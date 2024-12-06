@@ -351,7 +351,40 @@ contains
               rho_old(k) = rho(i,j,k)
             enddo
             ! convection 
+
+if (.FALSE.) then
+  ! SUBGRID CONVECTION ====
+            
+            ! Interpolate rho to subgrid points for this cell
+            ! => obtain 3D array subgrid_rho(nx_subgrid,ny_subgrid,:)
+
+            ! Check for regions with instability within subgrid array
+            !call check_stability(subgrid_unstable(isg,jsg),subgrid_rho(isg,jsg,:),kbo,kto)
+
+            ! Get average column density for region with instability
+            ! ==> obtain rho_ave
+
+
+            ! Get unstable fraction of cell
+            ! f_unstable(i,j) = count(subgrid_unstable) / (nx_subgrid*ny_subgrid)
+
+            ! Call once virtual solution of region that requires mixing
+            call convection(l_tracers_trans,ts_conv(:,:),rho_conv(:),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+            
+            ! Apply weighted average beween convected column and unconvected column (tracers + rho) 
+            ts(i,j,:,:)  = f_unstable(i,j)*ts_conv + (1.0-f_unstable(i,j))*ts(i,j,:,:) 
+
+            ! Update rho again based on tracer values
+            do k=k1(i,j),maxk
+              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+            end do
+
+else        
+  ! === Normal convection on the whole grid cell ===
+            ! Call once virtual solution of region that requires mixing
             call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+end if
+
             ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
             pe_conv = 0._wp
             do k=kven(i,j),maxk 

@@ -275,4 +275,35 @@ contains
 
   end subroutine coshuffle
 
+  subroutine check_stability(unstable,rho,kbo,kto)
+
+    implicit none
+
+    logical,  intent(OUT) :: unstable
+    real(wp), intent(IN)  :: rho(:)
+    integer,  intent(IN)  :: kbo
+    integer,  intent(IN)  :: kto 
+
+    ! Local variables
+    integer :: k, nz
+    real(wp) :: mindens
+
+    nz = size(rho)
+
+    ! Start at the base
+    mindens  = rho(kbo)
+    unstable = .FALSE.
+    do k = kbo+1, kto 
+      if (rho(k) .gt. mindens) then
+        unstable = .TRUE.
+        exit 
+      else
+        mindens = rho(k)
+      end if
+    end do
+
+    return
+
+  end subroutine check_stability
+
 end module convection_mod
