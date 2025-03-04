@@ -80,7 +80,7 @@ module lndvc_def
         real(wp) :: r_a_can, r_s_can, beta_s_can
         real(wp) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
         real(wp) :: albedo, alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif
-        integer,  allocatable, dimension(:) :: mask_snow
+        integer,  allocatable :: mask_snow(:)
         real(wp) :: f_snow, h_snow, w_snow, w_snow_max, w_snow_old, snowmelt, icemelt, snow_grain, dust_con
         real(wp) :: runoff, runoff_sur, calving, drainage, water_cons
         real(wp) :: rain_ground, evap_can, snow_ground, subl_can
@@ -138,10 +138,10 @@ module lndvc_def
         real(wp) :: cato_c, cato_c13, cato_c14
         real(wp) :: soil_c_tot, soil_resp, soil_c13_tot, soil_resp13, soil_c14_tot, soil_resp14
         real(wp) :: litter_in_frac
-        real(wp), allocatable, dimension(:) :: litterfall, litterfall13, litterfall14
-        real(wp), allocatable, dimension(:) :: wilt
-        real(wp), allocatable, dimension(:) :: root_frac
-        real(wp), allocatable, dimension(:) :: soil_resp_l
+        real(wp), allocatable :: litterfall(:), litterfall13(:), litterfall14(:)
+        real(wp), allocatable :: wilt(:)
+        real(wp), allocatable :: root_frac(:)
+        real(wp), allocatable :: soil_resp_l(:)
 
         ! === end virtual cell variables ====
 
@@ -297,18 +297,18 @@ module lndvc_def
         ! (topographies, masks, maps, etc)
         type(lndvc_vc_class), allocatable :: vc(:,:,:)
 
-
         integer :: ncells
         integer,  allocatable :: id_map(:,:)
         integer,  allocatable :: ij_1d(:,:)
         real(wp), allocatable :: z_lake(:)      ! par%nl_l
 
         ! === VEGETATION MODEL VARIABLES ===
+
         type(lndvc_veg_param_class) :: veg_par
+        type(lndvc_veg_global_class) :: veg_glob
         type(lndvc_veg_class), allocatable :: veg_vc(:,:,:)
         type(lndvc_veg_class), allocatable :: veg(:,:)
-        type(lndvc_veg_global_class) :: veg_glob
-
+        
         ! === SOIL MODEL ===========
 
 
@@ -317,7 +317,7 @@ module lndvc_def
 
         type(lndvc_smb_class), allocatable :: smb_vc(:,:,:)     ! cmn grid plus vc dimension
 
-        type(lndvc_smb_class), allocatable :: smb_cmn(:,:)      ! smb on the cmn grid, 5x5
+        type(lndvc_smb_class), allocatable :: smb(:,:)          ! smb on the cmn grid, 5x5
         type(lndvc_smb_class), allocatable :: smb_nh(:,:)       ! High-res projected grid, NH
         type(lndvc_smb_class), allocatable :: smb_sh(:,:)       ! High-res projected grid, SH
 

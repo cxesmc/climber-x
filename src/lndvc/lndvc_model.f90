@@ -15,8 +15,6 @@ module lndvc_model
     public :: lndvc_update_vc
     public :: lndvc_end
 
-
-    
 contains
 
     ! === Routines for whole domain control =============
@@ -110,7 +108,7 @@ contains
 
             case(2) ! lake
 
-                ! Call all updates you need for a land point
+                ! Call all updates you need for a lake point
 
                 !call lndvc_update_lake()
 
