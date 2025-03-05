@@ -4,6 +4,65 @@ module lndvc_grid
 
     implicit none
     
+    type lndvc_grid_class
+
+        ! layers
+        integer :: nl
+        integer :: nl_l
+        integer :: nlc
+
+        ! surface types
+        integer :: nsurf != 8 ! 5 pfts + bare soil + lake + ice
+        integer :: i_bare != 6
+        integer :: i_lake != 7
+        integer :: i_ice != 8
+
+        integer, allocatable :: flag_pft(:) != (/1,1,1,1,1,0,0,0/)
+        integer, allocatable :: flag_veg(:) != (/1,1,1,1,1,1,0,0/)
+        integer, allocatable :: i_surf(:) != (/1,2,3,4,5,6,7,8/)
+        
+        ! PFTs
+        integer :: npft != 5
+        integer :: ntrees != 2
+        integer :: ngrass != 2
+        integer :: nshrub != 1
+        integer :: nveg != npft+1
+        
+        integer, allocatable :: i_pft(:) != (/1,2,3,4,5/)
+        integer, allocatable :: i_trees(:) != (/1,2/)
+        integer, allocatable :: i_grass(:) != (/3,4/)
+        integer, allocatable :: i_shrub(:) != (/5/)
+        integer, allocatable :: flag_tree(:)  != (/1,1,0,0,0/)
+        integer, allocatable :: flag_grass(:) != (/0,0,1,1,0/)
+        integer, allocatable :: flag_shrub(:) != (/0,0,0,0,1/)
+        
+        ! carbon
+        integer :: ncarb != 5
+        integer :: ic_min != 1
+        integer :: ic_peat != 2
+        integer :: ic_shelf != 3
+        integer :: ic_ice != 4
+        integer :: ic_lake != 5
+
+        ! ground/snow types
+        integer :: nsoil != 3  ! vegetation, ice, lake
+        integer :: is_veg != 1
+        integer :: is_ice != 2
+        integer :: is_lake != 3
+
+        integer, allocatable :: i_soil(:) != (/1,2,3/)
+        
+    !     ! levels
+    !     integer,  parameter :: nl = 5
+    !     real(wp) :: z(0:nl) = (/0._wp,0.1_wp,0.3_wp,0.7_wp,1.5_wp,3.1_wp/)! z(0) is overwritten with 0.5*h_snow
+    !     real(wp) :: z_int(0:nl)
+    !     real(wp) :: dz(0:nl)
+    !     real(wp) :: rdz(0:nl)
+    !     real(wp) :: rdz_pos(0:nl)
+    !     real(wp) :: rdz_neg(0:nl)
+        
+    end type
+
     ! levels
     integer,  parameter :: nl = 5
     real(wp) :: z(0:nl) = (/0._wp,0.1_wp,0.3_wp,0.7_wp,1.5_wp,3.1_wp/)! z(0) is overwritten with 0.5*h_snow
@@ -70,11 +129,70 @@ module lndvc_grid
 
 contains
 
-    subroutine lndvc_grid_init
+    subroutine lndvc_grid_init(grd)
 
         implicit none
 
+        type(lndvc_grid_class), intent(inout) :: grd
+
         integer :: k
+
+        ! ===  Set some fixed grid parameters ===
+
+        ! surface types
+        grd%nsurf   = 8 ! 5 pfts + bare soil + lake + ice
+        grd%i_bare  = 6
+        grd%i_lake  = 7
+        grd%i_ice   = 8
+        
+        if (allocated(grd%flag_pft)) deallocate(grd%flag_pft)
+        allocate(grd%flag_pft(grd%nsurf))
+        if (allocated(grd%flag_veg)) deallocate(grd%flag_veg)
+        allocate(grd%flag_veg(grd%nsurf))
+        if (allocated(grd%i_surf)) deallocate(grd%i_surf)
+        allocate(grd%i_surf(grd%nsurf))
+        
+        grd%flag_pft = [1,1,1,1,1,0,0,0]
+        grd%flag_veg = [1,1,1,1,1,1,0,0]
+        grd%i_surf   = [1,2,3,4,5,6,7,8]
+        
+        ! PFTs
+        grd%npft    = 5
+        grd%ntrees  = 2
+        grd%ngrass  = 2
+        grd%nshrub  = 1
+        grd%nveg    = grd%npft+1
+
+        ! carbon
+        grd%ncarb       = 5
+        grd%ic_min      = 1
+        grd%ic_peat     = 2
+        grd%ic_shelf    = 3
+        grd%ic_ice      = 4
+        grd%ic_lake     = 5
+
+        ! ground/snow types
+        grd%nsoil   = 3  ! vegetation, ice, lake
+        grd%is_veg  = 1
+        grd%is_ice  = 2
+        grd%is_lake = 3
+
+        if (allocated(grd%i_pft)) deallocate(grd%i_pft)
+        allocate(grd%i_pft(grd%npft))
+        if (allocated(grd%i_trees)) deallocate(grd%i_trees)
+        allocate(grd%i_trees(grd%ntrees))
+        
+        grd%i_pft = (/1,2,3,4,5/)
+        grd%i_trees = (/1,2/)
+        ! i_grass(ngrass) = (/3,4/)
+        ! i_shrub(nshrub) = (/5/)
+        ! flag_tree(npft)  = (/1,1,0,0,0/)
+        ! flag_grass(npft) = (/0,0,1,1,0/)
+        ! flag_shrub(npft) = (/0,0,0,0,1/)
+        
+        !i_soil(nsoil) = (/1,2,3/)
+        
+
 
         z(0) = 0._wp 
         dz(0) = 0._wp
