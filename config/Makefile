@@ -48,10 +48,10 @@ include config/Makefile_climber.mk
 
 # Compile the static libraries using their own Makefiles
 coord-static: 
-	$(MAKE) -C $(COORDROOT) coord-static parallel=$(openmp)
+	$(MAKE) -C $(COORDROOT) coord-static openmp=$(openmp)
 
 yelmo-static: 
-	$(MAKE) -C $(YELMOROOT) yelmo-static parallel=$(openmp)
+	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
 
 climber-clim: FFLAGS = $(FFLAGS_CLIM)
@@ -62,7 +62,7 @@ climber-clim: coord-static \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 \
-				ice-dummy smb-dummy imo-dummy main-clim
+				ice-dummy smb-dummy bmb-dummy main-clim
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_obj) $(LFLAGS)
 	@echo " "
 	@echo "    climber.x is ready."
@@ -77,7 +77,7 @@ climber-clim-bgc: coord-static \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc co2 ch4 \
-				ice-dummy smb-dummy imo-dummy main-clim-bgc
+				ice-dummy smb-dummy bmb-dummy main-clim-bgc
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_bgc_obj) $(LFLAGS)
 	@echo " "
 	@echo "    climber.x is ready."
@@ -92,7 +92,7 @@ climber-clim-ice: coord-static yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 \
-				ice smb imo main-clim-ice
+				ice smb bmb main-clim-ice
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_ice_obj) $(LFLAGS)
 	@echo " "
 	@echo "    climber.x is ready."
@@ -107,7 +107,7 @@ climber-clim-bgc-ice: coord-static yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 \
-				ice smb imo main
+				ice smb bmb main
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_bgc_ice_obj) $(LFLAGS)
 	@echo " "
 	@echo "    climber.x is ready."
@@ -237,22 +237,22 @@ ice-sico: $(obj_ice_sico)
 	@echo "ice-sico files compiled successfully."
 	@echo ""
 
-imo: FFLAGS = $(FFLAGS_CLIM)
-imo: LFLAGS = $(LFLAGS_CLIM)
-imo: CPPFLAGS = $(CPPFLAGS_CLIM)
-imo: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-imo: $(obj_imo)
+bmb: FFLAGS = $(FFLAGS_CLIM)
+bmb: LFLAGS = $(LFLAGS_CLIM)
+bmb: CPPFLAGS = $(CPPFLAGS_CLIM)
+bmb: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
+bmb: $(obj_bmb)
 	@echo ""
-	@echo "imo files compiled successfully."
+	@echo "bmb files compiled successfully."
 	@echo ""
 
-imo-dummy: FFLAGS = $(FFLAGS_CLIM)
-imo-dummy: LFLAGS = $(LFLAGS_CLIM)
-imo-dummy: CPPFLAGS = $(CPPFLAGS_CLIM)
-imo-dummy: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-imo-dummy: $(obj_imo_dummy)
+bmb-dummy: FFLAGS = $(FFLAGS_CLIM)
+bmb-dummy: LFLAGS = $(LFLAGS_CLIM)
+bmb-dummy: CPPFLAGS = $(CPPFLAGS_CLIM)
+bmb-dummy: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
+bmb-dummy: $(obj_bmb_dummy)
 	@echo ""
-	@echo "imo-dummy files compiled successfully."
+	@echo "bmb-dummy files compiled successfully."
 	@echo ""
 
 lnd: FFLAGS = $(FFLAGS_CLIM)
@@ -411,8 +411,8 @@ clean-bgc:
 clean-ice:
 	rm -f  $(obj_ice) $(obj_ice_sico) $(obj_ice_dummy)
 
-clean-imo:
-	rm -f  $(obj_imo) $(obj_imo_dummy)
+clean-bmb:
+	rm -f  $(obj_bmb) $(obj_bmb_dummy)
 
 clean-sic:
 	rm -f  $(obj_sic)

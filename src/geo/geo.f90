@@ -26,11 +26,11 @@
 module geo_mod
 
   use precision, only : wp, dp
-  use control, only : in_dir, sea_level_init, flag_geo, flag_lakes, flag_ice, flag_smb, flag_bgc, i_map
+  use control, only : in_dir, sea_level_init, flag_geo, flag_lakes, flag_ice, flag_smb, flag_bgc
   use control, only : geo_restart, restart_in_dir
   use constants, only : rho_i, rho_sw, pi, R_earth
   use dim_name, only: dim_lon, dim_lat, dim_depth, dim_lon1, dim_lat1, dim_time
-  use coord, only : grid_class, grid_init, map_class, map_init, map_field
+  use coord, only : grid_class, grid_init
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
   use ncio
   use geo_params, only : i_geo, geo_ref_file
@@ -99,10 +99,6 @@ contains
     real(wp), allocatable, dimension(:,:) :: mask_ice
     real(wp), allocatable, dimension(:,:) :: mask_ice_geo
     type(grid_class) :: grid_rel
-    type(map_class) :: map_hires_to_lowres
-    type(map_class) :: map_rel_to_geo
-    type(map_class) :: map_bndgeo_to_geo
-    type(map_class) :: map_bndice_to_geo
     type(map_scrip_class) :: maps_hires_to_lowres
     type(map_scrip_class) :: maps_rel_to_geo
     type(map_scrip_class) :: maps_bndgeo_to_geo
@@ -156,6 +152,10 @@ contains
     allocate(geo%z_sur(ni,nj))
     allocate(geo%z_sur_std(ni,nj))
     allocate(geo%z_sur_smooth_std(ni,nj))
+    allocate(geo%z_ocn(ni,nj))
+    allocate(geo%z_ocn_min(ni,nj))
+    allocate(geo%z_ocn_max(ni,nj))
+    allocate(geo%z_ocn_max_q(ni,nj))
     allocate(geo%z_veg(ni,nj))
     allocate(geo%z_veg_min(ni,nj))
     allocate(geo%z_veg_max(ni,nj))
@@ -165,6 +165,7 @@ contains
     allocate(geo%z_lake(ni,nj))
     allocate(geo%z_bed(ni,nj))
     allocate(geo%mask_coast(ni,nj))
+    allocate(geo%mask_coast2(ni,nj))
     allocate(geo%i_coast_nbr(ni,nj,n_coast_cells))
     allocate(geo%j_coast_nbr(ni,nj,n_coast_cells))
     allocate(geo%coast_nbr(ni,nj))
@@ -209,14 +210,8 @@ contains
         geo%hires%z_bed = z_bed
       else
         allocate(z_bed_anom(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
-        if (i_map==1) then
-          call map_init(map_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid, &
-            lat_lim=2._dp*(bnd_geo_grid%lat(1,2)-bnd_geo_grid%lat(1,1)),dist_max=1.e6_dp,max_neighbors=4)
-          call map_field(map_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,method="quadrant")
-        else if (i_map==2) then
-          call map_scrip_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-          call map_scrip_field(maps_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,method="mean",missing_value=-9999._dp)
-        endif
+        call map_scrip_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_scrip_field(maps_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,method="mean",missing_value=-9999._dp)
         geo%hires%z_bed = geo%hires%z_bed_ref + z_bed_anom 
         deallocate(z_bed_anom)
       endif
@@ -240,27 +235,21 @@ contains
       if (bnd_ice_grid%name==geo%hires%grid%name) then
         geo%hires%h_ice = h_ice
       else
-        if (i_map==1) then
-          call map_init(map_bndice_to_geo,bnd_ice_grid,geo%hires%grid, &
-            lat_lim=2._dp*(bnd_geo_grid%lat(1,2)-bnd_geo_grid%lat(1,1)),dist_max=1.e6_dp,max_neighbors=1)
-          call map_field(map_bndice_to_geo,"h_ice",h_ice,geo%hires%h_ice,method="nn")
-        else if (i_map==2) then
-          call map_scrip_init(maps_bndice_to_geo,bnd_ice_grid,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-          call map_scrip_field(maps_bndice_to_geo,"h_ice",h_ice,geo%hires%h_ice,method="mean",missing_value=-9999._dp,reset=.false.)
-          allocate(mask_ice(bnd_ice_grid%G%nx,bnd_ice_grid%G%ny))
-          allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
-          where (h_ice>h_ice_min) 
-            mask_ice = 1.
-          elsewhere
-            mask_ice = 0.
-          endwhere
-          mask_ice_geo = 1.
-          call map_scrip_field(maps_bndice_to_geo,"mask",mask_ice,mask_ice_geo,method="mean",missing_value=-9999._dp,reset=.false., &
-            filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
-          where (mask_ice_geo<0.5) geo%hires%h_ice = 0._wp
-          deallocate(mask_ice)
-          deallocate(mask_ice_geo)
-        endif
+        call map_scrip_init(maps_bndice_to_geo,bnd_ice_grid,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_scrip_field(maps_bndice_to_geo,"h_ice",h_ice,geo%hires%h_ice,method="mean",missing_value=-9999._dp,reset=.false.)
+        allocate(mask_ice(bnd_ice_grid%G%nx,bnd_ice_grid%G%ny))
+        allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
+        where (h_ice>h_ice_min) 
+          mask_ice = 1.
+        elsewhere
+          mask_ice = 0.
+        endwhere
+        mask_ice_geo = 1.
+        call map_scrip_field(maps_bndice_to_geo,"mask",mask_ice,mask_ice_geo,method="mean",missing_value=-9999._dp,reset=.false., &
+          filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
+        where (mask_ice_geo<0.5) geo%hires%h_ice = 0._wp
+        deallocate(mask_ice)
+        deallocate(mask_ice_geo)
       endif
 
       ! derive mask and topography
@@ -454,21 +443,11 @@ contains
 
         allocate( tmp(ni_rel,nj_rel) )
         call nc_read(trim(z_bed_rel_file),"z_bed_rel",tmp)
-
-        if (i_map==1) then
-
-          call map_init(map_rel_to_geo,grid_rel,geo%hires%grid,lat_lim=2._dp*(grid_rel%lat(1,2)-grid_rel%lat(1,1)),dist_max=5.e5_dp,max_neighbors=1)
-          call map_field(map_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="nn")
-
-        else if (i_map==2) then
-
-          call map_scrip_init(maps_rel_to_geo,grid_rel,geo%hires%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-          call map_scrip_field(maps_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="mean",missing_value=-9999._dp, &
-            filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
-
-        endif
-
+        call map_scrip_init(maps_rel_to_geo,grid_rel,geo%hires%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_scrip_field(maps_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="mean",missing_value=-9999._dp, &
+          filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
         deallocate( tmp )
+
       endif
       deallocate( lon_rel )
       deallocate( lat_rel )
@@ -531,15 +510,9 @@ contains
     !-------------------------------------------------------------------
 
     call geo_heat(geo%hires%grid, geo%hires%q_geo)
-
-    if (i_map==1) then
-      call map_init(map_hires_to_lowres,geo%hires%grid,geo%grid,lat_lim=1._dp,dist_max=1.e6_dp,max_neighbors=1)
-      call map_field(map_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="nn")
-    else if (i_map==2) then
-      call map_scrip_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp, &
-        filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
-    endif
+    call map_scrip_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_scrip_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp, &
+      filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
 
     !-------------------------------------------------------------------
     ! sediment thickness and mask
@@ -839,7 +812,7 @@ contains
   call hires_to_lowres(geo%n_lakes, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, geo%hires%z_bed, geo%hires%z_sur, & ! in
     geo%hires%map_runoff, geo%hires%i_runoff_coarse, geo%hires%j_runoff_coarse, &   ! in
     geo%f_ocn, geo%f_ocn2, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_ice_flt, geo%f_lake, geo%f_lake_n, &
-    geo%z_sur, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, &     ! out
+    geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
     geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, geo%z_sur_lnd_std, &    ! out
     geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice)   ! out
   !$ time2 = omp_get_wtime()
@@ -880,7 +853,7 @@ contains
   !-------------------------------------------------------------------
   !$ time1 = omp_get_wtime()
   call coast_cells(geo%f_lnd, geo%i_runoff, geo%j_runoff, &      ! in
-    geo%mask_coast, geo%i_coast_nbr, geo%j_coast_nbr, geo%coast_nbr)   ! out
+    geo%mask_coast, geo%mask_coast2, geo%i_coast_nbr, geo%j_coast_nbr, geo%coast_nbr)   ! out
   !$ time2 = omp_get_wtime()
   !$ if(l_write_timer) print *,'coast_cells',time2-time1
 
@@ -1004,6 +977,10 @@ contains
     deallocate(geo%z_sur)
     deallocate(geo%z_sur_std)
     deallocate(geo%z_sur_smooth_std)
+    deallocate(geo%z_ocn)
+    deallocate(geo%z_ocn_min)
+    deallocate(geo%z_ocn_max)
+    deallocate(geo%z_ocn_max_q)
     deallocate(geo%z_veg)
     deallocate(geo%z_veg_min)
     deallocate(geo%z_veg_max)
@@ -1013,6 +990,7 @@ contains
     deallocate(geo%z_lake)
     deallocate(geo%z_bed)
     deallocate(geo%mask_coast)
+    deallocate(geo%mask_coast2)
     deallocate(geo%i_coast_nbr)
     deallocate(geo%j_coast_nbr)
     deallocate(geo%coast_nbr)

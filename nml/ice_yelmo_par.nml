@@ -4,6 +4,15 @@
     grid_path       = "None"
     phys_const      = "Earth"
     experiment      = "None"            ! "None", "EISMINT1", "MISMIP3D"  to apply special boundary conditions
+    nml_ytopo       = "ytopo"
+    nml_ydyn        = "ydyn"
+    nml_ytill       = "ytill"
+    nml_yneff       = "yneff"
+    nml_ymat        = "ymat"
+    nml_ytherm      = "ytherm"
+    nml_masks       = "yelmo_masks"
+    nml_init_topo   = "yelmo_init_topo"
+    nml_data        = "yelmo_data"
     restart         = "None"
     restart_z_bed   = True              ! Take z_bed (and z_bed_sd) from restart file
     restart_H_ice   = True              ! Take H_ice from restart file
@@ -31,10 +40,10 @@
 &ytopo
     solver              = "impl-lis"        ! "expl", "impl-lis"
     calv_flt_method     = "vm-l19"          ! "zero", "threshold", "flux", "vm-l19", "kill"
-    calv_grnd_method    = "stress-b12"      ! "zero", "stress-b12"
+    calv_grnd_method    = "zero"            ! "zero", "stress-b12"
     bmb_gl_method       = "pmp"             ! "fcmp": flotation; "fmp": full melt; "pmp": partial melt; "nmp": no melt
     fmb_method          = 1                 ! 0: prescribe boundary field fmb_shlf; 1: calculate proportional fmb~bmb_shlf.
-    dmb_method          = 1                 ! 0: no subgrid discharge, 1: subgrid discharge on
+    dmb_method          = 0                 ! 0: no subgrid discharge, 1: subgrid discharge on
     surf_gl_method      = 0                 ! 0: binary (max grnd/flt elevation), 1: subgrid average elevation
     margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
     margin_flt_subgrid  = True              ! Allow fractional ice area for floating margins
@@ -69,7 +78,7 @@
     zb_deep_1           = -1000.0 !-2000.0           ! [m] Bedrock elevation to end transition to deep ocean
     zb_sigma            = 100e3             ! [m] Gaussian filtering of bedrock for calving transition to deep ocean
     dmb_alpha_max       = 60.0              ! [deg] Maximum angle of slope from coast at which to allow discharge
-    dmb_tau             = 20.0              ! [yr]  Discharge timescale
+    dmb_tau             = 30.0              ! [yr]  Discharge timescale
     dmb_sigma_ref       = 300.0             ! [m]   Reference bed roughness
     dmb_m_d             = 3.0               ! [-]   Discharge distance scaling exponent
     dmb_m_r             = 0.0               ! [-]   Discharge resolution scaling exponent

@@ -49,17 +49,18 @@ contains
   !   Subroutine :  c o n v e c t i o n
   !   Purpose    :  convection code suitable for arbitrary functions rho(T,S)
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine convection(l_trans_tracers,ts,rho,kbo,mask_coast,nconv,dconv,kven,dven)
+  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,i,j)
 
     implicit none
 
     logical, dimension(:), intent(in) :: l_trans_tracers
     real(wp), dimension(:,:), intent(inout) :: ts
     real(wp), dimension(:), intent(inout) :: rho
-    integer, intent(in) :: kbo
+    integer, intent(in) :: kbo, kbov
     integer, intent(in) :: mask_coast
     integer, intent(inout) :: kven, nconv
     real(wp), intent(inout) :: dven, dconv
+    integer, intent(in) :: i, j
 
     real(wp), dimension(3) :: tmx, tsm
     logical :: chk_la, chk_lb
@@ -74,14 +75,30 @@ contains
     dconv = 0._wp
     dven  = 0._wp
 
-    if (i_conv_shuffle.eq.1 .or. (i_conv_shuffle.eq.2 .and. mask_coast.eq.1)) then
+    !----------------------------------------------
+    ! optional shuffle convection to mix directly down to density level
+
+    if (i_conv_shuffle.ge.1) then
       ! Mueller convection scheme from Bern3D after Müller et al 
       ! 'ventilation time scales in an efficient 3-d ocean model'
-      ! first apply coshuffle to mix directly down to density level
-      ! don't comment out the call without ensuring kven is initialised
-      call coshuffle(l_trans_tracers,kven,ts,rho,kbo)
+      if (i_conv_shuffle.eq.1) then
+        call coshuffle(l_trans_tracers,kven,ts,rho,kbo)
+      endif
+      if (i_conv_shuffle.eq.2 .and. mask_coast.eq.1) then
+        call coshuffle(l_trans_tracers,kven,ts,rho,kbo)
+      endif
+      if (i_conv_shuffle.eq.3 .and. mask_coast.eq.1) then
+        call coshuffle(l_trans_tracers,kven,ts,rho,kbov)
+      endif
+      if (i_conv_shuffle.eq.4 .and. mask_coast.eq.1 .and. j.lt.18) then
+        call coshuffle(l_trans_tracers,kven,ts,rho,kbo)
+      endif
+      if (i_conv_shuffle.eq.5 .and. mask_coast.eq.1 .and. j.lt.18) then
+        call coshuffle(l_trans_tracers,kven,ts,rho,kbov)
+      endif
     endif
 
+    !----------------------------------------------
     ! convection scheme of Rahmstorf 1993 as implemented in MOM5
 
     ! search for unstable regions starting from the top

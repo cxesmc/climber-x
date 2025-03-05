@@ -65,7 +65,7 @@ module ice_def
         real(wp), allocatable :: smb(:,:) 
         real(wp), allocatable :: accum(:,:) 
         real(wp), allocatable :: runoff(:,:) 
-        real(wp), allocatable :: Q_bm_float(:,:) 
+        real(wp), allocatable :: bmb_shlf(:,:) 
         real(wp), allocatable :: temp_s(:,:) 
         real(wp), allocatable :: temp_g(:,:) 
         real(wp), allocatable :: q_geo(:,:) 

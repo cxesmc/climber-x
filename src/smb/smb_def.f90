@@ -405,6 +405,7 @@ module smb_def
 
       ! output variables
       real(wp), dimension(:,:,:), allocatable :: mon_runoff     !! monthly runoff on ice sheet grid [kg/m2/s]
+      real(wp), dimension(:,:,:), allocatable :: mon_icemelt    !! monthly icemelt on ice sheet grid [kg/m2/s]
       real(wp), dimension(:,:), allocatable :: t_ice       !! annual mean top ice temperature on ice sheet grid [degC]
       real(wp), dimension(:,:), allocatable :: t_ground    !! ground temperature (soil over land and bottom water over ocean) on ice sheet grid [degC]
 

@@ -14,9 +14,9 @@
  flag_lakes       = F        ! use lake model?
  flag_geo         = F        ! use interactive geography/topography?
  flag_smb         = F        ! use surface mass balance model?
- flag_imo         = F        ! use floating ice melt by ocean model?
+ flag_bmb         = F        ! use basal mass balance model?
  flag_ice         = F        ! use ice sheet model?
- ice_model_name   = 'sico'   ! select which ice sheet model to use, 'sico' or 'yelmo'
+ ice_model_name   = 'yelmo'  ! select which ice sheet model to use, 'sico' or 'yelmo'
  ice_domain_name  = 'NH-32KM' !'ANT-32KM'      ! name of ice sheet domanin(s) to be used
 
  !-------------------------------------------------------
@@ -37,10 +37,6 @@
  ocn_restore_temp = F        ! use surface temperature restoring for ocean model?
  atm_fix_tau = F
 
- i_map = 2                   ! mapping method to use: 
-                             ! 1 = coordinates internal mapping routine
-                             ! 2 = mapping weights computed by external call to cdo (v1.9.6 or higher required)
-
  !-------------------------------------------------------
  ! model timer settings
  !-------------------------------------------------------
@@ -49,7 +45,7 @@
  dt_day_ocn  = 1.               ! ocn time step in days (can also be an integer fraction)
  dt_day_bgc  = 1.               ! bgc time step in days (can also be an integer fraction)
  dt_day_smb  = 1                ! smb time step in days 
- dt_day_imo  = 30               ! imo time step in days 
+ dt_day_bmb  = 30               ! bmb time step in days 
  n_year_ice  = 1                ! frequency of ice sheet model call in years
  n_year_smb  = 10               ! frequency of smb call in years
  n_year_geo  = 10               ! frequency of geo update in years
@@ -349,7 +345,7 @@
  nyout_sic = 1000       ! frequency of sea ice output in years
  nyout_bgc = 1000       ! frequency of ocean biogeochemistry output in years
  nyout_smb = 1000       ! frequency of smb output in years
- nyout_imo = 1000       ! frequency of imo output in years
+ nyout_bmb = 1000       ! frequency of bmb output in years
  nyout_ice = 1000       ! frequency of ice model output in years
  nyout_geo = 1000       ! frequency of geography output in years
 
@@ -366,7 +362,7 @@
  geo_restart = false       ! start from saved geo state?
  ice_restart = false       ! start from saved ice state?
  smb_restart = false       ! start form saved smb state?
- imo_restart = false       ! start form saved imo state?
+ bmb_restart = false       ! start form saved bmb state?
 
  restart_in_dir = "restart/pi"      ! name of directory inside restart/ that contains the restart files to restart from
  i_write_restart = 0                ! control of restart file writing:

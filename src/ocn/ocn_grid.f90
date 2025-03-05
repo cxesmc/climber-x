@@ -151,12 +151,14 @@ contains
   ! Function :  o c n _ g r i d _ i n i t
   ! Purpose  :  initialize ocean grid
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ocn_grid_init(f_ocn,topo_in,ocn_vol_tot_real,grid)
+  subroutine ocn_grid_init(f_ocn,topo_in,z_ocn_max,mask_coast,ocn_vol_tot_real,grid)
 
     implicit none
  
     real(wp), intent(in) :: f_ocn(:,:)  !! ocean fracŧion
     real(wp), intent(in) :: topo_in(:,:)  !! 'real' ocean bathymetry [m]
+    real(wp), intent(in) :: z_ocn_max(:,:)  !! 'real' ocean bathymetry [m]
+    integer, intent(in) :: mask_coast(:,:)  !! 'real' ocean bathymetry [m]
     real(dp), intent(in) :: ocn_vol_tot_real
     type(grid_class), intent(inout) :: grid
 
@@ -395,7 +397,26 @@ contains
     else if (i_smooth.eq.3) then
       ! smooth using FFT filter
       call smooth_topo_fft(topo, smooth_fac)
+    else if (i_smooth.eq.4) then
+      call smooth_topo(topo, int(smooth_fac))
+      do j=1,maxj
+        do i=1,maxi
+          if (j.lt.7 .and.mask_coast(i,j).eq.1) then
+            topo(i,j) = z_ocn_max(i,j)
+          endif
+        enddo
+      enddo
+    else if (i_smooth.eq.5) then
+      call smooth_topo(topo, int(smooth_fac))
+      do j=1,maxj
+        do i=1,maxi
+          if (mask_coast(i,j).eq.1) then
+            topo(i,j) = z_ocn_max(i,j)
+          endif
+        enddo
+      enddo
     endif
+      
 
     ! truncate to depth levels and get index of bottom layer in k1_pot
     call truncate_topo(topo,k1_pot)

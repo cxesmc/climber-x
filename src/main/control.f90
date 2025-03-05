@@ -30,13 +30,13 @@ module control
 
   implicit none
 
-  logical :: atm_restart, co2_restart, ch4_restart, lnd_restart, ocn_restart, sic_restart, bgc_restart, geo_restart, ice_restart, smb_restart, imo_restart
+  logical :: atm_restart, co2_restart, ch4_restart, lnd_restart, ocn_restart, sic_restart, bgc_restart, geo_restart, ice_restart, smb_restart, bmb_restart
   character (len=256) :: restart_in_dir 
   integer :: i_write_restart 
   integer :: n_year_write_restart 
   integer :: years_write_restart(10)
 
-  logical :: flag_atm, flag_co2, flag_ch4, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_imo, flag_geo
+  logical :: flag_atm, flag_co2, flag_ch4, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
   logical :: ocn_restore_sal, ocn_restore_temp
   logical :: atm_fix_tau
   character (len=256) :: ice_model_name
@@ -55,8 +55,6 @@ module control
   integer :: nyear_avg_offline
 
   logical :: l_feedbacks
-
-  integer :: i_map
 
   integer :: iorbit
   real(wp) :: ecc_const, obl_const, per_const
@@ -230,11 +228,10 @@ contains
     call nml_read(filename,"control","year_start_offline",year_start_offline)
     call nml_read(filename,"control","nyear_avg_offline",nyear_avg_offline)
     call nml_read(filename,"control","flag_smb",flag_smb)
-    call nml_read(filename,"control","flag_imo",flag_imo)
+    call nml_read(filename,"control","flag_bmb",flag_bmb)
     call nml_read(filename,"control","ocn_restore_sal",ocn_restore_sal)
     call nml_read(filename,"control","ocn_restore_temp",ocn_restore_temp)
     call nml_read(filename,"control","atm_fix_tau",atm_fix_tau)
-    call nml_read(filename,"control","i_map",i_map)
 
     call nml_read(filename,"control","iorbit",iorbit)
     call nml_read(filename,"control","ecc_const",ecc_const)
@@ -330,7 +327,7 @@ contains
     call nml_read(filename,"control","geo_restart",geo_restart)
     call nml_read(filename,"control","ice_restart",ice_restart)
     call nml_read(filename,"control","smb_restart",smb_restart)
-    call nml_read(filename,"control","imo_restart",imo_restart)
+    call nml_read(filename,"control","bmb_restart",bmb_restart)
     call nml_read(filename,"control","restart_in_dir",restart_in_dir)
     call nml_read(filename,"control","i_write_restart",i_write_restart)
     call nml_read(filename,"control","n_year_write_restart",n_year_write_restart)

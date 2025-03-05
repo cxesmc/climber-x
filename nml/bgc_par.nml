@@ -73,7 +73,7 @@
     i_radiation = 1         ! radiation profile to be used, 1..original HAMOCC, 2..analytical solution of integral 
     l_SW_diurnal_cycle = F
     iphy_growth = 1         ! parameterisation of phytoplankton growth. 1 == HAMOCC, 2 == PISCES, 3 == REcom, 4 == Sherman 2016
-    mu0 = 0.6   ! 3            ! d-1, max phytoplankton growth rate at 0 degC
+    mu0 = 0.6               ! d-1, max phytoplankton growth rate at 0 degC, 0.6 usually used for iphy_growth==1,2,3 and 3.0 for iphy_growth==4
     q10_temfa = 1.5         ! Q10 for temperature dependence of phytoplankton growth, used only if iphy_growth==4
     pi_alpha = 0.03         ! initial slope of production vs irradiance curve, 0.02 for HAMOCC (iphy_growth==1), 2 for PISCES (iphy_growth==2)
     c_to_chl = 60           ! gC/gChl, Carbon to Chlorophyll ratio in phytoplankton

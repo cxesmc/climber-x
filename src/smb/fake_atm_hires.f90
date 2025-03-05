@@ -27,10 +27,8 @@ module fake_atm_hires_mod
 
   use precision, only : wp, dp
   use timer, only: doy, nday_year, time_soy_bnd, monthly2daily
-  use control, only : i_map
   use smb_params, only : ifake_atm_hires, fake_atm_hires_const_file, fake_atm_hires_var_file, prc_forcing, wind_forcing
   use coord, only : grid_init, grid_class
-  use coord, only : map_init, map_class
   use coord, only : map_scrip_init, map_scrip_class
   use ncio
 
@@ -38,7 +36,6 @@ module fake_atm_hires_mod
 
   type fake_atm_hires_type
     type(grid_class) :: grid
-    type(map_class) :: map_atm_to_smb
     type(map_scrip_class) :: maps_atm_to_smb
     real(wp), dimension(:,:), allocatable :: tair, tstd, qair, rain, snow, prc, pressure, swdown, lwdown, usur, vsur, wind, cld, cod, alb
   end type
@@ -98,11 +95,7 @@ contains
     x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
   ! initialize map
-  if (i_map.eq.1) then
-    call map_init(atm%map_atm_to_smb,atm%grid,smb_grid,max_neighbors=1,lat_lim=10._dp,dist_max=2.e6_dp)
-  else if (i_map.eq.2) then
-    call map_scrip_init(atm%maps_atm_to_smb,atm%grid,smb_grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-  endif
+  call map_scrip_init(atm%maps_atm_to_smb,atm%grid,smb_grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
 
   ! allocate atm type variables
   allocate(atm%tair(ni,nj))

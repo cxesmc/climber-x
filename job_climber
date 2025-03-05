@@ -457,7 +457,7 @@ def parse_args(args=[],force=False):
     args.sort()
     
     # Loop over the arguments and parse them into separate parameters
-    if 'atm_par=' in " ".join(args) or 'ocn_par=' in " ".join(args) or 'bgc_par=' in " ".join(args) or 'sic_par=' in " ".join(args) or 'lnd_par=' in " ".join(args) or 'smb_par=' in " ".join(args) or 'imo_par=' in " ".join(args) or 'ice_sico_par=' in " ".join(args) or 'ice_yelmo_par=' in " ".join(args) or 'geo_par=' in " ".join(args) or 'control=' in " ".join(args) or '&' in " ".join(args):
+    if 'atm_par=' in " ".join(args) or 'ocn_par=' in " ".join(args) or 'bgc_par=' in " ".join(args) or 'sic_par=' in " ".join(args) or 'lnd_par=' in " ".join(args) or 'smb_par=' in " ".join(args) or 'bmb_par=' in " ".join(args) or 'ice_sico_par=' in " ".join(args) or 'ice_yelmo_par=' in " ".join(args) or 'geo_par=' in " ".join(args) or 'control=' in " ".join(args) or '&' in " ".join(args):
 
         for arg in args:        
             now = "none"
@@ -467,7 +467,7 @@ def parse_args(args=[],force=False):
             if 'sic_par='   in arg: now = "sic_par"
             if 'lnd_par='   in arg: now = "lnd_par"
             if 'smb_par='   in arg: now = "smb_par"
-            if 'imo_par='   in arg: now = "imo_par"
+            if 'bmb_par='   in arg: now = "bmb_par"
             if 'ice_sico_par='   in arg: now = "ice_sico_par"
             if 'ice_yelmo_par='   in arg: now = "ice_yelmo_par"
             if 'geo_par='   in arg: now = "geo_par"
@@ -758,8 +758,8 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
     o8_out = "geo_par.nml" # Output name of options file
     o9     = "nml/atm_par.nml"   # Name of options file
     o9_out = "atm_par.nml" # Output name of options file
-    o10     = "nml/imo_par.nml"   # Name of options file
-    o10_out = "imo_par.nml" # Output name of options file
+    o10     = "nml/bmb_par.nml"   # Name of options file
+    o10_out = "bmb_par.nml" # Output name of options file
 
     # Generate a name for the output folder, if desired
     if auto:
@@ -774,7 +774,7 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
     p_sic   = parameters()
     p_lnd   = parameters()
     p_smb   = parameters()
-    p_imo   = parameters()
+    p_bmb   = parameters()
     p_ice_sico   = parameters()
     p_ice_yelmo  = parameters()
     p_geo   = parameters()
@@ -791,7 +791,7 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
     p_ice_yelmo= parameters(file=o7)
     p_geo = parameters(file=o8)
     p_atm = parameters(file=o9)
-    p_imo = parameters(file=o10)
+    p_bmb = parameters(file=o10)
 
     # Store parameter lists as new objects for modification and output
     p_con1  = p_con
@@ -800,7 +800,7 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
     p_sic1  = p_sic
     p_lnd1  = p_lnd
     p_smb1  = p_smb
-    p_imo1  = p_imo
+    p_bmb1  = p_bmb
     p_ice_sico1  = p_ice_sico
     p_ice_yelmo1  = p_ice_yelmo
     p_geo1  = p_geo
@@ -818,8 +818,8 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
             p_lnd1.set(param=p)
         elif p.group == "smb_par":
             p_smb1.set(param=p)
-        elif p.group == "imo_par":
-            p_imo1.set(param=p)
+        elif p.group == "bmb_par":
+            p_bmb1.set(param=p)
         elif p.group == "ice_sico_par":
             p_ice_sico1.set(param=p)
         elif p.group == "ice_yelmo_par":
@@ -879,7 +879,7 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
         p_ice_yelmo.write(outfldr+o7_out)
         p_geo.write(outfldr+o8_out)
         p_atm.write(outfldr+o9_out)
-        p_imo.write(outfldr+o10_out)
+        p_bmb.write(outfldr+o10_out)
 
         # Copy files of interest
         shutil.copy("nml/ice_grids.nml",outfldr)

@@ -6,37 +6,38 @@ FC  = ifort
 
 NETCDF_FORTRANROOT = /sw/rhel6-x64/netcdf/netcdf_fortran-4.4.2-intel14/
 NETCDF_CROOT = /sw/rhel6-x64/netcdf/netcdf_c-4.3.2-intel14/
-
 INC_NC  = -I${NETCDF_FORTRANROOT}/include
 LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
 
-COORDROOT = src/utils/coordinates/libcoordinates
-INC_COORD = -I${COORDROOT}/include
-LIB_COORD = -L${COORDROOT}/include -lcoordinates
+# coordinates
+COORDROOT = src/utils/coordinates
+INC_COORD = -I${COORDROOT}/libcoordinates/include
+LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
-LIB_MKL = -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread
+# FESM-UTILS
+FESMUTILSROOT=src/utils/fesm-utils/utils
+INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
+LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
 
-#LISROOT = /home/willeit/lis
-LISROOT = src/utils/lis
+# FFTW
+FFTWROOT = src/utils/fesm-utils/fftw-omp
+INC_FFTW = -I${FFTWROOT}/include
+LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
+
+# LIS
+LISROOT = src/utils/fesm-utils/lis-omp
 INC_LIS = -I${LISROOT}/include 
 LIB_LIS = -L${LISROOT}/lib/ -llis
 
-#YELMOROOT = src/yelmo/libyelmo
-YELMOROOT = src/yelmo_default/libyelmo
-INC_YELMO = -I${YELMOROOT}/include
-LIB_YELMO = -L${YELMOROOT}/include -lyelmo
+# Yelmo
+YELMOROOT = src/yelmo
+INC_YELMO = -I${YELMOROOT}/libyelmo/include
+LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 
-#VILMAROOT = /p/projects/megarun/matteo/climberX/src/vilma
+# VILMA
 VILMAROOT = src/vilma
 INC_VILMA = -I${VILMAROOT}/include
-LIB_VILMA = ${VILMAROOT}/lib/vega_vip.a
-
-#FFTWROOT = /p/projects/megarun/matteo/fftw/
-#FFTWROOT = src/utils/fftw/
-#FFTWROOT = src/utils/fftw_intel2018.3/
-FFTWROOT = src/utils/fftw_intel_18.0.4/
-INC_FFTW = -I${FFTWROOT}/include
-LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lfftw3f -lm
+LIB_VILMA = ${VILMAROOT}/lib/vega_pism.a
 
 ### Compiler options #############
 
@@ -48,8 +49,8 @@ DFLAGS_NODEBUG = -Ofast -xHASWELL -traceback #-O3  #-O2 -fp-model precise
 DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
 DFLAGS_PROFILE = -O3 -pg -g #-O2 -fp-model precise -pg 
 
-FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
 FFLAGS_OPENMP  = $(FFLAGS_DEFAULT) -qopenmp #-parallel -qopt-report-phase=par #-qopt-report=5 #-ipo -parallel -par-threshold90 -qopt-report #-mcmodel=medium
 
-LFLAGS  = $(LIB_NC) $(LIB_COORD) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS  = $(LIB_NC) $(LIB_COORD) $(LIB_LIS) $(LIB_FESMUTILS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW) -Wl,-zmuldefs
 

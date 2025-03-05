@@ -14,7 +14,7 @@ output
 out
 src/main/gitversion.f90
 src/bgc
-src/utils/exlib
+src/utils/fesm-utils
 src/utils/fftw*
 src/utils/lis*
 src/utils/coordinates*
@@ -22,6 +22,7 @@ src/yelmo*
 src/vilma
 bench
 matlab
+julia
 data
 *.sh
 !run_bench_cx.sh

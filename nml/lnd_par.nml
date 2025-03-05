@@ -211,9 +211,9 @@
     ich4_ftemp       = 2        ! temperature dependence of ch4 emission fraction. 1=Arrhenius, 2=q10
     Ea_ch4           = 0.96     ! eV, activation energy for temperature dependence of ch4 emission fraction, 0.96 in Yvon-Durocher 2014 (only for ich4_ftemp=1)
     q10_ch4          = 1.8      ! q10 for temperature dependence of ch4 emission fraction (only for ich4_ftemp==2)
-    ch4_frac_wet     = 0.067    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
+    ch4_frac_wet     = 0.066    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
     ch4_frac_shelf   = 0.0      ! fraction of carbon emitted as methane from ocean shelf
-    ch4_frac_peat    = 0.067    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
+    ch4_frac_peat    = 0.066    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------

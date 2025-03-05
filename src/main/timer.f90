@@ -27,7 +27,7 @@ module timer
 
   use precision, only : wp, dp
   use nml
-  use control, only : flag_atm, flag_ocn, flag_lnd, flag_sic, flag_ice, flag_smb, flag_imo, flag_bgc, flag_geo, ifake_geo
+  use control, only : flag_atm, flag_ocn, flag_lnd, flag_sic, flag_ice, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo
   use control, only : l_spinup_cc, nyears_spinup_bgc, year_start_offline, nyear_avg_offline
   use control, only : i_write_restart, n_year_write_restart, years_write_restart
 
@@ -40,7 +40,7 @@ module timer
   integer :: doy, mon, year, year_geo, year_clim, year_smb, nyears, nyears_clim, nyears_geo, &
   year_ini, year_now
   integer :: step, nstep, nstep_mon, nstep_year
-  integer :: step_atm, step_lnd, step_ocn, step_sic, step_bgc, step_smb, step_imo, step_ice
+  integer :: step_atm, step_lnd, step_ocn, step_sic, step_bgc, step_smb, step_bmb, step_ice
 
   integer, parameter :: nday_year = 360  !! days per year [day/year]
   integer, parameter :: nmon_year = 12   !! months per year [mon/year]
@@ -61,8 +61,8 @@ module timer
   real(wp), parameter :: dt_day_sic  = 1._wp                ! sea ice time step in days 
   real(wp)            :: dt_day_ice  != real(n_year_ice,wp)*real(nday_year,wp)   ! ice sheet model time step in days
 
-  real(wp) :: dt_day_fastest, dt_day_ocn, dt_day_bgc, dt_day_smb, dt_day_imo
-  real(wp) :: dt_atm, dt_lnd, dt_ocn, dt_bgc, dt_sic, dt_smb, dt_imo, dt_geo, dt_fastest
+  real(wp) :: dt_day_fastest, dt_day_ocn, dt_day_bgc, dt_day_smb, dt_day_bmb
+  real(wp) :: dt_atm, dt_lnd, dt_ocn, dt_bgc, dt_sic, dt_smb, dt_bmb, dt_geo, dt_fastest
   integer :: n_year_ice, n_year_smb, n_year_geo
   integer :: n_accel
 
@@ -72,7 +72,7 @@ module timer
   integer :: nstep_mon_sic, nstep_year_sic
   integer :: nstep_mon_lnd, nstep_year_lnd
   integer :: nstep_mon_smb, nstep_year_smb
-  integer :: nstep_mon_imo, nstep_year_imo
+  integer :: nstep_mon_bmb, nstep_year_bmb
   logical :: time_soy, time_eoy, time_som, time_eom
   logical :: time_soy_atm, time_eoy_atm, time_som_atm, time_eom_atm
   logical :: time_soy_ocn, time_eoy_ocn, time_som_ocn, time_eom_ocn
@@ -80,7 +80,7 @@ module timer
   logical :: time_soy_sic, time_eoy_sic, time_som_sic, time_eom_sic
   logical :: time_soy_lnd, time_eoy_lnd, time_som_lnd, time_eom_lnd
   logical :: time_soy_smb, time_eoy_smb, time_som_smb, time_eom_smb
-  logical :: time_soy_imo, time_eoy_imo, time_som_imo, time_eom_imo
+  logical :: time_soy_bmb, time_eoy_bmb, time_som_bmb, time_eom_bmb
   logical :: time_soy_bnd
   logical :: time_feedback_save, time_feedback_analysis
   logical :: time_spinup_cc_1, time_spinup_cc_2, time_call_daily_input_save, time_use_daily_input_save
@@ -90,13 +90,13 @@ module timer
   integer :: y_out_ts, y_out_ts_geo, y_out_ts_clim, y_out_ts_smb, ny_out_ts, ny_out_ts_geo, &
   ny_out_ts_accel, ny_out_ts_smb
   integer :: nyout_cmn, nyout_atm, nyout_lnd, nyout_ocn, nyout_sic, nyout_bgc, &
-  nyout_smb, nyout_imo, nyout_ice, nyout_geo
+  nyout_smb, nyout_bmb, nyout_ice, nyout_geo
   logical :: time_out_ts, time_out_ts_geo, time_out_ts_clim, time_out_ts_smb, time_out_cmn, &
   time_out_atm, time_out_lnd, time_out_ocn, time_out_sic, time_out_bgc, time_out_smb, &
-  time_out_imo, time_out_ice, time_out_geo
+  time_out_bmb, time_out_ice, time_out_geo
 
   logical :: time_call_atm, time_call_lnd, time_call_ocn, time_call_sic, time_call_bgc, &
-  time_call_smb, time_call_imo, time_call_ice, time_call_geo, time_call_clim
+  time_call_smb, time_call_bmb, time_call_ice, time_call_geo, time_call_clim
 
 contains
 
@@ -115,7 +115,7 @@ contains
     call nml_read(filename,"control","dt_day_ocn",dt_day_ocn)
     call nml_read(filename,"control","dt_day_bgc",dt_day_bgc)
     call nml_read(filename,"control","dt_day_smb",dt_day_smb)
-    call nml_read(filename,"control","dt_day_imo",dt_day_imo)
+    call nml_read(filename,"control","dt_day_bmb",dt_day_bmb)
     call nml_read(filename,"control","n_year_ice",n_year_ice)
     call nml_read(filename,"control","n_year_smb",n_year_smb)
     call nml_read(filename,"control","n_year_geo",n_year_geo)
@@ -127,7 +127,7 @@ contains
     call nml_read(filename,"control","nyout_bgc",nyout_bgc)
     call nml_read(filename,"control","nyout_sic",nyout_sic)
     call nml_read(filename,"control","nyout_smb",nyout_smb)
-    call nml_read(filename,"control","nyout_imo",nyout_imo)
+    call nml_read(filename,"control","nyout_bmb",nyout_bmb)
     call nml_read(filename,"control","nyout_ice",nyout_ice)
     call nml_read(filename,"control","nyout_geo",nyout_geo)
     call nml_read(filename,"control","n_accel",n_accel)
@@ -153,7 +153,7 @@ contains
     if (flag_bgc ) dt_day_fastest = minval([dt_day_bgc, dt_day_fastest])
     if (flag_sic ) dt_day_fastest = minval([dt_day_sic, dt_day_fastest])
     if (flag_smb ) dt_day_fastest = minval([dt_day_smb, dt_day_fastest])
-    if (flag_imo ) dt_day_fastest = minval([dt_day_imo, dt_day_fastest])
+    if (flag_bmb ) dt_day_fastest = minval([dt_day_bmb, dt_day_fastest])
     if (flag_ice ) dt_day_fastest = minval([dt_day_ice, dt_day_fastest])
     if (flag_geo ) dt_day_fastest = minval([real(nday_year*n_year_geo,wp), dt_day_fastest])
     dt_day_fastest = minval([day_year,dt_day_fastest])
@@ -190,7 +190,7 @@ contains
     step_bgc = nint(dt_day_bgc/dt_day_fastest)
     step_sic = nint(dt_day_sic/dt_day_fastest)
     step_smb = nint(dt_day_smb/dt_day_fastest)
-    step_imo = nint(dt_day_imo/dt_day_fastest)
+    step_bmb = nint(dt_day_bmb/dt_day_fastest)
     step_ice = nint(dt_day_ice/dt_day_fastest)
 
     nstep_mon_atm = nint(nday_mon/dt_day_atm)
@@ -205,8 +205,8 @@ contains
     nstep_year_lnd = nint(nday_year/dt_day_lnd)
     nstep_mon_smb = nint(nday_mon/dt_day_smb)
     nstep_year_smb = nint(nday_year/dt_day_smb)
-    nstep_mon_imo = nint(nday_mon/dt_day_imo)
-    nstep_year_imo = nint(nday_year/dt_day_imo)
+    nstep_mon_bmb = nint(nday_mon/dt_day_bmb)
+    nstep_year_bmb = nint(nday_year/dt_day_bmb)
 
     ! timesteps in seconds
     dt_atm = dt_day_atm * sec_day
@@ -215,7 +215,7 @@ contains
     dt_bgc = dt_day_bgc * sec_day
     dt_sic = dt_day_sic * sec_day
     dt_smb = dt_day_smb * sec_day
-    dt_imo = dt_day_imo * sec_day
+    dt_bmb = dt_day_bmb * sec_day
     dt_geo = n_year_geo * sec_year
 
     ! initialize
@@ -226,7 +226,7 @@ contains
 !   write(6,'(a)') "---------------------------------------------"
 !   write(6,'(a)') "From subroutine timer_init"
 !   write(6,*) n_accel
-!   write(6,*) step_atm, step_lnd, step_ocn, step_sic, step_bgc, step_smb, step_imo, step_ice
+!   write(6,*) step_atm, step_lnd, step_ocn, step_sic, step_bgc, step_smb, step_bmb, step_ice
 !   write(6,'(a)') "---------------------------------------------"
 
    return
@@ -377,18 +377,18 @@ contains
       time_out_smb = .false.
     endif
     
-    if (flag_imo .and. year_call_accel) then !ok
-      time_call_imo = (mod(step,step_imo) .eq. 0)
-      time_soy_imo = step_imo .eq. soy
-      time_eom_imo = (mod(soy,nstep_mon_imo*step_imo) .eq. 0)
-      time_eoy_imo = (mod(soy,nstep_year_imo*step_imo) .eq. 0)
-      time_out_imo = (mod(year,nyout_imo) .eq. 0) .and. year_now.ge.year_out_start
+    if (flag_bmb .and. year_call_accel) then !ok
+      time_call_bmb = (mod(step,step_bmb) .eq. 0)
+      time_soy_bmb = step_bmb .eq. soy
+      time_eom_bmb = (mod(soy,nstep_mon_bmb*step_bmb) .eq. 0)
+      time_eoy_bmb = (mod(soy,nstep_year_bmb*step_bmb) .eq. 0)
+      time_out_bmb = (mod(year,nyout_bmb) .eq. 0) .and. year_now.ge.year_out_start
     else
-      time_call_imo =.false. 
-      time_soy_imo = .false.
-      time_eom_imo = .false.
-      time_eoy_imo = .false.
-      time_out_imo = .false.
+      time_call_bmb =.false. 
+      time_soy_bmb = .false.
+      time_eom_bmb = .false.
+      time_eoy_bmb = .false.
+      time_out_bmb = .false.
     endif
     
     if (flag_ice) then

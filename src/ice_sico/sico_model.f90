@@ -3,11 +3,10 @@ module sicopolis
   use nml
   use ncio
   use coord, only : grid_class, grid_init
-  use coord, only : map_class, map_init, map_field
   use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
 
   use timer, only : sec_year
-  use control, only : restart_in_dir, i_map
+  use control, only : restart_in_dir
 
   use sico_types_m, only : wp, sp
 
@@ -353,7 +352,6 @@ contains
   real(wp) :: dist, weigh, sum_weigh
   real(wp) :: Hice, freeboard_ratio
   type(grid_class) :: mask_maxextent_grid
-  type(map_class) :: map_maxextent_to_ice
   type(map_scrip_class) :: maps_maxextent_to_ice
   real(wp), dimension(:,:), allocatable :: tmp1
   integer, dimension(:,:), allocatable :: tmpi
@@ -405,14 +403,9 @@ contains
     call grid_init(mask_maxextent_grid,name=trim(ice%par%mask_maxextent_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
     ! map to ice grid
     allocate(tmpi(1:ice%grid%IMAX+1,1:ice%grid%JMAX+1))
-    if (i_map==1) then
-      call map_init(map_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,max_neighbors=1,lat_lim=5._wp,dist_max=1.e6_wp)
-      call map_field(map_maxextent_to_ice,"mask",maxi,tmpi,method="nn")
-    else if (i_map==2) then
-      call map_scrip_init(maps_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,method="nn",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_maxextent_to_ice,"mask",maxi,tmpi,method="mean",missing_value=-9999._wp, &
-        filt_method="none",filt_par=[5.0*ice%grid%grid1%G%dx,ice%grid%grid1%G%dx])
-    endif
+    call map_scrip_init(maps_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,method="nn",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_scrip_field(maps_maxextent_to_ice,"mask",maxi,tmpi,method="mean",missing_value=-9999._wp, &
+      filt_method="none",filt_par=[5.0*ice%grid%grid1%G%dx,ice%grid%grid1%G%dx])
     ice%state%mask_maxextent = transpose(tmpi)
 
     deallocate(maxi, lon_maxi, lat_maxi, tmpi)

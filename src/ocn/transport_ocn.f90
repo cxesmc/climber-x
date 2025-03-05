@@ -71,9 +71,9 @@ contains
   !   Purpose    :  transport of tracers
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine transport(l_tracers_trans,l_tracer_dic,l_tracers_isodiff,l_large_vol_change, &
-                      u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast, &
+                      u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
                       ts,rho,nconv,dconv,kven,dven,conv_pe, &
-                      mld,fdx,fdy,fdz,fax,fay,faz, error)
+                      mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
 
     !$ use omp_lib
 
@@ -89,6 +89,7 @@ contains
     real(wp), dimension(:,:,:), intent(in) :: flx_bot
     real(wp), dimension(:,:), intent(in) :: f_ocn
     integer, dimension(:,:), intent(in) :: mask_coast
+    real(wp), dimension(:,:), intent(in) :: z_ocn_max
 
     real(wp), dimension(:,:,:), intent(inout) :: rho
     real(wp), dimension(:,:,:,:), intent(inout) :: ts
@@ -103,20 +104,20 @@ contains
     real(wp), dimension(:,:,:,:), intent(out) :: fax
     real(wp), dimension(:,:,:,:), intent(out) :: fay
     real(wp), dimension(:,:,:,:), intent(out) :: faz
+    real(wp), dimension(:,:,:,:), intent(out) :: dts_dt_adv
+    real(wp), dimension(:,:,:,:), intent(out) :: dts_dt_diff
 
     logical, intent(inout) :: error
 
-    integer :: i, j, k, l, ll, ip1, idiff
+    integer :: i, j, k, l, ll, ip1, idiff, k1_max
     integer, allocatable, dimension(:,:) :: mldk
-    real(wp), allocatable, dimension(:,:,:) :: advection_tendency
-    real(wp), allocatable, dimension(:,:,:) :: diffusion_tendency
     real(wp), dimension(maxk) :: rho_old
     real(wp), allocatable, dimension(:,:) :: pe_layer1
     real(wp) :: pe_conv, pe_buoy, e_mix
     real(wp) :: mldtstmp(2), mldrhotmp
     real(wp) :: brunt_vaisala
     real(wp) :: diff_dia_tmp
-    real(wp) :: rho1, rho2, drhodz, dudz2
+    real(wp) :: rho1, rho2, drhodz, dudz2, tv1
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -124,8 +125,6 @@ contains
 
     allocate(mldk(maxi,maxj))
     allocate(pe_layer1(maxi,maxj))
-    allocate(advection_tendency(maxi,maxj,maxk))
-    allocate(diffusion_tendency(maxi,maxj,maxk))
 
     if (l_mld) then
     !$ time1 = omp_get_wtime()
@@ -248,7 +247,7 @@ contains
 
     ! tracer loop
     !$ time1 = omp_get_wtime()
-    !$omp parallel do private ( ll, l , idiff, advection_tendency,diffusion_tendency)
+    !$omp parallel do private ( ll, l , idiff)
     do ll=1,n_tracers_trans
       l = idx_tracers_trans(ll)
        !!$ print *,l,ll,omp_get_thread_num(),'/',omp_get_num_threads()
@@ -257,11 +256,11 @@ contains
        if (i_advection.eq.1) then
           ! Fiadeiro and Veronis 1977 weighted upstream/centred differences scheme (standard in Goldstein)
           call advection_upstream(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
-                                 fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), advection_tendency)
+                                 fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
        elseif (i_advection.eq.2) then
           ! Flux corrected transport advection scheme following Zalesak 1979
           call advection_fct(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
-                            fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), advection_tendency)
+                            fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
        endif
 
        if (i_diff.eq.1 .and. l_tracers_isodiff(l) .and. .not.l_large_vol_change) then
@@ -274,25 +273,25 @@ contains
 !       if (ll.eq.1 .or. ll.eq.2) then
 !         ! active tracers temperature and salinity
 !         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, diffusion_tendency,l)
+!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
 !       else
 !         ! passive tracers 
 !         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, diffusion_tendency,l)
+!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
 !       endif
 
        if (l_tracer_dic(l)) then
          ! DIC tracers 
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, diffusion_tendency,l)
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
        else
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, diffusion_tendency,l)
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
        endif
 
        ! apply advection and diffusion to tracer field
        where (mask_c.eq.1)
-         ts(:,:,:,l) = ts(:,:,:,l) + dt*(advection_tendency+diffusion_tendency)
+         ts(:,:,:,l) = ts(:,:,:,l) + dt*(dts_dt_adv(:,:,:,l)+dts_dt_diff(:,:,:,l))
        endwhere
 
        if (l_diff33_impl) then
@@ -327,7 +326,7 @@ contains
     if (l_mld) then
     !$ time1 = omp_get_wtime()
 
-      !$omp parallel do collapse(2) private(i,j,k,rho_old,pe_conv,pe_buoy,e_mix)
+      !$omp parallel do collapse(2) private(i,j,k,rho_old,pe_conv,pe_buoy,e_mix,tv1,k1_max)
       do j=1,maxj
         do i=1,maxi
           if (mask_ocn(i,j).eq.1) then
@@ -369,8 +368,17 @@ if (.FALSE.) then
             ! f_unstable(i,j) = count(subgrid_unstable) / (nx_subgrid*ny_subgrid)
 
             ! Call once virtual solution of region that requires mixing
-            call convection(l_tracers_trans,ts_conv(:,:),rho_conv(:),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
-            
+            k1_max = k1(i,j)
+            tv1 = 5000._wp
+            do k=maxk,1,-1
+              if (abs(z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
+                k1_max = k
+                tv1 = abs(z_ocn_max(i,j)-zw(k-1))
+              endif
+            enddo
+            k1_max = max(k1_max,k1(i,j))
+            call convection(l_tracers_trans,ts_conv(:,:),rho_conv(:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+
             ! Apply weighted average beween convected column and unconvected column (tracers + rho) 
             ts(i,j,:,:)  = f_unstable(i,j)*ts_conv + (1.0-f_unstable(i,j))*ts(i,j,:,:) 
 
@@ -382,7 +390,17 @@ if (.FALSE.) then
 else        
   ! === Normal convection on the whole grid cell ===
             ! Call once virtual solution of region that requires mixing
-            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+            k1_max = k1(i,j)
+            tv1 = 5000._wp
+            do k=maxk,1,-1
+              if (abs(z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
+                k1_max = k
+                tv1 = abs(z_ocn_max(i,j)-zw(k-1))
+              endif
+            enddo
+            k1_max = max(k1_max,k1(i,j))
+            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+
 end if
 
             ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
@@ -458,7 +476,7 @@ end if
               endif
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
             enddo
-            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
           endif
         enddo
       enddo
@@ -468,8 +486,6 @@ end if
 
     deallocate(mldk)
     deallocate(pe_layer1)
-    deallocate(advection_tendency)
-    deallocate(diffusion_tendency)
 
    return
 

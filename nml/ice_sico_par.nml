@@ -428,7 +428,7 @@
 !                         Power of temperature
 !                         (only for i_disc>0)
 
-    tau_dmb = 20.0       
+    tau_dmb = 30.0       
 !                         time scale for discharge parameterisation (years)
 
     r_mar_eff = 500.0

@@ -6,23 +6,26 @@ FC  = gfortran
 
 # NetCDF
 INC_NC  = -I${NETCDFF_ROOT}/include
-# the -rpath options ensure that the same shared libraries are found at runtime
 LIB_NC  = -L${NETCDFF_ROOT}/lib -Wl\,-rpath=${NETCDFF_ROOT}/lib -lnetcdff -L${NETCDFC_ROOT}/lib -Wl\,-rpath=${NETCDFC_ROOT}/lib -lnetcdf
-
-# FFTW
-FFTWROOT = src/utils/exlib-gfortran/fftw-omp
-INC_FFTW = -I${FFTWROOT}/include
-LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
+# the -rpath options ensure that the same shared libraries are found at runtime
 
 # coordinates
 COORDROOT = src/utils/coordinates_gfortran
 INC_COORD = -I${COORDROOT}/libcoordinates/include
 LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
-LIB_MKL = -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -liomp5 -lpthread
+# FESM-UTILS
+FESMUTILSROOT=src/utils/fesm-utils/utils
+INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
+LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
+
+# FFTW
+FFTWROOT = src/utils/fesm-utils/fftw-omp
+INC_FFTW = -I${FFTWROOT}/include
+LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
 
 # LIS
-LISROOT = src/utils/exlib-gfortran/lis-omp
+LISROOT = src/utils/fesm-utils/lis-omp
 INC_LIS = -I${LISROOT}/include 
 LIB_LIS = -L${LISROOT}/lib/ -llis
 
@@ -45,10 +48,10 @@ DFLAGS_NODEBUG = -O3 -ffree-line-length-none
 DFLAGS_DEBUG   = -ffree-line-length-none -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -finit-real=snan -fbacktrace -fcheck=all -Wall
 DFLAGS_PROFILE = -O3 -ffree-line-length-none -pg 
 
-FFLAGS_FULL = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
-FFLAGS_CLIM = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_COORD) $(INC_FFTW)
+FFLAGS_FULL = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_CLIM = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
 FFLAGS_OPENMP  = -fopenmp 
 
-LFLAGS_FULL  = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) -Wl,-zmuldefs
-LFLAGS_CLIM  = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS_FULL  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) -Wl,-zmuldefs
+LFLAGS_CLIM  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) -Wl,-zmuldefs
 

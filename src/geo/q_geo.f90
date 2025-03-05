@@ -26,7 +26,6 @@
 module q_geo_mod
 
   use precision, only : wp, dp
-  use control, only : i_map
   use geo_params, only : i_q_geo, q_geo_const, q_geo_file
 
   use ncio
@@ -80,14 +79,9 @@ contains
       ppos = scan(trim(q_geo_file),".", BACK= .true.)-1
       call grid_init(qgeo_grid,name=trim(q_geo_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
       ! map to geo grid
-      if (i_map==1) then
-        call map_init(map_qgeo_to_geo,qgeo_grid,geo_grid,max_neighbors=4,lat_lim=5._dp,dist_max=1.e6_dp)
-        call map_field(map_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="bilinear")
-      else if (i_map==2) then
-        call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
-          !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
-      endif
+      call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
+        !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
 

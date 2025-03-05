@@ -32,7 +32,7 @@ module hires_to_lowres_mod
   use geo_params, only : f_crit, f_crit_eq
   use geo_params, only : l_ocn_below_shelf
   use geo_params, only : l_close_panama, l_close_bering
-  use geo_params, only : i_z_min_max
+  use geo_params, only : i_z_min_max, z_ocn_max_quant
   use geo_grid, only : ni, nj, n_topo_sur, i_topo_sur, j_topo_sur, i0_topo, i1_topo, j0_topo, j1_topo
 
   implicit none
@@ -45,7 +45,7 @@ contains
   subroutine hires_to_lowres(n_lakes, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, &
     hires_map_runoff, hires_i_runoff, hires_j_runoff, &  ! in
     f_ocn, f_ocn2, f_lnd, f_ice, f_ice_grd, f_ice_flt, f_lake, f_lake_n, &   ! out
-    z_sur, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, z_sur_std, z_sur_smooth_std, z_veg_std, z_sur_lnd_std, &    ! out
+    z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, z_sur_std, z_sur_smooth_std, z_veg_std, z_sur_lnd_std, &    ! out
     f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice)   ! out
 
   implicit none
@@ -70,6 +70,10 @@ contains
   real(wp), intent(out) :: f_lake(:,:)
   real(wp), intent(out) :: f_lake_n(:,:,:)
   real(wp), intent(out) :: z_sur(:,:)
+  real(wp), intent(out) :: z_ocn(:,:)
+  real(wp), intent(out) :: z_ocn_min(:,:)
+  real(wp), intent(out) :: z_ocn_max(:,:)
+  real(wp), intent(out) :: z_ocn_max_q(:,:)
   real(wp), intent(out) :: z_ice(:,:)
   real(wp), intent(out) :: z_lake(:,:)
   real(wp), intent(out) :: z_veg(:,:)
@@ -102,6 +106,8 @@ contains
   real(wp), dimension(:), allocatable :: z_topo_fil_cell
   real(wp), dimension(:), allocatable :: z_sur_cell
   real(wp), dimension(:), allocatable :: z_bed_cell
+  real(wp), dimension(:), allocatable :: z_ocn_tmp
+  real(wp), dimension(:), allocatable :: z_ocn_tmp2
   integer, dimension(:), allocatable :: map_runoff_cell
   logical, dimension(:), allocatable :: mask_cell_roff
 
@@ -118,9 +124,13 @@ contains
   allocate( mask_ndir(n_topo_sur))
   allocate( dir_count(n_topo_sur))
 
+  allocate( z_ocn_tmp(n_topo_sur) )
+  allocate( z_ocn_tmp2(n_topo_sur) )
+  z_ocn_tmp2 = 0._wp
+
   !$omp parallel do private(i,j,ii,jj,n,fcrit,nocn,nice,nice_grd,nice_flt,nveg,nlake,nlaken,ncells,nrun_veg,nrun_ice) &
   !$omp private(mask_ndir,i_runoff_cell,j_runoff_cell,dir_count,dir_loc,dir_loc_save,nrun_tot) &
-  !$omp private(mask_cell,z_topo_cell,z_topo_fil_cell,z_sur_cell,z_bed_cell,map_runoff_cell,mask_cell_roff,z_sur_lnd,z_bed_lnd)
+  !$omp private(mask_cell,z_topo_cell,z_topo_fil_cell,z_sur_cell,z_bed_cell,z_ocn_tmp,map_runoff_cell,mask_cell_roff,z_sur_lnd,z_bed_lnd)
   do j=1,nj
     do i=1,ni
 
@@ -442,6 +452,22 @@ contains
         z_sur_std(i,j) = 0._wp
         z_sur_smooth_std(i,j) = 0._wp
       endif
+      
+      ! grid-cell mean ocean elevation 
+      if (nocn.gt.0) then
+        z_ocn(i,j) = sum(z_bed_cell, mask_cell.eq.2)/real(nocn,wp)
+        z_ocn_min(i,j) = minval(z_bed_cell, mask_cell.eq.2)
+        z_ocn_max(i,j) = maxval(z_bed_cell, mask_cell.eq.2)
+        z_ocn_tmp = pack(z_bed_cell, mask_cell.eq.2,z_ocn_tmp2)
+        call bubble_sort(z_ocn_tmp)
+        z_ocn_max_q(i,j) = z_ocn_tmp(max(1,nint(real(nocn,wp)*z_ocn_max_quant/100._wp)))
+        !print *,'nocn,z,z_min,z_max,z_q10',nocn,z_ocn(i,j),z_ocn_min(i,j),maxval(z_bed_cell, mask_cell.eq.2),z_ocn_max_q(i,j)
+      else
+        z_ocn(i,j) = 0._wp
+        z_ocn_min(i,j) = 0._wp 
+        z_ocn_max(i,j) = 0._wp
+        z_ocn_max_q(i,j) = 0._wp
+      endif
 
       ! grid-cell mean ice-free and land-free land elevation 
       if (nveg.gt.0) then
@@ -509,5 +535,25 @@ contains
 
 
   end subroutine hires_to_lowres
+
+  SUBROUTINE Bubble_Sort(a)
+  REAL(wp), INTENT(in out), DIMENSION(:) :: a
+  REAL(wp) :: temp
+  INTEGER :: i, j
+  LOGICAL :: swapped
+
+  DO j = SIZE(a)-1, 1, -1
+    swapped = .FALSE.
+    DO i = 1, j
+      IF (a(i) > a(i+1)) THEN
+        temp = a(i)
+        a(i) = a(i+1)
+        a(i+1) = temp
+        swapped = .TRUE.
+      END IF
+    END DO
+    IF (.NOT. swapped) EXIT
+  END DO
+END SUBROUTINE Bubble_Sort
 
 end module hires_to_lowres_mod

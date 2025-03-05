@@ -28,15 +28,15 @@ program climber
 
   use precision, only : wp, dp, sp
   use timer, only : timer_init, timer_update
-  use timer, only : step, nstep, year_ini, year, year_now, mon, time_soy, time_eoy, time_eoy_smb, time_soy_smb, time_soy_imo, time_eoy_imo
-  use timer, only : time_call_atm, time_call_ocn, time_call_lnd, time_call_sic, time_call_smb, time_call_imo, time_call_ice, time_call_geo, time_call_clim
+  use timer, only : step, nstep, year_ini, year, year_now, mon, time_soy, time_eoy, time_eoy_smb, time_soy_smb, time_soy_bmb, time_eoy_bmb
+  use timer, only : time_call_atm, time_call_ocn, time_call_lnd, time_call_sic, time_call_smb, time_call_bmb, time_call_ice, time_call_geo, time_call_clim
   use timer, only : time_call_bgc, doy
   use timer, only : time_spinup_cc_1, time_spinup_cc_2
   use timer, only : time_out_ice 
   use timer, only : time_write_restart
   use timer, only : n_year_ice
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
-  use control, only: flag_atm, flag_co2, flag_ch4, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_imo, flag_bgc, flag_geo, ifake_geo, flag_lakes
+  use control, only: flag_atm, flag_co2, flag_ch4, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
   use control, only: l_aquaplanet
   use control, only : l_spinup_cc, l_daily_input_save_ocn, l_daily_input_save_bgc
@@ -52,11 +52,11 @@ program climber
     &                ocn_to_cmn, cmn_to_ocn, &
     &                smb_to_cmn, cmn_to_smb, &
     &                ice_to_smb, ice_to_cmn, smb_to_ice, &
-    &                imo_to_cmn, cmn_to_imo, &
-    &                ice_to_imo, imo_to_ice, &
+    &                bmb_to_cmn, cmn_to_bmb, &
+    &                ice_to_bmb, bmb_to_ice, &
     &                cmn_to_geo, geo_to_cmn, &
     &                ice_to_geo, bnd_to_geo, geo_to_ice, &
-    &                geo_to_smb, geo_to_imo, &
+    &                geo_to_smb, geo_to_bmb, &
     &                co2_to_cmn, cmn_to_co2, &
     &                ch4_to_cmn, cmn_to_ch4, &
     &                bnd_to_cmn, &
@@ -94,9 +94,9 @@ program climber
   use smb_def, only : smb_in_class, smb_class 
   use smb_out, only: smb_diag, smb_diag_init
 
-  use imo_model, only: imo_init, imo_update, imo_end, imo_write_restart
-  use imo_def, only : imo_class
-  use imo_out, only: imo_diag, imo_diag_init
+  use bmb_model, only: bmb_init, bmb_update, bmb_end, bmb_write_restart
+  use bmb_def, only : bmb_class
+  use bmb_out, only: bmb_diag, bmb_diag_init
 
   use co2_model, only: co2_init, co2_update, co2_end, co2_write_restart
   use co2_def, only : co2_class
@@ -128,7 +128,7 @@ program climber
   type(ice_class), allocatable :: ice(:)
   type(smb_in_class) :: smb_in
   type(smb_class), allocatable :: smb(:) 
-  type(imo_class), allocatable :: imo(:) 
+  type(bmb_class), allocatable :: bmb(:) 
   type(co2_class) :: co2
   type(ch4_class) :: ch4
   type(geo_class) :: geo
@@ -147,7 +147,7 @@ program climber
   !$ real(dp) :: time_geo
   !$ real(dp) :: time_ice
   !$ real(dp) :: time_smb
-  !$ real(dp) :: time_imo
+  !$ real(dp) :: time_bmb
 
   write(*,*) 'climber-x git_commit_hash', git_commit_hash
    
@@ -191,7 +191,7 @@ program climber
     call geo_diag_init(geo)
 
     ! define ice grid object for all domains, if required
-    if (flag_ice .or. flag_smb .or. flag_imo) then
+    if (flag_ice .or. flag_smb .or. flag_bmb) then
       allocate(ice_grid(n_ice_domain))
       do n=1,n_ice_domain
         call ice_grid_init(ice_domain_name(n), ice_grid(n))
@@ -240,7 +240,7 @@ program climber
        else
          n_tracers_bgc = 0
        endif
-       call ocn_init(ocn,geo%f_ocn,geo%z_bed,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
+       call ocn_init(ocn,geo%f_ocn,geo%z_bed,geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
        call ocn_diag_init
     endif
 
@@ -295,12 +295,12 @@ program climber
       enddo
     endif
 
-    ! Initialize imo
-    if (flag_imo) then
-      allocate(imo(n_ice_domain))
+    ! Initialize bmb
+    if (flag_bmb) then
+      allocate(bmb(n_ice_domain))
       do n=1,n_ice_domain
-        call imo_init(imo(n),ice_grid(n),cmn%grid) 
-        call imo_diag_init(imo(n))
+        call bmb_init(bmb(n),ice_grid(n),cmn%grid) 
+        call bmb_diag_init(bmb(n))
       enddo
     endif
 
@@ -333,9 +333,9 @@ program climber
       enddo
     endif
     if (flag_lnd) call lnd_to_cmn(lnd,cmn)
-    if (flag_imo) then
+    if (flag_bmb) then
       do n=1,n_ice_domain
-        call imo_to_cmn(imo(n),cmn)
+        call bmb_to_cmn(bmb(n),cmn)
       enddo
     endif
     if (flag_ice) then
@@ -367,7 +367,7 @@ program climber
       !$   time_geo = 0._dp
       !$   time_ice = 0._dp
       !$   time_smb = 0._dp
-      !$   time_imo = 0._dp
+      !$   time_bmb = 0._dp
       !$ endif
 
       ! for carbon cycle spinup
@@ -462,29 +462,29 @@ program climber
 
       !---------------------------------------------------------
       ! update ice melt to ocean model
-      if (flag_imo .and. time_call_imo) then
+      if (flag_bmb .and. time_call_bmb) then
         !$ time_ini = omp_get_wtime()
-        if (l_debug_main_loop) print*, 'update imo model'
+        if (l_debug_main_loop) print*, 'update bmb model'
         do n=1,n_ice_domain
-          call cmn_to_imo(cmn,imo(n))
-          if (time_soy_imo) then
+          call cmn_to_bmb(cmn,bmb(n))
+          if (time_soy_bmb) then
             if (flag_ice) then
-              call ice_to_imo(ice(n),imo(n))
+              call ice_to_bmb(ice(n),bmb(n))
             else
-              call geo_to_imo(geo, imo(n))
+              call geo_to_bmb(geo, bmb(n))
             endif
           endif
-          call imo_update(imo(n))
-          call imo_diag(imo(n))
-          if (time_eoy_imo) then
-            call imo_to_cmn(imo(n),cmn)
+          call bmb_update(bmb(n))
+          call bmb_diag(bmb(n))
+          if (time_eoy_bmb) then
+            call bmb_to_cmn(bmb(n),cmn)
             if (flag_ice) then
-              call imo_to_ice(imo(n),ice(n))
+              call bmb_to_ice(bmb(n),ice(n))
             endif
           endif
         enddo
         !$ time_end = omp_get_wtime()
-        !$ time_imo = time_imo + (time_end-time_ini)
+        !$ time_bmb = time_bmb + (time_end-time_ini)
       endif
 
       !---------------------------------------------------------
@@ -599,7 +599,7 @@ program climber
       !$   print *,'time geo',time_geo 
       !$   print *,'time ice',time_ice 
       !$   print *,'time smb',time_smb 
-      !$   print *,'time imo',time_imo 
+      !$   print *,'time bmb',time_bmb 
       !$ endif
 
       !---------------------------------------------------------
@@ -655,8 +655,8 @@ program climber
         enddo
       endif
 
-      ! End imo
-      !    if (flag_imo) call imo_end(imo)
+      ! End bmb
+      !    if (flag_bmb) call bmb_end(bmb)
 
       if (l_aquaplanet) call aqua_end(cmn)
 
@@ -782,9 +782,9 @@ subroutine write_restart(restart_out_dir, year_now)
       call smb_write_restart(trim(rest_dir)//"/smb_"//trim(smb(n)%grid%name)//"_restart.nc",smb(n))
     enddo
   endif
-  if (flag_imo) then
+  if (flag_bmb) then
     do n=1,n_ice_domain
-      call imo_write_restart(trim(rest_dir)//"/imo_"//trim(imo(n)%grid%name)//"_restart.nc",imo(n))
+      call bmb_write_restart(trim(rest_dir)//"/bmb_"//trim(bmb(n)%grid%name)//"_restart.nc",bmb(n))
     enddo
   endif
   if (flag_ice) then

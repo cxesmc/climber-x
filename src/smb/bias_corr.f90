@@ -27,10 +27,9 @@ module bias_corr_mod
 
    use precision, only : wp, dp
    use timer, only: doy, nday_year, monthly2daily
-   use control, only : i_map, out_dir
+   use control, only : out_dir
    use smb_params, only : smb_ref_file, smb_cx_ref_file 
    use coord, only : grid_init, grid_class
-   use coord, only : map_init, map_class, map_field
    use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
    use ncio
 
@@ -107,7 +106,6 @@ contains
    real(wp), dimension(:,:), allocatable :: smb, prc, evp
    character(len=256) :: fnm
    type(grid_class) :: grid_ref
-   type(map_class) :: map_to_smb
    type(map_scrip_class) :: maps_to_smb
 
 
@@ -146,22 +144,12 @@ contains
      x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
    ! initialize map
-   if (i_map.eq.1) then
-     call map_init(map_to_smb,grid_ref,grid,max_neighbors=1,lat_lim=10._dp,dist_max=2.e6_dp)
-   else if (i_map.eq.2) then
-     call map_scrip_init(maps_to_smb,grid_ref,grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-   endif
+   call map_scrip_init(maps_to_smb,grid_ref,grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
 
    ! mapping
-   if (i_map.eq.1) then
-     call map_field(map_to_smb,"smb",smb,ann_smb_ref,method="nn") 
-     call map_field(map_to_smb,"prc",prc,ann_prc_ref,method="nn") 
-     call map_field(map_to_smb,"evp",evp,ann_evp_ref,method="nn") 
-   else if (i_map.eq.2) then
-     call map_scrip_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 
-     call map_scrip_field(maps_to_smb,"prc",prc,ann_prc_ref,method="mean") 
-     call map_scrip_field(maps_to_smb,"evp",evp,ann_evp_ref,method="mean") 
-   endif
+   call map_scrip_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 
+   call map_scrip_field(maps_to_smb,"prc",prc,ann_prc_ref,method="mean") 
+   call map_scrip_field(maps_to_smb,"evp",evp,ann_evp_ref,method="mean") 
 
    deallocate(smb)
    deallocate(prc)

@@ -26,9 +26,8 @@
 module ice_model
     
     use precision, only : wp, sp, dp 
-    use control, only : out_dir, i_map
+    use control, only : out_dir
     use coord, only : grid_class, grid_init
-    use coord, only : map_class, map_init, map_field
     use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
     use ice_def, only : ice_class
     use yelmo, only : wp_yelmo, yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
@@ -256,7 +255,6 @@ contains
         real(wp), allocatable :: q_geo(:,:)    ! geothermal heat flux on ice sheet grid [W/m2]
         real(wp), allocatable :: h_sed(:,:)    ! sediment thickness on ice sheet grid [m]
         integer, allocatable :: id_mask(:,:)    ! ice id mask 
-        type(map_class) :: map_geo_to_ice
         type(map_scrip_class) :: maps_geo_to_ice
 
         type(yelmo_class), pointer :: ylmo
@@ -314,28 +312,16 @@ contains
         ! set ice ID mask
         call set_ice_id(ice%grid, id_mask)
 
-        if (i_map==1) then
-          ! initialize geo to ice map
-          call map_init(map_geo_to_ice,geo_grid,ice%grid,lat_lim=4._dp*(geo_grid%lat(1,2)-geo_grid%lat(1,1)),dist_max=1.e5_dp,max_neighbors=4)
-          ! map bedrock elevation and ice thickness to ice sheet grid
-          call map_field(map_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="bilinear")
-          call map_field(map_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="bilinear")
-          call map_field(map_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,method="bilinear")
-          call map_field(map_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="bilinear")
-          call map_field(map_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="bilinear")
-          call map_field(map_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="bilinear")
-        else if (i_map==2) then
-          call map_scrip_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-          call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="mean")
-          call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="mean", &
-            filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-          call map_scrip_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,method="mean")
-          call map_scrip_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="mean")
-          call map_scrip_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="mean", missing_value=-9999._dp, &
-            filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-          call map_scrip_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp, &
-            filt_method="none",filt_par=[100._dp,ice%grid%G%dx])
-        endif
+        call map_scrip_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="mean")
+        call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="mean", &
+          filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
+        call map_scrip_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,method="mean")
+        call map_scrip_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="mean")
+        call map_scrip_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="mean", missing_value=-9999._dp, &
+          filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
+        call map_scrip_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp, &
+          filt_method="none",filt_par=[100._dp,ice%grid%G%dx])
 
         where (h_ice<10._wp) h_ice = 0._wp
 
@@ -551,9 +537,8 @@ contains
         ! annual surface mass balance [m(ice equivalent)/s] => [m(ice equivalent)/yr]
         ylmo%bnd%smb = ice%smb*ylmo%bnd%c%sec_year 
 
-        ! basal melt of floating ice [m(ice equivalent)/s] => [! m(ice equivalent)/yr]
-        ! (convert to basal mass balance with melt negative)
-        ylmo%bnd%bmb_shlf = -ice%Q_bm_float*ylmo%bnd%c%sec_year 
+        ! basal mass balance of floating ice [m(ice equivalent)/s] => [! m(ice equivalent)/yr]
+        ylmo%bnd%bmb_shlf = ice%bmb_shlf*ylmo%bnd%c%sec_year 
 
         ! ice surface temperature [degC] => [K] 
         ylmo%bnd%T_srf = min(0.0_wp,ice%temp_s) + 273.15_wp
@@ -642,7 +627,7 @@ contains
             ! annual runoff
             sico%state%runoff(j-1,i-1) = ice%runoff(i,j)    ! m(ice equivalent)/s
             ! basal melt of floating ice 
-            sico%state%Q_bm_float(j-1,i-1) = ice%Q_bm_float(i,j) ! m(ice equivalent)/s
+            sico%state%Q_bm_float(j-1,i-1) = -ice%bmb_shlf(i,j) ! m(ice equivalent)/s
             ! ice surface temperature
             sico%state%temp_s(j-1,i-1) = min(-0.001_wp,ice%temp_s(i,j)) ! degC
             ! ground temperature
@@ -798,7 +783,7 @@ contains
         allocate(ice%mask_extent(nx,ny))
         allocate(ice%calv(nx,ny))
         allocate(ice%Q_b(nx,ny))
-        allocate(ice%Q_bm_float(nx,ny))
+        allocate(ice%bmb_shlf(nx,ny))
         allocate(ice%smb(nx,ny))
         allocate(ice%accum(nx,ny))
         allocate(ice%runoff(nx,ny))
@@ -821,7 +806,7 @@ contains
         ice%mask_extent = 0.0_wp
         ice%calv        = 0.0_wp
         ice%Q_b         = 0.0_wp
-        ice%Q_bm_float  = 0.0_wp
+        ice%bmb_shlf    = 0.0_wp
         ice%smb         = 0.0_wp
         ice%accum       = 0.0_wp
         ice%runoff      = 0.0_wp
@@ -855,7 +840,7 @@ contains
         if (allocated(ice%mask_extent)) deallocate(ice%mask_extent)
         if (allocated(ice%calv))        deallocate(ice%calv)
         if (allocated(ice%Q_b))         deallocate(ice%Q_b)
-        if (allocated(ice%Q_bm_float))  deallocate(ice%Q_bm_float)
+        if (allocated(ice%bmb_shlf))    deallocate(ice%bmb_shlf)
         if (allocated(ice%smb))         deallocate(ice%smb)
         if (allocated(ice%accum))       deallocate(ice%accum)
         if (allocated(ice%runoff))      deallocate(ice%runoff)

@@ -58,6 +58,7 @@ module geo_params
 
   integer :: i_z_min_max
   real(wp) :: sigma_filter
+  real(wp) :: z_ocn_max_quant
 
   integer :: i_lakes
   real(wp) :: lake_area_crit 
@@ -120,6 +121,7 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","h_ice_min",h_ice_min)
     call nml_read(filename,"geo_par","i_z_min_max",i_z_min_max)
     call nml_read(filename,"geo_par","sigma_filter",sigma_filter)
+    call nml_read(filename,"geo_par","z_ocn_max_quant",z_ocn_max_quant)
     call nml_read(filename,"geo_par","geo_ref_file",geo_ref_file)
     call nml_read(filename,"geo_par","z_bed_rel_file",z_bed_rel_file)
     call nml_read(filename,"geo_par","z_bed_1min_file",z_bed_1min_file)

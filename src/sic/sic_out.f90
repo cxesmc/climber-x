@@ -32,7 +32,7 @@ module sic_out
   use timer, only : nstep_year_sic, nstep_mon_sic, nyout_sic, ny_out_ts, y_out_ts_clim, time_out_ts_clim
   use timer, only : time_soy_sic, time_eoy_sic, time_out_sic
   use control, only : out_dir
-  use climber_grid, only : basin_mask, i_atlantic, i_pacific, i_indian, i_southern
+  use climber_grid, only : basin_mask, basin_mask2, i_atlantic, i_pacific, i_indian, i_southern
   use climber_grid, only : lon, lat, lonu, latv
   use sic_grid, only : maxi, maxj, phi0, dphi, sv, dxv, area
   use sic_params, only : dt, l_daily_output, l_diag_dyn, rho_sic
@@ -96,6 +96,7 @@ module sic_out
      real(wp), dimension(:,:), allocatable :: fyic_s ! Meridional force due to shearing internal stress [Pa].
      real(wp), dimension(:,:), allocatable :: Cor_v  ! Meridional Coriolis acceleration [m s-2].
      real(wp), dimension(:,:), allocatable :: PFv    ! Meridional hydrostatic pressure driven acceleration [m s-2].
+     real(wp), dimension(:,:), allocatable :: fwt, fwp, fwa
   end type
 
   type(ts_out), allocatable :: mon_ts(:,:), ann_ts(:)
@@ -249,6 +250,9 @@ contains
     allocate(ann_s%fyic_s(maxi,maxj)) 
     allocate(ann_s%Cor_v (maxi,maxj)) 
     allocate(ann_s%PFv   (maxi,maxj)) 
+    allocate(ann_s%fwt(3,maxj))
+    allocate(ann_s%fwp(3,maxj))
+    allocate(ann_s%fwa(3,maxj))
 
     do k=1,nmon_year
      allocate(mon_s(k)%hsic(maxi,maxj))
@@ -313,6 +317,9 @@ contains
      allocate(mon_s(k)%fyic_s(maxi,maxj)) 
      allocate(mon_s(k)%Cor_v (maxi,maxj)) 
      allocate(mon_s(k)%PFv   (maxi,maxj)) 
+     allocate(mon_s(k)%fwt(3,maxj))
+     allocate(mon_s(k)%fwp(3,maxj))
+     allocate(mon_s(k)%fwa(3,maxj))
     enddo
 
 
@@ -338,6 +345,8 @@ contains
     real(wp) :: fram_exp
     real(wp) :: denmark_exp
     real(wp) :: buoy_sic_NA(nlatv_buoy), S0, S_sic, S_star, beta
+    real(wp) :: tv2, tv3
+    real(wp) :: fwt(3,maxj), fwp(3,maxj), fwa(3,maxj)
 
 
     ! current index
@@ -525,6 +534,9 @@ contains
        mon_s(m)%fyic_s = 0._wp 
        mon_s(m)%Cor_v  = 0._wp 
        mon_s(m)%PFv    = 0._wp 
+       mon_s(m)%fwt    = 0._wp 
+       mon_s(m)%fwa    = 0._wp 
+       mon_s(m)%fwp    = 0._wp 
       enddo
      endif
 
@@ -600,6 +612,34 @@ contains
      mon_s(mon)%fyic_s   = mon_s(mon)%fyic_s    + sic%fyic_s       * mon_avg
      mon_s(mon)%Cor_v    = mon_s(mon)%Cor_v     + sic%Cor_v        * mon_avg
      mon_s(mon)%PFv      = mon_s(mon)%PFv       + sic%PFv          * mon_avg
+
+     fwt = 0._wp
+     fwa = 0._wp
+     fwp = 0._wp
+     do j=1,maxj
+       do i=1,maxi
+         ! advective transport
+         tv2 = sic%fay_sic(i,j)/dt  ! m3/s
+         ! diffusive transport
+         tv3 = sic%fdy_sic(i,j)/dt  ! m3/s
+         fwt(1,j) = fwt(1,j) + tv2 + tv3
+         fwt(2,j) = fwt(2,j) + tv2
+         fwt(3,j) = fwt(3,j) + tv3
+         if (basin_mask2(i,j).eq.i_pacific .or. basin_mask2(i,j).eq.i_indian) then
+           fwp(1,j) = fwp(1,j) + tv2 + tv3
+           fwp(2,j) = fwp(2,j) + tv2
+           fwp(3,j) = fwp(3,j) + tv3
+         else if (basin_mask2(i,j).eq.i_atlantic) then
+           fwa(1,j) = fwa(1,j) + tv2 + tv3
+           fwa(2,j) = fwa(2,j) + tv2
+           fwa(3,j) = fwa(3,j) + tv3
+         endif
+       enddo
+     enddo
+
+     mon_s(mon)%fwt = mon_s(mon)%fwt + fwt*1.e-6_wp * mon_avg ! Sv
+     mon_s(mon)%fwa = mon_s(mon)%fwa + fwa*1.e-6_wp * mon_avg ! Sv
+     mon_s(mon)%fwp = mon_s(mon)%fwp + fwp*1.e-6_wp * mon_avg ! Sv
 
    endif
 
@@ -813,6 +853,7 @@ contains
     call nc_write_dim(fnm, dim_lat, x=lat, axis="y", ncid=ncid)
     call nc_write_dim(fnm,"lonu",x=lonu(2:maxi+1),axis="y",ncid=ncid)
     call nc_write_dim(fnm,"latv",x=latv(2:maxj+1),axis="y",ncid=ncid)
+    call nc_write_dim(fnm,"type",x=1._wp,dx=1._wp,nx=3,units="[tot,adv,diff]",ncid=ncid)
     call nc_close(ncid)
 
    return
@@ -896,6 +937,11 @@ contains
     call nc_write(fnm,"str_d ", sngl(vars%str_d  ), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The divergence stress tensor component",units="Pa m",ncid=ncid) 
     call nc_write(fnm,"str_t ", sngl(vars%str_t  ), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The tension stress tensor component",units="Pa m",ncid=ncid)
     call nc_write(fnm,"str_s ", sngl(vars%str_s  ), dims=[dim_lonu,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The shearing stress tensor component",units="Pa m",ncid=ncid)
+
+    call nc_write(fnm,"fwt   ", sngl(vars%fwt    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwa   ", sngl(vars%fwa    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Atlantic",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwp   ", sngl(vars%fwp    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Indo-Pacific",units="Sv",ncid=ncid)
+
     if (l_diag_dyn) then
     call nc_write(fnm,"fxic  ", sngl(vars%fxic   ), dims=[dim_lonu,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="Zonal force due to internal stresses",units="Pa",ncid=ncid)
     call nc_write(fnm,"fxic_d", sngl(vars%fxic_d ), dims=[dim_lonu,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="Zonal force due to divergence internal stress",units="Pa",ncid=ncid)
@@ -1050,6 +1096,9 @@ contains
     ave%fyic_s   = 0._wp
     ave%Cor_v    = 0._wp
     ave%PFv      = 0._wp
+    ave%fwt      = 0._wp
+    ave%fwa      = 0._wp
+    ave%fwp      = 0._wp
 
     ! Loop over the time indices to sum up and average (if necessary)
     do k = 1, n
@@ -1115,6 +1164,9 @@ contains
        ave%fyic_s   = ave%fyic_s  + d(k)%fyic_s      / div
        ave%Cor_v    = ave%Cor_v   + d(k)%Cor_v       / div
        ave%PFv      = ave%PFv     + d(k)%PFv         / div
+       ave%fwt      = ave%fwt     + d(k)%fwt         / div
+       ave%fwa      = ave%fwa     + d(k)%fwa         / div
+       ave%fwp      = ave%fwp     + d(k)%fwp         / div
     end do
 
    return

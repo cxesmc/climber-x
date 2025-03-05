@@ -77,6 +77,7 @@ module ocn_def
      logical, allocatable :: l_tracers_trans(:)    !! flags for bgc tracer transport
      logical, allocatable :: l_tracer_dic(:)    !! flags for bgc DIC tracers
      logical, allocatable :: l_tracers_isodiff(:)    !! flags for isopycnal diffusion of tracers 
+     real(wp), allocatable :: z_ocn_max(:,:)    !! ocean floor elevation [m]
      real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell, including floating ice [1]
      real(wp), allocatable :: f_ocn_old(:,:)    !! old ocean fraction in grid cell [1]
      real(wp), allocatable :: f_ocn2(:,:)    !! ocean fraction in grid cell, excluding floating ice [1]
@@ -102,6 +103,7 @@ module ocn_def
      real(wp), allocatable :: runoff(:,:)   !! runoff into the ocean [kg/m2/s] 
      real(wp), allocatable :: runoff_veg(:,:)   !! runoff into the ocean [kg/m2/s] 
      real(wp), allocatable :: runoff_ice(:,:)   !! runoff into the ocean [kg/m2/s] 
+     real(wp), allocatable :: melt_ice(:,:)   !! freshwater flux into the ocean from ice sheet melt [kg/m2/s] 
      real(wp), allocatable :: runoff_lake(:,:)   !! runoff into the ocean [kg/m2/s] 
      real(wp), allocatable :: calving(:,:)   !! ice calving into the ocean [kg/m2/s] 
      real(wp), allocatable :: bmelt(:,:)   !! basal melt of ice into the ocean [kg/m2/s] 
@@ -120,6 +122,8 @@ module ocn_def
      real(wp), allocatable :: fax(:,:,:,:)   !! zonal advective tracer volume flux [m3 * tracer conc]
      real(wp), allocatable :: fay(:,:,:,:)   !! meridional advective tracer volume flux [m3 * tracer conc]
      real(wp), allocatable :: faz(:,:,:,:)   !! vertical advective tracer volume flux [m3 * tracer conc]
+     real(wp), allocatable :: dts_dt_adv(:,:,:,:)   !! tracer tendency due to advection [tracer conc/s]
+     real(wp), allocatable :: dts_dt_diff(:,:,:,:)   !! tracer tendency due to diffusion [tracer conc/s]
      real(wp), allocatable :: sst_min(:,:)  !! minimum annual surface layer temperature for corals [degC]
      real(wp), allocatable :: sst_max(:,:)  !! maximum annual surface layer temperature for corals [degC]
      real(wp), allocatable :: rho(:,:,:)    !! density [kg/m3]

@@ -147,6 +147,8 @@
  n_cells_dist_calving = 5     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
  n_cells_dist_weath = 5       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)
  l_fw_corr = T                ! correct freshwater flux to ensure net zero freshwater flux into ocean?
+ l_fw_melt_ice_sep = F        ! treat freshwater to the ocean originating from ice sheet melt separately? 
+                              ! If ==T, fw is applied at the surface and salinity conservation is ensured by compensating uniformely over the whole ocean
  i_fw = 2                     ! virtual salinity flux:
                               ! 1 = virtual salinity flux using reference saln0
                               ! 2 = virtual salinity flux using local salinity, compensate over the whole surface ocean to conserve salinity
@@ -160,6 +162,7 @@
                               ! 0 = no special treatment of brine rejection
                               ! 1 = brine rejection 
                               ! 2 = brine rejection only along coastal cells
+ i_brines_z = 1                              
  frac_brines = 0.
  z_mix_brines = 100.          ! m, depth over which brines are mixed, only for i_brines>0
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation

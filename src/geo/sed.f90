@@ -26,12 +26,10 @@
 module sed_mod
 
   use precision, only : wp, dp
-  use control, only : i_map
   use geo_params, only : sed_file
 
   use ncio
   use coord, only : grid_class, grid_init
-  use coord, only : map_class, map_init, map_field
   use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
 
   implicit none
@@ -54,7 +52,6 @@ contains
     real(wp), dimension(:), allocatable :: lon_sed, lat_sed
     real(wp), dimension(:,:), allocatable :: h_sed_in
     type(grid_class) :: sed_grid
-    type(map_class) :: map_sed_to_geo
     type(map_scrip_class) :: maps_sed_to_geo
 
 
@@ -73,14 +70,9 @@ contains
     ppos = scan(trim(sed_file),".", BACK= .true.)-1
     call grid_init(sed_grid,name=trim(sed_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_sed,dp),y=real(lat_sed,dp))
     ! map to geo grid
-    if (i_map==1) then
-      call map_init(map_sed_to_geo,sed_grid,geo_grid,max_neighbors=4,lat_lim=2._dp,dist_max=1.e6_dp)
-      call map_field(map_sed_to_geo,"h_sed",h_sed_in,h_sed,method="bilinear")
-    else if (i_map==2) then
-      call map_scrip_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,method="mean",missing_value=-9999._dp)
-        !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
-    endif
+    call map_scrip_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_scrip_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,method="mean",missing_value=-9999._dp)
+      !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
     deallocate(h_sed_in, lon_sed, lat_sed)
 

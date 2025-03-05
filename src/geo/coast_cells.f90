@@ -36,7 +36,7 @@ module coast_cells_mod
 contains
 
   subroutine coast_cells(f_lnd, i_runoff, j_runoff, &
-      mask_coast, i_coast_nbr, j_coast_nbr, coast_nbr)
+      mask_coast, mask_coast2, i_coast_nbr, j_coast_nbr, coast_nbr)
 
     implicit none
 
@@ -44,11 +44,12 @@ contains
     integer, intent(in) :: i_runoff(:,:)
     integer, intent(in) :: j_runoff(:,:)
     integer, intent(out) :: mask_coast(:,:)
+    integer, intent(out) :: mask_coast2(:,:)
     integer, intent(out) :: i_coast_nbr(:,:,:)
     integer, intent(out) :: j_coast_nbr(:,:,:)
     integer, intent(out) :: coast_nbr(:,:)
 
-    integer :: i, j, ii, jj, iii, jjj, ni, nj, n, no, nbr, n_nbr_lnd, n_nbr_ocn
+    integer :: i, j, ii, jj, iii, jjj, ni, nj, n, no, nbr, n_nbr_lnd, n_nbr_ocn, n_nbr_lnd2
     integer :: ip1, im1, jp1, jm1, ip2, im2, jp2, jm2, ip3, im3, ip4, im4
     integer, dimension(9) :: idx1, jdx1
     integer, dimension(28) :: idx2, jdx2
@@ -63,8 +64,10 @@ contains
     do i=1,ni
       do j=1,nj
         mask_coast(i,j) = 0
+        mask_coast2(i,j) = 0
         if (f_lnd(i,j).lt.1._wp) then
           n_nbr_lnd = 0
+          n_nbr_lnd2 = 0
           n_nbr_ocn = 0
           ! look for land in 9-cell neighborhood
           do ii=i-1,i+1
@@ -78,6 +81,9 @@ contains
               if (f_lnd(iii,jjj).gt.0._wp) then
                 n_nbr_lnd = n_nbr_lnd+1
               endif
+              if (f_lnd(iii,jjj).eq.1._wp) then
+                n_nbr_lnd2 = n_nbr_lnd2+1
+              endif
               if (f_lnd(iii,jjj).lt.1._wp) then
                 n_nbr_ocn = n_nbr_ocn+1
               endif
@@ -87,6 +93,10 @@ contains
           if (n_nbr_lnd>0 .and. n_nbr_ocn<9) then
             ! coastal cell 
             mask_coast(i,j) = 1
+          endif
+          if (n_nbr_lnd2>0) then
+            ! coastal cell 
+            mask_coast2(i,j) = 1
           endif
         endif
       enddo

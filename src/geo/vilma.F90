@@ -1,7 +1,6 @@
 module vilma_model
 
     use precision, only : wp
-    use control, only : i_map
     use timer, only : dt_geo, sec_year
 
 #ifdef VILMA
@@ -18,7 +17,6 @@ module vilma_model
     use constants, only : rho_i, rho_sw
     use geo_params, only : vilma_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
     use coord, only : grid_class, grid_init
-    use coord, only : map_class, map_init, map_field
     use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
     use ncio
 
@@ -39,7 +37,6 @@ module vilma_model
     real(wp), dimension(:,:), allocatable :: h_ice(:,:)
 
     type(grid_class) :: vilma_grid
-    type(map_class) :: map_geo_to_vilma, map_vilma_to_geo
     type(map_scrip_class) :: maps_geo_to_vilma, maps_vilma_to_geo
 
 
@@ -90,25 +87,21 @@ contains
     iepoch = iepoch + 1
 
     ! interpolate ice thickness to vilma grid
-    if (i_map==1) then
-      call map_field(map_geo_to_vilma,"hice",h_ice_g,h_ice,method="nn") 
-    else if (i_map==2) then
-      call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
-        filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
-      allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
-      allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
-      where (h_ice_g>0._wp) 
-        mask_ice_g = 1.
-      elsewhere
-        mask_ice_g = 0.
-      endwhere
-      mask_ice = 1.
-      call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-        filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
-      where (mask_ice<0.5) h_ice = 0._wp
-      deallocate(mask_ice_g)
-      deallocate(mask_ice)
-    endif
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
+      filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
+    allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
+    allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
+    where (h_ice_g>0._wp) 
+      mask_ice_g = 1.
+    elsewhere
+      mask_ice_g = 0.
+    endwhere
+    mask_ice = 1.
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
+      filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
+    where (mask_ice<0.5) h_ice = 0._wp
+    deallocate(mask_ice_g)
+    deallocate(mask_ice)
 
     ! append h_ice to ice thickness netcdf file
     fnm = trim(out_dir)//"/vilma_h_ice.nc"
@@ -126,11 +119,7 @@ contains
 
     ! interpolate from Gauss-Legendre vilma_grid to geo_grid (regular lat-lon)
     ! relative sea level
-    if (i_map==1) then
-      call map_field(map_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="quadrant") 
-    else if (i_map==2) then
-      call map_scrip_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="mean",missing_value=-9999._dp)
-    endif
+    call map_scrip_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="mean",missing_value=-9999._dp)
 
     ! update bedrock elevation
     z_bed_g = z_bed_ref_g - rsl_g
@@ -203,13 +192,8 @@ contains
     call grid_init(vilma_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
 
     ! generate maps for mapping between geo and vilma
-    if (i_map==1) then
-      call map_init(map_geo_to_vilma,geo_grid,vilma_grid,lat_lim=2._dp*abs(geo_grid%lat(1,2)-geo_grid%lat(1,1)),dist_max=2.e6_dp,max_neighbors=1)
-      call map_init(map_vilma_to_geo,vilma_grid,geo_grid,lat_lim=2._dp*abs(vilma_grid%lat(1,2)-vilma_grid%lat(1,1)),dist_max=2.e6_dp,max_neighbors=4)
-    else if (i_map==2) then
-      call map_scrip_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    endif
+    call map_scrip_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_scrip_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     ! initialize VILMA
 
@@ -355,40 +339,34 @@ contains
 
     z_bed_ref_g = z_bed_ref_in
     ! interpolate z_bed_ref and h_ice to vilma grid
-    if (i_map==1) then
-      call map_field(map_geo_to_vilma,"zref",z_bed_ref_g,z_bed_ref,method="nn") 
-      call map_field(map_geo_to_vilma,"hice",h_ice_ref_g,h_ice_ref,method="nn") 
-      call map_field(map_geo_to_vilma,"hice",h_ice_g,h_ice,method="nn") 
-    else if (i_map==2) then
-      call map_scrip_field(maps_geo_to_vilma,"zref",z_bed_ref_g,z_bed_ref,method="mean",missing_value=-9999._dp, &
-        filt_method="none")
-      call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_ref_g,h_ice_ref,method="mean",missing_value=-9999._dp, &
-        filt_method="none")
-      call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
-        filt_method="none")
-      allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
-      allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
-      where (h_ice_ref_g>0._wp) 
-        mask_ice_g = 1.
-      elsewhere
-        mask_ice_g = 0.
-      endwhere
-      mask_ice = 1.
-      call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-        filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
-      where (mask_ice<0.5) h_ice_ref = 0._wp
-      where (h_ice_g>0._wp) 
-        mask_ice_g = 1.
-      elsewhere
-        mask_ice_g = 0.
-      endwhere
-      mask_ice = 1.
-      call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-        filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
-      where (mask_ice<0.5) h_ice = 0._wp
-      deallocate(mask_ice_g)
-      deallocate(mask_ice)
-    endif
+    call map_scrip_field(maps_geo_to_vilma,"zref",z_bed_ref_g,z_bed_ref,method="mean",missing_value=-9999._dp, &
+      filt_method="none")
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_ref_g,h_ice_ref,method="mean",missing_value=-9999._dp, &
+      filt_method="none")
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
+      filt_method="none")
+    allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
+    allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
+    where (h_ice_ref_g>0._wp) 
+      mask_ice_g = 1.
+    elsewhere
+      mask_ice_g = 0.
+    endwhere
+    mask_ice = 1.
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
+      filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
+    where (mask_ice<0.5) h_ice_ref = 0._wp
+    where (h_ice_g>0._wp) 
+      mask_ice_g = 1.
+    elsewhere
+      mask_ice_g = 0.
+    endwhere
+    mask_ice = 1.
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
+      filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
+    where (mask_ice<0.5) h_ice = 0._wp
+    deallocate(mask_ice_g)
+    deallocate(mask_ice)
 
     ! write reference topography to netcdf file
     fnm = trim(out_dir)//"/vilma_z_bed_ref.nc"
