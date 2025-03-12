@@ -7,6 +7,7 @@ jobrun ./runme -r -- -o output/run -p ctl.nyears=5000
 '''
 import subprocess as subp 
 import sys, os, argparse, shutil, glob, json
+from itertools import chain
 
 # Check whether runner library is installed or not:
 try:
@@ -87,6 +88,8 @@ def main():
         help='HPC partition specification (overrides settings given by queue alias)')
     parser.add_argument('--qos',type=str, metavar="QOS", default=None,
         help='HPC quality of service specification (overrides settings given by queue alias)')
+    parser.add_argument('-m','--mem',type=str, metavar="MEM", default=None,
+        help='HPC max memory per node specification (overrides settings given by queue alias)')
     parser.add_argument('--omp', type=int, metavar="OMP", default=hpc_config["omp"],
         help='Specify number of threads for running with OpenMP (default = 1 implies no parallel computation)')
     parser.add_argument('--email', type=str, default=hpc_config["email"],
@@ -128,7 +131,8 @@ def main():
     submit      = args.submit 
     wall        = args.wall
     queue       = args.queue 
-    qos         = args.qos  
+    qos         = args.qos
+    mem         = args.mem  
     partition   = args.part
     omp         = args.omp 
     email       = args.email 
@@ -174,6 +178,12 @@ def main():
                 if partition is None: partition = hpc_queues["queues"][queue]["partition"]
                 if wall is None: wall = hpc_queues["queues"][queue]["wall"]
 
+        # Set memory option if not set at command line and available.
+        # Note: since memory is job specific, a default value can be set in
+        # hpc_config options rather than in hpc_queues.
+        if mem is None and "mem" in hpc_config.keys(): 
+            mem = hpc_config["mem"]
+    
     # Additional options, consistency checks
 
     if with_runner and not runner_is_installed:
@@ -191,6 +201,11 @@ def main():
     if exe_path in info["exe_aliases"]:
         exe_path = info["exe_aliases"].get(exe_path)
     
+    # Recover the current alias too, for use with determining relevant par_paths
+    exe_alias = next((k for k, v in info["exe_aliases"].items() if v == exe_path), None)
+
+    print("exe_alias: {}".format(exe_alias))
+
     # Also extract executable filename 
     exe_fname = os.path.basename(exe_path)
 
@@ -261,7 +276,21 @@ def main():
     ### PARAMETER FILES ###
 
     # Get list of parameter files to manage
-    par_paths = list(info["par_paths"].values())
+    #par_paths = list(info["par_paths"].values())
+
+    # Define the allowed keys
+    allowed_keys = {"", "all", "none", "na", "general", exe_alias}  # Replace with your actual keys
+
+    # Filter the dictionary and extract values only for the allowed keys
+    # Note: below method will allow each key to include a list of param files,
+    # or an individual parameter file.
+    # Flatten values: convert lists to individual items
+    par_paths = list(chain.from_iterable(
+        [v] if isinstance(v, str) else v for k, v in info["par_paths"].items() if k in allowed_keys
+    ))
+
+    #print(par_paths)  # This will contain only the values from allowed keys
+    #sys.exit()
 
     if info["par_path_as_argument"] is True:
         par_paths.append(par_path)   # add included parameter file provided at command line too
@@ -337,7 +366,7 @@ def main():
     if submit:
 
         # Write the job.submit script to rundir
-        preparejob(path_jobscript_template,rundir,executable,qos,
+        preparejob(path_jobscript_template,rundir,executable,qos,mem,
                             wall,partition,account,omp,jobname,email,mail_type)
         
         if run:
@@ -380,7 +409,7 @@ def runjob(rundir,cmd,omp):
     
     return jobstatus
 
-def preparejob(path_template,rundir,cmd,qos,wall,partition,account,omp,jobname,email,mail_type):
+def preparejob(path_template,rundir,cmd,qos,mem,wall,partition,account,omp,jobname,email,mail_type):
     '''Prepare and write job script for submitting a job to a HPC queue'''
 
     # Create the jobscript using current info
@@ -388,7 +417,7 @@ def preparejob(path_template,rundir,cmd,qos,wall,partition,account,omp,jobname,e
     path_jobscript = "{}/{}".format(rundir,nm_jobscript)
     
     # Generate a job submission script, write to path
-    script  = generate_jobscript(path_template,cmd,jobname,account,qos,wall,partition,omp,email,mail_type)
+    script  = generate_jobscript(path_template,cmd,jobname,account,qos,mem,wall,partition,omp,email,mail_type)
     jobfile = open(path_jobscript,'w').write(script)
 
     return
@@ -509,7 +538,7 @@ def get_git_revision_hash():
     githash = subp.check_output(['git', 'rev-parse', 'HEAD']).strip()
     return githash.decode("ascii") 
 
-def generate_jobscript(template,cmd,jobname,account,qos,wall,partition,omp,email,mail_type):
+def generate_jobscript(template,cmd,jobname,account,qos,mem,wall,partition,omp,email,mail_type):
     '''Definition of the job script based on a template file and 
     fields in < > that can be substituted.'''
 
@@ -550,11 +579,16 @@ def generate_jobscript(template,cmd,jobname,account,qos,wall,partition,omp,email
     job_script = job_script.replace('<PARTITION>',partition)
     job_script = job_script.replace('<QOS>',qos)
     job_script = job_script.replace('<WALL>',"{}".format(wall))
-    job_script = job_script.replace('<OMP>',"{}".format(omp))
+    job_script = job_script.replace('<OMP>', "{}".format(omp))
     job_script = job_script.replace('<JOBNAME>',jobname)
     job_script = job_script.replace('<ACCOUNT>',account)
     job_script = job_script.replace('<CMD>',cmd)
     
+    if mem is None or mem == -1:
+        job_script = job_script.replace('#SBATCH --mem=<MEM>', "")
+    else:
+        job_script = job_script.replace('<MEM>', "{}".format(mem))
+        
     return job_script
 
 
