@@ -119,6 +119,17 @@ contains
     real(wp) :: diff_dia_tmp
     real(wp) :: rho1, rho2, drhodz, dudz2, tv1
 
+    ! Subgrid convection variables
+    integer,  parameter :: nx_subgrid = 5
+    real(wp), parameter :: ntot_subgrid = real(nx_subgrid*nx_subgrid,wp)
+    real(wp), allocatable :: ts_subgrid(:,:,:,:)
+    real(wp), allocatable :: rho_subgrid(:,:,:)
+    integer,  allocatable :: nconv_subgrid(:,:)
+    real(wp), allocatable :: dconv_subgrid(:,:)
+    integer,  allocatable :: kven_subgrid(:,:)
+    real(wp), allocatable :: dven_subgrid(:,:)
+    !real(wp), allocatable :: f_conv(maxi,maxj) <=== Should be global
+
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
 
@@ -351,23 +362,7 @@ contains
             enddo
             ! convection 
 
-if (.FALSE.) then
-  ! SUBGRID CONVECTION ====
-            
-            ! Interpolate rho to subgrid points for this cell
-            ! => obtain 3D array subgrid_rho(nx_subgrid,ny_subgrid,:)
-
-            ! Check for regions with instability within subgrid array
-            !call check_stability(subgrid_unstable(isg,jsg),subgrid_rho(isg,jsg,:),kbo,kto)
-
-            ! Get average column density for region with instability
-            ! ==> obtain rho_ave
-
-
-            ! Get unstable fraction of cell
-            ! f_unstable(i,j) = count(subgrid_unstable) / (nx_subgrid*ny_subgrid)
-
-            ! Call once virtual solution of region that requires mixing
+            ! Find index of the maximum depth where convection could be applied
             k1_max = k1(i,j)
             tv1 = 5000._wp
             do k=maxk,1,-1
@@ -377,10 +372,68 @@ if (.FALSE.) then
               endif
             enddo
             k1_max = max(k1_max,k1(i,j))
-            call convection(l_tracers_trans,ts_conv(:,:),rho_conv(:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
 
-            ! Apply weighted average beween convected column and unconvected column (tracers + rho) 
-            ts(i,j,:,:)  = f_unstable(i,j)*ts_conv + (1.0-f_unstable(i,j))*ts(i,j,:,:) 
+if (.FALSE.) then
+  ! SUBGRID CONVECTION ====
+
+            ! Allocate subgrid arrays
+            allocate(ts_subgrid(nx_subgrid,nx_subgrid,maxk,2))
+            allocate(rho_subgrid(nx_subgrid,nx_subgrid,maxk))
+            allocate(nconv_subgrid(nx_subgrid,nx_subgrid))
+            allocate(dconv_subgrid(nx_subgrid,nx_subgrid))
+            allocate(kven_subgrid(nx_subgrid,nx_subgrid))
+            allocate(dven_subgrid(nx_subgrid,nx_subgrid))
+
+            ! Interpolate tracers ts (temp, salinity) and rho to subgrid points for this cell
+            ! => obtain 3D array subgrid_rho(nx_subgrid,ny_subgrid,:)
+
+            do k = k1(i,j), maxk
+
+              im1 = i-1
+              if (im1.eq.0) im1 = maxi
+              if (mask_c(im1,j,k).eq.0) im1 = i
+              ip1 = i+1
+              if (ip1.eq.maxi+1) ip1 = 1
+              if (mask_c(ip1,j,k).eq.0) ip1 = i
+              jm1 = j-1
+              if (jm1.eq.0) jm1 = 1
+              if (mask_c(i,jm1,k).eq.0) jm1 = j
+              jp1 = j+1
+              if (jp1.eq.maxj+1) jp1 = maxj
+              if (mask_c(i,jp1,k).eq.0) jp1 = j
+
+              do n = 1, n_tracers_tot
+                call calc_subgrid_array(ts_subgrid(:,:,k,n),ts(:,:,k,n),nx_subgrid,i,j,im1,ip1,jm1,jp1)
+              end do
+              call calc_subgrid_array(rho_subgrid(:,:,k),rho(:,:,k),nx_subgrid,i,j,im1,ip1,jm1,jp1)
+            end do
+
+            ! Loop over subgrid points and calculate updated tracers from possible convection
+            do js=1,nx_subgrid
+              do is=1,nx_subgrid
+
+                ! Call once virtual solution of region that requires mixing
+                call convection(l_tracers_trans,ts_subgrid(is,js,:,:),rho_subgrid(is,js,:),k1(i,j),k1_max,mask_coast(i,j), &
+                                      nconv_subgrid(is,js),dconv_subgrid(is,js),kven_subgrid(is,js),dven_subgrid(is,js)) 
+
+              end do
+            end do
+
+            ! Average over subgrid values
+            do k = k1(i,j), maxk
+              do n = 1, n_tracers_tot
+                ts(i,j,k,n) = sum(ts_subgrid(:,:,k,n)) / ntot_subgrid
+              end do
+            end do
+
+            ! Get average convection information
+            nconv(i,j) = sum(nconv_subgrid) / ntot_subgrid
+            dconv(i,j) = sum(dconv_subgrid) / ntot_subgrid
+            kven(i,j)  = sum(kven_subgrid)  / ntot_subgrid
+            dven(i,j)  = sum(dven_subgrid)  / ntot_subgrid
+
+            ! Calculate fraction of cell that experienced convection
+            f_conv(i,j) = count(nconv_subgrid)  / ntot_subgrid
 
             ! Update rho again based on tracer values
             do k=k1(i,j),maxk
@@ -390,16 +443,7 @@ if (.FALSE.) then
 else        
   ! === Normal convection on the whole grid cell ===
             ! Call once virtual solution of region that requires mixing
-            k1_max = k1(i,j)
-            tv1 = 5000._wp
-            do k=maxk,1,-1
-              if (abs(z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
-                k1_max = k
-                tv1 = abs(z_ocn_max(i,j)-zw(k-1))
-              endif
-            enddo
-            k1_max = max(k1_max,k1(i,j))
-            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
 
 end if
 
@@ -476,7 +520,7 @@ end if
               endif
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
             enddo
-            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
           endif
         enddo
       enddo

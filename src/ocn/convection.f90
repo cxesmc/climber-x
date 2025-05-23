@@ -49,7 +49,7 @@ contains
   !   Subroutine :  c o n v e c t i o n
   !   Purpose    :  convection code suitable for arbitrary functions rho(T,S)
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,i,j)
+  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven)
 
     implicit none
 
@@ -58,9 +58,8 @@ contains
     real(wp), dimension(:), intent(inout) :: rho
     integer, intent(in) :: kbo, kbov
     integer, intent(in) :: mask_coast
-    integer, intent(inout) :: kven, nconv
-    real(wp), intent(inout) :: dven, dconv
-    integer, intent(in) :: i, j
+    integer, intent(out) :: kven, nconv
+    real(wp), intent(out) :: dven, dconv
 
     real(wp), dimension(3) :: tmx, tsm
     logical :: chk_la, chk_lb
