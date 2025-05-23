@@ -86,6 +86,7 @@ module ocn_params
      logical :: l_conv_shuffle_passive
      logical :: l_mix_bgc_all
      logical :: l_mld
+     logical :: l_subgrid_convection
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
      real(wp) :: drhcor_max
@@ -271,6 +272,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","slope_max",slope_max)
     call nml_read(filename,"ocn_par","diff_gm",diff_gm)
 
+    call nml_read(filename,"ocn_par","l_subgrid_convection",l_subgrid_convection)
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)
     call nml_read(filename,"ocn_par","l_conv_shuffle_passive",l_conv_shuffle_passive)
     call nml_read(filename,"ocn_par","l_mix_bgc_all",l_mix_bgc_all)

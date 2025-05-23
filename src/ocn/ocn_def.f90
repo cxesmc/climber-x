@@ -129,6 +129,7 @@ module ocn_def
      real(wp), allocatable :: rho(:,:,:)    !! density [kg/m3]
      real(wp), allocatable :: ke_tau(:,:) !! kinetic energy by wind input into the mixed layer []
      real(wp), allocatable :: mld(:,:)      !! mixed layer depth [m]
+     real(wp), allocatable :: f_conv(:,:)   !! fraction of grid cells where convection occurs 
      real(wp), allocatable :: dconv(:,:)    !! depth of convection [m] 
      real(wp), allocatable :: dven(:,:)     !! depth of ventilation [m]
      real(wp), allocatable :: conv_pe(:,:)     !! potential energy released by convection [J/m2]

@@ -435,7 +435,7 @@ $(objdir)/krausturner.o : $(dir_ocn)krausturner.f90 $(objdir)/ocn_params.o $(obj
 
 $(objdir)/transport_ocn.o : $(dir_ocn)transport_ocn.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o \
 	$(objdir)/advection.o $(objdir)/diffusion.o $(objdir)/eos.o $(objdir)/convection.o $(objdir)/krausturner.o 
-	$(FC) $(LDFLAGS) -c -o $@ $<
+	$(FC) $(INC_FESMUTILS) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/advection.o : $(dir_ocn)advection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<

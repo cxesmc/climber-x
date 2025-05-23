@@ -174,7 +174,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: fayti, fdyti
      real(wp), dimension(:,:), allocatable :: faysi, fdysi 
      real(wp), dimension(:,:), allocatable :: mld, mldmax, mldst, ke_tau
-     real(wp), dimension(:,:), allocatable :: dconv, dven, nconv, kven
+     real(wp), dimension(:,:), allocatable :: f_conv, dconv, dven, nconv, kven
      real(wp), dimension(:,:), allocatable :: ssh
      real(wp), dimension(:,:), allocatable :: q_geo
   end type
@@ -337,6 +337,7 @@ contains
     allocate(ann_o%kven(maxi,maxj))
     allocate(ann_o%dconv(maxi,maxj))
     allocate(ann_o%dven(maxi,maxj))
+    allocate(ann_o%f_conv(maxi,maxj))
     allocate(ann_o%mld(maxi,maxj))
     allocate(ann_o%mldmax(maxi,maxj))
     allocate(ann_o%mldst(maxi,maxj))
@@ -431,6 +432,7 @@ contains
      allocate(mon_o(k)%kven(maxi,maxj))
      allocate(mon_o(k)%dconv(maxi,maxj))
      allocate(mon_o(k)%dven(maxi,maxj))
+     allocate(mon_o(k)%f_conv(maxi,maxj))
      allocate(mon_o(k)%mld(maxi,maxj))
      allocate(mon_o(k)%mldst(maxi,maxj))
      allocate(mon_o(k)%ke_tau(maxi,maxj))
@@ -2886,6 +2888,7 @@ contains
             mon_o(m)%kven  = 0._wp
             mon_o(m)%dconv = 0._wp
             mon_o(m)%dven  = 0._wp
+            mon_o(m)%f_conv = 0._wp
             mon_o(m)%mld   = 0._wp
             mon_o(m)%mldst = 0._wp
             mon_o(m)%ke_tau = 0._wp
@@ -2912,6 +2915,7 @@ contains
             mon_o(m)%kven  = missing_value
             mon_o(m)%dconv = missing_value
             mon_o(m)%dven  = missing_value
+            mon_o(m)%f_conv = missing_value
             mon_o(m)%mld   = missing_value
             mon_o(m)%mldst = missing_value
             mon_o(m)%ke_tau   = missing_value
@@ -3231,6 +3235,7 @@ contains
       mon_o(mon)%kven  = mon_o(mon)%kven  + real(ocn%kven,wp)                    * mon_avg
       mon_o(mon)%dconv = mon_o(mon)%dconv + ocn%dconv                            * mon_avg
       mon_o(mon)%dven  = mon_o(mon)%dven  + ocn%dven                             * mon_avg
+      mon_o(mon)%f_conv = mon_o(mon)%f_conv + ocn%f_conv                         * mon_avg
       mon_o(mon)%mld   = mon_o(mon)%mld   + (-ocn%mld)                           * mon_avg
       mon_o(mon)%ke_tau = mon_o(mon)%ke_tau   + ocn%ke_tau/dt*1000._wp     * mon_avg ! mW/m2
     elsewhere
@@ -3256,6 +3261,7 @@ contains
       mon_o(mon)%kven        = missing_value 
       mon_o(mon)%dconv       = missing_value 
       mon_o(mon)%dven        = missing_value 
+      mon_o(mon)%f_conv      = missing_value 
       mon_o(mon)%mld         = missing_value 
       mon_o(mon)%ke_tau      = missing_value 
     endwhere
@@ -3965,6 +3971,7 @@ contains
     call nc_write(fnm,"kven",      sngl(vars%kven),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="maximum integer surface water ventilation",units="PW",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"dconv",     sngl(vars%dconv),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="maximum depth of convection",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"dven",      sngl(vars%dven),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="surface water ventilation depth",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"f_conv", sngl(vars%f_conv),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="fraction of grid gell where convection occurs",units="1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"mld",       sngl(vars%mld),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth from mixed layer scheme",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"mldst",     sngl(vars%mldst),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth from sigma-t criterion",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ke_tau",  sngl(vars%ke_tau),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="kinetic energy input into the ocean by wind stress",units="mW/m2",missing_value=missing_value,ncid=ncid)
@@ -4147,6 +4154,7 @@ contains
     ave%kven  = 0._wp
     ave%dconv = 0._wp
     ave%dven  = 0._wp
+    ave%f_conv = 0._wp
     ave%mld   = 0._wp
     ave%mldst = 0._wp
     ave%ke_tau   = 0._wp
@@ -4237,6 +4245,7 @@ contains
        ave%nconv   = ave%nconv    + d(k)%nconv    / div
        ave%kven    = ave%kven     + d(k)%kven     / div
        ave%dconv   = ave%dconv    + d(k)%dconv    / div
+       ave%f_conv  = ave%f_conv   + d(k)%f_conv   / div
        ave%dven    = ave%dven     + d(k)%dven     / div
        ave%mld     = ave%mld      + d(k)%mld      / div
        ave%mldst   = ave%mldst    + d(k)%mldst    / div

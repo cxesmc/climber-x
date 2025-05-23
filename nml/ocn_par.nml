@@ -102,6 +102,7 @@
  !-------------------------------------------------------------------------------------------
  ! convection settings
  !-------------------------------------------------------------------------------------------
+ l_subgrid_convection = F     ! apply subgrid convection?
  i_conv_shuffle = 0           ! settings for shuffle convection of Mueller 2006, applied be the convection scheme:
                               ! 0 = no shuffle convection applied
                               ! 1 = shuffle convection applied everywhere

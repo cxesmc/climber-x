@@ -48,6 +48,7 @@ module transport_ocn_mod
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
   use ocn_params, only : slope_max, slope_crit
   use ocn_params, only : diffx_max, diffy_max
+  use ocn_params, only : l_subgrid_convection
   use ocn_params, only : l_mld, mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
 
   use advection_mod, only : advection_upstream, advection_fct
@@ -55,6 +56,8 @@ module transport_ocn_mod
   use eos_mod
   use convection_mod, only : convection
   use krausturner_mod
+
+  use subgrid, only : calc_subgrid_array_dble
 
   implicit none
 
@@ -72,7 +75,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine transport(l_tracers_trans,l_tracer_dic,l_tracers_isodiff,l_large_vol_change, &
                       u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
-                      ts,rho,nconv,dconv,kven,dven,conv_pe, &
+                      ts,rho,f_conv,nconv,dconv,kven,dven,conv_pe, &
                       mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
 
     !$ use omp_lib
@@ -93,6 +96,7 @@ contains
 
     real(wp), dimension(:,:,:), intent(inout) :: rho
     real(wp), dimension(:,:,:,:), intent(inout) :: ts
+    real(wp), dimension(:,:), intent(inout) :: f_conv
     integer, dimension(:,:), intent(inout) :: kven, nconv
     real(wp), dimension(:,:), intent(inout) :: dven, dconv
     real(wp), dimension(:,:), intent(inout) :: conv_pe
@@ -120,6 +124,7 @@ contains
     real(wp) :: rho1, rho2, drhodz, dudz2, tv1
 
     ! Subgrid convection variables
+    integer :: is, js, n, im1, jm1, jp1
     integer,  parameter :: nx_subgrid = 5
     real(wp), parameter :: ntot_subgrid = real(nx_subgrid*nx_subgrid,wp)
     real(wp), allocatable :: ts_subgrid(:,:,:,:)
@@ -128,7 +133,6 @@ contains
     real(wp), allocatable :: dconv_subgrid(:,:)
     integer,  allocatable :: kven_subgrid(:,:)
     real(wp), allocatable :: dven_subgrid(:,:)
-    !real(wp), allocatable :: f_conv(maxi,maxj) <=== Should be global
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -373,79 +377,84 @@ contains
             enddo
             k1_max = max(k1_max,k1(i,j))
 
-if (.FALSE.) then
-  ! SUBGRID CONVECTION ====
+            if (l_subgrid_convection) then
+              ! subgrid convection scheme
 
-            ! Allocate subgrid arrays
-            allocate(ts_subgrid(nx_subgrid,nx_subgrid,maxk,2))
-            allocate(rho_subgrid(nx_subgrid,nx_subgrid,maxk))
-            allocate(nconv_subgrid(nx_subgrid,nx_subgrid))
-            allocate(dconv_subgrid(nx_subgrid,nx_subgrid))
-            allocate(kven_subgrid(nx_subgrid,nx_subgrid))
-            allocate(dven_subgrid(nx_subgrid,nx_subgrid))
+              ! Allocate subgrid arrays
+              allocate(ts_subgrid(nx_subgrid,nx_subgrid,maxk,2))
+              allocate(rho_subgrid(nx_subgrid,nx_subgrid,maxk))
+              allocate(nconv_subgrid(nx_subgrid,nx_subgrid))
+              allocate(dconv_subgrid(nx_subgrid,nx_subgrid))
+              allocate(kven_subgrid(nx_subgrid,nx_subgrid))
+              allocate(dven_subgrid(nx_subgrid,nx_subgrid))
 
-            ! Interpolate tracers ts (temp, salinity) and rho to subgrid points for this cell
-            ! => obtain 3D array subgrid_rho(nx_subgrid,ny_subgrid,:)
+              ! Interpolate tracers ts (temp, salinity) and rho to subgrid points for this cell
 
-            do k = k1(i,j), maxk
+              do k = k1(i,j), maxk
 
-              im1 = i-1
-              if (im1.eq.0) im1 = maxi
-              if (mask_c(im1,j,k).eq.0) im1 = i
-              ip1 = i+1
-              if (ip1.eq.maxi+1) ip1 = 1
-              if (mask_c(ip1,j,k).eq.0) ip1 = i
-              jm1 = j-1
-              if (jm1.eq.0) jm1 = 1
-              if (mask_c(i,jm1,k).eq.0) jm1 = j
-              jp1 = j+1
-              if (jp1.eq.maxj+1) jp1 = maxj
-              if (mask_c(i,jp1,k).eq.0) jp1 = j
+                im1 = i-1
+                if (im1.eq.0) im1 = maxi
+                if (mask_c(im1,j,k).eq.0) im1 = i
+                ip1 = i+1
+                if (ip1.eq.maxi+1) ip1 = 1
+                if (mask_c(ip1,j,k).eq.0) ip1 = i
+                jm1 = j-1
+                if (jm1.eq.0) jm1 = 1
+                if (mask_c(i,jm1,k).eq.0) jm1 = j
+                jp1 = j+1
+                if (jp1.eq.maxj+1) jp1 = maxj
+                if (mask_c(i,jp1,k).eq.0) jp1 = j
 
-              do n = 1, n_tracers_tot
-                call calc_subgrid_array(ts_subgrid(:,:,k,n),ts(:,:,k,n),nx_subgrid,i,j,im1,ip1,jm1,jp1)
+                do n = 1, n_tracers_tot
+                  call calc_subgrid_array_dble(ts_subgrid(:,:,k,n),ts(:,:,k,n),nx_subgrid,i,j,im1,ip1,jm1,jp1)
+                end do
+                call calc_subgrid_array_dble(rho_subgrid(:,:,k),rho(:,:,k),nx_subgrid,i,j,im1,ip1,jm1,jp1)
               end do
-              call calc_subgrid_array(rho_subgrid(:,:,k),rho(:,:,k),nx_subgrid,i,j,im1,ip1,jm1,jp1)
-            end do
 
-            ! Loop over subgrid points and calculate updated tracers from possible convection
-            do js=1,nx_subgrid
-              do is=1,nx_subgrid
+              ! Loop over subgrid points and calculate updated tracers from possible convection
+              do js=1,nx_subgrid
+                do is=1,nx_subgrid
 
-                ! Call once virtual solution of region that requires mixing
-                call convection(l_tracers_trans,ts_subgrid(is,js,:,:),rho_subgrid(is,js,:),k1(i,j),k1_max,mask_coast(i,j), &
-                                      nconv_subgrid(is,js),dconv_subgrid(is,js),kven_subgrid(is,js),dven_subgrid(is,js)) 
+                  ! Call once virtual solution of region that requires mixing
+                  call convection(l_tracers_trans,ts_subgrid(is,js,:,:),rho_subgrid(is,js,:),k1(i,j),k1_max,mask_coast(i,j), &
+                    nconv_subgrid(is,js),dconv_subgrid(is,js),kven_subgrid(is,js),dven_subgrid(is,js),i,j) 
 
+                end do
               end do
-            end do
 
-            ! Average over subgrid values
-            do k = k1(i,j), maxk
-              do n = 1, n_tracers_tot
-                ts(i,j,k,n) = sum(ts_subgrid(:,:,k,n)) / ntot_subgrid
+              ! Average over subgrid values
+              do k = k1(i,j), maxk
+                do n = 1, n_tracers_tot
+                  ts(i,j,k,n) = sum(ts_subgrid(:,:,k,n)) / ntot_subgrid
+                end do
               end do
-            end do
 
-            ! Get average convection information
-            nconv(i,j) = sum(nconv_subgrid) / ntot_subgrid
-            dconv(i,j) = sum(dconv_subgrid) / ntot_subgrid
-            kven(i,j)  = sum(kven_subgrid)  / ntot_subgrid
-            dven(i,j)  = sum(dven_subgrid)  / ntot_subgrid
+              ! Get average convection information
+              nconv(i,j) = sum(nconv_subgrid) / ntot_subgrid
+              dconv(i,j) = sum(dconv_subgrid) / ntot_subgrid
+              kven(i,j)  = sum(kven_subgrid)  / ntot_subgrid
+              dven(i,j)  = sum(dven_subgrid)  / ntot_subgrid
 
-            ! Calculate fraction of cell that experienced convection
-            f_conv(i,j) = count(nconv_subgrid)  / ntot_subgrid
+              ! Calculate fraction of cell that experienced convection
+              f_conv(i,j) = real(count(nconv_subgrid>0),wp)  / ntot_subgrid
 
-            ! Update rho again based on tracer values
-            do k=k1(i,j),maxk
-              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
-            end do
+              ! Update rho again based on tracer values
+              do k=k1(i,j),maxk
+                rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+              end do
 
-else        
-  ! === Normal convection on the whole grid cell ===
-            ! Call once virtual solution of region that requires mixing
-            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+            else        
+              ! === Normal convection on the whole grid cell ===
 
-end if
+              ! Call once virtual solution of region that requires mixing
+              call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+              if (nconv(i,j).gt.0) then
+                f_conv(i,j) = 1._wp
+              else
+                f_conv(i,j) = 0._wp
+              endif
+
+            end if
 
             ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
             pe_conv = 0._wp
@@ -520,7 +529,12 @@ end if
               endif
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
             enddo
-            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j)) 
+            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+            if (nconv(i,j).gt.0) then
+              f_conv(i,j) = 1._wp
+            else
+              f_conv(i,j) = 0._wp
+            endif
           endif
         enddo
       enddo
