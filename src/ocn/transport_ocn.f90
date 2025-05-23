@@ -337,6 +337,18 @@ contains
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: advdiff ',time2-time1
 
+    if (l_subgrid_convection) then
+
+      ! Allocate subgrid arrays
+      allocate(ts_subgrid(nx_subgrid,nx_subgrid,maxk,2))
+      allocate(rho_subgrid(nx_subgrid,nx_subgrid,maxk))
+      allocate(nconv_subgrid(nx_subgrid,nx_subgrid))
+      allocate(dconv_subgrid(nx_subgrid,nx_subgrid))
+      allocate(kven_subgrid(nx_subgrid,nx_subgrid))
+      allocate(dven_subgrid(nx_subgrid,nx_subgrid))
+
+    endif
+
     ! convection and mixed layer scheme
     if (l_mld) then
     !$ time1 = omp_get_wtime()
@@ -379,14 +391,6 @@ contains
 
             if (l_subgrid_convection) then
               ! subgrid convection scheme
-
-              ! Allocate subgrid arrays
-              allocate(ts_subgrid(nx_subgrid,nx_subgrid,maxk,2))
-              allocate(rho_subgrid(nx_subgrid,nx_subgrid,maxk))
-              allocate(nconv_subgrid(nx_subgrid,nx_subgrid))
-              allocate(dconv_subgrid(nx_subgrid,nx_subgrid))
-              allocate(kven_subgrid(nx_subgrid,nx_subgrid))
-              allocate(dven_subgrid(nx_subgrid,nx_subgrid))
 
               ! Interpolate tracers ts (temp, salinity) and rho to subgrid points for this cell
 
