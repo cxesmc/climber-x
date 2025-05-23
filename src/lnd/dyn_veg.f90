@@ -343,6 +343,22 @@ contains
         endif
         pft_frac(1) = 0._wp
         pft_frac(2) = 0._wp
+      else if (veg_par%i_deforest.eq.21) then
+        ! convert tropical forest to grassland
+        if (pft_frac(3).gt.pft_frac(4)) then
+          pft_frac(3) = pft_frac(3) + pft_frac(1) 
+        else
+          pft_frac(4) = pft_frac(4) + pft_frac(1)
+        endif
+        pft_frac(1) = 0._wp
+      else if (veg_par%i_deforest.eq.22) then
+        ! convert boreal forest to grassland
+        if (pft_frac(3).gt.pft_frac(4)) then
+          pft_frac(3) = pft_frac(3) + pft_frac(2) 
+        else
+          pft_frac(4) = pft_frac(4) + pft_frac(2)
+        endif
+        pft_frac(2) = 0._wp
       else if (veg_par%i_deforest.eq.3) then
         ! convert forest to shrubs
         pft_frac(5) = pft_frac(5) + pft_frac(1) + pft_frac(2)

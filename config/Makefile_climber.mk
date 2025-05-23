@@ -24,7 +24,9 @@ obj_atm = $(patsubst %, $(objdir)/%, $(tmp_atm) )
 dir_bgc = $(srcdir)/bgc/
 files_bgc = bgc_grid.f90 bgc_params.f90 bgc_def.f90 mo_biomod.f90 \
 	          bgc_diag.f90 apply_net_fw.f90 chemcon.f90 \
-                  mo_m4ago_physics.f90 mo_m4ago_core.f90 mo_m4ago_climberx.f90 \
+                  mo_m4ago_types.f90 mo_m4ago_params.f90 \
+                  mo_m4ago_physics.f90 mo_m4ago_core.f90 mo_m4ago_HAMOCCinit.f90 \
+                  mo_m4ago_HAMOCCPrimPart.f90 mo_m4ago_climberx.f90 \
 	          ocprod.f90 carchm.f90 cyano.f90 \
 	          powadi.f90 dipowa.f90 powach.f90 sedshi.f90 \
 	          mo_beleg_bgc.f90 tracer_cons.f90 flx_sed.f90 \
@@ -35,7 +37,8 @@ obj_bgc = $(patsubst %, $(objdir)/%, $(tmp_bgc))
 
 # addition of M4AGO sinking scheme (git submodule in separate directory)
 dir_m4ago = $(srcdir)/bgc/m4ago/src/
-files_m4ago = mo_m4ago_physics.f90 mo_m4ago_core.f90 mo_m4ago_climberx.f90
+files_m4ago = mo_m4ago_types.f90 mo_m4ago_params.f90 mo_m4ago_physics.f90 mo_m4ago_core.f90 \
+              mo_m4ago_HAMOCCinit.f90 mo_m4ago_HAMOCCPrimPart.f90 mo_m4ago_climberx.f90	      
 tmp_m4ago = $(patsubst %.f90, %.o, $(files_m4ago) )
 obj_m4ago = $(patsubst %, $(objdir)/%, $(tmp_m4ago))
 
@@ -658,7 +661,9 @@ $(objdir)/lndvc_model.o : $(dir_lndvc)/lndvc_model.f90 $(objdir)/lndvc_def.o $(o
 # ocean biogeochemistry rules ####
 $(objdir)/bgc_model.o : $(dir_bgc)bgc_model.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o \
 	$(objdir)/mo_biomod.o $(objdir)/bgc_diag.o $(objdir)/apply_net_fw.o $(objdir)/chemcon.o \
-	$(objdir)/mo_m4ago_physics.o $(objdir)/mo_m4ago_core.o $(objdir)/mo_m4ago_climberx.o \
+	$(objdir)/mo_m4ago_types.o $(objdir)/mo_m4ago_params.o $(objdir)/mo_m4ago_physics.o \
+	$(objdir)/mo_m4ago_core.o $(objdir)/mo_m4ago_HAMOCCinit.o $(objdir)/mo_m4ago_HAMOCCPrimPart.o \
+	$(objdir)/mo_m4ago_climberx.o \
 	$(objdir)/ocprod.o $(objdir)/carchm.o $(objdir)/cyano.o $(objdir)/powadi.o \
 	$(objdir)/dipowa.o $(objdir)/powach.o $(objdir)/sedshi.o $(objdir)/mo_beleg_bgc.o $(objdir)/tracer_cons.o \
 	$(objdir)/flx_sed.o $(objdir)/flx_sed_net.o $(objdir)/flx_bur.o $(objdir)/sed_grid_update_tracers.o
@@ -667,7 +672,22 @@ $(objdir)/bgc_model.o : $(dir_bgc)bgc_model.f90 $(objdir)/bgc_grid.o $(objdir)/b
 $(objdir)/bgc_grid.o : $(dir_bgc)/bgc_grid.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_params.o : $(dir_bgc)/bgc_params.f90 $(objdir)/bgc_grid.o 
+$(objdir)/mo_m4ago_types.o : $(dir_m4ago)/mo_m4ago_types.f90 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/mo_m4ago_physics.o : $(dir_m4ago)/mo_m4ago_physics.f90 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/mo_m4ago_core.o : $(dir_m4ago)/mo_m4ago_core.f90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_physics.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/mo_m4ago_params.o : $(dir_m4ago)/mo_m4ago_params.f90 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/mo_m4ago_HAMOCCinit.o : $(dir_m4ago)/mo_m4ago_HAMOCCinit.F90 ${objdir}/mo_m4ago_params.o ${objdir}/mo_m4ago_core.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/bgc_params.o : $(dir_bgc)/bgc_params.f90 $(objdir)/bgc_grid.o ${objdir}/mo_m4ago_HAMOCCinit.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bgc_def.o : $(dir_bgc)/bgc_def.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_diag.o
@@ -685,18 +705,16 @@ $(objdir)/apply_net_fw.o : $(dir_bgc)/apply_net_fw.f90 $(objdir)/bgc_grid.o $(ob
 $(objdir)/chemcon.o : $(dir_bgc)/chemcon.f90 $(objdir)/bgc_def.o $(objdir)/bgc_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_physics.o : $(dir_m4ago)/mo_m4ago_physics.f90 
+$(objdir)/mo_m4ago_HAMOCCPrimPart.o : $(dir_m4ago)/mo_m4ago_HAMOCCPrimPart.F90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_HAMOCCinit.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_core.o : $(dir_m4ago)/mo_m4ago_core.f90 
+$(objdir)/mo_m4ago_climberx.o : $(dir_m4ago)/mo_m4ago_climberx.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o \
+	${objdir}/mo_m4ago_types.o $(objdir)/mo_m4ago_params.o $(objdir)/mo_m4ago_core.o  $(objdir)/mo_m4ago_physics.o \
+	${objdir}/mo_m4ago_HAMOCCinit.o $(objdir)/mo_m4ago_HAMOCCPrimPart.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_climberx.o : $(dir_m4ago)/mo_m4ago_climberx.f90 $(objdir)/bgc_params.o \
-	$(objdir)/bgc_def.o $(objdir)/mo_m4ago_physics.o  $(objdir)/mo_m4ago_core.o 
-	$(FC) $(LDFLAGS) -c -o $@ $<
-
-$(objdir)/ocprod.o : $(dir_bgc)/ocprod.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o \
-	$(objdir)/mo_m4ago_physics.o $(objdir)/mo_m4ago_core.o
+$(objdir)/ocprod.o : $(dir_bgc)/ocprod.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o ${objdir}/bgc_diag.o \
+	$(objdir)/mo_m4ago_physics.o $(objdir)/mo_m4ago_HAMOCCinit.o ${objdir}/mo_m4ago_climberx.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/carchm.o : $(dir_bgc)/carchm.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o

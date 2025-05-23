@@ -114,6 +114,7 @@ module ocn_params
      real(wp) :: relax_calv
      real(wp) :: relax_bmelt
      real(wp) :: scale_runoff_ice
+     real(wp) :: scale_dhdt_ice
      ! peak and background temperatures for i_init option 3
      real(wp) :: init3_peak = 25.0_wp
      real(wp) :: init3_bg   = 15.0_wp
@@ -308,6 +309,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","relax_calv",relax_calv)
     call nml_read(filename,"ocn_par","relax_bmelt",relax_bmelt)
     call nml_read(filename,"ocn_par","scale_runoff_ice",scale_runoff_ice)
+    call nml_read(filename,"ocn_par","scale_dhdt_ice",scale_dhdt_ice)
 
     call nml_read(filename,"ocn_par","l_hosing",l_hosing)
     call nml_read(filename,"ocn_par","i_hosing",i_hosing)

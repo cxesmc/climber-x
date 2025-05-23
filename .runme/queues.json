@@ -63,6 +63,30 @@
         }
     },
 
+    "caucluster" :
+    {
+        "job_template"  : ".runme/submit_slurm",
+        
+        "queues" :
+        {   "test" :
+            {   "qos"  : "test",
+                "partition" : "base",
+                "wall" : "02:00:00"  
+            },
+            "express" :
+            {   "qos"  : "express",
+                "partition" : "base",
+                "wall" : "12:00:00"  
+            },
+            "long" :
+            {   "qos"  : "long",
+                "partition" : "base",
+                "wall" : "240:00:00"  
+            }
+        }
+    },
+
+
     "awi_albedo" :
     {
         "job_template"  : ".runme/submit_slurm",

@@ -70,7 +70,7 @@ module coupler
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, tau_sst, tau_sss
     use ocn_params, only : l_ocn_input_fix, l_ocn_fix_wind, l_ocn_fix_fw, l_ocn_fix_flx, i_ocn_input_fix
     use ocn_params, only : n_cells_dist_runoff, n_cells_dist_calving, n_cells_dist_weath
-    use ocn_params, only : relax_run, relax_calv, relax_bmelt, scale_runoff_ice
+    use ocn_params, only : relax_run, relax_calv, relax_bmelt, scale_runoff_ice, scale_dhdt_ice
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi
     use lnd_grid, only : is_veg, is_ice, nl
@@ -287,6 +287,7 @@ module coupler
       real(wp), dimension(:,:),   allocatable :: calving_ice_l !! calving from ice sheets computed by land model [kg/s]
       real(wp), dimension(:,:,:), allocatable :: melt_ice_i_mon  !! monthly ice sheet melt [kg/s]
       real(wp), dimension(:,:,:), allocatable :: acc_ice_i_mon  !! monthly ice sheet net accumulation from prescribed bnd ice thickness changes [kg/s]
+      real(wp), dimension(:,:,:), allocatable :: dhdt_ice_i_mon  !! monthly change in freshwater flux from prescribed bnd ice thickness changes [kg/s]
       real(wp), dimension(:,:,:), allocatable :: runoff_ice_i_mon  !! monthly runoff from ice sheets [kg/s]
       real(wp), dimension(:,:),   allocatable :: calving_ice_i !! calving from ice sheets computed by ice model [kg/s]
       real(wp), dimension(:,:),   allocatable :: bmelt_grd_i !! basal melt from grounded ice sheets computed by ice model [kg/s]
@@ -1996,6 +1997,8 @@ contains
       ch4%dch4lnd_dt   = 0._wp 
     endif
 
+    ch4%t2m_glob_ann = cmn%t2m_glob_ann
+
     return
     
   end subroutine cmn_to_ch4
@@ -3269,6 +3272,7 @@ contains
         allocate(melt_ice_i_mon(cmn%grid%G%nx,cmn%grid%G%ny,nmon_year))
         melt_ice_i_mon(:,:,:) = 0._wp
         cmn%acc_ice_i_mon(:,:,:) = 0._wp
+        cmn%dhdt_ice_i_mon(:,:,:) = 0._wp
         do ii=1,bnd%ice%grid%G%nx
           do jj=1,bnd%ice%grid%G%ny
             i = bnd%ice%grid_ice_to_cmn%i_lowres(ii,jj)
@@ -3278,6 +3282,8 @@ contains
                 max(0._wp,(-bnd%ice%dh_ice_dt(ii,jj))*rho_i*bnd%ice%grid%area(ii,jj))  ! m /s * kg/m3 * m2 = kg/s
               cmn%acc_ice_i_mon(i,j,:) = cmn%acc_ice_i_mon(i,j,:) + &
                 max(0._wp,(bnd%ice%dh_ice_dt(ii,jj))*rho_i*bnd%ice%grid%area(ii,jj))  ! m /s * kg/m3 * m2 = kg/s
+              cmn%dhdt_ice_i_mon(i,j,:) = cmn%dhdt_ice_i_mon(i,j,:) + &
+                bnd%ice%dh_ice_dt(ii,jj)*rho_i*bnd%ice%grid%area(ii,jj)  ! m /s * kg/m3 * m2 = kg/s
             endif
           enddo
         enddo
@@ -3590,7 +3596,9 @@ contains
         if (cmn%mask_smb(i,j).eq.0) then
           ! grid cell not covered by smb model domain(s) 
           ! melt from prescribed ice sheet changes (if applicable)
-          cmn%melt_ice(i,j) = scale_runoff_ice*cmn%melt_ice_i_mon(i,j,mon)
+          cmn%melt_ice(i,j) = scale_runoff_ice*cmn%melt_ice_i_mon(i,j,mon) 
+          ! add freshwater flux from changes in ice thickness (both positive and negative), if required
+          cmn%melt_ice(i,j) = cmn%melt_ice(i,j) - scale_dhdt_ice*cmn%dhdt_ice_i_mon(i,j,mon)
           ! use runoff computed in the land model + melt from prescribed ice sheet changes (if applicable)
           cmn%runoff_ice(i,j) = cmn%runoff_ice_l(i,j) + cmn%melt_ice(i,j)
         else
@@ -3993,6 +4001,7 @@ contains
     cmn%calving_ice_l = 0._wp
     cmn%melt_ice_i_mon = 0._wp
     cmn%acc_ice_i_mon = 0._wp
+    cmn%dhdt_ice_i_mon = 0._wp
     cmn%runoff_ice_i_mon = 0._wp
     cmn%calving_ice_i = 0._wp
     cmn%bmelt_grd_i = 0._wp
@@ -4184,6 +4193,7 @@ contains
     allocate(cmn%calving_ice_l(ni,nj))
     allocate(cmn%melt_ice_i_mon(ni,nj,nmon_year)) 
     allocate(cmn%acc_ice_i_mon(ni,nj,nmon_year)) 
+    allocate(cmn%dhdt_ice_i_mon(ni,nj,nmon_year)) 
     allocate(cmn%runoff_ice_i_mon(ni,nj,nmon_year)) 
     allocate(cmn%calving_ice_i(ni,nj))
     allocate(cmn%bmelt_grd_i(ni,nj))

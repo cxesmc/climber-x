@@ -16,6 +16,10 @@
     l_conserve_sil  = T
     l_conserve_alk  = F
 
+    ini_tracer_scale = 1.   ! factor to scale ALL bgc tracer concentrations from restart file, used only if bgc_restart=T in control.nml
+                            ! e.g., to counter-balance reduction of ocean volume (see vol in ocn_ts.nc)
+                            !       when initializing LGM runs from PI-restarts for bgc, but LGM restarts for ocn/geo 
+
     alk_scale = 1.          ! factor to scale alkalinity read from restart file, used only if bgc_restart=T in control.nml
     dic_scale = 1.          ! factor to scale DIC concentration read from restart file, used only if bgc_restart=T in control.nml
     po4_scale = 1.          ! factor to scale phosphate read from restart file, used only if bgc_restart=T in control.nml
@@ -125,16 +129,16 @@
                              ! 2 = M4AGO aggregate sinking scheme (Maerz et al., 2020; https://doi.org/10.5194/bg-17-1765-2020)
     l_sinklimit = F          ! limit sinking speed by CFL stability?
     l_viscosink = F          ! effect of seawater viscosity on particle sinking? (only for ballasting scheme, isinking=1)
-    l_wpoc_const = F        ! use constant POC sinking speed? If not then linear increase with depth (dwpoc_dz) is used, used only if l_ballast==F
-    wpoc_zconst = 100       ! m, depth below which POC sinking speed increases with depth, used only if l_ballast==F
-    dwpoc_dz = 0.01         ! s-1, rate of increase of POC sinking speed with depth, used only if l_ballast==F
+    l_wpoc_const = F        ! use constant POC sinking speed? If not then linear increase with depth (dwpoc_dz) is used, used only for Martin-type sinking (isinkscheme=0)
+    wpoc_zconst = 100       ! m, depth below which POC sinking speed increases with depth, used only for Martin-type sinking (isinkscheme=0)
+    dwpoc_dz = 0.01         ! s-1, rate of increase of POC sinking speed with depth, used only for Martin-type sinking (isinkscheme=0)
     l_wpoc_scale = F        ! scale POC sinking speed with factor wpoc_scale for year > 2000 AD?
     wpoc_scale = 1.         ! factor by which to scale POC sinking speed, used only if l_wpoc_scale==T
-    sinkspeed_poc = 3.0     ! m/d, POC sinking speed, used if lmartin == F, 5 in HAMOCC, used only if l_ballast==F
+    sinkspeed_poc = 3.0     ! m/d, POC sinking speed, used if lmartin == F, 5 in HAMOCC, used only for prescribed sinking speeds (isinkscheme=0)
     sinkspeed_opal = 30.0   ! m/d, sinking speed of opal, used only if l_ballast==F
     sinkspeed_cal =  30.0   ! m/d, sinking speed of cal, used only if l_ballast==F
-    w0 = 0.5                ! m/d, reference sinking speed for ballasting scheme, used only if l_ballast==T
-    det_crit = 1.e-9        ! kmolC/m3, to avoid fast sinking of dust under ice, aggregates are only formed for POC > det_crit, used only if l_ballast==T
+    w0 = 0.5                ! m/d, reference sinking speed for ballasting scheme, used only for ballasting (isinkscheme=1)
+    det_crit = 1.e-9        ! kmolC/m3, to avoid fast sinking of dust under ice, aggregates are only formed for POC > det_crit, used only for ballasting (isinkscheme=1)
     l_rem_temp = T          ! temperature dependence of remineralisation rate?
     drempoc_ref = 0.05       ! d-1, POC remineralisation rate, constant value used if l_rem_temp==F (0.025 in HAMOCC), value at temperature trem_ref otherwise
     dremdoc_ref = 0.004      ! d-1, DOC remineralisation rate, constant value used if l_rem_temp==F (0.004 in HAMOCC), value at temperature trem_ref otherwise

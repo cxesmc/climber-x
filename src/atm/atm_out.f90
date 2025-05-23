@@ -80,6 +80,7 @@ module atm_out
     real(wp) :: ts6090
     real(wp) :: tgrl
     real(wp) :: tgrl1
+    real(wp) :: tgrl1_jja
     real(wp) :: tnatl
     real(wp) :: tant    
     real(wp) :: dust_grl
@@ -936,7 +937,7 @@ contains
 
     integer :: i, j, m, k, y, ind, imi, jmi, ipl, jpl
     character (len=256) :: fnm
-    real(wp) :: mon_avg, ann_avg, favg, favgl, favg6090, fcum, xsum, lsqr, esqr6090
+    real(wp) :: mon_avg, ann_avg, jja_avg, favg, favgl, favg6090, fcum, xsum, lsqr, esqr6090
     real(wp) :: t, rh
     real(wp) :: faxmasi, faymasi
     real(wp) :: tup
@@ -1038,6 +1039,7 @@ contains
 
     mon_avg = 1._wp/nstep_mon_atm
     ann_avg = 1._wp/nstep_year_atm
+    jja_avg = 1._wp/(nstep_mon_atm*3._wp)
 
     if (time_soy_atm) then
       ann_ts(y)%co2flx=0
@@ -1051,6 +1053,7 @@ contains
       ann_ts(y)%ts6090=0
       ann_ts(y)%tgrl=0
       ann_ts(y)%tgrl1=0
+      ann_ts(y)%tgrl1_jja=0
       ann_ts(y)%tnatl=0
       ann_ts(y)%tant=0
       ann_ts(y)%dust_grl=0
@@ -1310,6 +1313,10 @@ contains
     ann_ts(y)%tgrl          = ann_ts(y)%tgrl          + sum(atm%t2(i_grl,j_grl,:)*atm%frst(i_grl,j_grl,:)) * ann_avg
     ann_ts(y)%tgrl1         = ann_ts(y)%tgrl1         + sum(atm%t2(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice)*atm%frst(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice)) &
                                                       / (sum(atm%frst(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice))+1.e-20_wp)* ann_avg
+    if (mon.ge.6 .and. mon.le.8) then
+      ann_ts(y)%tgrl1_jja   = ann_ts(y)%tgrl1_jja     + sum(atm%t2(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice)*atm%frst(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice)) &
+                                                      / (sum(atm%frst(i_grl_1:i_grl_2,j_grl_2:j_grl_1,i_ice))+1.e-20_wp)* jja_avg
+    endif
     ann_ts(y)%tnatl         = ann_ts(y)%tnatl         + sum(atm%t2(i_natl_1:i_natl_2,j_natl_2:j_natl_1,:)*atm%frst(i_natl_1:i_natl_2,j_natl_2:j_natl_1,:)) &
                                                       / size(atm%frst(i_natl_1:i_natl_2,j_natl_2:j_natl_1,1))* ann_avg
     ann_ts(y)%tant          = ann_ts(y)%tant          + sum(atm%t2(i_ant,j_ant,:)*atm%frst(i_ant,j_ant,:)) * ann_avg 
@@ -1405,6 +1412,7 @@ contains
       ann_ts(y)%ts6090 = ann_ts(y)%ts6090 - T0    ! degC
       ann_ts(y)%tgrl = ann_ts(y)%tgrl - T0    ! degC
       ann_ts(y)%tgrl1 = ann_ts(y)%tgrl1 - T0    ! degC
+      ann_ts(y)%tgrl1_jja = ann_ts(y)%tgrl1_jja - T0    ! degC
       ann_ts(y)%tnatl = ann_ts(y)%tnatl - T0    ! degC
       ann_ts(y)%tant = ann_ts(y)%tant - T0    ! degC
       ann_ts(y)%tam = ann_ts(y)%tam - T0    ! degC
@@ -2319,6 +2327,7 @@ contains
     call nc_write(fnm,"ts6090  ", vars%ts6090  , dims=[dim_time],start=[nout],count=[y],long_name="surface air temperature between 60-90S",units="degC",ncid=ncid)
     call nc_write(fnm,"tgrl    ", vars%tgrl    , dims=[dim_time],start=[nout],count=[y],long_name="Greenland surface air temperature NGRIP",units="degC",ncid=ncid)
     call nc_write(fnm,"tgrl1   ", vars%tgrl1   , dims=[dim_time],start=[nout],count=[y],long_name="Greenland surface air temperature",units="degC",ncid=ncid)
+    call nc_write(fnm,"tgrl1_jja", vars%tgrl1_jja, dims=[dim_time],start=[nout],count=[y],long_name="JJA Greenland surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"tnatl   ", vars%tnatl   , dims=[dim_time],start=[nout],count=[y],long_name="North Atlantic surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"tant    ", vars%tant    , dims=[dim_time],start=[nout],count=[y],long_name="Antarctica surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"dust_grl", vars%dust_grl, dims=[dim_time],start=[nout],count=[y],long_name="Greenland dust deposition",units="kg/m2/s",ncid=ncid)

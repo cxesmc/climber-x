@@ -57,12 +57,15 @@
     i_evp_soil = 2              ! parameterisation of soil evaporation:
                                 ! 1 .. Lee and Pielke 1992 
                                 ! 2 .. quadratic with soil moisture 
-    theta_crit_evp = 0.43       ! m3/m3, critical volumentric soil moisture for bare soil evaporation parameterisation 
+    theta_crit_evp = 0.25       ! m3/m3, critical volumentric soil moisture for bare soil evaporation parameterisation 
+    dz_evp = 0.05               ! m, maximum depth from which evaporation can occur
+    frac_inf_2 = 0.0            ! fraction of infiltration added to second soil layer, as opposed to the top layer
     l_dew       = F             ! allow dew deposition?
     l_prc_intercept = T         ! allow for precipitation interception by vegetation?
     tau_w = 1.                  ! days, removal time scale of water from canopy
     tau_s = 1.                  ! days, removal time scale of snow from canopy
-    alpha_int_w = 0.2           ! interception factor for water, CLM, TUNABLE
+    alpha_int_w_tree = 0.2      ! interception factor for water, CLM, TUNABLE
+    alpha_int_w_grass = 0.1     ! interception factor for water, CLM, TUNABLE
     alpha_int_s = 0.5           ! interception factor for snow
     can_max_w = 0.2             ! kg/m2, canopy interception capacity parameter Verseghy 1991
     can_max_s = 0.2             ! kg/m2, canopy interception capacity parameter for snow
@@ -297,7 +300,7 @@
     theta_wilt_u = 0.1          ! m3/m3, uniform wilting point, 0.14 (0.05 - 0.3)
     psi_sat_u    = -0.2         ! m, uniform matric potential at saturation, -0.19 (-0.71 - -0.05)
     k_sat_u      = 100          ! kg/m2/day, uniform hydraulic conductivity at saturation, 520 (86 - 1900)
-    b_u          = 4            ! integer, unifrom Clapp-Horneberger parameter, 6 (4 - 14)
+    b_u          = 3            ! integer, unifrom Clapp-Horneberger parameter, 6 (4 - 14)
 
     lnd_par_file    = "input/lnd_par.nc"
     soil_texture = 1            ! which soil texture to use; 1...HWSD, 2...GSDE

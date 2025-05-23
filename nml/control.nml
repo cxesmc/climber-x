@@ -208,7 +208,11 @@
  i_ch4_tau = 1                      ! ch4 lifetime:
                                     ! 1 = constant lifetime ch4_tau_const
                                     ! 2,3 = variable lifetime dependent on atmospheric CH4 load
+                                    ! 4 = variable lifetime from file (MAGICC) (ch4_tau_file)
+                                    ! 5 = variable lifetime dependent on NOx, CO, VOCs and CH4 load
  ch4_tau_const = 9.5                ! years, constant/reference lifetime of CH4 in the atmosphere
+ ch4_tau_file  = "input/ch4_tau_historical_ssp126.nc"
+ CO_NOx_VOC_file = "input/CO_NOx_VOC_emi_historical_ssp126.nc"
 
  !-------------------------------------------------------
  ! CH4 emissions for simulations with flag_ch4==true
@@ -218,6 +222,7 @@
                                     ! 1 = prescribed CH4 emissions from file (ch4_emis_file)
  ch4_emis_const = 0.                ! TgCH4/yr, constant CH4 emission rate to the atmosphere, used only if ich4_emis == 0
  ch4_emis_file  = "input/ch4_emis_historical_1850-2014.nc"
+ ch4_emis_other_const= 74.          ! constant CH4 emissions from rivers, lakes and other sources
 
  !-------------------------------------------------------
  ! atmospheric N2O

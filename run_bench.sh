@@ -5,7 +5,7 @@
 ############################################################################
 
 # Specify desidered name of output directory
-outdir=bench_v1.3
+outdir=bench_v1.4.0
 
 # A complete model benchmark involves the following steps:
 # step=1    : preindustrial equilibrium spinup, climate only
@@ -205,7 +205,8 @@ then
 #./runme -rs -q medium --omp 32 -o output/$outdir/deglac_gowan   ctl.nyears=21000 ctl.year_ini=-21000 ctl.ifake_ice=1 ctl.ifake_geo=1 ctl.ico2=1 ctl.ich4=1 ctl.in2o=1 ctl.iorbit=2 ctl.fake_geo_var_file=input/geo_ice_gowan.nc ctl.fake_geo_ref_file=input/geo_ice_gowan_0ka.nc ctl.fake_ice_var_file=input/geo_ice_gowan.nc ctl.n_year_geo=100 ctl.nyout_atm=100 nyout_ocn=100 ctl.nyout_sic=100 ctl.nyout_lnd=100 ctl.nyout_geo=100 ctl.restart_in_dir=restart_lgm
 
 # last glacial cycle with prescribed ice sheets
-./runme -rs -q long -w 240:00:00 --omp 32 -o output/$outdir/lgc_tarasov ctl.nyears=125000 ctl.year_ini=-125000 ctl.ifake_ice=1 ctl.ifake_geo=1 ctl.ico2=1 ctl.ich4=1 ctl.in2o=1 ctl.orbit=2 ctl.fake_geo_var_file=input/geo_ice_tarasov_lgc.nc ctl.fake_ice_var_file=input/geo_ice_tarasov_lgc.nc ctl.n_year_geo=100 #ocn.l_noise_fw=T ocn.noise_amp_fw=0,0.5 ocn.scale_runoff_ice=0,1
+./runme -rs -q long -w 240:00:00 --omp 32 -o output/$outdir/lgc_tarasov -p ctl.nyears=125000 ctl.year_ini=-125000 ctl.ifake_ice=1 ctl.ifake_geo=1 ctl.ico2=1 ctl.ich4=1 ctl.in2o=1 ctl.orbit=2 ctl.fake_geo_var_file=input/geo_ice_tarasov_lgc.nc ctl.fake_ice_var_file=input/geo_ice_tarasov_lgc.nc ctl.n_year_geo=100 ocn.l_noise_fw=T ocn.noise_amp_fw=0 
+./runme -rs -q long -w 240:00:00 --omp 32 -o output/$outdir/lgc_tarasov_noise -p ctl.nyears=125000 ctl.year_ini=-125000 ctl.ifake_ice=1 ctl.ifake_geo=1 ctl.ico2=1 ctl.ich4=1 ctl.in2o=1 ctl.orbit=2 ctl.fake_geo_var_file=input/geo_ice_tarasov_lgc.nc ctl.fake_ice_var_file=input/geo_ice_tarasov_lgc.nc ctl.n_year_geo=100 ocn.l_noise_fw=T ocn.noise_amp_fw=0.5 
 
 # last glacial cycle with interactive ice sheets
 #./runme -rs -q long   -w 500:00:00 --omp 32 -o output/$outdir/lgc_ice_sico        -p ctl.year_ini=-125000 ctl.nyears=125000 ctl.iorbit=2 ctl.ico2=1 ctl.ich4=1 ctl.in2o=1 ctl.ice_domain_name=NH-32KM ctl.flag_geo=T ctl.flag_ice=T ctl.flag_smb=T ctl.flag_bmb=T ctl.n_accel=1  ctl.ice_model_name=sico 

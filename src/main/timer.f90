@@ -37,9 +37,9 @@ module timer
 ! year: ordinary year
 ! year_clim:  climate year (reduced due to acceleration)
 ! year_smb:  smb year (reduced due to acceleration times smb call)
-  integer :: doy, mon, year, year_geo, year_clim, year_smb, nyears, nyears_clim, nyears_geo, &
+  integer :: soy, doy, mon, year, year_geo, year_clim, year_smb, nyears, nyears_clim, nyears_geo, &
   year_ini, year_now
-  integer :: step, nstep, nstep_mon, nstep_year
+  integer :: step, nstep, nstep_day, nstep_mon, nstep_year
   integer :: step_atm, step_lnd, step_ocn, step_sic, step_bgc, step_smb, step_bmb, step_ice
 
   integer, parameter :: nday_year = 360  !! days per year [day/year]
@@ -66,21 +66,21 @@ module timer
   integer :: n_year_ice, n_year_smb, n_year_geo
   integer :: n_accel
 
-  integer :: nstep_mon_atm, nstep_year_atm
-  integer :: nstep_mon_ocn, nstep_year_ocn
-  integer :: nstep_mon_bgc, nstep_year_bgc
-  integer :: nstep_mon_sic, nstep_year_sic
-  integer :: nstep_mon_lnd, nstep_year_lnd
-  integer :: nstep_mon_smb, nstep_year_smb
-  integer :: nstep_mon_bmb, nstep_year_bmb
+  integer :: nstep_day_atm, nstep_mon_atm, nstep_year_atm
+  integer :: nstep_day_ocn, nstep_mon_ocn, nstep_year_ocn
+  integer :: nstep_day_bgc, nstep_mon_bgc, nstep_year_bgc
+  integer :: nstep_day_sic, nstep_mon_sic, nstep_year_sic
+  integer :: nstep_day_lnd, nstep_mon_lnd, nstep_year_lnd
+  integer :: nstep_day_smb, nstep_mon_smb, nstep_year_smb
+  integer :: nstep_day_bmb, nstep_mon_bmb, nstep_year_bmb
   logical :: time_soy, time_eoy, time_som, time_eom
-  logical :: time_soy_atm, time_eoy_atm, time_som_atm, time_eom_atm
-  logical :: time_soy_ocn, time_eoy_ocn, time_som_ocn, time_eom_ocn
-  logical :: time_soy_bgc, time_eoy_bgc, time_som_bgc, time_eom_bgc
-  logical :: time_soy_sic, time_eoy_sic, time_som_sic, time_eom_sic
-  logical :: time_soy_lnd, time_eoy_lnd, time_som_lnd, time_eom_lnd
-  logical :: time_soy_smb, time_eoy_smb, time_som_smb, time_eom_smb
-  logical :: time_soy_bmb, time_eoy_bmb, time_som_bmb, time_eom_bmb
+  logical :: time_soy_atm, time_eoy_atm, time_som_atm, time_eom_atm, time_sod_atm, time_eod_atm
+  logical :: time_soy_ocn, time_eoy_ocn, time_som_ocn, time_eom_ocn, time_sod_ocn, time_eod_ocn
+  logical :: time_soy_bgc, time_eoy_bgc, time_som_bgc, time_eom_bgc, time_sod_bgc, time_eod_bgc
+  logical :: time_soy_sic, time_eoy_sic, time_som_sic, time_eom_sic, time_sod_sic, time_eod_sic
+  logical :: time_soy_lnd, time_eoy_lnd, time_som_lnd, time_eom_lnd, time_sod_lnd, time_eod_lnd
+  logical :: time_soy_smb, time_eoy_smb, time_som_smb, time_eom_smb, time_sod_smb, time_eod_smb
+  logical :: time_soy_bmb, time_eoy_bmb, time_som_bmb, time_eom_bmb, time_sod_bmb, time_eod_bmb
   logical :: time_soy_bnd
   logical :: time_feedback_save, time_feedback_analysis
   logical :: time_spinup_cc_1, time_spinup_cc_2, time_call_daily_input_save, time_use_daily_input_save
@@ -177,6 +177,7 @@ contains
     ny_out_ts = min(100,nyears)
 
     ! number of time steps per year
+    nstep_day = nint(1._wp/dt_day_fastest)
     nstep_mon = nint(day_mon/dt_day_fastest)
     nstep_year = nint(day_year/dt_day_fastest)
     ny_out_ts_accel = ny_out_ts*n_accel
@@ -193,19 +194,28 @@ contains
     step_bmb = nint(dt_day_bmb/dt_day_fastest)
     step_ice = nint(dt_day_ice/dt_day_fastest)
 
+    nstep_day_atm = max(1, nint(1._wp/dt_day_atm))
+    nstep_day_ocn = max(1, nint(1._wp/dt_day_ocn))
+    nstep_day_bgc = max(1, nint(1._wp/dt_day_bgc))
+    nstep_day_sic = max(1, nint(1._wp/dt_day_sic))
+    nstep_day_lnd = max(1, nint(1._wp/dt_day_lnd))
+    nstep_day_smb = max(1, nint(1._wp/dt_day_smb))
+    nstep_day_bmb = max(1, nint(1._wp/dt_day_bmb))
+
     nstep_mon_atm = nint(nday_mon/dt_day_atm)
-    nstep_year_atm = nint(nday_year/dt_day_atm)
     nstep_mon_ocn = nint(nday_mon/dt_day_ocn)
-    nstep_year_ocn = nint(nday_year/dt_day_ocn)
     nstep_mon_bgc = nint(nday_mon/dt_day_bgc)
-    nstep_year_bgc = nint(nday_year/dt_day_bgc)
     nstep_mon_sic = nint(nday_mon/dt_day_sic)
-    nstep_year_sic = nint(nday_year/dt_day_sic)
     nstep_mon_lnd = nint(nday_mon/dt_day_lnd)
-    nstep_year_lnd = nint(nday_year/dt_day_lnd)
     nstep_mon_smb = nint(nday_mon/dt_day_smb)
-    nstep_year_smb = nint(nday_year/dt_day_smb)
     nstep_mon_bmb = nint(nday_mon/dt_day_bmb)
+
+    nstep_year_atm = nint(nday_year/dt_day_atm)
+    nstep_year_ocn = nint(nday_year/dt_day_ocn)
+    nstep_year_bgc = nint(nday_year/dt_day_bgc)
+    nstep_year_sic = nint(nday_year/dt_day_sic)
+    nstep_year_lnd = nint(nday_year/dt_day_lnd)
+    nstep_year_smb = nint(nday_year/dt_day_smb)
     nstep_year_bmb = nint(nday_year/dt_day_bmb)
 
     ! timesteps in seconds
@@ -241,8 +251,6 @@ contains
   subroutine timer_update
 
     implicit none
-! soy: step of year
-    integer :: soy
     real(dp) :: time_now
     logical :: year_call_accel
     logical :: year_call_smb
@@ -290,16 +298,20 @@ contains
     year_call_smb   = (mod(year,n_year_smb).eq.0).or.(year.eq.1)
 
     if (flag_atm .and. year_call_accel) then
-      time_call_atm = (mod(step,step_atm) .eq. 0)
-      time_soy_atm = step_atm .eq. soy
-      time_eom_atm = (mod(soy,nstep_mon_atm*step_atm) .eq. 0)
-      time_eoy_atm = (mod(soy,nstep_year_atm*step_atm) .eq. 0)
+      time_call_atm = (mod(step,step_atm) .eq. 1) .or. (step_atm.eq.1)
+      time_soy_atm = soy .eq. 1
+      time_sod_atm = (mod(soy,nstep_day_atm) .eq. 1) .or. (nstep_day_atm.eq.1)
+      time_eod_atm = (mod(soy,nstep_day_atm) .eq. 0)
+      time_eom_atm = (mod(doy,nday_mon) .eq. 0) .and. time_eod_atm
+      time_eoy_atm = (mod(doy,nday_year) .eq. 0) .and. time_eod_atm
       time_out_atm = (mod(year,nyout_atm) .eq. 0) .and. year_now.ge.year_out_start
       time_feedback_save     = year.eq.nyears/2  ! save fields 
       time_feedback_analysis = year.eq.nyears    ! do feedback analysis 
     else
       time_call_atm =.false. 
       time_soy_atm = .false.
+      time_sod_atm = .false.
+      time_eod_atm = .false.
       time_eom_atm = .false.
       time_eoy_atm = .false.
       time_out_atm = .false.
@@ -308,80 +320,106 @@ contains
     endif
 
     if (flag_ocn .and. year_call_accel) then
-      time_call_ocn = (mod(step,step_ocn) .eq. 0)
-      time_soy_ocn = step_ocn .eq. soy
-      time_eom_ocn = (mod(soy,nstep_mon_ocn*step_ocn) .eq. 0)
-      time_eoy_ocn = (mod(soy,nstep_year_ocn*step_ocn) .eq. 0)
+      !time_call_ocn = (mod(step,step_ocn) .eq. 0)
+      !time_soy_ocn = step_ocn .eq. soy
+      time_call_ocn = (mod(step,step_ocn) .eq. 1) .or. (step_ocn.eq.1)
+      time_soy_ocn = soy .eq. 1
+      time_sod_ocn = (mod(soy,nstep_day_ocn) .eq. 1) .or. (nstep_day_ocn.eq.1)
+      time_eod_ocn = (mod(soy,nstep_day_ocn) .eq. 0)
+      time_eom_ocn = (mod(doy,nday_mon) .eq. 0) .and. time_eod_ocn
+      time_eoy_ocn = (mod(doy,nday_year) .eq. 0) .and. time_eod_ocn
       time_out_ocn = (mod(year,nyout_ocn) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_ocn =.false. 
       time_soy_ocn = .false.
+      time_sod_ocn = .false.
+      time_eod_ocn = .false.
       time_eom_ocn = .false.
       time_eoy_ocn = .false.
       time_out_ocn = .false.
     endif
 
     if (flag_bgc .and. year_call_accel) then
-      time_call_bgc = (mod(step,step_bgc) .eq. 0)
-      time_soy_bgc = step_bgc .eq. soy
-      time_eom_bgc = (mod(soy,nstep_mon_bgc*step_bgc) .eq. 0)
-      time_eoy_bgc = (mod(soy,nstep_year_bgc*step_bgc) .eq. 0)
+      time_call_bgc = (mod(step,step_bgc) .eq. 1) .or. (step_bgc.eq.1)
+      time_soy_bgc = soy .eq. 1
+      time_sod_bgc = (mod(soy,nstep_day_bgc) .eq. 1) .or. (nstep_day_bgc.eq.1)
+      time_eod_bgc = (mod(soy,nstep_day_bgc) .eq. 0)
+      time_eom_bgc = (mod(doy,nday_mon) .eq. 0) .and. time_eod_bgc
+      time_eoy_bgc = (mod(doy,nday_year) .eq. 0) .and. time_eod_bgc
+      !time_eom_bgc = (mod(soy,(nstep_mon_bgc-1)*step_bgc+1) .eq. 0)
+      !time_eoy_bgc = (mod(soy,(nstep_year_bgc-1)*step_bgc+1) .eq. 0)
       time_out_bgc = (mod(year,nyout_bgc) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_bgc =.false. 
       time_soy_bgc = .false.
+      time_sod_bgc = .false.
+      time_eod_bgc = .false.
       time_eom_bgc = .false.
       time_eoy_bgc = .false.
       time_out_bgc = .false.
     endif
 
     if (flag_lnd .and. year_call_accel) then
-      time_call_lnd = (mod(step,step_lnd) .eq. 0)
-      time_soy_lnd = step_lnd .eq. soy
-      time_eom_lnd = (mod(soy,nstep_mon_lnd*step_lnd) .eq. 0)
-      time_eoy_lnd = (mod(soy,nstep_year_lnd*step_lnd) .eq. 0)
+      time_call_lnd = (mod(step,step_lnd) .eq. 1) .or. (step_lnd.eq.1)
+      time_soy_lnd = soy .eq. 1
+      time_sod_lnd = (mod(soy,nstep_day_lnd) .eq. 1) .or. (nstep_day_lnd.eq.1)
+      time_eod_lnd = (mod(soy,nstep_day_lnd) .eq. 0)
+      time_eom_lnd = (mod(doy,nday_mon) .eq. 0) .and. time_eod_lnd
+      time_eoy_lnd = (mod(doy,nday_year) .eq. 0) .and. time_eod_lnd
       time_out_lnd = (mod(year,nyout_lnd) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_lnd =.false. 
       time_soy_lnd = .false.
+      time_sod_lnd = .false.
+      time_eod_lnd = .false.
       time_eom_lnd = .false.
       time_eoy_lnd = .false.
       time_out_lnd = .false.
     endif
 
     if (flag_sic .and. year_call_accel) then
-      time_call_sic = (mod(step,step_sic) .eq. 0)
-      time_soy_sic = step_sic .eq. soy
-      time_eom_sic = (mod(soy,nstep_mon_sic*step_sic) .eq. 0)
-      time_eoy_sic = (mod(soy,nstep_year_sic*step_sic) .eq. 0)
+      time_call_sic = (mod(step,step_sic) .eq. 1) .or. (step_sic.eq.1)
+      time_soy_sic = soy .eq. 1
+      time_sod_sic = (mod(soy,nstep_day_sic) .eq. 1) .or. (nstep_day_sic.eq.1)
+      time_eod_sic = (mod(soy,nstep_day_sic) .eq. 0)
+      time_eom_sic = (mod(doy,nday_mon) .eq. 0) .and. time_eod_sic
+      time_eoy_sic = (mod(doy,nday_year) .eq. 0) .and. time_eod_sic
       time_out_sic = (mod(year,nyout_sic) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_sic =.false. 
       time_soy_sic = .false.
+      time_sod_sic = .false.
+      time_eod_sic = .false.
       time_eom_sic = .false.
       time_eoy_sic = .false.
       time_out_sic = .false.
     endif
 
-    if (flag_smb .and. year_call_smb) then !ok
-      time_call_smb = (mod(step,step_smb) .eq. 0)
-      time_soy_smb = step_smb .eq. soy
-      time_eom_smb = (mod(soy,nstep_mon_smb*step_smb) .eq. 0)
-      time_eoy_smb = (mod(soy,nstep_year_smb*step_smb) .eq. 0)
+    if (flag_smb .and. year_call_smb) then 
+      time_call_smb = (mod(step,step_smb) .eq. 1) .or. (step_smb.eq.1)
+      time_soy_smb = soy .eq. 1
+      time_sod_smb = (mod(soy,nstep_day_smb) .eq. 1) .or. (nstep_day_smb.eq.1)
+      time_eod_smb = (mod(soy,nstep_day_smb) .eq. 0)
+      time_eom_smb = (mod(doy,nday_mon) .eq. 0) .and. time_eod_smb
+      time_eoy_smb = (mod(doy,nday_year) .eq. 0) .and. time_eod_smb
       time_out_smb = (mod(year,nyout_smb) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_smb =.false. 
       time_soy_smb = .false.
+      time_sod_smb = .false.
+      time_eod_smb = .false.
       time_eom_smb = .false.
       time_eoy_smb = .false.
       time_out_smb = .false.
     endif
     
-    if (flag_bmb .and. year_call_accel) then !ok
-      time_call_bmb = (mod(step,step_bmb) .eq. 0)
-      time_soy_bmb = step_bmb .eq. soy
-      time_eom_bmb = (mod(soy,nstep_mon_bmb*step_bmb) .eq. 0)
-      time_eoy_bmb = (mod(soy,nstep_year_bmb*step_bmb) .eq. 0)
+    if (flag_bmb .and. year_call_accel) then 
+      time_call_bmb = (mod(step,step_bmb) .eq. 1) .or. (step_bmb.eq.1)
+      time_soy_bmb = soy .eq. 1
+      time_sod_bmb = (mod(soy,nstep_day_bmb) .eq. 1) .or. (nstep_day_bmb.eq.1)
+      time_eod_bmb = (mod(soy,nstep_day_bmb) .eq. 0)
+      time_eom_bmb = (mod(soy,(nstep_mon_bmb-1)*step_bmb+1) .eq. 0) .or. (nstep_mon_bmb.eq.1)
+      time_eoy_bmb = (mod(soy,(nstep_year_bmb-1)*step_bmb+1) .eq. 0) 
       time_out_bmb = (mod(year,nyout_bmb) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_bmb =.false. 
@@ -392,7 +430,7 @@ contains
     endif
     
     if (flag_ice) then
-      time_call_ice = (mod(step,step_ice) .eq. 0)
+      time_call_ice = (mod(step+nstep_day-1,step_ice) .eq. 0)
       time_out_ice = (mod(year,nyout_ice) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_ice =.false. 
@@ -569,6 +607,27 @@ contains
     return
 
   end subroutine monthly2daily
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  t i m e r _ p r i n t 
+  ! Purpose    :  print timer information 
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine timer_print
+
+    implicit none
+
+    if (time_call_atm) print *,'atm: sod=',time_sod_atm,' eod=',time_eod_atm,' eom=',time_eom_atm,' eoy=',time_eoy_atm
+    if (time_call_ocn) print *,'ocn: sod=',time_sod_ocn,' eod=',time_eod_ocn,' eom=',time_eom_ocn,' eoy=',time_eoy_ocn
+    if (time_call_sic) print *,'sic: sod=',time_sod_sic,' eod=',time_eod_sic,' eom=',time_eom_sic,' eoy=',time_eoy_sic
+    if (time_call_lnd) print *,'lnd: sod=',time_sod_lnd,' eod=',time_eod_lnd,' eom=',time_eom_lnd,' eoy=',time_eoy_lnd
+    if (time_call_bgc) print *,'bgc: sod=',time_sod_bgc,' eod=',time_eod_bgc,' eom=',time_eom_bgc,' eoy=',time_eoy_bgc
+    if (time_call_smb) print *,'smb: sod=',time_sod_smb,' eod=',time_eod_smb,' eom=',time_eom_smb,' eoy=',time_eoy_smb
+    if (time_call_bmb) print *,'bmb: sod=',time_sod_bmb,' eod=',time_eod_bmb,' eom=',time_eom_bmb,' eoy=',time_eoy_bmb
+
+    return
+
+  end subroutine timer_print
 
 end module timer
 

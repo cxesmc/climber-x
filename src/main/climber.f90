@@ -30,10 +30,10 @@ program climber
   use timer, only : timer_init, timer_update
   use timer, only : step, nstep, year_ini, year, year_now, mon, time_soy, time_eoy, time_eoy_smb, time_soy_smb, time_soy_bmb, time_eoy_bmb
   use timer, only : time_call_atm, time_call_ocn, time_call_lnd, time_call_sic, time_call_smb, time_call_bmb, time_call_ice, time_call_geo, time_call_clim
-  use timer, only : time_call_bgc, doy
+  use timer, only : time_call_bgc, doy, soy
   use timer, only : time_spinup_cc_1, time_spinup_cc_2
   use timer, only : time_out_ice 
-  use timer, only : time_write_restart
+  use timer, only : time_write_restart, timer_print
   use timer, only : n_year_ice
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
   use control, only: flag_atm, flag_co2, flag_ch4, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
@@ -355,7 +355,8 @@ program climber
       call timer_update
 
       if (time_soy) print *
-      if (l_debug_main_loop) print*, 'timer (year, mon, doy): ',year,mon,doy
+      if (l_debug_main_loop) print*, 'timer (year, mon, doy, soy): ',year,mon,doy,soy
+      if (l_debug_main_loop) call timer_print
 
       !$ if (time_soy) then
       !$   time_atm = 0._dp  

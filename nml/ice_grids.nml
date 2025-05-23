@@ -382,6 +382,30 @@
   grid_phi       = 70.0   
 /
 
+&GRL-PAL-16KM
+  grid_name      = GRL-PAL-16KM
+  grid_type      = polar_stereographic
+  grid_dx        = 16.0
+  grid_nx        = 146
+  grid_ny        = 182
+  grid_x0        = -1360.0    
+  grid_y0        = -3450.0    
+  grid_lambda    = -45.0  
+  grid_phi       = 70.0   
+/
+
+&GRL-PAL-32KM
+  grid_name      = GRL-PAL-32KM
+  grid_type      = polar_stereographic
+  grid_dx        = 32.0
+  grid_nx        = 74
+  grid_ny        = 91
+  grid_x0        = -1360.0    
+  grid_y0        = -3450.0    
+  grid_lambda    = -45.0  
+  grid_phi       = 70.0   
+/
+
 &SCD-10KM
   grid_name      = SCD-10KM
   grid_type      = stereographic

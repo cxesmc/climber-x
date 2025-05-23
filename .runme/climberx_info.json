@@ -1,12 +1,11 @@
 {
 
-    "exe_default" : "climber.x",
+    "exe_default" : "climber",
 
     "par_path_as_argument" : false,
 
     "exe_aliases" : 
         {   "climber" : "climber.x",
-            "cx"      : "climber.x",
             "mapping" : "mapping.x"
         },
     
@@ -27,18 +26,18 @@
         },
 
     "par_paths" :
-        {   "ctl"  : "nml/control.nml",
-            "atm"  : "nml/atm_par.nml",
-            "lnd"  : "nml/lnd_par.nml",
-            "sic"  : "nml/sic_par.nml",
-            "bgc"  : "nml/bgc_par.nml",
-            "geo"  : "nml/geo_par.nml",
-            "bmb"  : "nml/bmb_par.nml",
-            "ocn"  : "nml/ocn_par.nml",
-            "smb"  : "nml/smb_par.nml",
-            "icey" : "nml/ice_yelmo_par.nml",
-            "ices" : "nml/ice_sico_par.nml",
-            "hyst" : "nml/hyster_ctrl.nml"
+        {   "climber"  : [ "nml/control.nml",
+                           "nml/atm_par.nml",
+                           "nml/lnd_par.nml",
+                           "nml/sic_par.nml",
+                           "nml/bgc_par.nml",
+                           "nml/geo_par.nml",
+                           "nml/bmb_par.nml",
+                           "nml/ocn_par.nml",
+                           "nml/smb_par.nml",
+                           "nml/ice_yelmo_par.nml",
+                           "nml/ice_sico_par.nml",
+                           "nml/hyster_ctrl.nml" ]
         },
 
     "files" : 

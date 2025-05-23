@@ -906,6 +906,8 @@ contains
     else
       beta_s(i_bare) = beta_snow
     endif
+    ! scale to account for fraction of top layer from which evaporation can occur
+    beta_s(i_bare) = hydro_par%dz_evp/dz(1) * beta_s(i_bare)
 
     ! lake
     if( frac_surf(i_lake) .gt. 0._wp ) then

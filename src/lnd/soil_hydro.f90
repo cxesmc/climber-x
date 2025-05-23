@@ -68,7 +68,8 @@ contains
 
     integer :: i,j
     integer :: n, k, kk, i_here, i_print, j_print, n_print
-    real(wp) :: wilt_tot, dw, ddw, run_sub, f_veg, water_bal
+    real(wp) :: frac_inf_2, wilt_tot, dw, ddw, run_sub, f_veg, water_bal
+    real(wp), dimension(nl) :: inf
     real(wp), dimension(nl) :: r_sub
     real(wp), dimension(nl) :: q, e, dk_dtheta, dpsi_dtheta, dq_1_dtheta_1, dq_1_dtheta, dq_dtheta, dq_dtheta1
     real(wp), dimension(nl) :: a, b, c, r, x, ww_old
@@ -82,6 +83,12 @@ contains
  
 
     ww_old = w_w
+
+    inf(:) = 0._wp
+    ! all infiltration into the top layer or spread over top two layers
+    frac_inf_2 = hydro_par%frac_inf_2 * (1._wp - theta_i(2)/(theta_w(2)+theta_i(2)+0.001_wp))
+    inf(1) = (1._wp-frac_inf_2)*infiltration
+    inf(2) = frac_inf_2*infiltration
 
     e(:) = 0._wp
     
@@ -191,14 +198,14 @@ contains
     a(k) = 0._wp
     b(k) = - dq_dtheta(k) - rho_w*dz(k)*rdt
     c(k) = - dq_dtheta1(k)
-    r(k) = -infiltration + q(k) + e(k) + r_sub(k) 
+    r(k) = - inf(k) + q(k) + e(k) + r_sub(k) 
 
     ! intermediate layers
     do k=2,nl-1
      a(k) = dq_1_dtheta_1(k)
      b(k) = - dq_dtheta(k) + dq_1_dtheta(k) - rho_w*dz(k)*rdt
      c(k) = - dq_dtheta1(k)
-     r(k) = - q(k-1) + q(k) + e(k) + r_sub(k)
+     r(k) = - inf(k) - q(k-1) + q(k) + e(k) + r_sub(k)
     enddo
 
     ! bottom layer, k=nl, free drainage boundary condition: q_N = -k_N
@@ -297,7 +304,7 @@ lp1:  do k=nl-1,1,-1 ! search for the required amount of water in layers above
 
     if( check_water ) then
      ! water balance
-     water_bal =  infiltration*dt - sum(e)*dt - drainage(is_veg)*dt &
+     water_bal =  sum(inf)*dt - sum(e)*dt - drainage(is_veg)*dt &
                - sum(w_w-ww_old) 
 
      if(abs(water_bal).gt.1.d-7) then
@@ -306,7 +313,7 @@ lp1:  do k=nl-1,1,-1 ! search for the required amount of water in layers above
       print *,'sum(frac_surf)',sum(frac_surf)
       print *,'frac_sur',frac_surf
       print *,'dw_soil',sum(w_w-ww_old)
-      print *,'infiltration',infiltration*dt
+      print *,'sum(inf)',sum(inf)*dt,infiltration*dt
       print *,'sum(e)',sum(e)*dt
       print *,'drain',drainage(is_veg)*dt
       stop

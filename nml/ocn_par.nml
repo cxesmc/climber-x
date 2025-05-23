@@ -57,7 +57,7 @@
  !-------------------------------------------------------------------------------------------
  adrag = 4.                   ! days, inverse minimum drag
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
- drag_topo_fac = 3.           ! factor by which to increase drag in shallow water
+ drag_topo_fac = 2.5          ! factor by which to increase drag in shallow water
  drag_topo_scale_eq = 0.
  z_drag_shallow = 1000.       ! m, depth of shallow water regions below which to increase adrag by factor drag_topo_fac
  drag_frac_fac = 0.           ! factor by which to increase drag where small ocean fraction
@@ -143,9 +143,9 @@
  !-------------------------------------------------------------------------------------------
  ! salinity/runoff settings 
  !-------------------------------------------------------------------------------------------
- n_cells_dist_runoff = 5      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
- n_cells_dist_calving = 5     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
- n_cells_dist_weath = 5       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_runoff = 3      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_calving = 3     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_weath = 3       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)
  l_fw_corr = T                ! correct freshwater flux to ensure net zero freshwater flux into ocean?
  l_fw_melt_ice_sep = F        ! treat freshwater to the ocean originating from ice sheet melt separately? 
                               ! If ==T, fw is applied at the surface and salinity conservation is ensured by compensating uniformely over the whole ocean
@@ -153,7 +153,7 @@
                               ! 1 = virtual salinity flux using reference saln0
                               ! 2 = virtual salinity flux using local salinity, compensate over the whole surface ocean to conserve salinity
                               ! 3 = virtual salinity flux using local salinity
- i_saln0 = 1                  ! treatment of reference salinity:
+ i_saln0 = 2                  ! treatment of reference salinity:
                               ! 1 = use constant value saln0_const             
                               ! 2 = use volume averaged salinity
  saln0_const = 34.7           ! psu, reference salinity, used only if i_saln0==1
@@ -168,7 +168,8 @@
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_calv = 0.              ! relaxation factor for calving fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_bmelt = 0.             ! relaxation factor for basal melt fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
- scale_runoff_ice = 1.        ! scaling factor for runoff from ice sheets, only applied to interactive ice sheet (smb) model domain(s)
+ scale_runoff_ice = 1.        ! scaling factor for runoff from ice sheets
+ scale_dhdt_ice = 0.          ! scaling factor for freshwater flux from changes in ice sheet thickness, only used if ice sheet evolution is prescribed (ifake_ice==T)
 
  !-------------------------------------------------------------------------------------------
  ! additional tracers

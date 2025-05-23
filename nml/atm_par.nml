@@ -39,11 +39,11 @@
   i_mmc = 1                     ! meridional temperature gradients:
                                 ! 1 = assuming fixed position of cell borders
                                 ! 2 = following borders of the cells
-  c_mmc_had = 0.3               ! parameter for strength of Hadley cells
+  c_mmc_had = 0.35              ! parameter for strength of Hadley cells
   c_mmc_fer = 0.06 !0.05              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! 
-  c_mmc_2 = 0.017               ! 1/K
+  c_mmc_2 = 0.025               ! 1/K
   c_mmc_3 = 90.                 ! K
   c_mmc_4 = 195. !200.                ! K 
   c_mmc_z = 750.                ! m 
@@ -59,8 +59,8 @@
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
-  c_slp_4 = 7. !3.                  ! parameter for equatorial damping of azonal sea level pressure
-  c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_4 = 7.                  ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
   f_aslp_ice = 1.
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
@@ -89,7 +89,7 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 3.8e-3              ! K/m, background lapse rate
+  c_gam_1 = 3.7e-3              ! K/m, background lapse rate
   c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
   c_gam_4 = 5.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over ocean
@@ -101,10 +101,10 @@
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
   i_tsl = 2 !1
   i_tslz = 2 !1
-  c_tsl_gam = 8.e-3             ! lapse rate for reduction of skin temperature to sea level
-  c_tsl_gam_ice = 4.e-3 !8.e-3         ! lapse rate for reduction of skin temperature to sea level over ice sheets
-  tsl_gams_min_lnd = 5.e-3      ! K/m
-  tsl_gams_min_ice = 0. !5.e-3      ! K/m
+  c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
+  c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
+  tsl_gams_min_lnd = 6.5e-3     ! K/m
+  tsl_gams_min_ice = 3.e-3      ! K/m
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation

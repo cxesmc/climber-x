@@ -39,6 +39,8 @@ module ch4_def
       real(wp) :: f_ch4emis_agro  !! fraction of anthropogenic methane emissions originating from agriculture
       real(wp) :: dch4ox_dt       !! methane oxidation [kgCH4]
       real(wp) :: tau             !! atmospheric methane lifetime [years]
+      real(wp) :: t2m_glob_ann    !! global mean annual near-surface air temperature [K]
+      real(wp) :: demis_other_dt  !! other methane flux [kg CH4]
     end type
 
 

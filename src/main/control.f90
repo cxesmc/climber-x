@@ -118,6 +118,8 @@ module control
   integer :: i_ch4_tau
   real(wp) :: ch4_tau_const
   character (len=256) :: ch4_file
+  character (len=256) :: ch4_tau_file
+  character (len=256) :: CO_NOx_VOC_file
 
   integer :: ich4_rad
   real(wp) :: ch4_ref
@@ -127,6 +129,7 @@ module control
   integer :: ich4_emis
   real(wp) :: ch4_emis_const
   character (len=256) :: ch4_emis_file
+  real(wp) :: ch4_emis_other_const
 
   integer :: in2o
   real(wp) :: n2o_ref
@@ -290,6 +293,8 @@ contains
     call nml_read(filename,"control","ch4_const",ch4_const)
     call nml_read(filename,"control","i_ch4_tau",i_ch4_tau)
     call nml_read(filename,"control","ch4_tau_const",ch4_tau_const)
+    call nml_read(filename,"control","ch4_tau_file",ch4_tau_file)
+    call nml_read(filename,"control","CO_NOx_VOC_file",CO_NOx_VOC_file)
     call nml_read(filename,"control","ch4_file",ch4_file)
     call nml_read(filename,"control","ich4_rad",ich4_rad)
     call nml_read(filename,"control","ch4_ref",ch4_ref)
@@ -298,6 +303,7 @@ contains
     call nml_read(filename,"control","ich4_emis",ich4_emis)
     call nml_read(filename,"control","ch4_emis_const",ch4_emis_const)
     call nml_read(filename,"control","ch4_emis_file",ch4_emis_file)
+    call nml_read(filename,"control","ch4_emis_other_const",ch4_emis_other_const)
     call nml_read(filename,"control","in2o",in2o)
     call nml_read(filename,"control","n2o_ref",n2o_ref)
     call nml_read(filename,"control","n2o_const",n2o_const)

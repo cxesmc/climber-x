@@ -96,7 +96,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: f_snow, h_snow, w_snow, w_snow_max, w_snow_old, snowmelt, icemelt, snow_grain, dust_con
      real(wp), allocatable, dimension(:) :: runoff, runoff_sur, calving, drainage, water_cons
      real(wp), allocatable, dimension(:) :: rain_ground, evap_can, snow_ground, subl_can
-     real(wp), allocatable, dimension(:) :: w_can, w_can_old, s_can, s_can_old, f_snow_can
+     real(wp), allocatable, dimension(:) :: w_can, w_can_old, s_can, s_can_old, f_wat_can, f_snow_can
      real(wp), allocatable, dimension(:) :: transpiration, evap_surface, et
      real(wp), allocatable, dimension(:) :: f_wet_mon, w_table_mon
      real(wp), allocatable, dimension(:) :: f_wet_long

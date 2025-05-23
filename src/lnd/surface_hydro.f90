@@ -49,7 +49,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine canopy_water(frac_surf,lai,sai,r_a,t_skin,pressure,qair,rain,snow, &
                          w_can,w_can_old,s_can,s_can_old, &
-                         rain_ground,snow_ground,evap_can,subl_can,f_snow_can)
+                         rain_ground,snow_ground,evap_can,subl_can,f_wat_can,f_snow_can)
 
     implicit none
 
@@ -59,7 +59,7 @@ contains
     real(wp), dimension(:), intent(in) :: rain, snow
     real(wp), dimension(:), intent(inout) :: w_can, w_can_old, s_can, s_can_old
     real(wp), dimension(:), intent(inout) :: rain_ground, snow_ground, evap_can, subl_can
-    real(wp), dimension(:), intent(inout) :: f_snow_can
+    real(wp), dimension(:), intent(inout) :: f_wat_can, f_snow_can
 
     integer :: n
     real(wp) :: fac_e_w, fac_e_s, fac_i_w, fac_i_s, w_can_max, s_can_max
@@ -100,7 +100,7 @@ contains
             fac_e_w = rhoa/r_a(n) * (q_sat_w(t_skin(n),pressure(n)) - qair(n)) ! evaporation factor
           endif
 
-          fac_i_w = hydro_par%alpha_int_w * fac_lai ! interception factor for water
+          fac_i_w = hydro_par%alpha_int_w(n) * fac_lai ! interception factor for water
 
           ! update canopy water
           w_can(n) = (fac_i_w*rain(n) + w_can(n)*rdt) / (1._wp*rdt + fac_e_w/w_can_max + 1._wp/hydro_par%tau_w)
@@ -115,10 +115,14 @@ contains
 
           rain_ground(n) = rain(n) - evap_can(n) - (w_can(n) - w_can_old(n)) * rdt
 
+          ! fraction of water-covered canopy
+          f_wat_can(n) = w_can(n)/w_can_max
+
         else
 
           rain_ground(n) = rain(n)
           evap_can(n) = 0._wp
+          f_wat_can(n) = 0._wp
 
         endif
 
@@ -182,6 +186,7 @@ contains
         subl_can(n) = 0._wp
         w_can(n)    = 0._wp
         s_can(n)    = 0._wp
+        f_wat_can(n) = 0._wp
         f_snow_can(n) = 0._wp
 
       endif
@@ -193,6 +198,7 @@ contains
         snow_ground = snow
         evap_can = 0._wp
         subl_can = 0._wp
+        f_wat_can = 0._wp
         f_snow_can = 0._wp
     endwhere
 
@@ -444,6 +450,28 @@ contains
           f_wet = f_sat
         endif
 
+      elseif( hydro_par%i_fwet .eq. 4 ) then
+
+        ! TOPMODEL following Kleinen et al 2020
+        cti_lim = hydro_par%cti_min + hydro_par%f_wtab*w_table   ! NOTE: w_table is positive!
+        cti_lim = max(1._wp,cti_lim)
+        if (cti_lim.gt.14._wp) then
+          f_sat = 0._wp
+        else
+          i1 = cti_lim
+          i2 = i1+1
+          w2 = (cti_lim-i1)/(i2-i1)
+          w1 = 1._wp-w2
+          f_sat = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
+        endif
+        ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
+        if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp 
+        if( mask_snow(is_veg) .eq. 1 ) then
+          f_wet = 0._wp ! no wetland where snow
+        else
+          f_wet = f_sat
+        endif
+        
       endif
 
       f_wet_cum = f_wet_cum + f_wet

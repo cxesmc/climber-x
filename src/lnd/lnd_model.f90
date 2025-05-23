@@ -514,7 +514,7 @@ contains
       call canopy_water(lnd%frac_surf,lnd%lai,lnd%sai,lnd%r_a,lnd%t_skin, &
                        lnd%pressure,lnd%qatm,lnd%rain,lnd%snow, &
                        lnd%w_can,lnd%w_can_old,lnd%s_can,lnd%s_can_old, &
-                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can)
+                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can,lnd%f_wat_can)
 
       ! update soil thermal properties 
       if( lnd%f_veg .gt. 0._wp ) then
@@ -1348,6 +1348,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%subl_can       = 0._wp 
         lnd%l2d(i,j)%w_can_old      = 0._wp 
         lnd%l2d(i,j)%s_can_old      = 0._wp 
+        lnd%l2d(i,j)%f_wat_can      = 0._wp 
         lnd%l2d(i,j)%f_snow_can     = 0._wp 
         lnd%l2d(i,j)%transpiration  = 0._wp 
         lnd%l2d(i,j)%evap_surface   = 0._wp
@@ -1602,6 +1603,7 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%s_can             (nsurf))
         allocate(lnd%l2d(i,j)%s_can_old         (nsurf))
         allocate(lnd%l2d(i,j)%f_snow            (nsurf))
+        allocate(lnd%l2d(i,j)%f_wat_can         (nsurf))
         allocate(lnd%l2d(i,j)%f_snow_can        (nsurf))
         allocate(lnd%l2d(i,j)%transpiration     (nsurf))
         allocate(lnd%l2d(i,j)%evap_surface      (nsurf))

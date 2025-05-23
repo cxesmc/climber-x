@@ -354,19 +354,21 @@ contains
                 call yelmo_init(ylmo,par_path,grid_def="none",time=real(time,wp_yelmo), &
                             load_topo=.FALSE.,domain=domain,grid_name=grid%name)
 
-                ! Define topography based on input data
-                ylmo%tpo%now%H_ice   = h_ice 
-                ylmo%bnd%z_bed       = z_bed 
-                ylmo%bnd%z_bed_sd    = 0.0_wp 
-                
-                ! Populate dummy boundary information
-                ylmo%bnd%z_sl        = 0.0_wp 
-                ylmo%bnd%Q_geo       = q_geo*1e3  ! [W/m2] => mW/m2]
-                ylmo%bnd%T_srf       = 240.0_wp 
-                ylmo%bnd%T_shlf      = 273.15_wp 
-                ylmo%bnd%smb         = 0.0_wp 
-                ylmo%bnd%bmb_shlf    = 0.0_wp 
-                ylmo%bnd%H_sed       = H_sed
+                if (.not. ylmo%par%use_restart) then                          
+                  ! Define topography based on input data
+                  ylmo%tpo%now%H_ice   = h_ice 
+                  ylmo%bnd%z_bed       = z_bed 
+                  ylmo%bnd%z_bed_sd    = 0.0_wp 
+
+                  ! Populate dummy boundary information
+                  ylmo%bnd%z_sl        = 0.0_wp 
+                  ylmo%bnd%Q_geo       = q_geo*1e3  ! [W/m2] => mW/m2]
+                  ylmo%bnd%T_srf       = 240.0_wp 
+                  ylmo%bnd%T_shlf      = 273.15_wp 
+                  ylmo%bnd%smb         = 0.0_wp 
+                  ylmo%bnd%bmb_shlf    = 0.0_wp 
+                  ylmo%bnd%H_sed       = H_sed
+                endif
                 
                 ! Allow ice to grow over the whole domain by default
                 ! (later this will be set by ice%mask_extent)

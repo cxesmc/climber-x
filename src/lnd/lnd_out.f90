@@ -126,6 +126,7 @@ module lnd_out
     real(wp), allocatable, dimension(:,:,:) :: tskin
     real(wp), allocatable, dimension(:,:,:) :: tskin_amp
     real(wp), allocatable, dimension(:,:,:) :: scf
+    real(wp), allocatable, dimension(:,:,:) :: fcanwat
     real(wp), allocatable, dimension(:,:,:) :: fcansn
     real(wp), allocatable, dimension(:,:,:) :: runoff
     real(wp), allocatable, dimension(:,:,:) :: runsur
@@ -291,6 +292,7 @@ contains
       allocate(mon_su(k)%tskin(nx,ny,nsurf))
       allocate(mon_su(k)%tskin_amp(nx,ny,nsurf))
       allocate(mon_su(k)%scf(nx,ny,nsurf))
+      allocate(mon_su(k)%fcanwat(nx,ny,nsurf))
       allocate(mon_su(k)%fcansn(nx,ny,nsurf))
       allocate(mon_su(k)%runoff(nx,ny,nsoil))
       allocate(mon_su(k)%runsur(nx,ny,nsoil))
@@ -415,6 +417,7 @@ contains
     allocate(ann_su%tskin(nx,ny,nsurf))
     allocate(ann_su%tskin_amp(nx,ny,nsurf))
     allocate(ann_su%scf(nx,ny,nsurf))
+    allocate(ann_su%fcanwat(nx,ny,nsurf))
     allocate(ann_su%fcansn(nx,ny,nsurf))
     allocate(ann_su%runoff(nx,ny,nsoil))
     allocate(ann_su%runsur(nx,ny,nsoil))
@@ -1120,6 +1123,7 @@ contains
                   mon_su(m)%alb_dif(i,j,:)  = 0._wp
                   mon_su(m)%albsnw(i,j,:)   = 0._wp
                   mon_su(m)%scf(i,j,:)      = 0._wp
+                  mon_su(m)%fcanwat(i,j,:)  = 0._wp
                   mon_su(m)%fcansn(i,j,:)   = 0._wp
                   mon_su(m)%swe(i,j,:)      = 0._wp
                   mon_su(m)%swe_max(i,j,:)  = 0._wp
@@ -1173,6 +1177,7 @@ contains
                   mon_su(m)%alb_dif(i,j,:)  = missing_value 
                   mon_su(m)%albsnw(i,j,:)   = missing_value 
                   mon_su(m)%scf(i,j,:)      = missing_value 
+                  mon_su(m)%fcanwat(i,j,:)  = missing_value 
                   mon_su(m)%fcansn(i,j,:)   = missing_value 
                   mon_su(m)%swe(i,j,:)      = missing_value 
                   mon_su(m)%swe_max(i,j,:)  = missing_value 
@@ -1323,6 +1328,7 @@ contains
               mon_su(mon)%tskin(i,j,:)    = mon_su(mon)%tskin(i,j,:)    + lnd(i,j)%t_skin               * mon_avg
               mon_su(mon)%tskin_amp(i,j,:)= mon_su(mon)%tskin_amp(i,j,:)+ lnd(i,j)%t_skin_amp           * mon_avg
               mon_su(mon)%scf(i,j,:)      = mon_su(mon)%scf(i,j,:)      + lnd(i,j)%f_snow               * mon_avg
+              mon_su(mon)%fcanwat(i,j,:)  = mon_su(mon)%fcanwat(i,j,:)  + lnd(i,j)%f_wat_can            * mon_avg
               mon_su(mon)%fcansn(i,j,:)   = mon_su(mon)%fcansn(i,j,:)   + lnd(i,j)%f_snow_can           * mon_avg
               mon_su(mon)%alb(i,j,:)      = mon_su(mon)%alb(i,j,:)      + lnd(i,j)%albedo               * mon_avg
               mon_su(mon)%alb_dir(i,j,:)  = mon_su(mon)%alb_dir(i,j,:)  &
@@ -2331,6 +2337,7 @@ contains
     call nc_write(fnm,"alb_dir",  sngl(vars%alb_dir),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="surface direct beam albedo",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"alb_dif",  sngl(vars%alb_dif),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="surface diffuse albedo",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"scf",      sngl(vars%scf),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="snow cover fraction",units="/",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"fcanwat", sngl(vars%fcanwat),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="fraction of canopy covered by water",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fcansn",   sngl(vars%fcansn),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="fraction of canopy covered by snow",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"wind",     sngl(vars%wind),   dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="wind speed",units="m/s",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ra",       sngl(vars%ra),   dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1],long_name="aerodynamic resistance",units="s/m",missing_value=missing_value,ncid=ncid)
@@ -2451,6 +2458,7 @@ contains
     ave%alb_dif = 0._wp
     ave%albsnw  = 0._wp
     ave%scf     = 0._wp
+    ave%fcanwat = 0._wp
     ave%fcansn  = 0._wp
     ave%swe     = 0._wp
     ave%swe_max = 0._wp
@@ -2556,6 +2564,7 @@ contains
       ave%alb_dif = ave%alb_dif    + d(k)%alb_dif   / div
       ave%albsnw  = ave%albsnw     + d(k)%albsnw    / div
       ave%scf     = ave%scf        + d(k)%scf       / div
+      ave%fcanwat = ave%fcanwat    + d(k)%fcanwat   / div
       ave%fcansn  = ave%fcansn     + d(k)%fcansn    / div
       ave%swe     = ave%swe        + d(k)%swe       / div
       ave%swe_max = ave%swe_max    + d(k)%swe_max   / div

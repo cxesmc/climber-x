@@ -3,6 +3,7 @@
     "account"       : "megarun", 
     "jobname"       : "ClimberX",
     "omp"           : 32,
+    "mem"           : -1,
 
     "queues_file"   : ".runme/queues.json",
     "info_file"     : ".runme/climberx_info.json",

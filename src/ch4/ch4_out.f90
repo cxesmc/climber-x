@@ -41,6 +41,7 @@ module ch4_out
       real(wp) :: dch4lnd_dt
       real(wp) :: dch4emis_dt
       real(wp) :: dch4ox_dt
+      real(wp) :: demis_other_dt
       real(wp) :: tau
   end type
 
@@ -93,15 +94,16 @@ contains
     ann_ts(y)%dch4lnd_dt   = ch4%dch4lnd_dt * 1.e-9_wp    ! TgCH4/yr, positive into the atmosphere
     ann_ts(y)%dch4emis_dt  = ch4%dch4emis_dt * 1.e-9_wp   ! TgCH4/yr, positive into the atmosphere
     ann_ts(y)%dch4ox_dt    = ch4%dch4ox_dt * 1.e-9_wp     ! TgCH4/yr, positive into the atmosphere
+    ann_ts(y)%demis_other_dt   = ch4%demis_other_dt * 1.e-9_wp     ! TgCH4/yr, positive into the atmosphere
     ann_ts(y)%tau          = ch4%tau    ! years 
 
     ! write to standard output
     if (mod(year,10).eq.1) then
-      print '(a7,a9,6a7)','ch4','year','CH4','CH4ocn','CH4lnd','CH4emis','CH4ox','CH4tau'
+      print '(a7,a9,6a7)','ch4','year','CH4','CH4ocn','CH4lnd','CH4emis','CH4ox','CH4otherEmis','CH4tau'
     endif
 
     print '(a7,i9,F7.1,5F7.1)', &
-      'ch4',year_now,ann_ts(y)%ch4,ann_ts(y)%dch4ocn_dt,ann_ts(y)%dch4lnd_dt,ann_ts(y)%dch4emis_dt,ann_ts(y)%dch4ox_dt,ann_ts(y)%tau
+      'ch4',year_now,ann_ts(y)%ch4,ann_ts(y)%dch4ocn_dt,ann_ts(y)%dch4lnd_dt,ann_ts(y)%dch4emis_dt,ann_ts(y)%dch4ox_dt,ann_ts(y)%demis_other_dt,ann_ts(y)%tau
 
     ! write to netcdf file 
     if (time_out_ts_clim) then

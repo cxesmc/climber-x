@@ -245,8 +245,8 @@ contains
       endif
       ! fire disturbance
       gamma_fire = 1._wp/pft_par%tau_fire(n) &
-        * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) &  ! soil moisture factor
-        * max(0._wp, min(1._wp, (veg_c_above-veg_par%cveg_fire_low)/(veg_par%cveg_fire_high-veg_par%cveg_fire_low)))  ! fuel factor
+        * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) !&  ! soil moisture factor
+        !* max(0._wp, min(1._wp, (veg_c_above-veg_par%cveg_fire_low)/(veg_par%cveg_fire_high-veg_par%cveg_fire_low)))  ! fuel factor
       ! annual mean disturbance rate
       gamma_dist_cum(n) = gamma_dist_cum(n) &
         + (pft_par%gamma_dist_min(n)*fac_lim_bio &        ! minimum disturbance rate
