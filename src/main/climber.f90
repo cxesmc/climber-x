@@ -149,6 +149,12 @@ program climber
   !$ real(dp) :: time_smb
   !$ real(dp) :: time_bmb
 
+    ! print the Git version 
+#if defined(VERSION)
+        write(*,'(A,A)') "Git version: ", VERSION
+#else
+        write(*,'(A)') "Git version: unknown"
+#endif
   write(*,*) 'climber-x git_commit_hash', git_commit_hash
    
     ! ==============================

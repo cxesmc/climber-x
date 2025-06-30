@@ -16,6 +16,12 @@ defaulttarget: usage
 
 <COMPILER_CONFIGURATION>
 
+## gitversion
+# generate a Git version string
+GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
+CPPFLAGS_FULL := $(CPPFLAGS_FULL) -DVERSION=\"$(GIT_VERSION)\" 
+CPPFLAGS_CLIM := $(CPPFLAGS_CLIM) -DVERSION=\"$(GIT_VERSION)\" 
+
 # Determine whether to use normal flags (default), 
 # debugging flags (debug=1) or profiling flags (debug=2)
 DFLAGS   = $(DFLAGS_NODEBUG)
