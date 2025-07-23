@@ -572,6 +572,9 @@ contains
       geo%sea_level = geo%sea_level + geo%d_sea_level
       geo%hires%rsl = geo%sea_level   ! just for output
 
+      ! update bedrock elevation using sea level change
+      geo%hires%z_bed = geo%hires%z_bed - geo%d_sea_level
+
     else if (i_geo==1) then
       !-------------------------------------------------------------------
       ! LLRA GIA model + uniform sea level from ice volume
