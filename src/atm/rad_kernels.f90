@@ -191,7 +191,7 @@ contains
     !------------------------
 
     ! control 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     rk%flwr_top(:,:,i_lw_control)    = rk%flwr_top(:,:,i_lw_control)    + lwr_top  / nday_year
@@ -200,7 +200,7 @@ contains
     rk%flwr_sur_cs(:,:,i_lw_control) = rk%flwr_sur_cs(:,:,i_lw_control) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
     ! water vapor, increase corresponding to 1K temperature increase
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
       gams, gamb, gamt, tam+1._wp, ttrop, htrop) ! optional input arguments for feedback (moisture)
@@ -210,7 +210,7 @@ contains
     rk%flwr_sur_cs(:,:,i_lw_wv) = rk%flwr_sur_cs(:,:,i_lw_wv) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
     ! air temperature, 1 K temperature increase
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam+1._wp, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
       gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
@@ -221,7 +221,7 @@ contains
 
     ! surface temperature, 1 K temperature increase (assuming unit surface emissivity)
     rk_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + 1._wp)**4
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, rk_flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld) ! out
     rk%flwr_top(:,:,i_lw_Ts)    = rk%flwr_top(:,:,i_lw_Ts)    + lwr_top  / nday_year
@@ -230,7 +230,7 @@ contains
     rk%flwr_sur_cs(:,:,i_lw_Ts) = rk%flwr_sur_cs(:,:,i_lw_Ts) + sum((flwr_dw_sur_cs-rk_flwr_up_sur)*frst,3) / nday_year
 
     ! CO2, doubling 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, 2._wp*co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld) ! out
     rk%flwr_top(:,:,i_lw_co2)    = rk%flwr_top(:,:,i_lw_co2)    + lwr_top  / nday_year

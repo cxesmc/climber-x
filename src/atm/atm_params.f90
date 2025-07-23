@@ -105,6 +105,7 @@ module atm_params
   real(wp) :: a3_vap
   logical :: l_o3
   real(wp) :: ecs_scale
+  real(wp) :: ecs_scale_dT
 
   real(wp) :: c_gam_1   
   real(wp) :: c_gam_2
@@ -365,6 +366,7 @@ contains
     call nml_read(filename,"atm_par","a3_vap",a3_vap)
     call nml_read(filename,"atm_par","l_o3",l_o3)
     call nml_read(filename,"atm_par","ecs_scale",ecs_scale)
+    call nml_read(filename,"atm_par","ecs_scale_dT",ecs_scale_dT)
     call nml_read(filename,"atm_par","c_hrs_1",c_hrs_1)
     call nml_read(filename,"atm_par","c_hrs_2",c_hrs_2)
     call nml_read(filename,"atm_par","c_hrs_3",c_hrs_3)

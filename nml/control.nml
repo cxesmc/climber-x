@@ -160,8 +160,8 @@
  co2_emis_const = 0.                ! PgC/yr, constant CO2 emission rate to the atmosphere, used only if ico2_emis == 0
  co2_emis_file  = "input/co2_emis_hist_pulse_1000PgC_ssp.nc"
  co2_pulse = 1000.                  ! PgC, cumulative carbon emissions for CO2 pulse experiments, unsed only if ico2_emis == 2,4
- k_emis_fb = 0.                     ! PgC/year/K2, strength of prescribed carbon cycle feedback to global temperature change^2 
- C_emis_fb = 1000.                  ! PgC, maximum cumulated emissions from extra feedbacks
+ k_emis_fb = 0.                     ! PgC/year/K, strength of prescribed carbon cycle feedback to global temperature change
+ C_emis_fb = 100000.                ! PgC, maximum cumulated emissions from extra feedbacks
  co2_emis_min = -100.               ! PgC/yr, minimum emission rate for the future, only for ico2_emis==1
 
  !-------------------------------------------------------
@@ -222,7 +222,7 @@
                                     ! 1 = prescribed CH4 emissions from file (ch4_emis_file)
  ch4_emis_const = 0.                ! TgCH4/yr, constant CH4 emission rate to the atmosphere, used only if ich4_emis == 0
  ch4_emis_file  = "input/ch4_emis_historical_1850-2014.nc"
- ch4_emis_other_const= 74.          ! constant CH4 emissions from rivers, lakes and other sources
+ ch4_emis_other_const= 0. !74.          ! constant CH4 emissions from rivers, lakes and other sources
 
  !-------------------------------------------------------
  ! atmospheric N2O

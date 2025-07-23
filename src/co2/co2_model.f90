@@ -220,7 +220,7 @@ contains
     co2%Cemis_cum = co2%Cemis_cum + co2%dCemis_dt   ! GtC
 
     ! additional emission term based on global temperature change
-    co2%dCemis_extra_dt = (C_emis_fb-co2%Cemis_extra_cum)/C_emis_fb * k_emis_fb*co2%dT_glob_cum**2 * 1.e12_wp  ! PgC/yr/K2 * K2 * kgC/PgC = kgC/yr
+    co2%dCemis_extra_dt = (C_emis_fb-co2%Cemis_extra_cum)/C_emis_fb * k_emis_fb*co2%dT_glob_cum * 1.e12_wp  ! PgC/yr/K * K * kgC/PgC = kgC/yr
     co2%Cemis_extra_cum = co2%Cemis_extra_cum + co2%dCemis_extra_dt*1.e-12_wp  ! PgC
 
     ! update d13C of CO2 emissions if needed    

@@ -390,7 +390,7 @@ contains
     !-------------------------------
 
     ! control 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
@@ -400,7 +400,7 @@ contains
 
     ! radiative forcing
     ! longwave radiation with 2xCO2 to diagnose stratosphere fluxes 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &    ! in
       fb%co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
@@ -421,7 +421,7 @@ contains
       enddo
     enddo
     ! longwave radiation with 2xCO2 and adjusted stratospheric temperature (htrop and ttrop)
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, fb_ttrop, cld, clot, & ! in
       fb%co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &   ! out
@@ -431,7 +431,7 @@ contains
     ! Planck feedback
     fb_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + (fb%tskin(:,:,:,doy)-tskin))**4
     ! uniform tropospheric warming (same warming as near surface air)
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam+sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, fb_flwr_up_sur, &  ! in, account also for surface emission changes
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
@@ -439,7 +439,7 @@ contains
     fb%flwr_top(:,:,i_pl) = fb%flwr_top(:,:,i_pl) + lwr_top/nday_year
 
     ! water vapor feedback
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, fb%ram(:,:,doy), fb%hrm(:,:,doy), ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
@@ -447,49 +447,49 @@ contains
     fb%flwr_top(:,:,i_wv) = fb%flwr_top(:,:,i_wv) + lwr_top/nday_year
 
     ! cloud feedback
-    call lw_radiation(frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, fb%cld(:,:,doy), fb%clot(:,:,doy), &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld) = fb%flwr_top(:,:,i_cld) + lwr_top/nday_year
 
     ! cloud fraction feedback
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, fb%cld(:,:,doy), clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld_frac) = fb%flwr_top(:,:,i_cld_frac) + lwr_top/nday_year
 
     ! cloud top height feedback
-    call lw_radiation(frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld_hcld) = fb%flwr_top(:,:,i_cld_hcld) + lwr_top/nday_year
 
     ! cloud optical thickness feedback
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, fb%clot(:,:,doy), &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld_clot) = fb%flwr_top(:,:,i_cld_clot) + lwr_top/nday_year
 
     ! lapse rate feedback
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy)-sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, & ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
       gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
     fb%flwr_top(:,:,i_lr) = fb%flwr_top(:,:,i_lr) + lwr_top/nday_year
 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), tam, ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
       gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
     fb%flwr_top(:,:,i_lr_gam) = fb%flwr_top(:,:,i_lr_gam) + lwr_top/nday_year
 
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, fb%tam(:,:,doy)-sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
@@ -498,7 +498,7 @@ contains
 
     ! total temperature feedback
     fb_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + (fb%tskin(:,:,:,doy)-tskin))**4 ! assuming unit emissivity
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy), ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, fb_flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
@@ -506,7 +506,7 @@ contains
     fb%flwr_top(:,:,i_temp) = fb%flwr_top(:,:,i_temp) + lwr_top/nday_year
 
     ! albedo feedback
-    call lw_radiation(frst, zsa, zs, htrop, hcld, ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
@@ -514,7 +514,7 @@ contains
 
     ! all longwave feedbacks
     fb_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + (fb%tskin(:,:,:,doy)-tskin))**4 ! assuming unit emissivity
-    call lw_radiation(frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy), fb%ram(:,:,doy), fb%hrm(:,:,doy), ttrop, fb%cld(:,:,doy), fb%clot(:,:,doy), &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, fb_flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out

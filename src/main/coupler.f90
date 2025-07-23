@@ -554,6 +554,12 @@ contains
     enddo
     !$omp end parallel do
 
+    if (time_soy_atm .and. year.gt.1) then
+      if (atm%t2m_glob_ann.eq.0._wp) atm%t2m_glob_ann = cmn%t2m_glob_ann  ! initialize 
+      atm%dt2m_glob_ann_cum = atm%dt2m_glob_ann_cum + (cmn%t2m_glob_ann - atm%t2m_glob_ann)
+      atm%t2m_glob_ann = cmn%t2m_glob_ann 
+    endif
+
    return
 
   end subroutine cmn_to_atm
@@ -706,12 +712,15 @@ contains
         endif
         if (time_eoy_atm) then
           cmn%t2m_min_mon(i,j) = minval(cmn%t2m_mon_lnd(i,j,:))
-          cmn%t2m_glob_ann = sum( sum(cmn%t2m_mon(:,:,:),3)/nmon_year * area ) / sum(area)
         endif
 
       enddo
     enddo
     !$omp end parallel do
+
+    if (time_eoy_atm) then
+      cmn%t2m_glob_ann = sum( sum(cmn%t2m_mon(:,:,:),3)/nmon_year * area ) / sum(area)
+    endif
 
 
    return
@@ -3956,6 +3965,7 @@ contains
     cmn%t2m_mon = 0._wp
     cmn%t2m_mon_lnd = 0._wp
     cmn%t2m_min_mon = T0+20._wp
+    cmn%t2m_glob_ann = T0+15._wp
     cmn%t_soil = T0 
     cmn%t_shelf = T0 
     cmn%alb_vis_dir = 0._wp

@@ -33,7 +33,6 @@ module lw_radiation_mod
   use atm_params, only : ak_co2, beta_co2
   use atm_params, only : ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap, rh_strat
   use atm_params, only : l_o3
-  use atm_params, only : ecs_scale
   use atm_grid, only : im, jm, kmc, nm, i_ocn
   use atm_grid, only : zl, llwr, llwr1, llwr2, llwr3, llwr4, nlwr1, nlwr2, nlwr3, nlwr4
   use vesta_mod, only : t_prof, rh_prof
@@ -66,13 +65,14 @@ contains
   !   Subroutine :  l w _ r a d i a t i o n 
   !   Purpose    :  driver for LW radiation 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lw_radiation(frst, zsa, zs, htrop, hcld, ra2, gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &
+  subroutine lw_radiation(ecs_scale, frst, zsa, zs, htrop, hcld, ra2, gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &    ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &     ! out
       gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q) ! optional input arguments for feedback analysis
 
     implicit none
 
+    real(wp), intent(in ) :: ecs_scale
     real(wp), intent(in ) :: frst(:,:,:)
     real(wp), intent(in ) :: zsa(:,:)
     real(wp), intent(in ) :: zs(:,:,:)

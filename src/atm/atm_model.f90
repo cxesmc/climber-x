@@ -42,6 +42,7 @@ module atm_model
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
     use atm_params, only : tam_init
+    use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
@@ -91,6 +92,7 @@ contains
     type(atm_class) :: atm
 
     integer :: niter
+    real(wp) :: ecs_scale_now
     !$ real(wp) :: time1,time2
 
     real(wp), dimension(im,jm) :: prc_save
@@ -124,7 +126,8 @@ contains
     ! longwave radiation
     !-------------------------------------------------
     !$ time1 = omp_get_wtime()
-    call lw_radiation(atm%frst, atm%zsa, atm%zs, atm%htrop, atm%hcld, atm%ra2, &   ! in
+    ecs_scale_now = ecs_scale + ecs_scale_dT*atm%dt2m_glob_ann_cum
+    call lw_radiation(ecs_scale_now, atm%frst, atm%zsa, atm%zs, atm%htrop, atm%hcld, atm%ra2, &   ! in
       atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%ttrop, atm%cld, atm%clot, &
       atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%co2e, atm%o3, &  ! in
       atm%flwr_up_sur, &  ! in
@@ -536,6 +539,8 @@ contains
     eke_mon(:,:,0)   = eke_mon(:,:,12)
     eke_mon(:,:,13)  = eke_mon(:,:,1)
 
+    atm%t2m_glob_ann = 0._wp
+    atm%dt2m_glob_ann_cum = 0._wp
 
     atm%error = .false.
 

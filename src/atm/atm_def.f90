@@ -60,6 +60,9 @@ module atm_def
       real(wp) :: precession
       real(wp) :: obliquity
 
+      real(wp) :: t2m_glob_ann
+      real(wp) :: dt2m_glob_ann_cum
+
       real(wp), allocatable, dimension(:,:,:) :: solar
       real(wp), allocatable, dimension(:,:) :: solarm
       real(wp), allocatable, dimension(:,:,:) :: cosz

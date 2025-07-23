@@ -225,6 +225,7 @@
   l_o3 = T                      !
   hpbl = 1500.                  ! m
   ecs_scale = 1.                ! scaling of effective CO2 in long-wave radiation to mimic lower (<1) or higher (>1) climate sensitivity
+  ecs_scale_dT = 0.
 
   !-----------------------------------------------------------
   ! dust cycle settings
