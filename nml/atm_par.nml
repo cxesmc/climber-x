@@ -61,7 +61,6 @@
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 7.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
-  f_aslp_ice = 1.
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
   c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 
