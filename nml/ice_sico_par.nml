@@ -421,7 +421,7 @@
 !                         (only for i_disc>0)
 
     m_R = 0.    !1.5
-!                         Power of distance
+!                         Power of resolution
 !                         (only for i_disc>0)
 
     m_T = 2.0
