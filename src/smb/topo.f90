@@ -28,7 +28,7 @@ module topo_mod
   use precision, only : wp
   use constants, only : pi, r_earth
   use coord, only : grid_class, grid_allocate, map_class, map_field, map_scrip_class, map_scrip_field
-  use smb_params, only : h_atm, p0, prc_par, surf_par
+  use smb_params, only : h_atm, p0, prc_par, surf_par, gamma
 
   implicit none
 
@@ -272,7 +272,7 @@ contains
     do i=1,nx
       if (prc_par%l_elevation_corr .and. z_sur(i,j).ge.prc_par%z_sur_crit_fele) then
         dz = z_sur(i,j)-z_sur_i(i,j)
-        dT = -6.5e-3_wp*dz      ! use fixed lapse rate of 6.5 K/km here
+        dT = -gamma*dz 
         f_ele(i,j) = exp(prc_par%dP_dT*dT)
       else 
         f_ele(i,j) = 1._wp
