@@ -2754,7 +2754,7 @@ contains
        enddo
 
        ! maximum northward Atlantic heat transport
-       ann_ts(y)%hmaxa = maxval(ann_o%hfa(1,:))
+       ann_ts(y)%hmaxa = maxval(ann_o%hfa(1,jsf:))
        ann_ts(y)%h55a  = ann_o%hfa(1,29)    ! at 55N
        ! maximum northward Pacific heat transport
        ann_ts(y)%hmaxp = maxval(ann_o%hfp(1,:))
@@ -2763,7 +2763,7 @@ contains
        ann_ts(y)%h60s  = -ann_o%hft(1,6)
 
        ! maximum northward Atlantic freshwater transport
-       ann_ts(y)%fmaxa = maxval(ann_o%fwa)
+       ann_ts(y)%fmaxa = maxval(ann_o%fwa(1,jsf:))
 
        ! freshwater hosing 
        ann_ts(y)%hosing = ocn%hosing
