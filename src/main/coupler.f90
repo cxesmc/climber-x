@@ -2921,7 +2921,7 @@ contains
         filt_method="gaussian",filt_par=[100._dp,ice(n)%grid%G%dx])
       !$omp section
       ! map geothermal heat flux to ice grid
-      call map_scrip_field(maps_geo_to_ice(n),"q_geo",geo%hires%q_geo,ice(n)%q_geo,method="mean",missing_value=-9999._dp, &
+      call map_scrip_field(maps_geo_to_ice(n),"q_geo",geo%hires%q_geo_ice,ice(n)%q_geo,method="mean",missing_value=-9999._dp, &
         filt_method="gaussian",filt_par=[100._dp,ice(n)%grid%G%dx])
       !$omp section
       ! map sediment mask to ice grid
