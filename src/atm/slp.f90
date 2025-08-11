@@ -28,7 +28,7 @@ module slp_mod
   use atm_params, only : wp, dp
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use atm_params, only : ra, p0, hatm
-  use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5, f_aslp_ice
+  use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
   use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
   use atm_params, only : i_mmc, c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_z, c_mmc_1, c_mmc_2, c_mmc_3, c_mmc_4
   use atm_params, only : nsmooth_aslp, nsmooth_aslp_eq, nj_eq, nsmooth_aslp_topo
@@ -120,7 +120,6 @@ contains
       do i=1,im
         ! azonal sea level temperature
         atsl(i,j) = tsksl(i,j)-tslz(j)
-        atsl(i,j) = (1._wp-frst(i,j,i_ice))*atsl(i,j) + f_aslp_ice*frst(i,j,i_ice)*atsl(i,j)
       enddo
 
       do i=1,im

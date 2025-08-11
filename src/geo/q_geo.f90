@@ -27,6 +27,7 @@ module q_geo_mod
 
   use precision, only : wp, dp
   use geo_params, only : i_q_geo, q_geo_const, q_geo_file
+  use geo_params, only : i_q_geo_ice, q_geo_ice_const, q_geo_ice_file
 
   use ncio
   use coord, only : grid_class, grid_init
@@ -41,12 +42,13 @@ module q_geo_mod
 contains
 
 
-  subroutine geo_heat(geo_grid, q_geo)
+  subroutine geo_heat(geo_grid, q_geo, q_geo_ice)
 
     implicit none
 
     type(grid_class), intent(in) :: geo_grid
     real(wp), intent(out) :: q_geo(:,:)
+    real(wp), intent(out) :: q_geo_ice(:,:)
 
     integer :: ppos, spos
     integer :: ni_qgeo, nj_qgeo
@@ -81,6 +83,36 @@ contains
       ! map to geo grid
       call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
+        !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
+
+      deallocate(q_geo_in, lon_qgeo, lat_qgeo)
+
+    endif
+
+    if (i_q_geo_ice.eq.1) then
+
+      ! uniform value
+      q_geo_ice = q_geo_ice_const 
+
+    else if (i_q_geo_ice.eq.2) then
+
+      ! read from file
+      ni_qgeo = nc_size(trim(q_geo_ice_file),"lon")
+      nj_qgeo = nc_size(trim(q_geo_ice_file),"lat")
+      allocate( q_geo_in(ni_qgeo,nj_qgeo) )
+      allocate( lon_qgeo(ni_qgeo) )
+      allocate( lat_qgeo(nj_qgeo) )
+      call nc_read(trim(q_geo_ice_file),"lat",lat_qgeo)
+      call nc_read(trim(q_geo_ice_file),"lon",lon_qgeo)
+      call nc_read(trim(q_geo_ice_file),"q_geo",q_geo_in)
+
+      ! grid definition
+      spos = scan(trim(q_geo_ice_file),"/", BACK= .true.)+1
+      ppos = scan(trim(q_geo_ice_file),".", BACK= .true.)-1
+      call grid_init(qgeo_grid,name=trim(q_geo_ice_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
+      ! map to geo grid
+      call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo_ice,method="mean",missing_value=-9999._dp)
         !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)

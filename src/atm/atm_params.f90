@@ -79,7 +79,6 @@ module atm_params
   real(wp) :: c_slp_3
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
-  real(wp) :: f_aslp_ice
   logical :: l_aslp_topo
   real(wp) :: c_aslp_topo_1
   real(wp) :: c_aslp_topo_2
@@ -316,7 +315,6 @@ contains
     call nml_read(filename,"atm_par","c_slp_3",c_slp_3)
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
-    call nml_read(filename,"atm_par","f_aslp_ice",f_aslp_ice)
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
     call nml_read(filename,"atm_par","c_aslp_topo_1",c_aslp_topo_1)
     call nml_read(filename,"atm_par","c_aslp_topo_2",c_aslp_topo_2)
