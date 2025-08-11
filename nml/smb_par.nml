@@ -97,7 +97,7 @@
   c_fice = 1.                 ! factor for ice fraction dependence on topographic roughness, used only if i_f_ice==2
   z_sur_std_crit = 0.         ! m, critical topographic roughness for ice cover fraction, used only if i_f_ice==2
 
-  i_alb_ice = 1               ! ice sheet albedo parameterisation:
+  i_alb_ice = 0               ! ice sheet albedo parameterisation:
                               ! 0 = use constant ice albedo alb_ice_const
                               ! 1 = variable ice albedo accounting for firn -> ice transition and dirt accumulation 
   i_alb_ice_margin = 1        ! ice sheet margin albedo parameterisation, used only if i_alb_ice==1:
@@ -115,7 +115,7 @@
   !-------------------------------------------------------------------
   ! precipitation downscaling parameters
   !-------------------------------------------------------------------
-  l_elevation_corr = F        ! apply elevation correction of precipitation using Clausius-Clapeyron dependence on temperature?
+  l_elevation_corr = T        ! apply elevation correction of precipitation using Clausius-Clapeyron dependence on temperature?
   z_sur_crit_fele = 0.        ! m, height above which to apply elevation correction, used only if l_elevation_corr==T, 1500-2000 in CLIMBER-2 and Kapsch 2021
   z_sur_high_fele = 4000.     ! m, height above which precipitation is additionally reduced by a factor 0.1 
   dP_dT = 0.05                ! sensitivity of precipitation to temperature (~0.07, or 7%, for Clausius-Clapeyron), used only if l_elevation_corr==T

@@ -101,9 +101,9 @@
   i_tsl = 2 !1
   i_tslz = 2 !1
   c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
-  c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
+  c_tsl_gam_ice = 4.e-3         ! lapse rate for reduction of skin temperature to sea level over ice sheets
   tsl_gams_min_lnd = 6.5e-3     ! K/m
-  tsl_gams_min_ice = 2.e-3      ! K/m
+  tsl_gams_min_ice = 6.5e-3     ! K/m
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
