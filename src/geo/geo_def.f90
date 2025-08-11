@@ -78,6 +78,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_bed_rel  !! isostatically relaxed bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: z_bed_1min  !! bedrock elevation on 1 min resolution [m]
       real(wp), dimension(:,:), allocatable :: q_geo     !! geothermal heat flux [W/m2]
+      real(wp), dimension(:,:), allocatable :: q_geo_ice !! geothermal heat flux for ice sheets [W/m2]
       real(wp), dimension(:,:), allocatable :: h_sed     !! sediment thickness [m]
       integer, dimension(:,:), allocatable :: i_runoff, j_runoff  !! (i,j) indexes of runoff destination cell
       integer, dimension(:,:), allocatable :: i_runoff_coarse, j_runoff_coarse !! (i,j) indexes of runoff destination cell on the coearse grid

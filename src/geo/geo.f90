@@ -125,6 +125,7 @@ contains
     allocate( geo%hires%rsl(ni_topo,nj_topo))
     allocate( geo%hires%mask(ni_topo,nj_topo))
     allocate( geo%hires%q_geo(ni_topo,nj_topo))
+    allocate( geo%hires%q_geo_ice(ni_topo,nj_topo))
     allocate( geo%hires%h_sed(ni_topo,nj_topo))
     allocate( geo%hires%i_runoff(ni_topo,nj_topo))
     allocate( geo%hires%j_runoff(ni_topo,nj_topo))
@@ -509,7 +510,7 @@ contains
     ! geothermal heat flux
     !-------------------------------------------------------------------
 
-    call geo_heat(geo%hires%grid, geo%hires%q_geo)
+    call geo_heat(geo%hires%grid, geo%hires%q_geo, geo%hires%q_geo_ice)
     call map_scrip_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
     call map_scrip_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp, &
       filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
@@ -954,6 +955,7 @@ contains
     deallocate(geo%hires%rsl)
     deallocate(geo%hires%mask)
     deallocate(geo%hires%q_geo)
+    deallocate(geo%hires%q_geo_ice)
     deallocate(geo%hires%h_sed)
     deallocate(geo%hires%i_runoff)
     deallocate(geo%hires%j_runoff)

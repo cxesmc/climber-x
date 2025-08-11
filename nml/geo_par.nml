@@ -80,6 +80,9 @@
  i_q_geo = 2                                ! geothermal heat flux. 1..uniform value q_geo_const, 2..read from file q_geo_file
  q_geo_const = 0.055                        ! W/m2, geothermal heat flux, used only if i_q_geo==1
  q_geo_file = "input/q_geo_Lucazeau_2019_grl_Colgan_2022_ant_Burton_2020.nc"   ! geothermal heat flux input file, used only if i_q_geo==2
+ i_q_geo_ice = 2                                ! geothermal heat flux for ice sheets. 1..uniform value q_geo_ice_const, 2..read from file q_geo_ice_file
+ q_geo_ice_const = 0.055                        ! W/m2, geothermal heat flux, used only if i_q_geo_ice==1
+ q_geo_ice_file = "input/q_geo_Lucazeau_2019_grl_Colgan_2022_ant_Burton_2020.nc"   ! geothermal heat flux input file, used only if i_q_geo_ice==2
 
  !-------------------------------------------------------
  ! sediments 

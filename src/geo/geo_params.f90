@@ -75,6 +75,10 @@ module geo_params
   real(wp) :: q_geo_const
   character (len=256) :: q_geo_file
 
+  integer :: i_q_geo_ice
+  real(wp) :: q_geo_ice_const
+  character (len=256) :: q_geo_ice_file
+
   character (len=256) :: sed_file
 
   logical :: l_write_timer
@@ -135,6 +139,9 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","i_q_geo",i_q_geo)
     call nml_read(filename,"geo_par","q_geo_const",q_geo_const)
     call nml_read(filename,"geo_par","q_geo_file",q_geo_file)
+    call nml_read(filename,"geo_par","i_q_geo_ice",i_q_geo_ice)
+    call nml_read(filename,"geo_par","q_geo_ice_const",q_geo_ice_const)
+    call nml_read(filename,"geo_par","q_geo_ice_file",q_geo_ice_file)
     call nml_read(filename,"geo_par","sed_file",sed_file)
     call nml_read(filename,"geo_par","l_write_timer",l_write_timer)
     call nml_read(filename,"geo_par","l_output_hires",l_output_hires)
