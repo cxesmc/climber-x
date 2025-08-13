@@ -90,6 +90,8 @@ module ocn_out
   real(wp), dimension(:,:), allocatable :: t_atl, t_pac, t_ind, t_so
   real(wp), dimension(:,:), allocatable :: s_atl, s_pac, s_ind, s_so
   real(wp), dimension(:,:), allocatable :: rho_atl, rho_pac, rho_ind, rho_so
+    
+  real(wp), allocatable, dimension(:,:,:) :: ocn_vol0
 
   type ts_out
      integer :: ncells
@@ -124,7 +126,7 @@ module ocn_out
      real(wp) :: drake, bering, davis, fram, denmark, medi, indo, agulhas
      real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
      real(wp) :: shelf
-     real(wp) :: sl_steric
+     real(wp) :: rsl_steric, rsl_mass
      real(wp) :: mld_atlN50, mld_lab, mld_irm, mld_gin, mld_bkn, mld_wedd, mld_ross, mld_so
      real(wp) :: mldst_atlN50, mldst_lab, mldst_irm, mldst_gin, mldst_bkn, mldst_wedd, mldst_ross, mldst_so
      real(wp) :: pe_atlN, pe_atlN50, pe_lab, pe_irm, pe_gin, pe_bkn, pe_wedd, pe_ross, pe_so
@@ -454,6 +456,8 @@ contains
     allocate(rho_ind(maxj,maxk))
     allocate(rho_so(maxj,maxk))
  
+    allocate(ocn_vol0(maxi,maxj,maxk))
+
     mon_avg = 1._wp/nstep_mon_ocn
     ann_avg = 1._wp/nstep_year_ocn
 
@@ -1066,8 +1070,8 @@ contains
     real(wp) :: ocnvol_tot, ocnvol_atl, ocnvol_pac, ocnvol_ind, ocnvol_so
     real(wp) :: global_cfc11, global_cfc12
     real(wp), save :: ocn_area_tot0
-    real(wp), save :: sl_steric0
-    real(wp) :: sl_steric
+    real(wp), save :: rsl_steric0, rsl_mass0
+    real(wp) :: rsl_steric, rsl_mass
     logical :: int_drake, int_bering, int_davis, int_medi, int_indo, int_agulhas
     real(wp) :: tf_drake, tf_bering, tf_davis, tf_fram, tf_denmark, tf_medi, tf_indo, tf_agulhas
     real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
@@ -1123,7 +1127,8 @@ contains
     global_dye = 0._wp
     global_cfc11 = 0.0_wp
     global_cfc12 = 0.0_wp
-    sl_steric = 0._wp
+    rsl_steric = 0._wp
+    rsl_mass = 0._wp
     fw = 0._wp
     fw_corr = 0._wp
     fw_noise = 0._wp
@@ -1153,12 +1158,13 @@ contains
 
     if (year.eq.1) then
       ocn_area_tot0 = ocn_area_tot
+      ocn_vol0 = ocn_vol
     endif
 
     !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2) &
     !$omp reduction(+:sum_2d,sum_3d,ohc,ohc700,ohc2000,tdocn,tdocn_atl,tdocn_pac,tdocn_ind,tdocn_so,sdocn,sdocn_atl,sdocn_pac,sdocn_ind,sdocn_so,ocnvol_tot) &
     !$omp reduction(+:ocnvol_atl,ocnvol_pac,ocnvol_ind,ocnvol_so,global_cons,global_age,global_dye,global_cfc11,global_cfc12) &
-    !$omp reduction(+:sl_steric,fw,fw_corr,fw_noise,p_e_sic,runoff,runoff_veg,runoff_ice,runoff_lake,icemelt,calving,bmelt,fw_dhdt_ice,vsf,flx) &
+    !$omp reduction(+:rsl_steric,rsl_mass,fw,fw_corr,fw_noise,p_e_sic,runoff,runoff_veg,runoff_ice,runoff_lake,icemelt,calving,bmelt,fw_dhdt_ice,vsf,flx) &
     !$omp reduction(+:hft,hfp,hfa,hftz,hfpz,hfaz,fwt,fwp,fwa,fwtz,fwpz,fwaz)
     do i=1,maxi
       do j=1,maxj
@@ -1442,7 +1448,9 @@ contains
             ! dye tracer
             if (dye_tracer) global_dye = global_dye + ocn%ts(i,j,k,i_dye)*ocnvol/ocn_vol_tot
             ! steric sea level
-            sl_steric = sl_steric + ocnvol*rho0/ocn%rho(i,j,k) / ocn_area_tot0     ! m
+            rsl_steric = rsl_steric + ocn_vol0(i,j,k)*rho0/ocn%rho(i,j,k) / ocn_area_tot0     ! m
+            ! sea level from mass changes
+            rsl_mass = rsl_mass + ocn_vol(i,j,k) / ocn_area_tot0     ! m
           endif
         enddo
       enddo
@@ -1450,7 +1458,8 @@ contains
     !$omp end parallel do
 
     if (year.eq.1) then
-      sl_steric0 = sl_steric
+      rsl_steric0 = rsl_steric
+      rsl_mass0 = rsl_mass
     endif
 
     global_sst = sum_2d(1)/ocn_area_tot
@@ -2139,7 +2148,8 @@ contains
       ann_ts(y)%drhoSatl3 = 0._wp
       ann_ts(y)%cfc11   = 0._wp
       ann_ts(y)%cfc12   = 0._wp
-      ann_ts(y)%sl_steric = 0._wp
+      ann_ts(y)%rsl_steric = 0._wp
+      ann_ts(y)%rsl_mass = 0._wp
       ann_ts(y)%mld_atlN50 = 0._wp
       ann_ts(y)%mld_lab = 0._wp
       ann_ts(y)%mld_irm = 0._wp
@@ -2293,7 +2303,8 @@ contains
       ann_ts(y)%cfc11      = ann_ts(y)%cfc11      + global_cfc11*1.e-6_wp        * ann_avg ! Mmol
       ann_ts(y)%cfc12      = ann_ts(y)%cfc12      + global_cfc12*1.e-6_wp        * ann_avg ! Mmol
     endif
-    ann_ts(y)%sl_steric = ann_ts(y)%sl_steric + (sl_steric-sl_steric0)    * ann_avg ! m
+    ann_ts(y)%rsl_steric = ann_ts(y)%rsl_steric + (rsl_steric-rsl_steric0)    * ann_avg ! m
+    ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0)    * ann_avg ! m
 
     ann_o%opsi  = ann_o%opsi  + opsi(0:maxj,1:maxk)*1e-6  * ann_avg ! Sv
     ann_o%opsia = ann_o%opsia + opsia(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
@@ -3785,7 +3796,8 @@ contains
     call nc_write(fnm,"area",    vars%area,dim1=dim_time,start=[ndat],count=[y],long_name="Total surface ocean area",units="mln km2",ncid=ncid)
     call nc_write(fnm,"vol",     vars%vol,dim1=dim_time,start=[ndat],count=[y],long_name="Total ocean volume",units="mln km3",ncid=ncid)
     call nc_write(fnm,"shelf",   vars%shelf,dim1=dim_time,start=[ndat],count=[y],long_name="Total area of ocean shelf",units="mln km2",ncid=ncid)
-    call nc_write(fnm,"sl_steric",   vars%sl_steric,dim1=dim_time,start=[ndat],count=[y],long_name="Steric sea level change relative to first simulation year (includes also contribution form land ice volume changes if ice sheets are interactive)",units="m",ncid=ncid)
+    call nc_write(fnm,"rsl_steric",   vars%rsl_steric,dim1=dim_time,start=[ndat],count=[y],long_name="Steric sea level change relative to first simulation year",units="m",ncid=ncid)
+    call nc_write(fnm,"rsl_mass",   vars%rsl_mass,dim1=dim_time,start=[ndat],count=[y],long_name="Sea level change due to land ice mass changes relative to first simulation year (approx)",units="m",ncid=ncid)
 
     call nc_write(fnm,"mld_atlN50",   vars%mld_atlN50,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Atlantic >50N",units="m",ncid=ncid)
     call nc_write(fnm,"mld_lab",   vars%mld_lab,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Labrador Sea",units="m",ncid=ncid)
