@@ -35,6 +35,22 @@
  z_bed_1min_file  = "input/RTopo-2.0.1_1min.nc"
 
  !-------------------------------------------------------
+ ! equilibrated bedrock elevation and ice thickness, only for i_geo==2 (VILMA) and geo_restart==F
+ !-------------------------------------------------------
+ i_equilibrium = 1             ! choice of equilibrated bedrock elevation and associated ice thickness
+                               ! 0 = equal to initial bedrock elevation and ice thickness
+                               ! 1 = equal to reference bedrock elevation and ice thickness (from geo_ref_file)
+                               ! 2 = read from file geo_eq_file
+                               ! 3 = computed from reference bedrock elevation (z_bed_ref from geo_ref_file) + relative sea level (rsl) from geo_restart file 
+                               !     (even if geo_restart==F in control.nml) 
+ geo_eq_file = "input/geo_icefree_relaxed.nc"
+
+ !-------------------------------------------------------
+ ! initial bedrock elevation equal to z_bed_eq? Only for geo_restart==F
+ !-------------------------------------------------------
+ l_z_bed_ini_eq = false
+
+ !-------------------------------------------------------
  ! relaxed icefree bedrock topography 
  !-------------------------------------------------------
  z_bed_rel_file  = "input/RTopo-2.0.1_10min_z_bed_rel_icefree_LLRA.nc" !"input/VILMA_zbed_relaxed_icefree.nc"

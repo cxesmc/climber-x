@@ -33,7 +33,7 @@ module geo_mod
   use coord, only : grid_class, grid_init
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
   use ncio
-  use geo_params, only : i_geo, geo_ref_file
+  use geo_params, only : i_geo, geo_ref_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq
   use geo_params, only : z_bed_rel_file, z_bed_1min_file, sigma_filter
   use geo_params, only : geo_params_init, l_connect_ocn, f_crit, n_coast_cells, i_fix_cell_grl
   use geo_params, only : h_ice_min
@@ -96,6 +96,7 @@ contains
     integer, dimension(:), allocatable :: mask_cell
     real(wp), dimension(:,:), allocatable :: tmp
     real(wp), dimension(:,:), allocatable :: z_bed_anom
+    real(wp), dimension(:,:), allocatable :: rsl_restart
     real(wp), allocatable, dimension(:,:) :: mask_ice
     real(wp), allocatable, dimension(:,:) :: mask_ice_geo
     type(grid_class) :: grid_rel
@@ -115,13 +116,15 @@ contains
     allocate( geo%hires%h_ice_ref(ni_topo,nj_topo))
     allocate( geo%hires%z_topo_ref(ni_topo,nj_topo))
     allocate( geo%hires%mask_ref(ni_topo,nj_topo))
-    allocate( geo%hires%z_bed_rel(ni_topo,nj_topo))
     allocate( geo%hires%z_bed(ni_topo,nj_topo))
+    allocate( geo%hires%z_bed_eq(ni_topo,nj_topo))
+    allocate( geo%hires%z_bed_rel(ni_topo,nj_topo))
     allocate( geo%hires%z_topo(ni_topo,nj_topo))
     allocate( geo%hires%z_topo_fil(ni_topo,nj_topo))
     allocate( geo%hires%z_topo_fill(ni_topo,nj_topo))
     allocate( geo%hires%z_sur(ni_topo,nj_topo))
     allocate( geo%hires%h_ice(ni_topo,nj_topo))
+    allocate( geo%hires%h_ice_eq(ni_topo,nj_topo))
     allocate( geo%hires%rsl(ni_topo,nj_topo))
     allocate( geo%hires%mask(ni_topo,nj_topo))
     allocate( geo%hires%q_geo(ni_topo,nj_topo))
@@ -189,6 +192,7 @@ contains
 
     call nc_read(trim(geo_ref_file),"bedrock_topography",geo%hires%z_bed_ref)
     call nc_read(trim(geo_ref_file),"ice_thickness",geo%hires%h_ice_ref)
+      
 
     !------------------------------------------------------------------------
     ! restart 
@@ -208,13 +212,42 @@ contains
 
       ! initialize bedrock topography, map from bnd to geo
       if (bnd_geo_grid%name==geo%hires%grid%name) then
+        ! same grid, simply assign
         geo%hires%z_bed = z_bed
       else
+        ! different grid, compute anomalies and add on top of reference bedrock elevation
         allocate(z_bed_anom(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
         call map_scrip_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_scrip_field(maps_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,method="mean",missing_value=-9999._dp)
         geo%hires%z_bed = geo%hires%z_bed_ref + z_bed_anom 
         deallocate(z_bed_anom)
+      endif
+
+      ! equilibrium bedrock elevation and ice thickness, accounting for potential disequilibrium due to ice sheet loading history
+      if (i_equilibrium.eq.0) then
+        ! equal to initial values
+        geo%hires%z_bed_eq = geo%hires%z_bed
+        geo%hires%h_ice_eq = geo%hires%h_ice
+      else if (i_equilibrium.eq.1) then
+        ! equal to reference values
+        geo%hires%z_bed_eq = geo%hires%z_bed_ref
+        geo%hires%h_ice_eq = geo%hires%h_ice_ref
+      else if (i_equilibrium.eq.2) then
+        ! read from file 
+        call nc_read(trim(geo_eq_file),"bedrock_topography",geo%hires%z_bed_eq)
+        call nc_read(trim(geo_eq_file),"ice_thickness",geo%hires%h_ice_eq)
+      else if (i_equilibrium.eq.3) then
+        ! derived by adding rsl from restart file to reference bedrock elevation
+        allocate(rsl_restart(ni_topo,nj_topo))
+        call nc_read(trim(restart_in_dir)//"/geo_restart.nc","rsl", rsl_restart)
+        geo%hires%z_bed_eq = geo%hires%z_bed_ref + rsl_restart
+        deallocate(rsl_restart)
+        geo%hires%h_ice_eq = geo%hires%h_ice_ref
+      endif
+
+      if (l_z_bed_ini_eq) then
+        ! set bedrock topography equal to equilibrium value
+        geo%hires%z_bed = geo%hires%z_bed_eq
       endif
 
       ! option to close Hudson Bay
@@ -527,7 +560,7 @@ contains
     ! initialize VILMA
     !-------------------------------------------------------------------
     if (flag_geo .and. i_geo.eq.2) then
-      call vilma_init(geo%hires%grid, geo%hires%z_bed_ref, geo%hires%h_ice_ref, geo%hires%h_ice) 
+      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice) 
     endif
 
     print*
@@ -945,13 +978,15 @@ contains
     deallocate(geo%hires%h_ice_ref)
     deallocate(geo%hires%z_topo_ref)
     deallocate(geo%hires%mask_ref)
-    deallocate(geo%hires%z_bed_rel)
     deallocate(geo%hires%z_bed)
+    deallocate(geo%hires%z_bed_eq)
+    deallocate(geo%hires%z_bed_rel)
     deallocate(geo%hires%z_topo)
     deallocate(geo%hires%z_topo_fil)
     deallocate(geo%hires%z_topo_fill)
     deallocate(geo%hires%z_sur)
     deallocate(geo%hires%h_ice)
+    deallocate(geo%hires%h_ice_eq)
     deallocate(geo%hires%rsl)
     deallocate(geo%hires%mask)
     deallocate(geo%hires%q_geo)
@@ -1040,8 +1075,12 @@ contains
     call nc_write(fnm,"V_ice_af", geo%V_ice_af, dim1="g", long_name="volume of ice above floatation",units="m3")
 
     call nc_write(fnm,"z_bed ", geo%hires%z_bed , dims=["lon","lat"],long_name="z_bed ",units="m")
+    call nc_write(fnm,"z_bed_ref", geo%hires%z_bed_ref , dims=["lon","lat"],long_name="z_bed_ref ",units="m")
+    call nc_write(fnm,"z_bed_eq", geo%hires%z_bed_eq , dims=["lon","lat"],long_name="z_bed_eq ",units="m")
     call nc_write(fnm,"z_topo", geo%hires%z_topo, dims=["lon","lat"],long_name="z_topo",units="m") 
     call nc_write(fnm,"h_ice ", geo%hires%h_ice , dims=["lon","lat"],long_name="h_ice ",units="m")
+    call nc_write(fnm,"h_ice_ref ", geo%hires%h_ice_ref , dims=["lon","lat"],long_name="h_ice_ref ",units="m")
+    call nc_write(fnm,"h_ice_eq ", geo%hires%h_ice_eq , dims=["lon","lat"],long_name="h_ice_eq ",units="m")
     call nc_write(fnm,"rsl   ", geo%hires%rsl   , dims=["lon","lat"],long_name="rsl   ",units="m")
     call nc_write(fnm,"mask  ", geo%hires%mask  , dims=["lon","lat"],long_name="mask  ",units="1")
 
@@ -1069,8 +1108,12 @@ contains
     call nc_read(fnm,"V_ice_af",  geo%V_ice_af       )
 
     call nc_read(fnm,"z_bed    ", geo%hires%z_bed    )
+!    call nc_read(fnm,"z_bed_ref", geo%hires%z_bed_ref)
+    call nc_read(fnm,"z_bed_eq ", geo%hires%z_bed_eq )
     call nc_read(fnm,"z_topo   ", geo%hires%z_topo   ) 
     call nc_read(fnm,"h_ice    ", geo%hires%h_ice    )
+!    call nc_read(fnm,"h_ice_ref", geo%hires%h_ice_ref)
+    call nc_read(fnm,"h_ice_eq ", geo%hires%h_ice_eq )
     call nc_read(fnm,"rsl      ", geo%hires%rsl      )
     call nc_read(fnm,"mask     ", geo%hires%mask     )
 

@@ -72,10 +72,12 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_topo_fill     !! filled topography [m]
       real(wp), dimension(:,:), allocatable :: z_sur     !! surface elevation [m]
       real(wp), dimension(:,:), allocatable :: h_ice     !! ice thickness [m]
+      real(wp), dimension(:,:), allocatable :: h_ice_eq  !! ice thickness associated with equilibrium bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: rsl     !! relative sea level [m]
       integer, dimension(:,:), allocatable :: mask        !! ice/land/ocean/floating ice mask (following sicopolis convention)
       real(wp), dimension(:,:), allocatable :: z_bed  !! bedrock elevation [m]
-      real(wp), dimension(:,:), allocatable :: z_bed_rel  !! isostatically relaxed bedrock elevation [m]
+      real(wp), dimension(:,:), allocatable :: z_bed_eq  !! equilibrium bedrock elevation (can deviate from h_bed_ref due to ice history) [m]
+      real(wp), dimension(:,:), allocatable :: z_bed_rel  !! isostatically relaxed bedrock elevation for icefree conditions [m]
       real(wp), dimension(:,:), allocatable :: z_bed_1min  !! bedrock elevation on 1 min resolution [m]
       real(wp), dimension(:,:), allocatable :: q_geo     !! geothermal heat flux [W/m2]
       real(wp), dimension(:,:), allocatable :: q_geo_ice !! geothermal heat flux for ice sheets [W/m2]
