@@ -30,13 +30,13 @@ module control
 
   implicit none
 
-  logical :: atm_restart, co2_restart, ch4_restart, lnd_restart, ocn_restart, sic_restart, bgc_restart, geo_restart, ice_restart, smb_restart, bmb_restart
+  logical :: atm_restart, co2_restart, ch4_restart, n2o_restart, lnd_restart, ocn_restart, sic_restart, bgc_restart, geo_restart, ice_restart, smb_restart, bmb_restart
   character (len=256) :: restart_in_dir 
   integer :: i_write_restart 
   integer :: n_year_write_restart 
   integer :: years_write_restart(10)
 
-  logical :: flag_atm, flag_co2, flag_ch4, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
+  logical :: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
   logical :: ocn_restore_sal, ocn_restore_temp
   logical :: atm_fix_tau
   character (len=256) :: ice_model_name
@@ -114,6 +114,7 @@ module control
   logical :: l_lnd_co2
 
   integer :: ich4
+  real(wp) :: ch4_ref
   real(wp) :: ch4_const
   integer :: i_ch4_tau
   real(wp) :: ch4_tau_const
@@ -122,7 +123,6 @@ module control
   character (len=256) :: CO_NOx_VOC_file
 
   integer :: ich4_rad
-  real(wp) :: ch4_ref
   real(wp) :: ch4_rad_const
   character (len=256) :: ch4_rad_file
 
@@ -134,7 +134,17 @@ module control
   integer :: in2o
   real(wp) :: n2o_ref
   real(wp) :: n2o_const
+  integer :: i_n2o_tau
+  real(wp) :: n2o_tau_const
   character (len=256) :: n2o_file
+
+  integer :: in2o_rad
+  real(wp) :: n2o_rad_const
+  character (len=256) :: n2o_rad_file
+
+  integer :: in2o_emis
+  real(wp) :: n2o_emis_const
+  character (len=256) :: n2o_emis_file
 
   integer :: iso4
   real(wp) :: so4_const
@@ -196,6 +206,7 @@ contains
     write(*,*) "control parameters ==========="
     call nml_read(filename,"control","flag_co2",flag_co2)
     call nml_read(filename,"control","flag_ch4",flag_ch4)
+    call nml_read(filename,"control","flag_n2o",flag_n2o)
     call nml_read(filename,"control","flag_atm",flag_atm)
     call nml_read(filename,"control","flag_lnd",flag_lnd)
     call nml_read(filename,"control","flag_dust",flag_dust)
@@ -290,6 +301,7 @@ contains
     call nml_read(filename,"control","l_ocn_co2",l_ocn_co2)
     call nml_read(filename,"control","l_lnd_co2",l_lnd_co2)
     call nml_read(filename,"control","ich4",ich4)
+    call nml_read(filename,"control","ch4_ref",ch4_ref)
     call nml_read(filename,"control","ch4_const",ch4_const)
     call nml_read(filename,"control","i_ch4_tau",i_ch4_tau)
     call nml_read(filename,"control","ch4_tau_const",ch4_tau_const)
@@ -297,7 +309,6 @@ contains
     call nml_read(filename,"control","CO_NOx_VOC_file",CO_NOx_VOC_file)
     call nml_read(filename,"control","ch4_file",ch4_file)
     call nml_read(filename,"control","ich4_rad",ich4_rad)
-    call nml_read(filename,"control","ch4_ref",ch4_ref)
     call nml_read(filename,"control","ch4_rad_const",ch4_rad_const)
     call nml_read(filename,"control","ch4_rad_file",ch4_rad_file)
     call nml_read(filename,"control","ich4_emis",ich4_emis)
@@ -308,6 +319,14 @@ contains
     call nml_read(filename,"control","n2o_ref",n2o_ref)
     call nml_read(filename,"control","n2o_const",n2o_const)
     call nml_read(filename,"control","n2o_file",n2o_file)
+    call nml_read(filename,"control","i_n2o_tau",i_n2o_tau)
+    call nml_read(filename,"control","n2o_tau_const",n2o_tau_const)
+    call nml_read(filename,"control","in2o_rad",in2o_rad)
+    call nml_read(filename,"control","n2o_rad_const",n2o_rad_const)
+    call nml_read(filename,"control","n2o_rad_file",n2o_rad_file)
+    call nml_read(filename,"control","in2o_emis",in2o_emis)
+    call nml_read(filename,"control","n2o_emis_const",n2o_emis_const)
+    call nml_read(filename,"control","n2o_emis_file",n2o_emis_file)
     call nml_read(filename,"control","iso4",iso4)
     call nml_read(filename,"control","so4_const",so4_const)
     call nml_read(filename,"control","so4_file",so4_file)
@@ -326,6 +345,7 @@ contains
     call nml_read(filename,"control","atm_restart",atm_restart)
     call nml_read(filename,"control","co2_restart",co2_restart)
     call nml_read(filename,"control","ch4_restart",ch4_restart)
+    call nml_read(filename,"control","n2o_restart",n2o_restart)
     call nml_read(filename,"control","lnd_restart",lnd_restart)
     call nml_read(filename,"control","ocn_restart",ocn_restart)
     call nml_read(filename,"control","bgc_restart",bgc_restart)

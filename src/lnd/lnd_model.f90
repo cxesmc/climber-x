@@ -132,6 +132,7 @@ contains
       lnd%l0d%C13flx_atm_lnd = 0._wp
       lnd%l0d%C14flx_atm_lnd = 0._wp
       lnd%l0d%ch4_emis = 0._wp  
+      lnd%l0d%n2o_emis = 0._wp  
     endif
     if (time_eom_lnd) then
        do j=1,ny
@@ -146,7 +147,7 @@ contains
        enddo
      endif
 
-     ! cumulate annual global methane emissions
+     ! cumulate annual global methane and N2O emissions
      do j=1,ny
        do i=1,nx
          lnd%l0d%ch4_emis = lnd%l0d%ch4_emis  &
@@ -155,6 +156,9 @@ contains
            + lnd%l2d(i,j)%ch4_emis_lake*lnd%l2d(i,j)%f_lake & ! lakes
            + lnd%l2d(i,j)%ch4_emis_peat*lnd%l2d(i,j)%f_peat) & ! peatland
            * dt * area(i,j)   ! kgCH4
+         lnd%l0d%n2o_emis = lnd%l0d%n2o_emis  &
+           + lnd%l2d(i,j)%n2o_emis*lnd%l2d(i,j)%f_veg & 
+           * dt * area(i,j)   ! kgN2O
        enddo
      enddo
 

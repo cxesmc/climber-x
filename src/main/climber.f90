@@ -36,7 +36,7 @@ program climber
   use timer, only : time_write_restart, timer_print
   use timer, only : n_year_ice
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
-  use control, only: flag_atm, flag_co2, flag_ch4, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
+  use control, only: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
   use control, only: l_aquaplanet
   use control, only : l_spinup_cc, l_daily_input_save_ocn, l_daily_input_save_bgc
@@ -59,6 +59,7 @@ program climber
     &                geo_to_smb, geo_to_bmb, &
     &                co2_to_cmn, cmn_to_co2, &
     &                ch4_to_cmn, cmn_to_ch4, &
+    &                n2o_to_cmn, cmn_to_n2o, &
     &                bnd_to_cmn, &
     &                lakes_update, runoff_merge, runoff_to_ocn, &
     &                aquaplanet, aqua_init, aqua_end
@@ -106,6 +107,10 @@ program climber
   use ch4_def, only: ch4_class
   use ch4_out, only : ch4_diag, ch4_diag_init
 
+  use n2o_model, only: n2o_init, n2o_update, n2o_end, n2o_write_restart
+  use n2o_def, only: n2o_class
+  use n2o_out, only : n2o_diag, n2o_diag_init
+
   use bnd_mod, only: bnd_init, bnd_update
   use bnd_mod, only: bnd_class
 
@@ -131,6 +136,7 @@ program climber
   type(bmb_class), allocatable :: bmb(:) 
   type(co2_class) :: co2
   type(ch4_class) :: ch4
+  type(n2o_class) :: n2o
   type(geo_class) :: geo
   type(bnd_class) :: bnd
   type(grid_class), allocatable :: ice_grid(:)
@@ -322,6 +328,12 @@ program climber
        call ch4_diag_init
     endif
     
+    ! Initialise atmospheric N2O
+    if (flag_n2o) then
+       call n2o_init(n2o)
+       call n2o_diag_init
+    endif
+    
     call cmn_diag_init
 
     ! transfer initial state to coupler
@@ -330,6 +342,7 @@ program climber
     if (flag_atm) call atm_to_cmn(atm,cmn)
     if (flag_co2) call co2_to_cmn(co2,cmn)
     if (flag_ch4) call ch4_to_cmn(ch4,cmn)
+    if (flag_n2o) call n2o_to_cmn(n2o,cmn)
     if (flag_ocn) call ocn_to_cmn(ocn,cmn)
     if (flag_sic) call sic_to_cmn(sic,cmn) 
     if (flag_bgc) call bgc_to_cmn(bgc,cmn,ocn)
@@ -584,6 +597,15 @@ program climber
       endif
 
       !---------------------------------------------------------
+      ! update atmospheric N2O
+      if (flag_n2o .and. time_eoy) then
+        call cmn_to_n2o(cmn,n2o)
+        call n2o_update(n2o,real(year_now,kind=wp))
+        call n2o_diag(n2o)
+        call n2o_to_cmn(n2o,cmn)
+      endif
+
+      !---------------------------------------------------------
       ! update atmospheric CO2 
       if (flag_co2 .and. time_eoy) then
         call cmn_to_co2(cmn,co2)
@@ -801,6 +823,7 @@ subroutine write_restart(restart_out_dir, year_now)
   endif
   if (flag_co2) call co2_write_restart(trim(rest_dir)//"/co2_restart.nc",co2)
   if (flag_ch4) call ch4_write_restart(trim(rest_dir)//"/ch4_restart.nc",ch4)
+  if (flag_n2o) call n2o_write_restart(trim(rest_dir)//"/n2o_restart.nc",n2o)
 
   print *,'restart files written at year: ', year_now, ' in ', trim(rest_dir)
 

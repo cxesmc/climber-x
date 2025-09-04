@@ -35,9 +35,9 @@ module coupler
     use timer, only : monthly2daily
     use climber_grid, only : ni, nj, area
     use climber_grid, only : lon, lat, basin_mask, i_atlantic, i_pacific
-    use control, only : ico2_rad, ich4_rad, id13c, iD14c, prc_forcing
+    use control, only : ico2_rad, ich4_rad, in2o_rad, id13c, iD14c, prc_forcing
     use control, only : ocn_restore_temp, ocn_restore_sal, atm_fix_tau
-    use control, only : flag_co2, flag_ch4, flag_atm, flag_ocn, flag_bgc, flag_sic, flag_lnd, flag_dust, flag_smb, flag_bmb, flag_ice, flag_geo, flag_lakes
+    use control, only : flag_co2, flag_ch4, flag_n2o, flag_atm, flag_ocn, flag_bgc, flag_sic, flag_lnd, flag_dust, flag_smb, flag_bmb, flag_ice, flag_geo, flag_lakes
     use control, only : geo_restart
     use control, only : ifake_ice
     use control, only : l_spinup_cc
@@ -60,6 +60,7 @@ module coupler
     use ice_def, only : ice_class
     use co2_def, only : co2_class
     use ch4_def, only : ch4_class
+    use n2o_def, only : n2o_class
     use smb_def, only : smb_in_class, smb_class
     use bmb_def, only : bmb_class
     use bnd_mod, only : bnd_class
@@ -102,6 +103,7 @@ module coupler
     public :: bnd_to_geo, cmn_to_geo
     public :: cmn_to_co2, co2_to_cmn
     public :: cmn_to_ch4, ch4_to_cmn
+    public :: cmn_to_n2o, n2o_to_cmn
     public :: lakes_update, runoff_merge, runoff_to_ocn
     public :: aquaplanet, aqua_init, aqua_end
     public :: nsurf
@@ -149,6 +151,10 @@ module coupler
       real(wp) :: ch4_emis  !! anthropogenic CH4 emissions [kgCH4/yr]
       real(wp) :: f_ch4emis_agro  !! fraction of anthropogenic CH4 emissions originating from agriculture [1]
       real(wp) :: n2o   !! atmopheric N2O concentration [ppb]
+      real(wp) :: n2o_rad   !! atmopheric N2O concentration for radiation [ppb]
+      real(wp) :: n2o_flx_lnd   !! land N2O emissions [kgN2O/yr]
+      real(wp) :: n2o_flx_ocn   !! ocean N2O flux [kgN2O/yr]
+      real(wp) :: n2o_emis  !! anthropogenic N2O emissions [kgN2O/yr]
       real(wp) :: cfc11   !! atmopheric CFC11 concentration [ppt]
       real(wp) :: cfc12   !! atmopheric CFC12 concentration [ppt]
       real(wp), dimension(:,:), allocatable :: so4   !! atmopheric SO4 load [kg/m2]
@@ -396,7 +402,7 @@ contains
       ! well mixed greenhouse gas concentrations
       atm%co2 = cmn%co2_rad
       atm%ch4 = cmn%ch4_rad
-      atm%n2o = cmn%n2o
+      atm%n2o = cmn%n2o_rad
       atm%cfc11 = cmn%cfc11
       atm%cfc12 = cmn%cfc12
     endif
@@ -1553,6 +1559,8 @@ contains
       cmn%delta_C14_lnd = lnd%l0d%C14flx_atm_lnd ! kgC14/yr
       ! annual methane emissions
       cmn%ch4_flx_lnd = lnd%l0d%ch4_emis        ! kgCH4/yr
+      ! annual N2O emissions
+      cmn%n2o_flx_lnd = lnd%l0d%n2o_emis        ! kgN2O/yr
     endif
 
     cmn%Cflx_lnd_avg = lnd%l0d%Cflx_avg
@@ -1865,6 +1873,7 @@ contains
       cmn%delta_C_ocn   = bgc%delta_C ! kgC/yr
       cmn%delta_C13_ocn = bgc%delta_C13 ! kgC13/yr
       cmn%delta_C14_ocn = bgc%delta_C14 ! kgC14/yr
+      cmn%n2o_flx_ocn   = bgc%n2o_flx   ! kgN2O/yr
     endif
 
     cmn%Cflx_ocn_avg = bgc%Cflx_avg ! kgC/yr
@@ -2032,6 +2041,52 @@ contains
     if (ich4_rad.eq.0) cmn%ch4_rad = cmn%ch4   ! ppb
 
   end subroutine ch4_to_cmn
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  c m n _ t o _ n 2 o
+  ! Purpose    :  from common grid to n2o model
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine cmn_to_n2o(cmn,n2o)
+
+    type(cmn_class), intent(in) :: cmn
+    type(n2o_class), intent(inout) :: n2o
+
+
+    ! land methane fluxes
+    if (flag_lnd) then
+      n2o%dn2olnd_dt   = cmn%n2o_flx_lnd   ! kgN2O/yr
+    else
+      n2o%dn2olnd_dt   = 0._wp 
+    endif
+
+    ! ocean methane fluxes
+    if (flag_bgc) then
+      n2o%dn2oocn_dt   = cmn%n2o_flx_ocn   ! kgN2O/yr
+    else
+      n2o%dn2oocn_dt   = 0._wp 
+    endif
+
+    return
+    
+  end subroutine cmn_to_n2o
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  n 2 o _ t o _ c m n
+  ! Purpose    :  from n2o to common
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine n2o_to_cmn(n2o,cmn)
+
+    type(n2o_class), intent(in) :: n2o
+    type(cmn_class), intent(inout) :: cmn
+
+    cmn%n2o_emis = n2o%dn2oemis_dt ! kgN2O/yr
+
+    cmn%n2o = n2o%n2o   ! ppb
+    if (in2o_rad.eq.0) cmn%n2o_rad = cmn%n2o   ! ppb
+
+  end subroutine n2o_to_cmn
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -3260,7 +3315,15 @@ contains
         cmn%ch4_rad = bnd%ch4_rad
       endif
 
-      cmn%n2o = bnd%n2o
+      if (.not.flag_n2o) then
+        cmn%n2o = bnd%n2o
+        if (in2o_rad.eq.0) then
+          cmn%n2o_rad = cmn%n2o
+        endif
+      endif
+      if (in2o_rad.ne.0) then
+        cmn%n2o_rad = bnd%n2o_rad
+      endif
 
       cmn%cfc11 = bnd%cfc11
       cmn%cfc12 = bnd%cfc12

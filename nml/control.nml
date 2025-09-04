@@ -5,6 +5,7 @@
  !-------------------------------------------------------
  flag_co2         = F        ! use interactive co2?
  flag_ch4         = F        ! use interactive ch4?
+ flag_n2o         = F        ! use interactive n2o?
  flag_atm         = T        ! use atmosphere model?
  flag_ocn         = T        ! use ocean model?
  flag_bgc         = F        ! use ocean biogeochemistry model?
@@ -225,7 +226,7 @@
  ch4_emis_other_const= 0. !74.          ! constant CH4 emissions from rivers, lakes and other sources
 
  !-------------------------------------------------------
- ! atmospheric N2O
+ ! atmospheric N2O for simulations with flag_n2o==false
  !-------------------------------------------------------
  in2o       = 0                 ! n2o concentration:
                                 ! 0 = constant (n2o_const)
@@ -234,6 +235,33 @@
  n2o_ref    = 270.0             ! ppb, reference preindustrial N2O value
  n2o_const  = 270.0             ! ppb, constant N2O value if in2o == 0
  n2o_file   = "input/n2o_800kyr.nc" 
+
+ !-------------------------------------------------------
+ ! atmospheric N2O for radiation 
+ !-------------------------------------------------------
+ in2o_rad       = 0                 ! n2o concentration for radiation code:
+                                    ! 0 = equal to actual atmospheric N2O concentration set by interactive N2O or in2o flag 
+                                    ! 1 = constant (n2o_rad_const)
+                                    ! 2 = prescribed n2o from file (n2o_rad_file)
+ n2o_ref        = 270.              ! ppb, reference preindustrial N2O value (for radiative forcing)
+ n2o_rad_const  = 270.              ! ppb, constant n2o value if in2o_rad == 1
+ n2o_rad_file   = "input/n2o_800kyr.nc"
+
+ !-------------------------------------------------------
+ ! N2O atm lifetime for simulations with flag_n2o==true
+ !-------------------------------------------------------
+ i_n2o_tau = 1                      ! n2o lifetime:
+                                    ! 1 = constant lifetime n2o_tau_const
+ n2o_tau_const = 120.               ! years, constant/reference lifetime of N2O in the atmosphere
+
+ !-------------------------------------------------------
+ ! N2O emissions for simulations with flag_n2o==true
+ !-------------------------------------------------------
+ in2o_emis = 0                      ! N2O emissions:
+                                    ! 0 = constant (n2o_emis_const)
+                                    ! 1 = prescribed N2O emissions from file (n2o_emis_file)
+ n2o_emis_const = 0.                ! TgN2O/yr, constant N2O emission rate to the atmosphere, used only if in2o_emis == 0
+ n2o_emis_file  = "input/n2o_emis_historical_1850-2014.nc"
 
  !-------------------------------------------------------
  ! atmospheric SO4 (tropospheric)
@@ -359,6 +387,7 @@
  !-------------------------------------------------------
  co2_restart = false       ! start from saved atmospheric co2?
  ch4_restart = false       ! start from saved atmospheric ch4?
+ n2o_restart = false       ! start from saved atmospheric n2o?
  atm_restart = true        ! start from saved atmosphere state?
  lnd_restart = true        ! start from saved land state?
  ocn_restart = true        ! start from saved ocean state?

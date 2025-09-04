@@ -40,6 +40,7 @@ module bnd_mod
     use control, only : ich4, ch4_const, ch4_file
     use control, only : ich4_rad, ch4_rad_const, ch4_rad_file
     use control, only : in2o, n2o_const, n2o_file
+    use control, only : in2o_rad, n2o_rad_const, n2o_rad_file
     use control, only : iso4, so4_const, so4_file
     use control, only : io3, o3_const, o3_file_const, o3_file_var
     use control, only : icfc, cfc11_const, cfc12_const, cfc_file
@@ -61,6 +62,7 @@ module bnd_mod
     use ch4_mod
     use ch4_rad_mod
     use n2o_mod
+    use n2o_rad_mod
     use so4_mod
     use o3_mod
     use cfc_mod
@@ -100,7 +102,7 @@ module bnd_mod
      real(wp) :: volc
      real(wp) :: co2, co2_rad, d13c_atm, D14c_atm, c13_c12_atm, c14_c_atm
      real(wp) :: ch4, ch4_rad
-     real(wp) :: n2o
+     real(wp) :: n2o, n2o_rad
      real(wp), dimension(:,:), allocatable :: so4
      real(wp), dimension(:), allocatable :: o3_pl
      real(wp), dimension(:,:,:), allocatable :: o3
@@ -206,6 +208,11 @@ contains
       ! update atmospheric N2O concentration if required
       if( in2o.eq.1 .or. in2o.eq.2) then
         call n2o_update(in2o, real(year_now,kind=wp), bnd%n2o)     
+      endif
+
+      ! update atmospheric N2O concentration for radiation if required
+      if( in2o_rad.eq.2) then
+        call n2o_rad_update(in2o_rad, real(year_now,kind=wp), bnd%n2o_rad)     
       endif
 
       ! update atmospheric SO4 load if required
@@ -415,6 +422,16 @@ contains
       call n2o_init(n2o_file)
       ! get initial n2o value
       call n2o_update(in2o,real(year_ini,kind=wp),bnd%n2o)
+    endif
+
+    ! initialize atmospheric N2O for radiation
+    if (in2o_rad.eq.1) then
+      bnd%n2o_rad = n2o_rad_const
+    elseif (in2o_rad.eq.2) then
+      ! read n2o_rad file
+      call n2o_rad_init(n2o_rad_file)
+      ! get initial n2o_rad value
+      call n2o_rad_update(in2o_rad,real(year_ini,kind=wp),bnd%n2o_rad)
     endif
 
     ! initialize atmospheric SO4

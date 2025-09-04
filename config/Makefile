@@ -67,7 +67,7 @@ climber-clim: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
 climber-clim: coord-static \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
-				bgc-dummy co2 ch4 \
+				bgc-dummy co2 ch4 n2o \
 				ice-dummy smb-dummy bmb-dummy main-clim
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_obj) $(LFLAGS)
 	@echo " "
@@ -82,7 +82,7 @@ climber-clim-bgc: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
 climber-clim-bgc: coord-static \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
-				bgc co2 ch4 \
+				bgc co2 ch4 n2o \
 				ice-dummy smb-dummy bmb-dummy main-clim-bgc
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_bgc_obj) $(LFLAGS)
 	@echo " "
@@ -97,7 +97,7 @@ climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
 climber-clim-ice: coord-static yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
-				bgc-dummy co2 ch4 \
+				bgc-dummy co2 ch4 n2o \
 				ice smb bmb main-clim-ice
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_ice_obj) $(LFLAGS)
 	@echo " "
@@ -112,7 +112,7 @@ climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
 climber-clim-bgc-ice: coord-static yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
-				bgc co2 ch4 \
+				bgc co2 ch4 n2o \
 				ice smb bmb main
 	$(FC) $(LDFLAGS) -o climber.x $(climber_clim_bgc_ice_obj) $(LFLAGS)
 	@echo " "
@@ -187,6 +187,15 @@ ch4: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
 ch4: $(obj_ch4)
 	@echo ""
 	@echo "ch4 files compiled successfully."
+	@echo ""
+
+n2o: FFLAGS = $(FFLAGS_CLIM)
+n2o: LFLAGS = $(LFLAGS_CLIM)
+n2o: CPPFLAGS = $(CPPFLAGS_CLIM)
+n2o: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
+n2o: $(obj_n2o)
+	@echo ""
+	@echo "n2o files compiled successfully."
 	@echo ""
 
 co2: FFLAGS = $(FFLAGS_CLIM)
