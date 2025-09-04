@@ -44,8 +44,8 @@ LIB_VILMA = ${VILMAROOT}/lib/vega_pism.a
 CPPFLAGS_FULL     = -fpp -DVILMA
 CPPFLAGS_CLIM     = -fpp
 
-DFLAGS_NODEBUG = -Ofast -march=core-avx2 -mtune=core-avx2 -traceback  # -mno-lzcnt
-DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all,nouninit -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
+DFLAGS_NODEBUG = -Ofast -march=core-avx2 -mtune=core-avx2 -traceback -g  # -mno-lzcnt
+DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
 DFLAGS_PROFILE = -O3 -pg -g 
 
 FFLAGS_FULL = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
