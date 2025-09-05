@@ -251,6 +251,9 @@ contains
         call nc_write(fnm,"dz_bed", sngl(geo%hires%z_bed-geo%hires%z_bed_rel),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="difference between bedrock elevation and relaxed bedrock elevation",units="m",ncid=ncid)
         if (firstcall) then
           call nc_write(fnm,"z_bed_ref", sngl(geo%hires%z_bed_ref),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="present day reference bedrock elevation",units="m",ncid=ncid)
+          call nc_write(fnm,"z_bed_eq", sngl(geo%hires%z_bed_eq),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="equilibrium bedrock elevation",units="m",ncid=ncid)
+          call nc_write(fnm,"h_ice_ref", sngl(geo%hires%h_ice_ref),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="reference ice sheet thickness",units="m",ncid=ncid)
+          call nc_write(fnm,"h_ice_eq", sngl(geo%hires%h_ice_eq),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="ice thickness associated with equilibrium bedrock elevation",units="m",ncid=ncid)
           if (i_geo.eq.1) then
             call nc_write(fnm,"z_bed_rel", sngl(geo%hires%z_bed_rel),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="relaxed ice-free bedrock elevation",units="m",ncid=ncid)
           endif
@@ -258,7 +261,8 @@ contains
         call nc_write(fnm,"z_sur", sngl(geo%hires%z_sur),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="surface elevation",units="m",ncid=ncid)
         call nc_write(fnm,"h_ice", sngl(geo%hires%h_ice),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="ice sheet thickness",units="m",ncid=ncid)
         call nc_write(fnm,"mask", geo%hires%mask,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="mask",units="0=ice, 1=land, 2=ocean, 3=floating ice, 4=lake",ncid=ncid)
-        call nc_write(fnm,"rsl", sngl(geo%hires%rsl),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="relative sea level",units="m",ncid=ncid)
+        call nc_write(fnm,"rsl", sngl(geo%hires%rsl),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="relative sea level relative to equilibrated bedrock elevation",units="m",ncid=ncid)
+        call nc_write(fnm,"rsl_ref", sngl(geo%hires%rsl-(geo%hires%z_bed_eq-geo%hires%z_bed_ref)),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="relative sea level relative to reference (PI) bedrock topography",units="m",ncid=ncid)
         call nc_write(fnm,"mask_lake", geo%hires%mask_lake,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="lakes mask",units="/",ncid=ncid)
         call nc_write(fnm,"mask_lake_pot", geo%hires%mask_lake_pot,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="potential lakes mask",units="/",ncid=ncid)
         call nc_write(fnm,"z_lake", sngl(geo%hires%z_lake),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="lake surface elevation",units="m",ncid=ncid)
