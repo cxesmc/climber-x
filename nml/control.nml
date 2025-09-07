@@ -42,7 +42,7 @@
  !-------------------------------------------------------
  year_ini    = 0                ! initial year relative to present day (2000 AD)
  nyears      = 5000             ! number of simulation years
- dt_day_ocn  = 1.               ! ocn time step in days (can also be an integer fraction)
+ dt_day_ocn  = 0.5              ! ocn time step in days (can also be an integer fraction)
  dt_day_bgc  = 1.               ! bgc time step in days (can also be an integer fraction)
  dt_day_smb  = 1                ! smb time step in days 
  dt_day_bmb  = 30               ! bmb time step in days 
