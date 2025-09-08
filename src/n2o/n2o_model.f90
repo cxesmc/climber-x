@@ -35,16 +35,14 @@ module n2o_model
 
     implicit none
 
-    ! conversion factor from kgN2O to ppb N2O
-    real(wp), parameter :: kgN2O_to_ppb = 1._wp/7.82_wp*1e-9_wp  ! ppb/TgN2O * TgN2O/kgN2O
-    ! http://how-it-looks.blogspot.com/2011/07/petagrams-of-carbon.html
+    ! conversion factor from kgN2O-N to ppb N2O
+    real(wp), parameter :: kgN_to_ppb = 1._wp/4.976_wp*1e-9_wp  ! ppb/TgN2O-N * TgN2O-N/kgN2O-N
     ! The mean mass of the atmosphere is 5.1480e18 kg. The molar mass of air is 28.966 g/mol. 
     ! So the atmosphere contains 5.1480e21 g / 28.966 g/mol = 1.7773e20 moles of air.
     ! Mole fractions of carbon dioxide are expressed in ppm and directly convertible from parts-per-million by volume.
-    ! So 1 ppb N2O = 1.7773e20 / 1e9 = 1.7773e11 moles N2O
-    ! The molar mass of N2O is 44.0 g/mol.
-    ! So 1 ppb N2O = 1.7773e11 mol * 44.0 g/mol = 7.82 Tg N2O.
-    ! xxx TgN2O per ppb used in IPCC (Prather et al., 2012)
+    ! So 1 ppb N2O = 1.7773e20 / 1e9 = 1.7773e11 moles N2O.
+    ! The molar mass of N is 14.0 g/mol.
+    ! So 1 ppb N2O = 1.7773e11 mol * 2*14.0 g/mol = 4.976 Tg N2O-N.
     
     real(wp), dimension(:), allocatable :: n2o_emis_time, n2o_emis_data, f_n2o_emis_agro_data, n2o_tau_time, n2o_tau_data
 
@@ -90,7 +88,7 @@ contains
         endif
         w0 = 1._wp - abs(n2o_emis_time(i0)-time_now)/(n2o_emis_time(i1)-n2o_emis_time(i0))
         w1 = 1._wp - w0
-        n2o%dn2oemis_dt = (w0*n2o_emis_data(i0) + w1*n2o_emis_data(i1)) !  kgN2O/yr
+        n2o%dn2oemis_dt = (w0*n2o_emis_data(i0) + w1*n2o_emis_data(i1)) !  kgN2O-N/yr
       endif
     endif
 
@@ -101,13 +99,13 @@ contains
 
     endif
 
-    n2o%dn2oox_dt = n2o%n2om/n2o%tau   ! kgN2O/yr
+    n2o%dn2oox_dt = n2o%n2om/n2o%tau   ! kgN2O-N/yr
 
     ! add fluxes from ocean, land, anthropogenic emissions and decay (oxidation)
-    n2o%n2om   = n2o%n2om   + n2o%dn2oocn_dt   + n2o%dn2olnd_dt   + n2o%dn2oemis_dt - n2o%dn2oox_dt ! kgN2O
+    n2o%n2om   = n2o%n2om   + n2o%dn2oocn_dt   + n2o%dn2olnd_dt   + n2o%dn2oemis_dt - n2o%dn2oox_dt ! kgN2O-N
 
     ! n2o concentration
-    n2o%n2o = n2o%n2om * kgn2o_to_ppb   ! ppb
+    n2o%n2o = n2o%n2om * kgN_to_ppb   ! ppb
 
    return
 
@@ -139,13 +137,13 @@ contains
 
     endif
 
-    n2o%n2om = n2o%n2o / kgN2O_to_ppb   ! kgN2O
+    n2o%n2om = n2o%n2o / kgN_to_ppb   ! kgN2O-N
 
     ! emissions
     if (in2o_emis.eq.0) then
 
       ! constant n2o emissions
-      n2o%dn2oemis_dt = n2o_emis_const * 1.e9_wp ! kgN2O/yr
+      n2o%dn2oemis_dt = n2o_emis_const * 1.e9_wp ! kgN2O-N/yr
 
     else if (in2o_emis.eq.1) then
 
@@ -154,8 +152,8 @@ contains
       allocate( n2o_emis_time(ntime) )
       allocate( n2o_emis_data(ntime) )
       call nc_read(trim(n2o_emis_file),"time",n2o_emis_time)    ! time in years BP
-      call nc_read(trim(n2o_emis_file),"n2o_emis",n2o_emis_data) ! TgN2O/yr
-      n2o_emis_data = n2o_emis_data * 1.e9_wp  ! kgN2O/yr
+      call nc_read(trim(n2o_emis_file),"n2o_emis",n2o_emis_data) ! TgN2O-N/yr
+      n2o_emis_data = n2o_emis_data * 1.e9_wp  ! kgN2O-N/yr
 
     endif
 

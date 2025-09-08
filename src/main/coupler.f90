@@ -152,9 +152,9 @@ module coupler
       real(wp) :: f_ch4emis_agro  !! fraction of anthropogenic CH4 emissions originating from agriculture [1]
       real(wp) :: n2o   !! atmopheric N2O concentration [ppb]
       real(wp) :: n2o_rad   !! atmopheric N2O concentration for radiation [ppb]
-      real(wp) :: n2o_flx_lnd   !! land N2O emissions [kgN2O/yr]
-      real(wp) :: n2o_flx_ocn   !! ocean N2O flux [kgN2O/yr]
-      real(wp) :: n2o_emis  !! anthropogenic N2O emissions [kgN2O/yr]
+      real(wp) :: n2o_flx_lnd   !! land N2O emissions [kgN2O-N/yr]
+      real(wp) :: n2o_flx_ocn   !! ocean N2O flux [kgN2O-N/yr]
+      real(wp) :: n2o_emis  !! anthropogenic N2O emissions [kgN2O-N/yr]
       real(wp) :: cfc11   !! atmopheric CFC11 concentration [ppt]
       real(wp) :: cfc12   !! atmopheric CFC12 concentration [ppt]
       real(wp), dimension(:,:), allocatable :: so4   !! atmopheric SO4 load [kg/m2]
@@ -1560,7 +1560,7 @@ contains
       ! annual methane emissions
       cmn%ch4_flx_lnd = lnd%l0d%ch4_emis        ! kgCH4/yr
       ! annual N2O emissions
-      cmn%n2o_flx_lnd = lnd%l0d%n2o_emis        ! kgN2O/yr
+      cmn%n2o_flx_lnd = lnd%l0d%n2o_emis        ! kgN2O-N/yr
     endif
 
     cmn%Cflx_lnd_avg = lnd%l0d%Cflx_avg
@@ -1873,7 +1873,7 @@ contains
       cmn%delta_C_ocn   = bgc%delta_C ! kgC/yr
       cmn%delta_C13_ocn = bgc%delta_C13 ! kgC13/yr
       cmn%delta_C14_ocn = bgc%delta_C14 ! kgC14/yr
-      cmn%n2o_flx_ocn   = bgc%n2o_flx   ! kgN2O/yr
+      cmn%n2o_flx_ocn   = bgc%n2o_flx   ! kgN2O-N/yr
     endif
 
     cmn%Cflx_ocn_avg = bgc%Cflx_avg ! kgC/yr
@@ -2055,14 +2055,14 @@ contains
 
     ! land methane fluxes
     if (flag_lnd) then
-      n2o%dn2olnd_dt   = cmn%n2o_flx_lnd   ! kgN2O/yr
+      n2o%dn2olnd_dt   = cmn%n2o_flx_lnd   ! kgN2O-N/yr
     else
       n2o%dn2olnd_dt   = 0._wp 
     endif
 
     ! ocean methane fluxes
     if (flag_bgc) then
-      n2o%dn2oocn_dt   = cmn%n2o_flx_ocn   ! kgN2O/yr
+      n2o%dn2oocn_dt   = cmn%n2o_flx_ocn   ! kgN2O-N/yr
     else
       n2o%dn2oocn_dt   = 0._wp 
     endif
@@ -2081,7 +2081,7 @@ contains
     type(n2o_class), intent(in) :: n2o
     type(cmn_class), intent(inout) :: cmn
 
-    cmn%n2o_emis = n2o%dn2oemis_dt ! kgN2O/yr
+    cmn%n2o_emis = n2o%dn2oemis_dt ! kgN2O-N/yr
 
     cmn%n2o = n2o%n2o   ! ppb
     if (in2o_rad.eq.0) cmn%n2o_rad = cmn%n2o   ! ppb

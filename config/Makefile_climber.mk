@@ -142,7 +142,7 @@ files_lnd = lnd_model.f90 lnd_grid.f90 lnd_params.f90 lnd_def.f90 \
             photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 \
             soil_temp.f90 ice_temp.f90 shelf_temp.f90 lake_temp.f90 lake_convection.f90 sublake_temp.f90 soil_hydro.f90 water_check.f90 \
 	          dyn_veg.f90 soil_carbon.f90 peat_carbon.f90 shelf_carbon.f90 ice_carbon.f90 lake_carbon.f90 \
-	          carbon_trans.f90 dust_emis.f90 weathering.f90 carbon_export.f90 init_cell.f90 end_cell.f90 carbon_inventory.f90 carbon_flx_atm_lnd.f90 \
+	          carbon_trans.f90 n2o_emis.f90 dust_emis.f90 weathering.f90 carbon_export.f90 init_cell.f90 end_cell.f90 carbon_inventory.f90 carbon_flx_atm_lnd.f90 \
             lnd_model.f90 lnd_out.f90
 tmp_lnd = $(patsubst %.f90, %.o, $(files_lnd) )
 obj_lnd = $(patsubst %, $(objdir)/%, $(tmp_lnd) )
@@ -522,7 +522,7 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 	$(objdir)/veg_par.o $(objdir)/photosynthesis.o $(objdir)/dyn_veg.o \
 	$(objdir)/soil_carbon.o $(objdir)/peat_carbon.o $(objdir)/shelf_carbon.o $(objdir)/ice_carbon.o $(objdir)/lake_carbon.o \
 	$(objdir)/soil_carbon_par.o $(objdir)/shelf_carbon_par.o $(objdir)/ice_carbon_par.o $(objdir)/lake_carbon_par.o \
-	$(objdir)/carbon_trans.o $(objdir)/dust_emis.o $(objdir)/weathering.o $(objdir)/carbon_export.o $(objdir)/init_cell.o $(objdir)/end_cell.o \
+	$(objdir)/carbon_trans.o $(objdir)/n2o_emis.o $(objdir)/dust_emis.o $(objdir)/weathering.o $(objdir)/carbon_export.o $(objdir)/init_cell.o $(objdir)/end_cell.o \
 	$(objdir)/carbon_inventory.o $(objdir)/carbon_flx_atm_lnd.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
@@ -629,6 +629,9 @@ $(objdir)/lake_carbon.o : $(dir_lnd)lake_carbon.f90 $(objdir)/lnd_grid.o $(objdi
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/carbon_trans.o : $(dir_lnd)carbon_trans.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/n2o_emis.o : $(dir_lnd)n2o_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/dust_emis.o : $(dir_lnd)dust_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 

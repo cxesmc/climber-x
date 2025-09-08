@@ -220,6 +220,13 @@
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------
+    ! N2O emission params
+    !------------------------------------------------------------------------------------
+    k_n2o            = 5.e-7    ! kg N2O-N/m2/day, emission rate at 10 degC and 
+    q10_n2o          = 2.0      ! q10 for temperature dependence of N2O emission
+    theta_exp        = 3.0      ! power of emission dependence on relative soil moisture
+
+    !------------------------------------------------------------------------------------
     ! vegetation params
     !------------------------------------------------------------------------------------
     iseed = 1                   ! seeds (only used if from restart), 1=seeds everywhere, 2=seed dispersal

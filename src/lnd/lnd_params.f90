@@ -410,6 +410,14 @@ module lnd_params
   end type
   type(ch4_par_type) :: ch4_par
 
+  ! N2O parameters
+  type n2o_par_type
+    real(wp) :: k_n2o
+    real(wp) :: q10_n2o
+    real(wp) :: theta_exp
+  end type
+  type(n2o_par_type) :: n2o_par
+
   ! weathering parameters
   integer, parameter :: nlit_gemco2 = 6
   type weath_gemco2_type
@@ -932,6 +940,10 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","ch4_frac_peat",ch4_par%ch4_frac_peat)
     call nml_read(filename,"lnd_par","ch4_frac_shelf",ch4_par%ch4_frac_shelf)
     call nml_read(filename,"lnd_par","ch4_frac_lake",ch4_par%ch4_frac_lake)
+
+    call nml_read(filename,"lnd_par","k_n2o",n2o_par%k_n2o)
+    call nml_read(filename,"lnd_par","q10_n2o",n2o_par%q10_n2o)
+    call nml_read(filename,"lnd_par","theta_exp",n2o_par%theta_exp)
 
     call nml_read(filename,"lnd_par","lithology_uhh_file",lithology_uhh_file)
     call nml_read(filename,"lnd_par","lithology_gemco2_file",lithology_gemco2_file)

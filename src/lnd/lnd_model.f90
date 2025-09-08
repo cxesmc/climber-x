@@ -300,6 +300,7 @@ contains
     use ice_carbon_mod
     use lake_carbon_mod
     use carbon_trans_mod
+    use n2o_emis_mod
     use dust_emis_mod
     use weathering_mod
     use carbon_export_mod
@@ -907,6 +908,13 @@ contains
          lnd%dust_emis = 0._wp
        endif
 
+       ! N2O emissions
+       if (lnd%f_veg.gt.0._wp) then
+         call n2o_emission(lnd%t_soil(1), lnd%theta_w(1), lnd%theta_sat(1), &
+                           lnd%n2o_emis)
+       else
+         lnd%n2o_emis = 0._wp
+       endif
 
        if (time_eoy_lnd) then
        

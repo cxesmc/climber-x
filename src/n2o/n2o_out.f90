@@ -89,10 +89,10 @@ contains
 
     ! sum up and average over the year
     ann_ts(y)%n2o        = n2o%n2o           
-    ann_ts(y)%dn2oocn_dt   = n2o%dn2oocn_dt * 1.e-9_wp    ! TgN2O/yr, positive into the atmosphere
-    ann_ts(y)%dn2olnd_dt   = n2o%dn2olnd_dt * 1.e-9_wp    ! TgN2O/yr, positive into the atmosphere
-    ann_ts(y)%dn2oemis_dt  = n2o%dn2oemis_dt * 1.e-9_wp   ! TgN2O/yr, positive into the atmosphere
-    ann_ts(y)%dn2oox_dt    = n2o%dn2oox_dt * 1.e-9_wp     ! TgN2O/yr, positive into the atmosphere
+    ann_ts(y)%dn2oocn_dt   = n2o%dn2oocn_dt * 1.e-9_wp    ! TgN2O-N/yr, positive into the atmosphere
+    ann_ts(y)%dn2olnd_dt   = n2o%dn2olnd_dt * 1.e-9_wp    ! TgN2O-N/yr, positive into the atmosphere
+    ann_ts(y)%dn2oemis_dt  = n2o%dn2oemis_dt * 1.e-9_wp   ! TgN2O-N/yr, positive into the atmosphere
+    ann_ts(y)%dn2oox_dt    = n2o%dn2oox_dt * 1.e-9_wp     ! TgN2O-N/yr
     ann_ts(y)%tau          = n2o%tau    ! years 
 
     ! write to standard output
@@ -153,11 +153,11 @@ contains
     call nc_open(fnm,ncid)
     call nc_write(fnm,"time",  dble([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))]), dim1=dim_time,start=[ndat],count=[y],ncid=ncid)    
     call nc_write(fnm,"n2o       ",  vars%n2o       , dim1=dim_time,start=[ndat],count=[y],long_name="atmospheric n2o concentration",units="ppb",ncid=ncid) 
-    call nc_write(fnm,"N2Oocn_dt  ",  vars%dn2oocn_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="ocean methane flux to atmosphere",units="TgN2O/yr",ncid=ncid)  
-    call nc_write(fnm,"N2Olnd_dt  ",  vars%dn2olnd_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="natural land methane flux to atmosphere",units="TgN2O/yr",ncid=ncid)  
-    call nc_write(fnm,"N2Oemis_dt ",  vars%dn2oemis_dt , dim1=dim_time,start=[ndat],count=[y],long_name="anthropogenic methane emissions to atmosphere",units="TgN2O/yr",ncid=ncid)  
-    call nc_write(fnm,"N2Oox_dt   ",  vars%dn2oox_dt   , dim1=dim_time,start=[ndat],count=[y],long_name="methane oxidation in the atmosphere",units="TgN2O/yr",ncid=ncid)  
-    call nc_write(fnm,"tau   ",  vars%tau   , dim1=dim_time,start=[ndat],count=[y],long_name="methane lifetime in the atmosphere",units="years",ncid=ncid)  
+    call nc_write(fnm,"N2Oocn_dt  ",  vars%dn2oocn_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="ocean n2o flux to atmosphere",units="TgN2O-N/yr",ncid=ncid)  
+    call nc_write(fnm,"N2Olnd_dt  ",  vars%dn2olnd_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="natural land n2o flux to atmosphere",units="TgN2O-N/yr",ncid=ncid)  
+    call nc_write(fnm,"N2Oemis_dt ",  vars%dn2oemis_dt , dim1=dim_time,start=[ndat],count=[y],long_name="anthropogenic n2o emissions to atmosphere",units="TgN2O-N/yr",ncid=ncid)  
+    call nc_write(fnm,"N2Oox_dt   ",  vars%dn2oox_dt   , dim1=dim_time,start=[ndat],count=[y],long_name="n2o removal rate in the atmosphere",units="TgN2O-N/yr",ncid=ncid)  
+    call nc_write(fnm,"tau   ",  vars%tau   , dim1=dim_time,start=[ndat],count=[y],long_name="n2o lifetime in the atmosphere",units="years",ncid=ncid)  
     call nc_close(ncid)
 
    return

@@ -72,6 +72,7 @@ module lnd_out
     real(wp) :: soilc1m, soilc60N1m, minc1m, peatc1m, icec1m, shelfc1m, lakec1m, permc1m, soilc1m_pimask
     real(wp) :: soilc3m, minc3m, peatc3m, icec3m, shelfc3m, lakec3m, permc3m, soilc3m_pimask
     real(wp) :: ch4, ch4trop, ch4shelf, ch4lake,  ch4extrop, d13ch4
+    real(wp) :: n2o, n2otrop, n2oextrop
     real(wp) :: dust_e
     real(wp) :: weath_carb, weath_sil, weath_loess
     real(wp) :: doc_export, poc_export
@@ -142,6 +143,7 @@ module lnd_out
     real(wp), allocatable, dimension(:,:) :: dust_dep
     real(wp), allocatable, dimension(:,:,:) :: snow_grain
     real(wp), allocatable, dimension(:,:,:) :: dust_con
+    real(wp), allocatable, dimension(:,:) :: n2o
   end type
   type surf_g_out
     real(wp), dimension(nx,ny) :: le, etot, ecan, esur, trans, sh, slh, ef, swnet, lwnet, g, flx_melt, tskin, tskin_amp, alb, alb_dif, alb_dir, ra, rag, Ri, Ch, rs
@@ -308,6 +310,7 @@ contains
       allocate(mon_su(k)%dust_dep(nx,ny))
       allocate(mon_su(k)%snow_grain(nx,ny,nsoil))
       allocate(mon_su(k)%dust_con(nx,ny,nsoil))
+      allocate(mon_su(k)%n2o(nx,ny))
 
       allocate(mon_s(k)%tsoil(nx,ny,nl))
       allocate(mon_s(k)%tice(nx,ny,nl))
@@ -433,6 +436,7 @@ contains
     allocate(ann_su%dust_dep(nx,ny))
     allocate(ann_su%snow_grain(nx,ny,nsoil))
     allocate(ann_su%dust_con(nx,ny,nsoil))
+    allocate(ann_su%n2o(nx,ny))
 
     allocate(ann_s%tsoil(nx,ny,nl))
     allocate(ann_s%tice(nx,ny,nl))
@@ -530,6 +534,7 @@ contains
     real(wp) :: global_minc1m, global_peatc1m, global_permc1m, global_soilc1m_pimask, global_icec1m, global_shelfc1m, global_lakec1m
     real(wp) :: global_minc3m, global_peatc3m, global_permc3m, global_soilc3m_pimask, global_icec3m, global_shelfc3m, global_lakec3m
     real(wp) :: global_ch4, global_ch4trop, global_ch4shelf, global_ch4lake, global_ch4extrop, global_c13h4
+    real(wp) :: global_n2o, global_n2otrop, global_n2oextrop
     real(wp) :: global_dust_e
     real(wp) :: npp_ij, npp13_ij, npp14_ij, sresp_ij, sresp13_ij, sresp14_ij
     real(wp) :: sum_frac
@@ -553,9 +558,13 @@ contains
     global_prc   = 0._wp
     global_snow = 0._wp
     global_dust_e = 0._wp
+    global_n2o    = 0._wp
+    global_n2otrop= 0._wp
+    global_n2oextrop= 0._wp
 
     !$omp parallel do collapse(2) private(i,j,k) &
-    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_calving,global_drain,global_run,global_snow,global_dust_e)
+    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_calving,global_drain,global_run,global_snow,global_dust_e) &
+    !$omp reduction(+:global_n2o,global_n2otrop,global_n2oextrop) 
     do j = 1, ny
       do i = 1, nx
         if( lnd(i,j)%f_land.gt.0._wp ) then
@@ -607,6 +616,17 @@ contains
             * area(i,j) * 1.d-12 ! 10^12 m3
           ! dust emissions
           global_dust_e = global_dust_e + lnd(i,j)%dust_emis * area(i,j) * 1.e-9 * dt ! kg/m2/s*s*m2*Tg/kg = Tg
+          ! N2O
+          tmp = lnd(i,j)%n2o_emis*lnd(i,j)%f_veg * area(i,j) * dt * 1.d-9   ! TgN2O-N
+          global_n2o = global_n2o + tmp
+          ! tropical N2O
+          if (lat(j).ge.-30.and.lat(j).le.30) then
+            global_n2otrop = global_n2otrop + tmp
+          endif
+          ! extratropical N2O
+          if (abs(lat(j)).gt.30) then
+            global_n2oextrop = global_n2oextrop + tmp
+          endif
         endif
       enddo
     enddo
@@ -643,6 +663,9 @@ contains
     mon_ts(y,mon)%t      = mon_ts(y,mon)%t   + (global_t / sum(lnd%f_veg * area))  * mon_avg  ! K
     mon_ts(y,mon)%snow   = mon_ts(y,mon)%snow+ global_snow * mon_avg
     mon_ts(y,mon)%dust_e = mon_ts(y,mon)%dust_e+ global_dust_e
+    mon_ts(y,mon)%n2o       = mon_ts(y,mon)%n2o       + global_n2o
+    mon_ts(y,mon)%n2otrop   = mon_ts(y,mon)%n2otrop   + global_n2otrop
+    mon_ts(y,mon)%n2oextrop = mon_ts(y,mon)%n2oextrop + global_n2oextrop
 
 
     ! at the end of month
@@ -1006,8 +1029,8 @@ contains
       mon_ts(y,mon)%icec3m     = global_icec3m
       mon_ts(y,mon)%shelfc3m   = global_shelfc3m
       mon_ts(y,mon)%lakec3m    = global_lakec3m
-      mon_ts(y,mon)%ch4      = global_ch4
-      mon_ts(y,mon)%ch4trop   = global_ch4trop
+      mon_ts(y,mon)%ch4        = global_ch4
+      mon_ts(y,mon)%ch4trop    = global_ch4trop
       mon_ts(y,mon)%ch4shelf   = global_ch4shelf
       mon_ts(y,mon)%ch4lake    = global_ch4lake
       mon_ts(y,mon)%ch4extrop  = global_ch4extrop
@@ -1079,11 +1102,11 @@ contains
 
       ! write to standard output
       if (mod(year,10).eq.1) then
-        print '(a7,a9,17a7)','lnd','year','Cflx','NPP','CH4e','Aperm','prc','evp','run','Awet','Apeat', &
+        print '(a7,a9,18a7)','lnd','year','Cflx','NPP','CH4e','N2Oe','Aperm','prc','evp','run','Awet','Apeat', &
         'Cveg','Csoil','Cperm','Cpeat','Cice','Clake','Cshelf','dust_e'
       endif
-      print '(a7,i9,F7.3,10F7.1,6F7.0)', &
-      'lnd',year_now,ann_ts(y)%Cflx_atm_lnd,ann_ts(y)%npp,ann_ts(y)%ch4,ann_ts(y)%perm, &
+      print '(a7,i9,F7.3,11F7.1,6F7.0)', &
+      'lnd',year_now,ann_ts(y)%Cflx_atm_lnd,ann_ts(y)%npp,ann_ts(y)%ch4,ann_ts(y)%n2o,ann_ts(y)%perm, &
       ann_ts(y)%prc,ann_ts(y)%evp,ann_ts(y)%runoff,ann_ts(y)%wet,ann_ts(y)%peat,ann_ts(y)%vegc,ann_ts(y)%soilc, &
       ann_ts(y)%permc,ann_ts(y)%peatc,ann_ts(y)%icec,ann_ts(y)%lakec,ann_ts(y)%shelfc,ann_ts(y)%dust_e
 
@@ -1154,6 +1177,7 @@ contains
                   mon_su(m)%dust_e_s(i,j)   = 0._wp
                   mon_su(m)%dust_e(i,j)     = 0._wp
                   mon_su(m)%dust_dep(i,j)   = 0._wp
+                  mon_su(m)%n2o(i,j)        = 0._wp
                   mon_su(m)%snow_grain(i,j,:) = 0._wp
                   mon_su(m)%dust_con(i,j,:) = 0._wp
                 else
@@ -1208,6 +1232,7 @@ contains
                   mon_su(m)%dust_e_s(i,j)   = missing_value 
                   mon_su(m)%dust_e(i,j)     = missing_value 
                   mon_su(m)%dust_dep(i,j)   = missing_value 
+                  mon_su(m)%n2o(i,j)        = missing_value 
                   mon_su(m)%snow_grain(i,j,:) = missing_value
                   mon_su(m)%dust_con(i,j,:) = missing_value 
                 endif
@@ -1376,6 +1401,7 @@ contains
               mon_su(mon)%dust_e_s(i,j)   = mon_su(mon)%dust_e_s(i,j)   + lnd(i,j)%dust_emis_s * 1000._wp*dt
               mon_su(mon)%dust_e(i,j)     = mon_su(mon)%dust_e(i,j)     + lnd(i,j)%dust_emis * 1000._wp*dt
               mon_su(mon)%dust_dep(i,j)   = mon_su(mon)%dust_dep(i,j)   + lnd(i,j)%dust_dep * 1000._wp*dt
+              mon_su(mon)%n2o(i,j)        = mon_su(mon)%n2o(i,j)        + lnd(i,j)%n2o_emis * 1000._wp*dt  ! gN2O-N/m2/mon
             endif
           enddo
         enddo
@@ -1570,10 +1596,10 @@ contains
           + lnd%ch4_emis_lake*lnd%f_lake &
           + lnd%ch4_emis_peat*lnd%f_peat) &
           * sec_year * 1.d3 ! gC/m2 gridcell/yr
-          mon_c(mon)%ch4wet = lnd%ch4_emis_wetland*max(0._wp,lnd%f_wetland*lnd%f_veg-lnd%f_peat)*sec_year * 1.d3 ! gC/m2 gridcell/yr
+          mon_c(mon)%ch4wet   = lnd%ch4_emis_wetland*max(0._wp,lnd%f_wetland*lnd%f_veg-lnd%f_peat)*sec_year * 1.d3 ! gC/m2 gridcell/yr
           mon_c(mon)%ch4shelf = lnd%ch4_emis_shelf*lnd%f_shelf*sec_year * 1.d3 ! gC/m2 gridcell/yr
           mon_c(mon)%ch4lake  = lnd%ch4_emis_lake*lnd%f_lake*sec_year * 1.d3 ! gC/m2 gridcell/yr
-          mon_c(mon)%ch4peat= lnd%ch4_emis_peat*lnd%f_peat*sec_year * 1.d3 ! gC/m2 gridcell/yr
+          mon_c(mon)%ch4peat  = lnd%ch4_emis_peat*lnd%f_peat*sec_year * 1.d3 ! gC/m2 gridcell/yr
 
           ! grid cell averages
           do i=1,nx
@@ -2073,6 +2099,9 @@ contains
     call nc_write(fnm,"ch4shelf",sngl(vars%ch4shelf), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from ocean shelf",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ch4lake",sngl(vars%ch4lake), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from lakes",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"d13ch4",  sngl(vars%d13ch4), dim1=dim_time,start=[ndat],count=[y],long_name="d13C of methane emissions",units="permil",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o",     sngl(vars%n2o),    dim1=dim_time,start=[ndat],count=[y],long_name="N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2otrop",  sngl(vars%n2otrop), dim1=dim_time,start=[ndat],count=[y],long_name="tropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2oextrop", sngl(vars%n2oextrop),dim1=dim_time,start=[ndat],count=[y],long_name="extratropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"dust_e",  sngl(vars%dust_e), dim1=dim_time,start=[ndat],count=[y],long_name="total dust emission",units="Tg/yr",missing_value=missing_value,ncid=ncid)
 
     call nc_write(fnm,"doc_export",  sngl(vars%doc_export), dim1=dim_time,start=[ndat],count=[y],long_name="dissolved organic carbon export through rivers",units="PgC/yr",missing_value=missing_value,ncid=ncid)
@@ -2172,6 +2201,7 @@ contains
     ave%ch4lake = 0._wp
     ave%ch4extrop = 0._wp
     ave%d13ch4  = 0._wp
+    ave%n2o     = 0._wp
     ave%dust_e = 0._wp
 
     ! Loop over the time indices to sum up
@@ -2237,13 +2267,14 @@ contains
      ave%icec3m    = ave%icec3m       + d(k)%icec3m   / div
      ave%shelfc3m  = ave%shelfc3m     + d(k)%shelfc3m / div
      ave%lakec3m   = ave%lakec3m      + d(k)%lakec3m  / div
-     ave%ch4     = ave%ch4        + d(k)%ch4    / div
-     ave%ch4trop = ave%ch4trop     + d(k)%ch4trop / div
+     ave%ch4     = ave%ch4        + d(k)%ch4      / div
+     ave%ch4trop = ave%ch4trop    + d(k)%ch4trop  / div
      ave%ch4shelf= ave%ch4shelf   + d(k)%ch4shelf / div
      ave%ch4lake = ave%ch4lake    + d(k)%ch4lake  / div
      ave%ch4extrop = ave%ch4extrop    + d(k)%ch4extrop/ div
      ave%d13ch4  = ave%d13ch4     + d(k)%d13ch4/ div
-     ave%dust_e     = ave%dust_e        + d(k)%dust_e
+     ave%n2o     = ave%n2o        + d(k)%n2o    
+     ave%dust_e  = ave%dust_e     + d(k)%dust_e
     end do
       
    return
@@ -2378,6 +2409,7 @@ contains
     call nc_write(fnm,"dust_dep",     sngl(vars%dust_dep), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="total dust deposition",units="g/m2/mon",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"dust_con", sngl(vars%dust_con),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="dust_concentration in snow",units="mg/kg",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"snow_grain", sngl(vars%snow_grain),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="snow grain size",units="micro m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o",     sngl(vars%n2o), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="N2O emissions",units="gN2O-N/m2/mon",missing_value=missing_value,ncid=ncid)
 
     ! grid cell averages
 
@@ -2493,6 +2525,7 @@ contains
     ave%dust_dep = 0._wp
     ave%dust_con = 0._wp
     ave%snow_grain = 0._wp
+    ave%n2o = 0._wp
 
     do k = 1, n
     d_g(k)%etot    = 0._wp
@@ -2599,6 +2632,7 @@ contains
       ave%dust_dep    = ave%dust_dep       + d(k)%dust_dep      / div
       ave%dust_con    = ave%dust_con       + d(k)%dust_con      / div
       ave%snow_grain  = ave%snow_grain     + d(k)%snow_grain    / div
+      ave%n2o         = ave%n2o            + d(k)%n2o      / div
     end do
       
     ! grid cell averages
