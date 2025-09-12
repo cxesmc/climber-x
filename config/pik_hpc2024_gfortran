@@ -15,17 +15,17 @@ INC_COORD = -I${COORDROOT}/libcoordinates/include
 LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
-FESMUTILSROOT=src/utils/fesm-utils/utils
+FESMUTILSROOT=src/utils/fesm-utils_gfortran/utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
 
 # FFTW
-FFTWROOT = src/utils/fesm-utils/fftw-omp
+FFTWROOT = src/utils/fesm-utils_gfortran/fftw-omp
 INC_FFTW = -I${FFTWROOT}/include
 LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
 
 # LIS
-LISROOT = src/utils/fesm-utils/lis-omp
+LISROOT = src/utils/fesm-utils_gfortran/lis-omp
 INC_LIS = -I${LISROOT}/include 
 LIB_LIS = -L${LISROOT}/lib/ -llis
 
