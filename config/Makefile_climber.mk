@@ -136,7 +136,7 @@ obj_bmb_dummy = $(patsubst %, $(objdir)/%, $(tmp_bmb_dummy) )
 ########################################################################
 # land model related source files
 dir_lnd = $(srcdir)/lnd/
-files_lnd = lnd_model.f90 lnd_grid.f90 lnd_params.f90 lnd_def.f90 \
+files_lnd = lnd_grid.f90 lnd_params.f90 lnd_def.f90 \
 	          soil_par.f90 ice_par.f90 lake_par.f90 lake_rho.f90 shelf_par.f90 surface_par_lnd.f90 veg_par.f90 \
 	          soil_carbon_par.f90 shelf_carbon_par.f90 ice_carbon_par.f90 lake_carbon_par.f90 \
             photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 \
