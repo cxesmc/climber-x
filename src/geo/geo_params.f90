@@ -40,6 +40,7 @@ module geo_params
 
   integer :: i_equilibrium
   logical :: l_z_bed_ini_eq
+  real(wp) :: dz_bed_ini
 
   character (len=256) :: geo_ref_file
   character (len=256) :: geo_eq_file
@@ -132,6 +133,7 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","z_ocn_max_quant",z_ocn_max_quant)
     call nml_read(filename,"geo_par","i_equilibrium",i_equilibrium)
     call nml_read(filename,"geo_par","l_z_bed_ini_eq",l_z_bed_ini_eq)
+    call nml_read(filename,"geo_par","dz_bed_ini",dz_bed_ini)
     call nml_read(filename,"geo_par","geo_eq_file",geo_eq_file)
     call nml_read(filename,"geo_par","geo_ref_file",geo_ref_file)
     call nml_read(filename,"geo_par","z_bed_rel_file",z_bed_rel_file)

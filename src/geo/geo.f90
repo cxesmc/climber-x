@@ -33,7 +33,7 @@ module geo_mod
   use coord, only : grid_class, grid_init
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
   use ncio
-  use geo_params, only : i_geo, geo_ref_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq
+  use geo_params, only : i_geo, geo_ref_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
   use geo_params, only : z_bed_rel_file, z_bed_1min_file, sigma_filter
   use geo_params, only : geo_params_init, l_connect_ocn, f_crit, n_coast_cells, i_fix_cell_grl
   use geo_params, only : h_ice_min
@@ -192,7 +192,8 @@ contains
 
     call nc_read(trim(geo_ref_file),"bedrock_topography",geo%hires%z_bed_ref)
     call nc_read(trim(geo_ref_file),"ice_thickness",geo%hires%h_ice_ref)
-      
+    ! add optional uniform offset to bedrock elevation
+    geo%hires%z_bed_ref = geo%hires%z_bed_ref + dz_bed_ini
 
     !------------------------------------------------------------------------
     ! restart 
@@ -214,6 +215,8 @@ contains
       if (bnd_geo_grid%name==geo%hires%grid%name) then
         ! same grid, simply assign
         geo%hires%z_bed = z_bed
+        ! add optional uniform offset to bedrock elevation
+        geo%hires%z_bed = geo%hires%z_bed + dz_bed_ini
       else
         ! different grid, compute anomalies and add on top of reference bedrock elevation
         allocate(z_bed_anom(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
