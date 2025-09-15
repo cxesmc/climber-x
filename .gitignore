@@ -14,7 +14,7 @@ output
 out
 src/main/gitversion.f90
 src/bgc
-src/utils/fesm-utils
+src/utils/fesm-utils*
 src/utils/fftw*
 src/utils/lis*
 src/utils/coordinates*
