@@ -194,6 +194,11 @@
                                 ! 3 = solid sediment material is added as precipitation flux to neighboring wet cells
 
     !----------------------------------------------------------------------------
+    ! preformed tracers 
+    !----------------------------------------------------------------------------
+    l_preformed_tracers = T     ! enable preformed tracers
+
+    !----------------------------------------------------------------------------
     ! tracer transport flags
     !----------------------------------------------------------------------------
     l_trans_poc = F     ! transport (advection+diffusion) particulate organic carbon?
