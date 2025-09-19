@@ -222,6 +222,7 @@ module bgc_def
       real(wp) :: delta_c !! cumulated air-sea carbon flux over one year [kgc]
       real(wp) :: delta_c13 !! cumulated air-sea carbon 13 flux over one year [kgc13]
       real(wp) :: delta_c14 !! cumulated air-sea carbon 14 flux over one year [kgc14]
+      real(wp) :: n2o_flx  !! cumulated air-sea N2O flux over one year [kgN2O]
       real(wp) :: Cflx_avg !! average air-sea carbon flux [kgc/yr]
     end type
 
