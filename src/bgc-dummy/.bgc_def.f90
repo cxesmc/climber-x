@@ -224,6 +224,7 @@ module bgc_def
       real(wp) :: delta_c14 !! cumulated air-sea carbon 14 flux over one year [kgc14]
       real(wp) :: n2o_flx  !! cumulated air-sea N2O flux over one year [kgN2O]
       real(wp) :: Cflx_avg !! average air-sea carbon flux [kgc/yr]
+      real(wp) :: A_shelf_0_100m !! flooded shelf area with a water depth between 0 and 100 m [m2]
     end type
 
     private

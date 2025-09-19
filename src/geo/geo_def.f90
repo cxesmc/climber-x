@@ -99,6 +99,7 @@ module geo_def
       real(wp) :: d_sea_level      !! change in sea level [m]
       real(wp) :: V_ice_af       !! global ice sheet volume above floatation [m3]
       real(wp) :: A_bering       !! Bering Strait cross-sectional area [m2]      
+      real(wp) :: A_shelf_0_100m    !! area of flooded shelf with a water depth between 0 and 100 m
       type(grid_class) :: grid
       real(wp), dimension(:,:), allocatable :: f_ocn0     !! ocean fraction for present day sea level
       real(wp), dimension(:,:), allocatable :: f_lnd0     !! land fraction for present day sea level (1-ocean fraction)

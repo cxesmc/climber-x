@@ -162,6 +162,7 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: o3    !! atmopheric O3 concentration [mol/mol]
       real(wp) :: sea_level !! sea level relative to present [m]
       real(wp) :: A_bering !! Bering Strait cross-sectional area [m2]
+      real(wp) :: A_shelf_0_100m !! flooded shelf area with a water depth between 0 and 100 m [m2]
       real(wp) :: ocn_vol_tot !! actual ocean volume [m3]
       real(wp) :: buoy_sic_NA(6)   !! buoyancy flux from sea ice export over North Atlantic [N]
       real(wp) :: t2m_glob_ann  !! annual mean global temperature [K]
@@ -1604,6 +1605,7 @@ contains
       bgc%grid%coral_f_area = cmn%coral_f_area(:,:,nint(cmn%sea_level)-50:nint(cmn%sea_level)-1) ! top 50 m of ocean considering sea level
       ! todo
       bgc%grid%coral_f_topo = cmn%coral_f_topo(:,:,nint(cmn%sea_level)-50:nint(cmn%sea_level)-1) ! top 50 m of ocean considering sea level
+      bgc%A_shelf_0_100m = cmn%A_shelf_0_100m
     endif
 
     ! atmospheric CO2
@@ -3139,6 +3141,9 @@ contains
 
     ! Bering Strait cross-sectional area
     cmn%A_bering = geo%A_bering
+
+    ! flooded shelf area with a water depth between 0 and 100 m 
+    cmn%A_shelf_0_100m = geo%A_shelf_0_100m
 
     ! ocean fraction of grid cell, including floating ice
     cmn%f_ocn   = geo%f_ocn
