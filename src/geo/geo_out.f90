@@ -40,7 +40,7 @@ module geo_out
   integer :: nout
 
   type ts_out
-     real(wp) :: sea_level, Aocn, Aveg, Aice, Alake, A_bering, A_shelf_0_100m
+     real(wp) :: sea_level, Aocn, Aveg, Aice, Alake, A_bering, A_shelf
   end type
 
   type(ts_out), allocatable :: ann_ts(:)
@@ -138,7 +138,7 @@ contains
       print '(a7,a9,7a7)','geo','year','seal','Aocn','Aveg','Aice','Alake','Abrng','Ashlf'
     endif
     print '(a7,i9,7F7.1)','geo',year_now,geo%sea_level,geo%ocn_area_tot*fac,geo%veg_area_tot*fac,geo%ice_area_tot*fac,geo%lake_area_tot*fac, & 
-      geo%A_bering*1.e-6,geo%A_shelf_0_100m*fac
+      geo%A_bering*1.e-6,geo%A_shelf*fac
 
     ! supress inital write to netCDF time series
     if(.not.firstcall) then
@@ -153,7 +153,7 @@ contains
       ann_ts(y)%Aice = geo%ice_area_tot*fac
       ann_ts(y)%Alake = geo%lake_area_tot*fac
       ann_ts(y)%A_bering  = geo%A_bering
-      ann_ts(y)%A_shelf_0_100m = geo%A_shelf_0_100m*fac
+      ann_ts(y)%A_shelf = geo%A_shelf*fac
 
       ! write to netcdf file 
       if (time_out_ts_geo) then
@@ -176,7 +176,7 @@ contains
         count=[y],long_name="Total ice sheet surface area",units="mln km2",ncid=ncid)
         call nc_write(fnm,"Alake", ann_ts(1:y)%Alake, dim1=dim_time, start=[n1out], &
         count=[y],long_name="Total lake surface area",units="mln km2",ncid=ncid)
-        call nc_write(fnm,"A_shelf_0_100m", ann_ts(1:y)%A_shelf_0_100m, dim1=dim_time, start=[n1out], &
+        call nc_write(fnm,"A_shelf", ann_ts(1:y)%A_shelf, dim1=dim_time, start=[n1out], &
         count=[y],long_name="Area of flooded shelf with a water depth between 0 and 100 m",units="mln km2",ncid=ncid)
         call nc_close(ncid)
       endif

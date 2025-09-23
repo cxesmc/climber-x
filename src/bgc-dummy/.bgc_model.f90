@@ -14,7 +14,7 @@ contains
   !   subroutine :  b g c _ i n i
   !   purpose    :  initialize marine bio-geo-chemistry module
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine bgc_ini(bgc, ni, nj, lon, lat, layer_thk, layer_depth, level_depth, kbo, ocn_area, l_daily_input_save)
+  subroutine bgc_ini(bgc, ni, nj, lon, lat, layer_thk, layer_depth, level_depth, kbo, ocn_area, A_shelf_geo, l_daily_input_save)
 
     type(bgc_class), intent(out) :: bgc          !! state variables of bgc model, to initialize
 
@@ -26,6 +26,7 @@ contains
     real(wp), intent(in) :: level_depth(:)                !! depth of layer interfaces [m] -- first index for surface layer
     integer, intent(in) :: kbo(:, :)         !! index of bottom layer (1<= <= maxk if ocean, 0 otherwise)
     real(wp), intent(in) :: ocn_area(:,:)                 !! ocean grid cell area [m2]
+    real(wp), intent(in) :: A_shelf_geo
     logical, intent(in) :: l_daily_input_save
 
     return

@@ -937,7 +937,7 @@ contains
   !-------------------------------------------------------------------
   ! compute flooded shelf area with a water depth of 0-100 m
   !-------------------------------------------------------------------
-  geo%A_shelf_0_100m = sum(geo%hires%grid%area, mask = geo%hires%z_bed>=-100._wp .and. geo%hires%z_bed<=0._wp)
+  geo%A_shelf = sum(geo%hires%grid%area, mask = geo%hires%z_bed>=-100._wp .and. geo%hires%z_bed<=0._wp)
 
   if (firstcall) firstcall = .false.
 

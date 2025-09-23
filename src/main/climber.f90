@@ -260,7 +260,7 @@ program climber
     if (flag_bgc) then
       call bgc_ini(bgc, ocn%grid%ni, ocn%grid%nj, ocn%grid%lon, ocn%grid%lat, &
         ocn%grid%dz(ocn%grid%nk:1:-1), -ocn%grid%zro(ocn%grid%nk:1:-1), -ocn%grid%zw(ocn%grid%nk:0:-1), -ocn%grid%k1+ocn%grid%nk+1, &
-        ocn%grid%ocn_area,l_daily_input_save_bgc)
+        ocn%grid%ocn_area, geo%A_shelf, l_daily_input_save_bgc)
       call bgc_to_cmn(bgc, cmn,ocn) ! initialize tracers in ocean module
       call bgc_diag_init(ocn%grid%ni, ocn%grid%nj, ocn%grid%nk, ocn%grid%zro)
       ! flag for bgc tracers transport

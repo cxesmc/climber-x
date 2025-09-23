@@ -16,16 +16,34 @@
     l_conserve_sil  = T
     l_conserve_alk  = F
 
-    ini_tracer_scale = 1.   ! factor to scale ALL bgc tracer concentrations from restart file, used only if bgc_restart=T in control.nml
+
+    !----------------------------------------------------------------------------
+    ! tracer concentration scaling options 
+    !----------------------------------------------------------------------------
+    i_A_shelf_ini = 1           ! initialisation of shallow water area:
+                                ! 0 = use A_shelf_ini value
+                                ! 1 = use actual initial area derived from high-resolution initial bathymetry 
+    A_shelf_ini = 20.2          ! mln km2, initial shallow water area, used only if i_A_shelf_ini==0
+    A_shelf_pi  = 20.2          ! mln km2, present-day shallow water area
+    A_shelf_lgm = 8.4           ! mln km2, LGM shallow water area
+    alk_scale_A_shelf = 0.      ! max scaling factor of alkalinity relative to the initial state, when A_shelf == A_shelf_ini
+    dic_scale_A_shelf = 0.      ! max scaling factor of DIC relative to the initial state, when A_shelf == A_shelf_ini
+    po4_scale_A_shelf = 0.      ! max scaling factor of PO4 relative to the initial state, when A_shelf == A_shelf_ini
+    sil_scale_A_shelf = 0.      ! max scaling factor of silicate relative to the initial state, when A_shelf == A_shelf_ini
+
+    ini_tracer_scale = 1.   ! factor to scale ALL bgc tracer initial concentrations 
                             ! e.g., to counter-balance reduction of ocean volume (see vol in ocn_ts.nc)
                             !       when initializing LGM runs from PI-restarts for bgc, but LGM restarts for ocn/geo 
 
-    alk_scale = 1.          ! factor to scale alkalinity read from restart file, used only if bgc_restart=T in control.nml
-    dic_scale = 1.          ! factor to scale DIC concentration read from restart file, used only if bgc_restart=T in control.nml
-    po4_scale = 1.          ! factor to scale phosphate read from restart file, used only if bgc_restart=T in control.nml
-    no3_scale = 1.          ! factor to scale nitrate read from restart file, used only if bgc_restart=T in control.nml
-    sil_scale = 1.          ! factor to scale silicate read from restart file, used only if bgc_restart=T in control.nml
+    alk_scale = 1.          ! factor to scale initial alkalinity 
+    dic_scale = 1.          ! factor to scale initial DIC 
+    po4_scale = 1.          ! factor to scale initial phosphate 
+    no3_scale = 1.          ! factor to scale initial nitrate 
+    sil_scale = 1.          ! factor to scale initial silicate 
 
+    !----------------------------------------------------------------------------
+    ! surface freshwater flux settings 
+    !----------------------------------------------------------------------------
     i_bgc_fw = 1            ! freshwater flux used to dilute tracers at the surface: 
                             ! 1 = P-E+R+SIC
                             ! 2 = FW-noise-hosing
@@ -35,7 +53,6 @@
 
     l_apply_net_fw = T            ! dilute/concentrate surface tracers according to net surface freshwater flux?
     i_apply_net_fw = 2            ! dilution parameterisation. 1==zero net tracer flux at the surface, 2==compensate non-zero flux over whole ocean
-
 
     !----------------------------------------------------------------------------
     ! carbonate chemistry settings 
