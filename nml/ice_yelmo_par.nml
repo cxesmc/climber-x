@@ -39,50 +39,73 @@
 
 &ytopo
     solver              = "impl-lis"        ! "expl", "impl-lis"
-    calv_flt_method     = "vm-l19"          ! "zero", "threshold", "flux", "vm-l19", "kill"
-    calv_grnd_method    = "zero"            ! "zero", "stress-b12"
-    bmb_gl_method       = "pmp"             ! "fcmp": flotation; "fmp": full melt; "pmp": partial melt; "nmp": no melt
-    fmb_method          = 1                 ! 0: prescribe boundary field fmb_shlf; 1: calculate proportional fmb~bmb_shlf.
-    dmb_method          = 0                 ! 0: no subgrid discharge, 1: subgrid discharge on
     surf_gl_method      = 0                 ! 0: binary (max grnd/flt elevation), 1: subgrid average elevation
+    grad_lim            = 0.1               ! [m/m] Maximum allowed sloped in gradient calculations (dz/dx,dH/dx)
+    grad_lim_zb         = 0.05              ! [m/m] Maximum allowed sloped in bed gradient (dzb/dx)
+    dHdt_dyn_lim        = 100.0             ! [m/yr] Maximum allowed ice thickness change due to dynamics
     margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
-    margin_flt_subgrid  = True              ! Allow fractional ice area for floating margins
+    margin_flt_subgrid  = False             ! Allow fractional ice area for floating margins
     use_bmb             = True              ! Use basal mass balance in mass conservation equation
     topo_fixed          = False             ! Keep ice thickness fixed, perform other ytopo calculations
     topo_rel            = 0                 ! 0: No relaxation; 1: relax shelf; 2: relax shelf + gl; 3: all points 
     topo_rel_tau        = 10.0              ! [a] Time scale for relaxation 
     topo_rel_field      = "H_ref"           ! "H_ref" or "H_ice_n"
-    calv_tau            = 1.0               ! [a] Characteristic calving time
-    calv_thin           = 30.0              ! [m/yr] Calving rate to apply to very thin ice
-    H_min_grnd          = 0.1               ! [m] Minimum ice thickness at grounded margin (thinner ice is ablated) - helps with stability
+    grounded_melt       = True
+
+    ! === Grounding line ===
+    bmb_gl_method       = "pmp"             ! "fcmp": flotation; "fmp": full melt; "pmp": partial melt; "nmp": no melt
+    gl_sep              = 1                 ! 1: Linear f_grnd_acx/acy and binary f_grnd, 2: area f_grnd, average to acx/acy
+    gz_nx               = 15                ! [-] Number of interpolation points (nx*nx) to calculate grounded area at grounding line
+
+    ! bmb_gl_method = pmpt
+    dist_grz            = 200.0             ! [km] Radius to consider part of "grounding-line zone" (grz)
+    gz_Hg0              = 0.0               ! Grounding zone, limit of penetration of bmb_grnd 
+    gz_Hg1              = 0.0               ! Grounding zone, limit of penetration of bmb_shlf 
+    
+    ! === discharge mass balance ===
+    dmb_method          = 0                 ! 0: no subgrid discharge, 1: subgrid discharge on
+    dmb_alpha_max       = 60.0              ! [deg] Maximum angle of slope from coast at which to allow discharge
+    dmb_tau             = 100.0             ! [yr]  Discharge timescale
+    dmb_sigma_ref       = 300.0             ! [m]   Reference bed roughness
+    dmb_m_d             = 3.0               ! [-]   Discharge distance scaling exponent
+    dmb_m_r             = 1.0               ! [-]   Discharge resolution scaling exponent
+
+    ! === frontal mass melt ===
+    fmb_method          = 0                 ! 0: prescribe boundary field fmb_shlf; 1: calculate proportional fmb~bmb_shlf.
+    fmb_scale           = 1.0               ! Scaling of fmb ~ scale*bmb, scale=10 suggested by Pollard and DeConto (2016)
+/
+
+&ycalv
+    ! === calving method & law ===
+    use_lsf             = False             ! use level-set method
+    dt_lsf              = -1                ! [yr] lsf update timescale. If negative: no reset.
+    calv_flt_method     = "vm-l19"          ! "zero", "simple", "flux", "vm-l19", "kill"
+    calv_grnd_method    = "zero"            ! "zero", "stress-b12"
+    
+    ! === numeric noise === 
+    H_min_grnd          = 0.1               ! [m] Minimum ice thickness at grounded margin (thinner ice is ablated) - helps with stability, smaller value will lead to more precise summit
     H_min_flt           = 0.0               ! [m] Minimum ice thickness at floating margin (thinner ice is ablated) - helps with stability
     sd_min              = 100.0             ! [m] calv_grnd(z_bed_sd <= sd_min) = 0.0 
     sd_max              = 500.0             ! [m] calv_grnd(z_bed_sd >= sd_max) = calv_max  
     calv_grnd_max       = 0.0               ! [m/a] Maximum grounded calving rate from high stdev(z_bed)
-    grad_lim            = 0.1               ! [m/m] Maximum allowed sloped in gradient calculations (dz/dx,dH/dx)
-    grad_lim_zb         = 0.05              ! [m/m] Maximum allowed sloped in bed gradient (dzb/dx)
-    dist_grz            = 200.0             ! [km] Radius to consider part of "grounding-line zone" (grz)
-    gl_sep              = 1                 ! 1: Linear f_grnd_acx/acy and binary f_grnd, 2: area f_grnd, average to acx/acy
-    gz_nx               = 15                ! [-] Number of interpolation points (nx*nx) to calculate grounded area at grounding line
-    gz_Hg0              = 0.0               ! Grounding zone, limit of penetration of bmb_grnd 
-    gz_Hg1              = 100.0             ! Grounding zone, limit of penetration of bmb_shlf 
-    fmb_scale           = 1.0               ! Scaling of fmb ~ scale*bmb, scale=10 suggested by Pollard and DeConto (2016)
-    k2                  = 3e9               ! [m yr] eigen calving scaling factor (Albrecht et al, 2021 recommend 1e17 m s == 3.2e9 m yr)
-    w2                  = 25                ! [-] vm-l19 calving eigenvalue weighting coefficient
+    
+    ! === 
+    calv_tau            = 1.0               ! [a] Characteristic calving time
+    calv_thin           = 30.0              ! [m/yr] Calving rate to apply to very thin ice
+    k2                  = 3.2e9             ! [m yr] eigen calving scaling factor (Albrecht et al, 2021 recommend 1e17 m s == 3.2e9 m yr)
+    w2                  = 0.0               ! Weighting coefficient of 2nd principal strain/stress
     kt_ref              = 0.0025            ! [m yr-1 Pa-1] vm-l19 calving scaling parameter
     kt_deep             = 0.1               ! [m yr-1 Pa-1] vm-l19 calving scaling parameter for deep ocean
-    Hc_ref              = 50.0 !200.0             ! [m] Calving limit in ice thickness (thinner ice calves)
-    Hc_ref_thin         = 50.0              ! [m] Reference ice thickness for thin ice calving
-    Hc_deep             = 500.0 !500.0             ! [m] Calving limit in ice thickness (thinner ice calves)
-    zb_deep_0           = -200.0 !-1500.0           ! [m] Bedrock elevation to begin transition to deep ocean
-    zb_deep_1           = -1000.0 !-2000.0           ! [m] Bedrock elevation to end transition to deep ocean
-    zb_sigma            = 100e3             ! [m] Gaussian filtering of bedrock for calving transition to deep ocean
-    dmb_alpha_max       = 60.0              ! [deg] Maximum angle of slope from coast at which to allow discharge
-    dmb_tau             = 30.0              ! [yr]  Discharge timescale
-    dmb_sigma_ref       = 300.0             ! [m]   Reference bed roughness
-    dmb_m_d             = 3.0               ! [-]   Discharge distance scaling exponent
-    dmb_m_r             = 0.0               ! [-]   Discharge resolution scaling exponent
+    tau_ice             = 85.0e3            ! [Pa] Ice strength failure
 
+    ! === threshold method ===
+    Hc_ref_flt          = 50.0              ! [m] Calving limit in ice thickness (thinner ice calves)
+    Hc_ref_grnd         = 50.0              ! [m] Calving limit in grounded ice thickness (thinner ice calves)
+    Hc_ref_thin         = 50.0              ! [m] Reference ice thickness for thin ice calving
+    Hc_deep             = 500.0             ! [m] Calving limit in ice thickness (thinner ice calves)
+    zb_deep_0           = -200.0            ! [m] Bedrock elevation to begin transition to deep ocean
+    zb_deep_1           = -1000.0           ! [m] Bedrock elevation to end transition to deep ocean
+    zb_sigma            = 0.0               ! [m] Gaussian filtering of bedrock for calving transition to deep ocean
 /
 
 &ydyn
