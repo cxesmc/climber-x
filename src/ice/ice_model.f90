@@ -123,8 +123,8 @@ contains
 
                 ! Store regional calculations for this timestep in buffer
                 ylmo_reg_nt_now(idx_dom) = ylmo_reg_nt_now(idx_dom)+1 
-                ylmo_regs(idx_dom,ylmo_reg_nt_now)      = ylmo%reg 
-                ylmo_reg_times(idx_dom,ylmo_reg_nt_now) = time 
+                ylmo_regs(idx_dom,ylmo_reg_nt_now(idx_dom))      = ylmo%reg 
+                ylmo_reg_times(idx_dom,ylmo_reg_nt_now(idx_dom)) = time 
                 
                 if (ylmo_reg_nt_now(idx_dom) .eq. ylmo_reg_nt_tot) then 
                     ! Buffer full, write output to file 
