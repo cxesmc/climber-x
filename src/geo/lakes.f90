@@ -304,6 +304,7 @@ contains
     enddo
     !$omp end parallel do
 
+    deallocate(lake_sea)
     deallocate(lake_mask)
     deallocate(lake_depth)
     deallocate(map)

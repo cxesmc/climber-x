@@ -185,6 +185,7 @@ contains
       enddo
     enddo
 
+    deallocate(nbr_ocn)
 
     return
 

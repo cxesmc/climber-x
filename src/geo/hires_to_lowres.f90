@@ -528,10 +528,13 @@ contains
   deallocate( z_bed_cell )
   deallocate( map_runoff_cell )
   deallocate( mask_cell_roff )
-  deallocate( i_runoff_cell)
+  deallocate( i_runoff_cell) 
   deallocate( j_runoff_cell)
   deallocate( mask_ndir)
   deallocate( dir_count)
+  deallocate( z_sur_cell) 
+  deallocate( z_ocn_tmp) 
+  deallocate( z_ocn_tmp2) 
 
 
   end subroutine hires_to_lowres

@@ -118,6 +118,8 @@ contains
 
     z_topo_fill = z_topo_fill_ext(1:ni,1:nj)    ! for output
 
+    deallocate(z_topo_ext)
+    deallocate(z_topo_fill_ext)
 
    return
 
