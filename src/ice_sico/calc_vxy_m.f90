@@ -2738,7 +2738,10 @@ end do
     !$ if(par%l_write_timer) print *,'fill_vectors',time2-time1
 
 !-------- Settings for Lis --------
-    
+
+call lis_initialize(ierr)
+call CHKERR(ierr)
+
 call lis_matrix_create(LIS_COMM_WORLD, lgs_a, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_b, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_x, ierr)
@@ -2830,6 +2833,9 @@ call lis_matrix_destroy(lgs_a, ierr)
 call lis_vector_destroy(lgs_b, ierr)
 call lis_vector_destroy(lgs_x, ierr)
 call lis_solver_destroy(solver, ierr)
+
+call lis_finalize(ierr)      
+call CHKERR(ierr)
 
 do n=1, nmax-1, 2
 

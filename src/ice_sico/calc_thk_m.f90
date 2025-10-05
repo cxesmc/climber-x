@@ -550,6 +550,9 @@ nnz = k   ! number of non-zero elements of the matrix
 
 !  ------ Settings for Lis
 
+call lis_initialize(ierr)
+call CHKERR(ierr)
+
 call lis_matrix_create(LIS_COMM_WORLD, lgs_a, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_b, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_x, ierr)
@@ -595,6 +598,9 @@ call lis_matrix_destroy(lgs_a, ierr)
 call lis_vector_destroy(lgs_b, ierr)
 call lis_vector_destroy(lgs_x, ierr)
 call lis_solver_destroy(solver, ierr)
+
+call lis_finalize(ierr)      
+call CHKERR(ierr)
 
 do nr=1, nmax
    i = grd%n2i(nr)
@@ -1188,6 +1194,9 @@ nnz = k   ! number of non-zero elements of the matrix
 
 !  ------ Settings for Lis
 
+call lis_initialize(ierr)
+call CHKERR(ierr)
+
 call lis_matrix_create(LIS_COMM_WORLD, lgs_a, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_b, ierr)
 call lis_vector_create(LIS_COMM_WORLD, lgs_x, ierr)
@@ -1233,6 +1242,9 @@ call lis_matrix_destroy(lgs_a, ierr)
 call lis_vector_destroy(lgs_b, ierr)
 call lis_vector_destroy(lgs_x, ierr)
 call lis_solver_destroy(solver, ierr)
+
+call lis_finalize(ierr)      
+call CHKERR(ierr)
 
 do nr=1, nmax
    i = grd%n2i(nr)

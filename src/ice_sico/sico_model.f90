@@ -371,11 +371,6 @@ contains
   ! allocate variables
   call sico_alloc(ice)
 
-  !-------- Initialisation of the Library of Iterative Solvers Lis, if required -------- 
-  if (ice%par%calcthk==3 .or. ice%par%calcthk==6 .or. ice%par%margin==3 .or. ice%par%dynamics==2) then
-    call lis_initialize(ierr)
-  endif
-
   !  ------ Some auxiliary quantities required for the enthalpy method
 
   call calc_c_int_table(C, -190, 10, real(L,wp))
