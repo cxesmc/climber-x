@@ -5,6 +5,7 @@
     phys_const      = "Earth"
     experiment      = "None"            ! "None", "EISMINT1", "MISMIP3D"  to apply special boundary conditions
     nml_ytopo       = "ytopo"
+    nml_ycalv       = "ycalv"
     nml_ydyn        = "ydyn"
     nml_ytill       = "ytill"
     nml_yneff       = "yneff"
