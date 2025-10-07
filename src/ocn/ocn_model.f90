@@ -51,7 +51,7 @@ module ocn_model
     use ocn_check, only : check_vel
 
     use eos_mod, only : eos
-    use momentum_mod, only : momentum_init, momentum, fcormin_increase, fcormin_reset
+    use momentum_mod, only : momentum_init, momentum
     use transport_ocn_mod, only : transport_init, transport
     use hosing_mod, only : hosing_init, hosing_update
     use flux_adj_mod, only : flux_adj_init, flux_adj_update
@@ -91,7 +91,6 @@ contains
     real(wp) :: tau
     real(wp) :: sal_before, sal_after
     real(wp) :: vsf_saln0, vsf_saloc
-    logical :: error, error_eq, error_noneq
     real(wp) :: avg, tv1
 
     !$ logical, parameter :: print_omp = .false.
@@ -427,49 +426,18 @@ contains
     ! solve frictional-geostrophic balance equation
     !------------------------------------------------------------------------
 
-    error = .true.
+    !$ time1 = omp_get_wtime()
+    call momentum(ocn%f_ocn,ocn%tau,ocn%dtau_dz2,ocn%dtav_dz2,ocn%rho, &
+      ocn%ub,ocn%ub_isl,ocn%u,ocn%psi)
+    !$ time2 = omp_get_wtime()
+    !$ if(print_omp) print *,'momentum',time2-time1
 
-    n = 0
-    do while (error)
-
-      !$ time1 = omp_get_wtime()
-      call momentum(ocn%f_ocn,ocn%tau,ocn%dtau_dz2,ocn%dtav_dz2,ocn%rho, &
-        ocn%ub,ocn%ub_isl,ocn%u,ocn%psi)
-      !$ time2 = omp_get_wtime()
-      !$ if(print_omp) print *,'momentum',time2-time1
-
-      ! check velocity range
-      call check_vel(ocn%u, ocn%error, error_eq, error_noneq)
-
-      if (error_eq) then
-        n = n+1
-        print *
-        print *,'WARNING: CFL stability criterium not met around the equator'
-        print *,'min Coriolis parameter increased temporarily by a factor of ',2**n,' for stability'
-        print *,'velocities are re-diagnosed...'
-        call fcormin_increase(2._wp)
-        if (n.eq.2) exit
-      endif
-
-      error = error_eq !.or. error_noneq
-
-    enddo
-
-    ! reset min Coriolis parameter
-    if (n.ge.1) then 
-      call fcormin_reset
-    endif
+    ! check velocity range
+    call check_vel(ocn%u, ocn%error)
 
     !------------------------------------------------------------------------
     ! tracer transport (advection+diffusion+convection)
     !------------------------------------------------------------------------
-
-    ! if CFL criterium not fullfilled, temporary reduce timestep
-    error = ocn%error
-    if (error) then
-      dt = 0.5_wp*dt
-      ocn%error = .false.
-    endif
 
     !print *
     !print *,'before'
@@ -487,9 +455,6 @@ contains
     !do i=1,n_tracers_tot
     !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
     !enddo
-
-    ! restore timestep 
-    if (error) dt = 2._wp*dt
 
     !------------------------------------------------------------------------
     ! restore global salinity to reference value

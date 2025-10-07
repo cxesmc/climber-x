@@ -42,14 +42,12 @@ contains
   !   Subroutine :  c h e c k _ v e l
   !   Purpose    :  check velocity range 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine check_vel(u, error, error_eq, error_noneq)
+  subroutine check_vel(u, error)
 
     implicit none
 
     real(wp), dimension(1:,0:,0:,:), intent(in) :: u
     logical, intent(inout) :: error
-    logical, intent(inout) :: error_eq
-    logical, intent(inout) :: error_noneq
 
     integer :: i, j, k
     real(wp), dimension(maxj) :: u_min_CFL
@@ -70,9 +68,6 @@ contains
     v_min_CFL = -dy/dt
     v_max_CFL =  dy/dt
 
-    error_eq = .false. 
-    error_noneq = .false. 
-
     ! check CFL stability
     do j=1,maxj
       do i=1,maxi
@@ -84,12 +79,8 @@ contains
             print *,'doy',doy
             print *,'u',u(1,i,j,k)
             print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
+            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
             if (year>1 .and. doy>1) error = .true.
-            if (j.eq.maxj/2 .or. j.eq.maxj/2+1) then
-              error_eq = .true.
-            else
-              error_noneq = .true.
-            endif
           endif
           if (u(1,i,j,k).lt.u_min_CFL(j)) then
             print *
@@ -98,12 +89,8 @@ contains
             print *,'doy',doy
             print *,'u',u(1,i,j,k)
             print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
+            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
             if (year>1 .and. doy>1) error = .true.
-            if (j.eq.maxj/2 .or. j.eq.maxj/2+1) then
-              error_eq = .true.
-            else
-              error_noneq = .true.
-            endif
           endif
           if (u(2,i,j,k).gt.v_max_CFL) then
             print *
@@ -112,12 +99,8 @@ contains
             print *,'doy',doy
             print *,'v',u(2,i,j,k)
             print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
+            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
             if (year>1 .and. doy>1) error = .true.
-            if (j.eq.maxj/2 .or. j.eq.maxj/2+1) then
-              error_eq = .true.
-            else
-              error_noneq = .true.
-            endif
           endif
           if (u(2,i,j,k).lt.v_min_CFL) then
             print *
@@ -126,12 +109,8 @@ contains
             print *,'doy',doy
             print *,'v',u(2,i,j,k)
             print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
+            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
             if (year>1 .and. doy>1) error = .true.
-            if (j.eq.maxj/2 .or. j.eq.maxj/2+1) then
-              error_eq = .true.
-            else
-              error_noneq = .true.
-            endif
           endif
         enddo
       enddo

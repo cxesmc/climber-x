@@ -71,7 +71,6 @@ module momentum_mod
 
   private
   public :: momentum_init, momentum
-  public :: fcormin_increase, fcormin_reset
   public :: bp, ubar_wind, ubar_jbar   ! just for output
 
 contains
@@ -428,70 +427,6 @@ contains
     return
 
   end subroutine momentum_init
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  f c o r m i n _ i n c r e a s e
-  !   Purpose    :  increase minimum Coriolis parameter at the equator
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine fcormin_increase(fac)
-
-    implicit none
-
-    real(wp), intent(in) :: fac
-
-    integer :: i, j
-
-
-    fcormin = fcormin*fac
-    do j=1,maxj
-      fcor(j) = sign(max(abs(2._wp*omega*s(j)),fcormin),s(j))
-    enddo
-    do j=0,maxj
-      fcorv(j) = sign(max(abs(2._wp*omega*sv(j)),fcormin),sv(j))
-    enddo
-
-!    do j=1,maxj
-!      do i=1,maxi
-!        rtv(i,j) = 1._wp/(fcor(j)**2 + drag_bcl(1,i,j)*drag_bcl(1,i,j))
-!        rtv3(i,j) = 1._wp/(fcorv(j)**2 + drag_bcl(2,i,j)*drag_bcl(2,i,j))
-!      enddo
-!    enddo
-
-    return
-
-  end subroutine fcormin_increase
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  f c o r m i n _ r e s e t
-  !   Purpose    :  reset minimum Coriolis parameter at the equator at original value
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine fcormin_reset
-
-    implicit none
-
-    integer :: i, j
-
-
-    fcormin = fcormin_ref
-    do j=1,maxj
-      fcor(j) = sign(max(abs(2._wp*omega*s(j)),fcormin),s(j))
-    enddo
-    do j=0,maxj
-      fcorv(j) = sign(max(abs(2._wp*omega*sv(j)),fcormin),sv(j))
-    enddo
-
-!    do j=1,maxj
-!      do i=1,maxi
-!        rtv(i,j) = 1._wp/(fcor(j)**2 + drag_bcl(1,i,j)*drag_bcl(1,i,j))
-!        rtv3(i,j) = 1._wp/(fcorv(j)**2 + drag_bcl(2,i,j)*drag_bcl(2,i,j))
-!      enddo
-!    enddo
-
-    return
-
-  end subroutine fcormin_reset
 
 end module momentum_mod
  
