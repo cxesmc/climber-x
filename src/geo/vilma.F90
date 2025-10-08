@@ -24,7 +24,7 @@ module vilma_model
 
     private
     public :: vilma_init, vilma_update, vilma_end
-    public :: vilma_read_restart, vilma_write_restart
+    public :: vilma_write_restart
 
     logical, parameter :: l_load_hist = .false.
 
@@ -62,7 +62,7 @@ contains
     real(wp), allocatable, dimension(:,:) :: mask_ice_g
     real(wp), allocatable, dimension(:,:) :: mask_ice
 
-    integer :: stat, t
+    integer :: stat
     character(len=256) :: fnm
     integer :: ncid
 
@@ -526,25 +526,6 @@ contains
    return
 
   end subroutine vilma_write_restart
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  v i l m a _ r e a d _ r e s t a r t
-  ! Purpose  :  read restart netcdf file 
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma_read_restart(fnm)
-
-    implicit none
-
-    character (len=*) :: fnm
-
-
-    !call nc_read(fnm,"uc",     sic%uc)
-
-
-   return
-
-  end subroutine vilma_read_restart
 
 
 end module vilma_model

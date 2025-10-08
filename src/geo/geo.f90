@@ -588,7 +588,6 @@ contains
   type(geo_class), intent(inout) :: geo
 
   integer :: i, j, n
-  integer :: nocn
   logical :: l_was_ice_grd
   real(wp) :: A_bering, dx
   logical, save :: firstcall = .true.

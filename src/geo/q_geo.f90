@@ -55,7 +55,6 @@ contains
     real(wp), dimension(:), allocatable :: lon_qgeo, lat_qgeo
     real(wp), dimension(:,:), allocatable :: q_geo_in
     type(grid_class) :: qgeo_grid
-    type(map_class) :: map_qgeo_to_geo
     type(map_scrip_class) :: maps_qgeo_to_geo
 
 
