@@ -148,7 +148,7 @@ contains
                 ! SICOPOLIS ice-sheet model interface 
 
                 ! Get current domain from global domains
-                sico => sico_doms(idx_dom)  ! fixme, causes segmentation fault
+                sico => sico_doms(idx_dom)  
                 
                 ! First update ice sheet boundaries with ice data 
                 call ice_to_sico(sico,ice) 
@@ -932,6 +932,8 @@ contains
                       dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         
         call nc_write(filename,"bmb",ylmo%tpo%now%bmb,units="m/a ice equiv.",long_name="Basal mass balance", &
+                      dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
+        call nc_write(filename,"bmb_grnd",ylmo%thrm%now%bmb_grnd,units="m/a ice equiv.",long_name="Basal mass balance of grounded ice", &
                       dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
         call nc_write(filename,"dHidt",ylmo%tpo%now%dHidt,units="m/a",long_name="Ice thickness change", &
                       dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid)
