@@ -206,7 +206,7 @@ contains
     !-------------------------------------------------
     ! azonal sea level pressure
     !$ time1 = omp_get_wtime()
-    call azslp(atm%frst, atm%tsksl, atm%htrop, atm%zsa, atm%uz500, &  ! in
+    call azslp(atm%tsksl, atm%htrop, atm%zsa, atm%uz500, &  ! in
       atm%aslp, &   ! inout
       atm%aslp_temp, atm%aslp_topo, atm%dz500, atm%atsl) ! out
     !$ time2 = omp_get_wtime()

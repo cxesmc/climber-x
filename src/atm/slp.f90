@@ -48,7 +48,7 @@ contains
   !   Subroutine :  azslp
   !   Purpose    :  compute azonal component of sea level pressure
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine azslp(frst, tsksl, htrop, zsa, uz500, &
+  subroutine azslp(tsksl, htrop, zsa, uz500, &
       aslp, &
       aslp_temp, aslp_topo, dz500, atsl)
 
@@ -59,7 +59,6 @@ contains
     ! include FFTW3 library for Fourier Transform (https://www.fftw.org/)
     include 'fftw3.f03'
 
-    real(wp), intent(in   ) :: frst(:,:,:)
     real(wp), intent(in   ) :: tsksl(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
