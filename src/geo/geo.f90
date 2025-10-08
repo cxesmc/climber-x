@@ -282,8 +282,7 @@ contains
           mask_ice = 0.
         endwhere
         mask_ice_geo = 1.
-        call map_scrip_field(maps_bndice_to_geo,"mask",mask_ice,mask_ice_geo,method="mean",missing_value=-9999._dp,reset=.false., &
-          filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
+        call map_scrip_field(maps_bndice_to_geo,"mask",mask_ice,mask_ice_geo,method="mean",missing_value=-9999._dp,reset=.false.)
         where (mask_ice_geo<0.5) geo%hires%h_ice = 0._wp
         deallocate(mask_ice)
         deallocate(mask_ice_geo)
@@ -481,8 +480,7 @@ contains
         allocate( tmp(ni_rel,nj_rel) )
         call nc_read(trim(z_bed_rel_file),"z_bed_rel",tmp)
         call map_scrip_init(maps_rel_to_geo,grid_rel,geo%hires%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_scrip_field(maps_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="mean",missing_value=-9999._dp, &
-          filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
+        call map_scrip_field(maps_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="mean",missing_value=-9999._dp)
         deallocate( tmp )
 
       endif
@@ -548,8 +546,7 @@ contains
 
     call geo_heat(geo%hires%grid, geo%hires%q_geo, geo%hires%q_geo_ice)
     call map_scrip_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_scrip_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp, &
-      filt_method="none",filt_par=[5._dp*geo%hires%grid%G%dx,geo%hires%grid%G%dx])
+    call map_scrip_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp)
 
     !-------------------------------------------------------------------
     ! sediment thickness and mask

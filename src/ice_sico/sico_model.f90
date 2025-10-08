@@ -399,8 +399,7 @@ contains
     ! map to ice grid
     allocate(tmpi(1:ice%grid%IMAX+1,1:ice%grid%JMAX+1))
     call map_scrip_init(maps_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,method="nn",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_scrip_field(maps_maxextent_to_ice,"mask",maxi,tmpi,method="mean",missing_value=-9999._wp, &
-      filt_method="none",filt_par=[5.0*ice%grid%grid1%G%dx,ice%grid%grid1%G%dx])
+    call map_scrip_field(maps_maxextent_to_ice,"mask",maxi,tmpi,method="mean",missing_value=-9999._wp)
     ice%state%mask_maxextent = transpose(tmpi)
 
     deallocate(maxi, lon_maxi, lat_maxi, tmpi)

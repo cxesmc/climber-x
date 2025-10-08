@@ -881,8 +881,7 @@ contains
       call grid_init(mask_maxice_grid,name=trim(mask_maxice_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
       ! map to ice grid
       call map_scrip_init(maps_maxice_to_ice,mask_maxice_grid,smb%grid,method="nn",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,method="mean",missing_value=-9999._wp, &
-        filt_method="none",filt_par=[5.0*smb%grid%G%dx,smb%grid%G%dx])
+      call map_scrip_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,method="mean",missing_value=-9999._wp)
 
       deallocate(maxi, lon_maxi, lat_maxi)
 

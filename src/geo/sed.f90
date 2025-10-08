@@ -72,7 +72,6 @@ contains
     ! map to geo grid
     call map_scrip_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
     call map_scrip_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,method="mean",missing_value=-9999._dp)
-      !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
     deallocate(h_sed_in, lon_sed, lat_sed)
 

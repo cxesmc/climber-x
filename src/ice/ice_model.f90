@@ -320,8 +320,7 @@ contains
         call map_scrip_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="mean")
         call map_scrip_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="mean", missing_value=-9999._dp, &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-        call map_scrip_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp, &
-          filt_method="none",filt_par=[100._dp,ice%grid%G%dx])
+        call map_scrip_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp)
 
         where (h_ice<10._wp) h_ice = 0._wp
 

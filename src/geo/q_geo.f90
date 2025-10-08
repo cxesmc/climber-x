@@ -82,7 +82,6 @@ contains
       ! map to geo grid
       call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
-        !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
 
@@ -112,7 +111,6 @@ contains
       ! map to geo grid
       call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo_ice,method="mean",missing_value=-9999._dp)
-        !filt_method="gaussian",filt_par=[1._wp,geo_grid%G%dx])
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
 

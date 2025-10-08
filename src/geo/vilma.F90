@@ -89,8 +89,7 @@ contains
     iepoch = iepoch + 1
 
     ! interpolate ice thickness to vilma grid
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
-      filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_g>0._wp) 
@@ -99,8 +98,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-      filt_method="none",filt_par=[5._dp*geo_grid%G%dx,geo_grid%G%dx])
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
@@ -352,12 +350,9 @@ contains
 
     z_bed_eq_g = z_bed_eq_g_in
     ! interpolate to vilma grid
-    call map_scrip_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,method="mean",missing_value=-9999._dp, &
-      filt_method="none")
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,method="mean",missing_value=-9999._dp, &
-      filt_method="none")
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp, &
-      filt_method="none")
+    call map_scrip_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,method="mean",missing_value=-9999._dp)
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,method="mean",missing_value=-9999._dp)
+    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_eq_g>0._wp) 
@@ -366,8 +361,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-      filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice_eq = 0._wp
     where (h_ice_g>0._wp) 
       mask_ice_g = 1.
@@ -375,8 +369,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp, &
-      filt_method="none",filt_par=[5.0*geo_grid%G%dx,geo_grid%G%dx])
+    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
