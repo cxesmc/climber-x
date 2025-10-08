@@ -44,21 +44,18 @@ contains
   !   Subroutine :  s n o w _ u p d a t e 
   !   Purpose    :  update snow layer
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine snow_update(mask_snow,t2m,evp,snow,snowmelt, &
-                              w_snow,w_snow_old,w_snow_max,t_prof, &
+  subroutine snow_update(mask_snow,evp, &
+                              w_snow,w_snow_old,w_snow_max, &
                               h_snow)
 
 
     implicit none
 
     integer, intent(inout) :: mask_snow
-    real(wp), intent(in) :: t2m
-    real(wp), intent(in) :: evp, snow
-    real(wp), intent(inout) :: w_snow, w_snow_old, w_snow_max, snowmelt
-    real(wp), dimension(0:), intent(inout) :: t_prof
+    real(wp), intent(in) :: evp
+    real(wp), intent(inout) :: w_snow, w_snow_old, w_snow_max
     real(wp), intent(out) :: h_snow
 
-    real(wp) :: H, H_m, H_star
 
     ! snow water equivalent evolution
     ! remove sublimation, snowfall has been added already and snowmelt already removed and refreezing added during soil temperature update

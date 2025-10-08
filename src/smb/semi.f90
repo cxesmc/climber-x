@@ -43,7 +43,7 @@ contains
   !   Subroutine :  s e m i
   !   Purpose    :  surface energy and mass balance interface
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine semi(i, j, mask_ice, mask_ice_old, f_ice, alb_ice, z_sur, z_sur_i, z_sur_std, dz_dx_sur, dz_dy_sur, dz_sur, f_ele, & ! in
+  subroutine semi(i, j, f_ice, alb_ice, z_sur, z_sur_i, z_sur_std, dz_dx_sur, dz_dy_sur, dz_sur, f_ele, & ! in
       tam_i, t2m_bias_i, dTvar, gam_i, tstd_i, ram_i, pressure, u700_i, v700_i, wind_i, prc_i, prc_bias_i, &    ! in
       alb_vis_dir_i, alb_nir_dir_i, alb_vis_dif_i, alb_nir_dif_i, &     ! in
       swd_sur_vis_dir_i, swd_sur_nir_dir_i, swd_sur_vis_dif_i, swd_sur_nir_dif_i, &     ! in
@@ -66,8 +66,6 @@ contains
   implicit none
 
   integer, intent(in)  :: i, j
-  integer, intent(in) :: mask_ice
-  integer, intent(in) :: mask_ice_old
   real(wp), intent(in) :: f_ice
   real(wp), intent(in) :: z_sur
   real(wp), intent(in) :: z_sur_i
@@ -178,7 +176,6 @@ contains
   real(wp), intent(inout) :: f_rfz_to_snow
 
   real(wp) :: ram, qam, qsat_skin, r2m, r_skin
-  real(wp) :: dTemp, dz
 
 
   ! +++++++++++++++++++++++++++++++++
@@ -206,17 +203,17 @@ contains
     call wind_downscaling(u700_i, v700_i, wind_i, z_sur, z_sur_i, & ! in
       u700, v700, wind) ! out
     ! precipitation downscaling
-    call prc_downscaling(t2m, prc_i, prc_bias_i, u700, v700, wind_i, z_sur, dz_dx_sur, dz_dy_sur, dz_sur, f_ele, &    ! in
+    call prc_downscaling(t2m, prc_i, prc_bias_i, u700, v700, wind_i, dz_dx_sur, dz_dy_sur, dz_sur, f_ele, &    ! in
       snow, rain, prc, f_wind)  ! out
   endif
 
   ! surface albedo (needed for radiation downscaling)
-  call surface_albedo(mask_ice, mask_ice_old, z_sur_std, f_ice, alb_ice, h_snow, w_snow, w_snow_max, &
-    snow, rain, snowmelt, icemelt, refreezing, evp, &
-    t_skin, t_prof(0), dust_i, coszm_i, &
+  call surface_albedo(z_sur_std, f_ice, alb_ice, h_snow, w_snow, w_snow_max, &
+    snow, &
+    t_skin, dust_i, coszm_i, &
     snow_grain, dust_con, f_snow, dt_snowfree, alb_bg, &
     alb_snow_vis_dir, alb_snow_nir_dir, alb_snow_vis_dif, alb_snow_nir_dif, &
-    alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif, i,j)
+    alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif)
 
   if (.not.l_regional_climate_forcing) then
     ! radiation downscaling
@@ -251,7 +248,7 @@ contains
 
   ! +++++++++++++++++++++++++++++
   ! surface energy balance
-  call ebal(mask_ice, mask_snow, h_snow, & ! in
+  call ebal(mask_snow, h_snow, & ! in
     t_prof(:), t2m, tstd_i, q2m, pressure, &                            ! in
     swnet, swnet_min, lwdown, r_a, &                         ! in
     t_skin, &                                                           ! inout
@@ -261,7 +258,7 @@ contains
 
   ! +++++++++++++++++++++++++++++++
   ! snow/ice/soil thermodynamics
-  call smb_temp(mask_ice, mask_snow, h_snow, rain, &
+  call smb_temp(mask_snow, h_snow, rain, &
     flx_g, dflxg_dT, flx_melt, refreezing_sum, &
     t_prof(:), w_snow, snowmelt, icemelt, refreezing, f_rfz_to_snow, &
     t_prof_old(:), i,j)
@@ -283,8 +280,8 @@ contains
 
   ! +++++++++++++++++++++++++++++++
   ! update snow layer
-  call snow_update(mask_snow, t2m, evp, snow, snowmelt, &
-    w_snow, w_snow_old, w_snow_max, t_prof(:), &
+  call snow_update(mask_snow, evp, &
+    w_snow, w_snow_old, w_snow_max, &
     h_snow)
 
 

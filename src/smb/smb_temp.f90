@@ -44,12 +44,11 @@ contains
   !   Subroutine :  s m b _ t e m p
   !   Purpose    :  compute soil/ice temperature
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smb_temp(mask_ice, mask_snow, h_snow, rain, flx_g, dflxg_dT, flx_melt, refreezing_sum, &
+  subroutine smb_temp(mask_snow, h_snow, rain, flx_g, dflxg_dT, flx_melt, refreezing_sum, &
                      t_prof, w_snow, snowmelt, icemelt, refreezing, f_rfz_to_snow, t_prof_old, i,j)
 
     implicit none
 
-    integer, intent(in) :: mask_ice
     integer, intent(in) :: mask_snow
     real(wp), intent(in) :: h_snow
     real(wp), intent(in) :: rain
@@ -63,15 +62,15 @@ contains
     real(wp), intent(out) :: f_rfz_to_snow
     real(wp), dimension(0:), intent(out) :: t_prof_old
 
-    integer :: i, j, n, k
+    integer :: i, j, k
     real(wp), dimension(0:nl) :: a, b, c, r, x
     real(wp), dimension(0:nl) :: lambda, lambda_int, cap, cap_dz, rcap_dz
     real(wp), dimension(0:nl) :: dz_loc, z_loc, rdz_loc_pos, rdz_loc_neg
-    real(wp) :: w_ice, H, w_melt, H_star, w_snow_old, dw_snow, dw_ice, energy_warm_ice, flx_excess
+    real(wp) :: H, w_melt, H_star, w_snow_old, dw_snow, dw_ice, energy_warm_ice, flx_excess
     real(wp) :: melt_rain, flx_cold_content, refreezing_avail, refreezing_pot
     real(wp) :: refreezing_tot, refreezing_to_snow, refreezing_to_ice
     real(wp) :: refreezing_max, f_refreezing
-    real(wp) :: energy_cons, water_cons
+    real(wp) :: energy_cons
     real(wp) :: i_p, j_p
     logical :: i_print
 

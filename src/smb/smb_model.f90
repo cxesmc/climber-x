@@ -48,7 +48,7 @@ module smb_model
   use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
   use filter, only : filter1d
 
-  use topo_mod, only : topo_filter, topo_grad_map1, topo_grad_map2, topo_factors
+  use topo_mod, only : topo_filter, topo_grad_map, topo_factors
   use ice_mod, only : frac_ice, albedo_ice, margin_ice
   use smb_simple_m, only : smb_simple
   use smb_pdd_m, only : smb_pdd
@@ -77,7 +77,7 @@ contains
   type(smb_in_class), intent(in) :: smb_in
   type(smb_class) :: smb
 
-  integer :: i, j, ii, jj, n, nn, k
+  integer :: i, j, ii, jj, n, nn
   character(len=256) :: fnm
   integer :: ncid
   !$ real(wp) :: time1,time2
@@ -122,8 +122,8 @@ contains
 
     ! compute topography gradients of filtered topography
     if (i_smb.eq.3 .or. prc_par%l_slope_effect) then
-      !call topo_grad_map2(smb%grid, smb%grid_latlon, smb%maps_to_latlon, smb%maps_from_latlon, smb%z_sur-smb%z_sur_i, &
-      call topo_grad_map2(smb%grid, smb%grid_latlon, smb%maps_to_latlon, smb%maps_from_latlon, smb%z_sur_fil, &
+      !call topo_grad_map(smb%grid_latlon, smb%maps_to_latlon, smb%maps_from_latlon, smb%z_sur-smb%z_sur_i, &
+      call topo_grad_map(smb%grid_latlon, smb%maps_to_latlon, smb%maps_from_latlon, smb%z_sur_fil, &
         smb%dz_sur, smb%dz_dx_sur, smb%dz_dy_sur)
     else
       smb%dz_sur    = 0._wp
@@ -517,7 +517,7 @@ contains
 
       !-------------------------------------
       ! call SEMI 
-      call semi(i ,j ,smb%mask_ice(i,j), smb%mask_ice_old(i,j), smb%f_ice(i,j), smb%alb_ice(i,j), & ! in
+      call semi(i ,j ,smb%f_ice(i,j), smb%alb_ice(i,j), & ! in
         smb%z_sur_eff(i,j), smb%z_sur_i(i,j), smb%z_sur_std(i,j), &     ! in
         smb%dz_dx_sur(i,j), smb%dz_dy_sur(i,j), smb%dz_sur(i,j), smb%f_ele(i,j), & ! in
         smb%tam_i(i,j), smb%t2m_bias_i(i,j,doy), smb%dTvar, smb%gam_i(i,j), smb%tstd_i(i,j), smb%ram_i(i,j), &

@@ -42,23 +42,20 @@ contains
   !   Subroutine :  s u r f a c e _ a l b e d o
   !   Purpose    :  compute surface albedo 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine surface_albedo(mask_ice, mask_ice_old, z_sur_std, f_ice, alb_ice, h_snow, w_snow, w_snow_max, snow, rain, &
-                        snowmelt, icemelt, refreezing, evp, &
-                        t_skin, t_snow, dust_dep, coszm, &
+  subroutine surface_albedo(z_sur_std, f_ice, alb_ice, h_snow, w_snow, w_snow_max, snow, &
+                        t_skin, dust_dep, coszm, &
                         snow_grain, dust_con, f_snow, dt_snowfree, alb_bg, &
                         alb_snow_vis_dir, alb_snow_nir_dir, alb_snow_vis_dif, alb_snow_nir_dif, &
-                        alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif, i,j)
+                        alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif)
 
     implicit none
 
-    integer, intent(in) :: mask_ice
-    integer, intent(in) :: mask_ice_old
     real(wp), intent(in) :: z_sur_std
     real(wp), intent(in) :: f_ice
     real(wp), intent(in) :: alb_ice
     real(wp), intent(in) :: h_snow, w_snow, w_snow_max
-    real(wp), intent(in) :: snow, rain, snowmelt, icemelt, refreezing, evp
-    real(wp), intent(in) :: t_skin, t_snow, dust_dep, coszm
+    real(wp), intent(in) :: snow
+    real(wp), intent(in) :: t_skin, dust_dep, coszm
     real(wp), intent(inout) :: snow_grain, dust_con
     real(wp), intent(inout) :: f_snow
     real(wp), intent(inout) :: dt_snowfree
@@ -66,13 +63,8 @@ contains
     real(wp), intent(inout) :: alb_snow_vis_dir, alb_snow_nir_dir, alb_snow_vis_dif, alb_snow_nir_dif
     real(wp), intent(inout) :: alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif
 
-    real(wp) :: f_cosz
-    real(wp) :: c_dust_new_vis, c_dust_age_vis, c_dust_new_nir, c_dust_age_nir
-    real(wp) :: c_age_vis, c_age_nir, c_soot_vis, c_soot_nir
     real(wp) :: z0m, f_snow_orog
     real(wp), parameter :: eps = 1.e-10_wp
-
-    integer :: i, j
 
 
     if (h_snow.gt.0._wp) then
@@ -80,7 +72,7 @@ contains
       ! snow grain size
       if (snow_par%lsnow_aging) then
         call snow_grain_size(t_skin,snow, &
-                             snow_grain,i,j)
+                             snow_grain)
       else
         snow_grain = snow_par%snow_grain_fresh
       endif
@@ -88,7 +80,7 @@ contains
       ! dust effect on snow albedo
       if (snow_par%lsnow_dust) then
         ! dust concentration in top snow layer
-        call dust_in_snow(dust_dep,snow,snowmelt,evp,w_snow,w_snow_max, &
+        call dust_in_snow(dust_dep,snow,w_snow,w_snow_max, &
                           dust_con)
       else
         dust_con = 0._wp
@@ -149,14 +141,12 @@ contains
   !   Purpose    :  compute snow grain size
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine snow_grain_size(t_skin,snow, &
-                             snow_grain,i,j)
+                             snow_grain)
 
     implicit none
 
     real(wp), intent(in) :: t_skin, snow
     real(wp), intent(inout) :: snow_grain
-
-    integer :: i,j
 
     real(wp) :: f_age, f_tage1, f_tage2, f_tage, f_p
 
@@ -186,17 +176,17 @@ contains
   !   Subroutine :  d u s t _ i n _ s n o w
   !   Purpose    :  compute dust concentration in top snow layer
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine dust_in_snow(dust_dep,snow,snowmelt,evp,w_snow,w_snow_max, &
+  subroutine dust_in_snow(dust_dep,snow,w_snow,w_snow_max, &
                           dust_con)
 
     implicit none
 
     real(wp), intent(in) :: dust_dep
-    real(wp), intent(in) :: snow, snowmelt, evp
+    real(wp), intent(in) :: snow
     real(wp), intent(in) :: w_snow, w_snow_max
     real(wp), intent(inout) :: dust_con
 
-    real(wp) :: dust_con_melt_fac, snowmelt_eff, snow_eff
+    real(wp) :: dust_con_melt_fac
 
     real(wp), parameter :: dust_con_max = 1000._wp*1.e-6_wp ! kg/kg
 
@@ -244,7 +234,7 @@ contains
     integer :: k
     real(wp) :: f_cosz, f_age
     real(wp) :: d1, rint, c_dust_new_vis, c_dust_age_vis, c_dust_new_nir, c_dust_age_nir
-    real(wp) :: c_age_vis, c_age_nir, c_soot_vis, c_soot_nir
+    real(wp) :: c_age_vis, c_age_nir
 
     real(wp), dimension(4) :: tab0 = (/1.001_wp,10._wp,100._wp,1000._wp/)
     real(wp), dimension(4) :: tab1 = (/0.00_wp, 0.02_wp,0.10_wp,0.30_wp/)
@@ -413,7 +403,6 @@ contains
     real(wp), intent(in) :: wind
     real(wp), intent(out) :: r_a
 
-    integer :: n
     real(wp) :: rough_m, rough_h, fsnow
     real(wp) :: Ch, Ri
     real(wp) :: Ch_neutral

@@ -93,7 +93,7 @@ contains
   !-------------------------------------
   ! precipitation downscaling
   call prc_downscaling(t2m, prc_i, prc_bias_i, u700, v700, wind, &    ! in
-    z_sur, dz_dx_sur, dz_dy_sur, dz_sur, f_ele, &   ! in
+    dz_dx_sur, dz_dy_sur, dz_sur, f_ele, &   ! in
     snow, rain, prc, f_wind) ! out
 
   ! cumulate over the year

@@ -33,7 +33,7 @@ module topo_mod
   implicit none
 
   private
-  public :: topo_filter, topo_grad_map1, topo_grad_map2, topo_factors
+  public :: topo_filter, topo_grad_map, topo_factors
 
 contains
 
@@ -102,87 +102,14 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  t o p o _ g r a d _ m a p 1
+  !   Subroutine :  t o p o _ g r a d _ m a p 
   !   Purpose    :  derive topography gradients
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine topo_grad_map1(grid, grid_latlon, map_to_latlon, map_from_latlon, z_sur, &
+  subroutine topo_grad_map(grid_latlon, maps_to_latlon, maps_from_latlon, z_sur, &
                       dz_sur, dz_dx_sur, dz_dy_sur)
 
   implicit none
 
-  type(grid_class), intent(in) :: grid
-  type(grid_class), intent(in) :: grid_latlon
-  type(map_class), intent(in) :: map_to_latlon
-  type(map_class), intent(in) :: map_from_latlon
-  real(wp), dimension(:,:), intent(in) :: z_sur
-  real(wp), dimension(:,:), intent(out) :: dz_sur, dz_dx_sur, dz_dy_sur
-
-  real(wp), dimension(:,:), allocatable :: z_sur_latlon
-  real(wp), dimension(:,:), allocatable :: dz_dx_sur_latlon
-  real(wp), dimension(:,:), allocatable :: dz_dy_sur_latlon
-
-  integer :: i, j, im, ip, jm, jp, nx, ny
-  real(wp) :: dx, dy
-
-
-  ! ++++++++++++++++++++++++
-  ! topography gradients
-
-  ! map surface elevation to lat-lon
-  call grid_allocate(grid_latlon, z_sur_latlon)
-  call grid_allocate(grid_latlon, dz_dx_sur_latlon)
-  call grid_allocate(grid_latlon, dz_dy_sur_latlon)
-  call map_field(map_to_latlon,"z_sur",z_sur,z_sur_latlon,method="bilinear")
-
-  ! compute topography gradients in spherical coordinates
-  nx = grid_latlon%G%nx
-  ny = grid_latlon%G%ny
-
-  do j=1,ny
-    do i=1,nx
-
-      im=i-1
-      if (im.lt.1) im=1
-      ip=i+1
-      if (ip.gt.nx) ip=nx
-      jm=j-1
-      if (jm.lt.1) jm=1
-      jp=j+1
-      if (jp.gt.ny) jp=ny
-
-      dz_dx_sur_latlon(i,j) = (1._wp/(r_earth*cos(pi*grid_latlon%lat(i,j)/180._wp))) &
-        * (z_sur_latlon(ip,j)-z_sur_latlon(im,j))/(pi/180._wp*(grid_latlon%lon(ip,j)-grid_latlon%lon(im,j)))
-      dz_dy_sur_latlon(i,j) = 1._wp/r_earth &
-        * (z_sur_latlon(i,jp)-z_sur_latlon(i,jm))/(pi/180._wp*(grid_latlon%lat(i,jp)-grid_latlon%lat(i,jm)))
-
-    enddo
-  enddo
-
-  ! map topography gradients back to stereographic projection
-  call map_field(map_from_latlon,"dz_dx_sur",dz_dx_sur_latlon,dz_dx_sur,method="bilinear")
-  call map_field(map_from_latlon,"dz_dy_sur",dz_dy_sur_latlon,dz_dy_sur,method="bilinear")
-
-  dz_sur = sqrt(dz_dx_sur**2+dz_dy_sur**2)
-
-  deallocate(z_sur_latlon)
-  deallocate(dz_dx_sur_latlon)
-  deallocate(dz_dy_sur_latlon)
-
-  return
-
-  end subroutine topo_grad_map1
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  t o p o _ g r a d _ m a p 2
-  !   Purpose    :  derive topography gradients
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine topo_grad_map2(grid, grid_latlon, maps_to_latlon, maps_from_latlon, z_sur, &
-                      dz_sur, dz_dx_sur, dz_dy_sur)
-
-  implicit none
-
-  type(grid_class), intent(in) :: grid
   type(grid_class), intent(in) :: grid_latlon
   type(map_scrip_class), intent(in) :: maps_to_latlon
   type(map_scrip_class), intent(in) :: maps_from_latlon
@@ -194,7 +121,6 @@ contains
   real(wp), dimension(:,:), allocatable :: dz_dy_sur_latlon
 
   integer :: i, j, im, ip, jm, jp, nx, ny
-  real(wp) :: dx, dy
 
 
   ! ++++++++++++++++++++++++
@@ -242,7 +168,7 @@ contains
 
   return
 
-  end subroutine topo_grad_map2
+  end subroutine topo_grad_map
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

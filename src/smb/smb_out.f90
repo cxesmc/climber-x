@@ -315,7 +315,7 @@ contains
 
     type(smb_class) :: smb
 
-    integer :: i, j, m, k, y
+    integer :: m, k, y
     integer :: ppos
     character (len=256) :: fnm
     character (len=256) :: dom
@@ -783,35 +783,6 @@ contains
    return
 
   end subroutine ts_nc_write
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  t s _ a v e
-  ! Purpose  :  Average (or sum) the time series as needed
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ts_ave(d,ave)
-
-    implicit none
-
-    type(ts_out) :: d(:), ave
-
-    integer :: k, n
-    real(wp) :: div
-
-    n = size(d)
-    div = dble(n)
-
-    ! Set all rembo values to zero
-!    ave%a_nh = 0._wp
-
-    do k = 1, n
-!     ave%a_nh = ave%a_nh + d(k)%a_nh / div
-    end do
-
-
-   return
-
-  end subroutine ts_ave
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

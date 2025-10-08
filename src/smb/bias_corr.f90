@@ -99,7 +99,7 @@ contains
    real(wp), intent(out) :: ann_evp_ref(:,:)
    real(wp), intent(out) :: ann_evp_cx_ref(:,:)
 
-   integer :: ni, nj, nlon, nlat
+   integer :: ni, nj
    integer :: ppos, spos
    real(wp) :: dlon, dlat
    real(wp), dimension(:), allocatable :: lon, lat

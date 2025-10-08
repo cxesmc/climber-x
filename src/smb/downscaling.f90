@@ -74,13 +74,13 @@ contains
   !   Subroutine :  p r c _ d o w n s c a l i n g
   !   Purpose    :  downscaling of precipitation 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine prc_downscaling(t2m,prc_i,prc_bias_i,u700,v700,wind,z_sur,dz_dx_sur,dz_dy_sur,dz_sur,f_ele, &
+  subroutine prc_downscaling(t2m,prc_i,prc_bias_i,u700,v700,wind,dz_dx_sur,dz_dy_sur,dz_sur,f_ele, &
                             snow,rain,prc,f_wind)
 
   implicit none
 
   real(wp), intent(in) :: t2m, prc_i, prc_bias_i, u700, v700, wind
-  real(wp), intent(in) :: z_sur, dz_dx_sur, dz_dy_sur, dz_sur, f_ele
+  real(wp), intent(in) :: dz_dx_sur, dz_dy_sur, dz_sur, f_ele
   real(wp), intent(out) :: snow, rain, prc, f_wind
 
   real(wp) :: frsnw, w
