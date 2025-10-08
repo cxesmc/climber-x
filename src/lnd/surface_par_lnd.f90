@@ -265,7 +265,7 @@ contains
     integer :: k
     real(wp) :: f_cosz, f_age
     real(wp) :: d1, rint, c_dust_new_vis, c_dust_age_vis, c_dust_new_nir, c_dust_age_nir
-    real(wp) :: c_age_vis, c_age_nir, c_soot_vis, c_soot_nir
+    real(wp) :: c_age_vis, c_age_nir
 
     real(wp), dimension(4) :: tab0 = (/1.001_wp,10._wp,100._wp,1000._wp/)
     real(wp), dimension(4) :: tab1 = (/0.00_wp, 0.02_wp,0.10_wp,0.30_wp/)
@@ -460,7 +460,7 @@ contains
     real(wp), intent(in) :: w_snow, w_snow_max
     real(wp), intent(inout) :: dust_con
 
-    real(wp) :: dust_con_melt_fac, snowmelt_eff, snow_eff
+    real(wp) :: dust_con_melt_fac
 
     real(wp), parameter :: dust_con_max = 1000._wp*1.e-6_wp ! kg/kg
 
@@ -752,7 +752,6 @@ contains
     real(wp) :: fsnow, hsnow
     real(wp) :: u_star, Re
     real(wp) :: log_m, log_h, Ch_neutral
-    real(wp) :: flsai
     
     real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
 
@@ -860,15 +859,14 @@ contains
   !   Subroutine :  r e s i s t _ s u r 
   !   Purpose    :  compute surface resistance to evapotranspiration
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine resist_sur(frac_surf,mask_snow,w_snow,theta,theta_w,theta_field,theta_sat,psi_sat,psi_exp,k_exp,g_can,beta_s,r_s,beta_s_can,r_s_can)
+  subroutine resist_sur(frac_surf,mask_snow,w_snow,theta_w,g_can,beta_s,r_s,beta_s_can,r_s_can)
 
     implicit none
 
     integer,  dimension(:), intent(in) :: mask_snow
     real(wp), dimension(:), intent(in) :: w_snow
     real(wp), dimension(:), intent(in) :: frac_surf
-    real(wp), dimension(:), intent(in) :: theta, theta_w, theta_field, theta_sat, psi_sat
-    integer,  dimension(:), intent(in) :: psi_exp, k_exp
+    real(wp), dimension(:), intent(in) :: theta_w
     real(wp), dimension(:), intent(in) :: g_can
     real(wp), dimension(:), intent(out) :: beta_s, r_s
     real(wp), dimension(:), intent(out) :: beta_s_can, r_s_can

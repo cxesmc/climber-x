@@ -313,7 +313,6 @@ contains
 
     integer :: n, k
     real(wp) :: t_skin_mean, sum_frac
-    real(wp) :: dz_l_sum
 
 
      ! initialise prognostic variables

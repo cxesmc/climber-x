@@ -56,7 +56,7 @@ contains
 
     real(wp) :: tmx, tsm
     logical :: chk_la, chk_lb
-    integer :: k, kk, k_mix, l
+    integer :: k, kk, k_mix
     integer :: kb, kt, la, lb
     real(wp) :: rl, ru, zsm
     real(wp) :: dz_mix, f_i_lake_avg, Q, t_frz, t_unfrz

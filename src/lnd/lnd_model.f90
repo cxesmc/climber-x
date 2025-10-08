@@ -469,7 +469,7 @@ contains
 
       ! update phenological status of the vegetation 
       call phenology(lnd%frac_surf,lnd%f_veg, lnd%t2m, lnd%t2m_min_mon, lnd%gdd5_temp, lnd%gdd5, lnd%gdd, &
-                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%lai, lnd%lai_bal, i,j)
+                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%lai, lnd%lai_bal)
 
       ! aerodynamic resistance
       call resist_aer(lnd%frac_surf,lnd%veg_h,lnd%lai,lnd%sai,lnd%h_snow,&
@@ -507,12 +507,12 @@ contains
                           lnd%leaf_c, lnd%stem_c, lnd%root_c, &
                           lnd%discrimination,lnd%ci,lnd%g_can, &
                           lnd%gpp,lnd%npp,lnd%npp13,lnd%npp14, &
-                          lnd%npp_cum,lnd%npp13_cum,lnd%npp14_cum,lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, lnd%aresp,i,j)
+                          lnd%npp_cum,lnd%npp13_cum,lnd%npp14_cum,lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, lnd%aresp)
       endif
 
       ! surface resistance for evapotranspiration
       call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%w_snow, &
-                     lnd%theta,lnd%theta_w,lnd%theta_field,lnd%theta_sat,lnd%psi_sat,lnd%psi_exp,lnd%k_exp,lnd%g_can, &
+                     lnd%theta_w,lnd%g_can, &
                      lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can)
 
       ! compute evaporation of intercepted water
@@ -551,7 +551,7 @@ contains
       endif
 
       if( lnd%f_ice .gt. 0._wp ) then
-       call ebal_ice(lnd%mask_snow(is_ice),lnd%h_snow(is_ice),lnd%w_snow(is_ice),lnd%lambda_ice, &
+       call ebal_ice(lnd%mask_snow(is_ice),lnd%h_snow(is_ice),lnd%lambda_ice, &
                     lnd%t_skin(i_ice),lnd%t_skin_old(i_ice), &
                     lnd%t_ice,lnd%tatm(i_ice),lnd%qatm(i_ice),lnd%pressure(i_ice), &
                     lnd%swnet(i_ice),lnd%swnet_min(i_ice),lnd%lwdown(i_ice), &
@@ -569,10 +569,10 @@ contains
       endif
 
       if( lnd%f_lake .gt. 0._wp ) then
-       call ebal_lake(lnd%mask_snow(is_lake),lnd%h_snow(is_lake),lnd%w_snow(is_lake),lnd%lambda_lake, &
+       call ebal_lake(lnd%mask_snow(is_lake),lnd%h_snow(is_lake),lnd%lambda_lake, &
                     lnd%t_skin(i_lake),lnd%t_skin_old(i_lake), &
                     lnd%t_lake,lnd%tatm(i_lake),lnd%qatm(i_lake),lnd%pressure(i_lake), &
-                    lnd%swnet(i_lake),lnd%swnet_min(i_lake),lnd%lwdown(i_lake), &
+                    lnd%swnet(i_lake),lnd%lwdown(i_lake), &
                     lnd%beta_s(i_lake),lnd%r_s(i_lake),lnd%r_a(i_lake), &
                     lnd%flx_g(i_lake),lnd%dflxg_dT(i_lake),lnd%flx_melt(i_lake),lnd%t_skin_amp(i_lake), &
                     lnd%num_lh(i_lake),lnd%num_sh(i_lake),lnd%num_sw(i_lake),lnd%num_lw(i_lake),lnd%denom_lh(i_lake),lnd%denom_sh(i_lake),lnd%denom_lw(i_lake), &
@@ -685,11 +685,11 @@ contains
                             lnd%snowmelt, lnd%icemelt, &
                             lnd%theta, &
                             lnd%theta_sat,lnd%theta_field,lnd%k_sat, &
-                            lnd%cap_soil(1),lnd%cap_ice(1),lnd%cap_lake(1),lnd%f_peat,lnd%w_table_peat, &
+                            lnd%cap_soil(1),lnd%cap_lake(1), &
                             topmodel(i,j)%cti_mean,topmodel(i,j)%cti_cdf, &
                             dyptop(i,j)%k,dyptop(i,j)%v,dyptop(i,j)%xm,dyptop(i,j)%fmax, &
                             lnd%w_snow_old,lnd%w_snow,lnd%w_snow_max,lnd%w_w,lnd%w_i, &
-                            lnd%w_table_cum,lnd%f_wet_cum,lnd%tatm,lnd%t_soil,lnd%t_ice,lnd%t_lake, &
+                            lnd%w_table_cum,lnd%f_wet_cum,lnd%t_soil,lnd%t_lake, &
                             lnd%h_snow,lnd%calving,lnd%runoff_sur, &
                             lnd%infiltration,lnd%w_table,lnd%f_wet,lnd%f_wet_max,lnd%cti_lim,lnd%lake_water_tendency)
  

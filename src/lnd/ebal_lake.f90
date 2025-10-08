@@ -44,8 +44,8 @@ contains
   !   Subroutine :  e b a l _ l a k e
   !   Purpose    :  compute surface energy fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ebal_lake(mask_snow, h_snow, w_snow, lambda_lake, &
-                     t_skin, t_skin_old, t_lake, tatm, qatm, pressure, swnet, swnet_min, lwdown, &
+  subroutine ebal_lake(mask_snow, h_snow, lambda_lake, &
+                     t_skin, t_skin_old, t_lake, tatm, qatm, pressure, swnet, lwdown, &
                      beta_s, r_s, r_a, &
                      flx_g, dflxg_dT, flx_melt, &
                      t_skin_amp, &
@@ -58,9 +58,8 @@ contains
     integer, intent(in) :: i,j
     integer, intent(in) :: mask_snow
     real(wp), intent(in) :: h_snow
-    real(wp), intent(in) :: w_snow
     real(wp), dimension(0:), intent(in) :: t_lake, lambda_lake
-    real(wp), intent(in) :: tatm, qatm, swnet, swnet_min
+    real(wp), intent(in) :: tatm, qatm, swnet
     real(wp), intent(in) :: pressure, lwdown
     real(wp), intent(in) :: beta_s, r_s, r_a
     real(wp), intent(inout) :: t_skin
@@ -77,9 +76,6 @@ contains
     real(wp) :: sh, lh, g, lw, sh_0, lh_0, g_0, lw_0
     real(wp) :: num, denom, num_g, denom_g, emiss
     real(wp) :: L_v_skin
-    real(wp) :: sh_pos, lh_pos, g_pos, lw_pos
-    real(wp) :: t_skin_max, t_skin_min, t_skin_pos
-    real(wp) :: t1, dt_pos, Ts, acos_fac, sqrt_fac
 
 
     n = i_lake

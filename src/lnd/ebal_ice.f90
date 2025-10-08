@@ -44,7 +44,7 @@ contains
   !   Purpose    :  compute skin temperature and diagnose surface energy fluxes
   !              :  by solving the surface energy balance equation
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ebal_ice(mask_snow, h_snow, w_snow, lambda_ice, &
+  subroutine ebal_ice(mask_snow, h_snow, lambda_ice, &
                      t_skin, t_skin_old, t_ice, tatm, qatm, pressure, swnet, swnet_min, lwdown, &
                      beta_s, r_s, r_a, &
                      flx_g, dflxg_dT, flx_melt, t_skin_amp, &
@@ -57,7 +57,6 @@ contains
     integer, intent(in) :: i,j
     integer, intent(in) :: mask_snow
     real(wp), intent(in) :: h_snow
-    real(wp), intent(in) :: w_snow
     real(wp), dimension(0:), intent(in) :: t_ice, lambda_ice
     real(wp), intent(in) :: tatm, qatm, swnet, swnet_min
     real(wp), intent(in) :: pressure, lwdown

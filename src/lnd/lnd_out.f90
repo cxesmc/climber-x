@@ -2008,7 +2008,7 @@ contains
     type(ts_out) :: vars(:)
 
     character (len=*) :: fnm
-    integer :: ndat, y, ncid, n, i
+    integer :: ndat, y, ncid, i
 
     call nc_open(fnm,ncid)
     call nc_write(fnm,"time", real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), &

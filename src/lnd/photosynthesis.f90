@@ -70,7 +70,7 @@ contains
                            theta_w,theta_field,theta_wilt,wilt,root_frac, &
                            lai,phen,leaf_c,stem_c,root_c, &
                            discrimination,ci,g_can,gpp,npp,npp13,npp14,npp_cum,npp13_cum,npp14_cum,npp_ann,npp13_ann,npp14_ann, &
-                           aresp,i,j)
+                           aresp)
 
     implicit none
 
@@ -89,7 +89,6 @@ contains
     real(wp), dimension(:), intent(inout) :: npp_cum, npp13_cum, npp14_cum
     real(wp), dimension(:), intent(inout) :: npp_ann, npp13_ann, npp14_ann
 
-    integer :: i, j
     integer :: n, k
     logical :: lim_bio
     real(wp) :: tleaf, vpd, sqrt_vpd, par, apar, temp_air, hum_air, swdown, f_veg, p

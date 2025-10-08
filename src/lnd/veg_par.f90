@@ -44,7 +44,7 @@ contains
   !   Purpose    :  compute leaf area index, from LPJ
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine phenology(frac_surf,f_veg,t2m,t2m_min_mon,gdd5_temp,gdd5,gdd,phen_acc,phen,gamma_leaf, &
-                      lai,lai_bal,i,j)
+                      lai,lai_bal)
 
     implicit none
 
@@ -62,7 +62,6 @@ contains
     real(wp), parameter :: phen_max  = 250._wp !210._wp
     real(wp), parameter :: phen_min  = 10._wp
 
-    integer :: i,j
 
     if( f_veg .gt. 0._wp ) then
 
@@ -152,7 +151,7 @@ contains
     real(wp), intent(in) :: alt
     real(wp), dimension(:), intent(inout) :: litter_in_frac
 
-    integer :: n, k
+    integer :: k
 
 
     ! first assign reference litter input distribution

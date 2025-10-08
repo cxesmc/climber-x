@@ -212,26 +212,25 @@ contains
   !   Purpose    :  surface hydrology
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine surface_hydrology(frac_surf,mask_snow,evap_surface,rain_ground,snow_ground,snowmelt,icemelt, &
-                              theta,theta_sat,theta_field,k_sat,cap_soil,cap_ice,cap_lake,f_peat,w_table_peat, &
+                              theta,theta_sat,theta_field,k_sat,cap_soil,cap_lake, &
                               cti_mean, cti_cdf, &
                               dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax, &
-                              w_snow_old,w_snow,w_snow_max,w_w,w_i,w_table_cum,f_wet_cum,tatm,t_soil,t_ice,t_lake, &
+                              w_snow_old,w_snow,w_snow_max,w_w,w_i,w_table_cum,f_wet_cum,t_soil,t_lake, &
                               h_snow,calving,runoff_sur,infiltration,w_table,f_wet,f_wet_max,cti_lim,lake_water_tendency)
 
 
     implicit none
 
     integer, dimension(:), intent(inout) :: mask_snow
-    real(wp), dimension(:), intent(in) :: frac_surf, evap_surface, snow_ground, tatm
+    real(wp), dimension(:), intent(in) :: frac_surf, evap_surface, snow_ground
     real(wp), dimension(:), intent(inout) :: rain_ground
-    real(wp), intent(in) :: f_peat, w_table_peat
     real(wp), dimension(:), intent(in) :: theta, theta_sat, theta_field, k_sat
-    real(wp), intent(in) :: cap_soil, cap_ice, cap_lake
+    real(wp), intent(in) :: cap_soil, cap_lake
     real(wp), intent(in) :: cti_mean, cti_cdf(:)
     real(wp), intent(in) :: dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax
     real(wp), dimension(:), intent(inout) :: w_snow_old, w_snow, w_snow_max, snowmelt, icemelt
     real(wp), intent(inout) :: w_table_cum, f_wet_cum
-    real(wp), dimension(0:), intent(inout) :: t_soil, t_ice, t_lake
+    real(wp), dimension(0:), intent(inout) :: t_soil, t_lake
     real(wp), dimension(:), intent(inout) :: w_w, w_i
     real(wp), dimension(:), intent(out) :: h_snow, calving, runoff_sur
     real(wp), intent(out) :: lake_water_tendency

@@ -671,7 +671,7 @@ subroutine lnd_par_load
 
     implicit none 
 
-    integer :: k, n
+    integer :: n
     real(wp) :: sla_nl, sla_bl, sla_c3, sla_c4, sla_sh
     real(wp) :: gamma_dist_tree, gamma_dist_grass, gamma_dist_shrub
     real(wp) :: tau_fire
