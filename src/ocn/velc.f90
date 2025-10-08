@@ -46,12 +46,11 @@ contains
   !              :  add barotropic component and 
   !              :  compute vertical velocity from continuity equation
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine velc(f_ocn,rho,dtau_dz2,dtav_dz2,ub, &
+  subroutine velc(rho,dtau_dz2,dtav_dz2,ub, &
                   u)
 
     implicit none
 
-    real(wp), dimension(:,:), intent(in) :: f_ocn
     real(wp), dimension(:,:,:), intent(in) :: rho
     real(wp), dimension(:,:,:), intent(in) :: dtau_dz2, dtav_dz2
     real(wp), dimension(:,0:,0:), intent(in) :: ub

@@ -37,8 +37,12 @@ module ocn_grid
   use ocn_params, only : shelf_depth, nlayers, i_smooth, smooth_fac, zw_in
   use ocn_params, only : z_mix_brines, dbl
   use ocn_params, only : i_isl, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
+  
+  use, intrinsic :: iso_c_binding 
 
   implicit none
+  
+  include 'fftw3.f03'
 
   integer :: maxi     !! number of gridcells in longitudinal direction []
   integer :: maxj     !! number of gridcells in latitudinal direction []
@@ -1204,18 +1208,14 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine smooth_topo_fft(topo, smooth_fac)
 
-  use, intrinsic :: iso_c_binding 
-
   implicit none
-
-  include 'fftw3.f03'
 
 
     real(wp), intent(inout) :: topo(:,:)
     real(wp), intent(in) :: smooth_fac
 
     integer :: i, j, nx, ny, nx2, ny2
-    integer*8 :: plan
+    type(C_PTR) :: plan_r2c, plan_c2r
     real(wp) :: X, Y, R, R0, lambda
     real(wp), allocatable :: topo_ext(:,:)
     real(wp), allocatable, dimension(:,:) :: M
@@ -1272,9 +1272,9 @@ contains
 
     !  Make a plan for the FFT, and forward transform the data.
     !
-    call dfftw_plan_dft_r2c_2d(plan,nx*2,ny*2,topo_ext,topo_fft,FFTW_ESTIMATE)
-    call dfftw_execute_dft_r2c(plan, topo_ext, topo_fft)
-    call dfftw_destroy_plan(plan)
+    plan_r2c = fftw_plan_dft_r2c_2d(nx*2,ny*2,topo_ext,topo_fft,FFTW_ESTIMATE)
+    call fftw_execute_dft_r2c(plan_r2c, topo_ext, topo_fft)
+    call fftw_destroy_plan(plan_r2c)
 
     !    call nc_open(fnm,ncid)
     !    call nc_write(fnm,"topo_fft_re",     real(topo_fft),dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
@@ -1295,9 +1295,9 @@ contains
 
     !  Make a plan for the backward FFT, and back transform.
     !
-    call dfftw_plan_dft_c2r_2d(plan, nx*2, ny*2, topo_fft, topo_ext, FFTW_ESTIMATE )
-    call dfftw_execute_dft_c2r(plan,topo_fft,topo_ext )
-    call dfftw_destroy_plan(plan)
+    plan_c2r = fftw_plan_dft_c2r_2d(nx*2,ny*2,topo_fft,topo_ext,FFTW_ESTIMATE)
+    call fftw_execute_dft_c2r(plan_c2r, topo_fft, topo_ext)
+    call fftw_destroy_plan(plan_c2r)
 
     ! De-frame the data matrix
     topo = topo_ext((nx2+1):(nx2+nx),(ny2+1):(ny2+ny))

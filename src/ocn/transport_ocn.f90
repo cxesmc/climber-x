@@ -283,10 +283,10 @@ contains
        if (l_tracer_dic(l)) then
          ! DIC tracers 
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l))
        else
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l))
        endif
 
        ! apply advection and diffusion to tracer field

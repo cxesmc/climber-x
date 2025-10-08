@@ -86,7 +86,7 @@ contains
 
     type(ocn_class) :: ocn
 
-    integer :: i, j, k, n, k_mix, n_mix, k1_max
+    integer :: i, j, k, k1_max
     logical :: flag_brines
     real(wp) :: tau
     real(wp) :: sal_before, sal_after

@@ -48,7 +48,7 @@ contains
   !   Purpose    :  
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine diffusion(i_diff, f_ocn,tracer,diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-                      fdx, fdy, fdz, slope2_w, tracer_tendency,l)
+                      fdx, fdy, fdz, slope2_w, tracer_tendency)
 
     implicit none
 
@@ -65,8 +65,6 @@ contains
     real(wp), dimension(0:,0:,0:), intent(out) :: fdz
     real(wp), dimension(:,:,:), intent(out) :: slope2_w
     real(wp), dimension(:,:,:), intent(out) :: tracer_tendency
-
-    integer, intent(in) :: l
 
     integer :: i, j, k, i0, j0, i1, i2, ip1, nnp, knp, k1, k2
     real(wp) :: dts_dx, dts_dy, dts_dz, tv

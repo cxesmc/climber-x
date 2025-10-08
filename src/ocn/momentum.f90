@@ -207,10 +207,10 @@ contains
     ! update velocities
     !$ time1 = omp_get_wtime()
     if (i_eos.ne.5) then
-      call velc(f_ocn,rho,dtau_dz2,dtav_dz2,ub, &
+      call velc(rho,dtau_dz2,dtav_dz2,ub, &
                 u)
     else if (i_eos.eq.5) then
-      call velc(f_ocn,rho_tb,dtau_dz2,dtav_dz2,ub, &
+      call velc(rho_tb,dtau_dz2,dtav_dz2,ub, &
                 u)
     endif
     !$ time2 = omp_get_wtime()
@@ -390,7 +390,7 @@ contains
 
     implicit none
 
-    integer :: i, j
+    integer :: j
 
 
     ! allocate variables

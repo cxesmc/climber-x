@@ -62,7 +62,7 @@ contains
     real(wp), parameter :: h = 50._wp           ! indicative depth of Strait (m)
     real(wp), parameter :: f_cor = 1.4e-4_wp    ! Coriolis parameter
 
-    integer :: i, j, k, kk, k1_h, nk, l
+    integer :: i, j, k, kk, k1_h, nk
     integer, parameter :: ni = 3, nj_Arctic = 2, nj_Pacific = 2
     integer, dimension(ni) :: i_idx = (/1,2,3/)
     integer, dimension(nj_Arctic)  :: j_idx_Arctic = (/33,34/)
