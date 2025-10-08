@@ -348,23 +348,33 @@ contains
     real(wp) :: w0, w1
 
 
-    ! interpolate from co2_data to current year
-     imin = minloc(abs(time_dat-btime),1) 
-      if (time_dat(imin).lt.btime) then
-        i0 = imin
-        i1 = imin+1
+      ! interpolate to current year
+      if (btime.le.minval(time_dat)) then
+        ecc = ecc_dat(lbound(ecc_dat,1))
+        xob = obl_dat(lbound(obl_dat,1))
+        per = per_dat(lbound(per_dat,1))
+      elseif (btime.ge.maxval(time_dat)) then
+        ecc = ecc_dat(ubound(ecc_dat,1))
+        xob = obl_dat(ubound(obl_dat,1))
+        per = per_dat(ubound(per_dat,1))
       else
-        i0 = imin-1
-        i1 = imin
+        imin = minloc(abs(time_dat-btime),1) 
+        if (time_dat(imin).lt.btime) then
+          i0 = imin
+          i1 = imin+1
+        else
+          i0 = imin-1
+          i1 = imin
+        endif
+        w0 = 1._wp - abs(time_dat(i0)-btime)/(time_dat(i1)-time_dat(i0))
+        w1 = 1._wp - w0
+        ecc = w0*ecc_dat(i0) + w1*ecc_dat(i1)
+        xob = w0*obl_dat(i0) + w1*obl_dat(i1)
+        per_dat1=per_dat(i0)
+        per_dat2=per_dat(i1)
+        if (per_dat2.lt.per_dat1) per_dat2=per_dat2+360._wp
+        per = w0*per_dat1 + w1*per_dat2
       endif
-      w0 = 1._wp - abs(time_dat(i0)-btime)/(time_dat(i1)-time_dat(i0))
-      w1 = 1._wp - w0
-      ecc = w0*ecc_dat(i0) + w1*ecc_dat(i1)
-      xob = w0*obl_dat(i0) + w1*obl_dat(i1)
-      per_dat1=per_dat(i0)
-      per_dat2=per_dat(i1)
-      if (per_dat2.lt.per_dat1) per_dat2=per_dat2+360._wp
-      per = w0*per_dat1 + w1*per_dat2
       if (per.gt.360._wp) per=per-360._wp
 
     return
