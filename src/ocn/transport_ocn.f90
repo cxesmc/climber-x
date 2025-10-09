@@ -139,11 +139,7 @@ contains
               ! apply surface fluxes and compute new virtual temperature and salinity
               mldtstmp(1) = ts(i,j,maxk,1)-flx_sur(i,j,1)*dt/dz(maxk)  ! C
               mldtstmp(2) = ts(i,j,maxk,2)-flx_sur(i,j,2)*dt/dz(maxk)  ! psu
-              if (mldtstmp(2).lt.0._wp) then
-                print *,'WARNING: s<0',mldtstmp(2),i,j
-                print *,'set s=0'
-                mldtstmp(2) = 1.e-2_wp
-              endif
+              mldtstmp(2) = max(0._wp,mldtstmp(2))
               ! compute new virtual density
               mldrhotmp = eos(mldtstmp(1),mldtstmp(2),zro(maxk))
               ! potential energy change induced by mixing the top layer
@@ -182,11 +178,6 @@ contains
       !rho1 = eos(3._wp,35.5_wp,-3000._wp)
       !print *,rho1,1041.83267
 
-!dvohelp(i,j) = (relax*MIN(dvohelp(i,j),dv0+dvo_wind(i,j)) &
-!               +relne*(dvo_wind(i,j) &
-!               + dv0 / ((1._wp + crd*rinumo(i,j))**3) + dbackv(i,j,k)))  &
-!               * weto(i,j,k)
-      
        ! compute x,y,z-density gradient needed for isoneutral diffusion
        !$omp parallel do collapse(2) &
        !$omp private ( i,j,k ,brunt_vaisala,diff_dia_tmp,ip1,rho1,rho2)
@@ -225,8 +216,7 @@ contains
              endif
              if (mask_u(i,j,k).eq.1) then
                ! zonal density gradient on u-grid
-               ip1 = i+1
-               if (ip1.eq.maxi+1) ip1 = 1
+               ip1 = modulo(i,maxi) + 1
                rho1 = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
                rho2 = eos(ts(ip1,j,k,1),ts(ip1,j,k,2),zro(k))
                drho_dx(i,j,k) = (rho2-rho1)*rdx(j)
@@ -340,11 +330,7 @@ contains
             endif
             ! update density
             do k=k1(i,j),maxk
-              if (ts(i,j,k,2).lt.0._wp) then
-                print *,'WARNING: s<0',ts(i,j,k,2),i,j,k
-                print *,'set s=0'
-                ts(i,j,k,2) = 1.e-2_wp
-              endif
+              ts(i,j,k,2) = max(0._wp,ts(i,j,k,2))  ! make sure that salinity is positive
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
               ! remember old density needed to calculate PE change. 
               rho_old(k) = rho(i,j,k)
@@ -393,19 +379,19 @@ contains
                 mld(i,j) = zw(maxk-1)
               endif
               ! in rare cases the resulting mld can be positive due to termobaricity effects (see email discussion with Edwards and Oliver)
-              if (mld(i,j).gt.0._wp) mld(i,j) = 0._wp ! set to zero
+              mld(i,j) = min(0._wp,mld(i,j))
             endif
-            if(mld(i,j).gt.0._wp) then
-              print *,''
-              print *,'WARNING: mld>0', i,j
-              print *,'mld',mld(i,j),mldk(i,j)
-              print *,'e_mix',e_mix
-              print *,'pe_layer1',pe_layer1(i,j)
-              print *,'pe_conv',pe_conv
-              print *,'pe_buoy',pe_buoy
-              print *,'ke_tau',ke_tau(i,j)*mlddec(maxk)
-              !stop 'mld > 0'
-            endif
+            !if(mld(i,j).gt.0._wp) then
+            !  print *,''
+            !  print *,'WARNING: mld>0', i,j
+            !  print *,'mld',mld(i,j),mldk(i,j)
+            !  print *,'e_mix',e_mix
+            !  print *,'pe_layer1',pe_layer1(i,j)
+            !  print *,'pe_conv',pe_conv
+            !  print *,'pe_buoy',pe_buoy
+            !  print *,'ke_tau',ke_tau(i,j)*mlddec(maxk)
+            !  !stop 'mld > 0'
+            !endif
             ! update density
             do k=k1(i,j),maxk
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
@@ -426,11 +412,7 @@ contains
           if (mask_ocn(i,j).eq.1) then
             ! update density
             do k=k1(i,j),maxk
-              if (ts(i,j,k,2).lt.0._wp) then
-                print *,'WARNING: s<0',ts(i,j,k,2),i,j,k
-                print *,'set s=0'
-                ts(i,j,k,2) = 0._wp
-              endif
+              ts(i,j,k,2) = max(0._wp,ts(i,j,k,2))  ! make sure that salinity is positive
               rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
             enddo
             call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 

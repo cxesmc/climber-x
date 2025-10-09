@@ -84,10 +84,9 @@ contains
           endif
         enddo
         tsum(:) = 0._wp
-        ip1 = i+1
-        if (ip1.eq.maxi+1) ip1=1
-        im1 = i-1
-        if (im1.eq.0) im1=maxi
+        ip1 = modulo(i,maxi) + 1
+        im1 = modulo(i - 2, maxi) + 1
+
         do k=k1(i,j),maxk
           ! compute terms of zonal velocity component
           if (k1(ip1,j).gt.k) then
@@ -183,10 +182,6 @@ contains
     do j=1,maxj
       do i=1,maxi
         tv = 0._wp
-        ip1 = i+1
-        if (ip1.eq.maxi+1) ip1=1
-        im1 = i-1
-        if (im1.eq.0) im1=maxi
         do k=k1(i,j),maxk
           dy_dz_i = dy*dz(k)
           dy_dz_im1 = dy*dz(k)

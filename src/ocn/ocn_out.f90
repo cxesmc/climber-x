@@ -1676,7 +1676,7 @@ contains
           endif
           if (i_alphabeta.eq.1) then
             rho1 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)-0.5_wp,0._wp)    
+            rho2 = eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)    
             beta = rho1-rho2
           else if (i_alphabeta.eq.2) then
             beta = 0.8_wp   ! kg/m3/psu
@@ -1739,7 +1739,7 @@ contains
           if (ocn%f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) then
             if (i_alphabeta.eq.1) then
               rho1 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp)    
-              rho2 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)-0.5_wp,0._wp)    
+              rho2 = eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)    
               beta = rho1-rho2
             else if (i_alphabeta.eq.2) then
               beta = 0.8_wp   ! kg/m3/psu
@@ -3349,7 +3349,7 @@ contains
           mon_o(mon)%buoyT(i,j) = mon_o(mon)%buoyT(i,j) + g/cap_w*ocn%flx(i,j)*alpha/rho0 * mon_avg ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg = kg/m/s3 = N/m2/s
           if (i_alphabeta.eq.1) then
             rho1 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)-0.5_wp,0._wp)    
+            rho2 = eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)    
             beta = rho1-rho2
           else if (i_alphabeta.eq.2) then
             beta = 0.8_wp   ! kg/m3/psu

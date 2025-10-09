@@ -81,8 +81,7 @@ contains
 
           ! flux to east
           if (mask_u(I,j,k).eq.1) then  
-            ip1 = i+1
-            if (ip1.eq.maxi+1) ip1=1
+            ip1 = modulo(i,maxi) + 1
             dy_dz = dy*dz(k)
             fdx(I,j,k) = - rdx(j) * min(diffx_max(j),diff_iso) * (tracer(ip1,j,k)-tracer_ijk) *dy_dz*dt  ! volume flux
             if (i_diff.eq.1 .and. diff_iso.ne.diff_gm) then

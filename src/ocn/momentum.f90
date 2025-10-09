@@ -271,8 +271,7 @@ contains
 
         ii = i
         if (ii.eq.0) ii=maxi
-        ip1 = i+1
-        if (ip1.eq.maxi+1) ip1=1
+        ip1 = modulo(i,maxi) + 1
         min_frac = min(f_ocn(ii,max(1,j)),f_ocn(ip1,max(1,j)),f_ocn(ii,min(maxj,j+1)),f_ocn(ip1,min(maxj,j+1)))
 
         !tmp = drag_par%adrag*(1._wp + min(drag_par%drag_topo_fac,topo_fac*dep_fac) + drag_par%drag_frac_fac*(1._wp-min_frac))

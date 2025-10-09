@@ -161,7 +161,6 @@ contains
     real(wp) :: dy_dz, dx_dz
     real(wp) :: pp, pm, qp, qm, qdp
     real(wp) :: xmax, xmin
-    real(wp) :: cx, cy, cz
     real(wp) :: tracer_tmp1
 
     allocate(tracer_tmp(maxi,maxj,maxk))
@@ -188,17 +187,12 @@ contains
       do j=1,maxj
         do i=1,maxi
           if (mask_u(i,j,k).eq.1) then
-            ip1 = i+1
-            if (ip1.eq.maxi+1) ip1=1
+            ip1 = modulo(i,maxi) + 1
             uvel = u(1,i,j,k)
             tracer_i = tracer((/i,ip1/),j,k)
             dy_dz = dy*dz(k)
             ! low order, ustream
-            if (uvel.gt.0._wp) then
-              fxl(i,j,k)=uvel*tracer_i(1)*dy_dz*dt  ! m/s*K * m2*s = m3 * K
-            else
-              fxl(i,j,k)=uvel*tracer_i(2)*dy_dz*dt  ! m/s*K * m2*s = m3 * K
-            endif
+            fxl(i,j,k) = uvel * merge(tracer_i(1), tracer_i(2), uvel > 0._wp) * dy_dz * dt  ! m/s*K * m2*s = m3 * K
             ! high order, centered differences
             fxh=0.5_wp*(tracer_i(1)+tracer_i(2))*uvel*dy_dz*dt
             afx(i,j,k)=fxh-fxl(i,j,k)
@@ -229,11 +223,7 @@ contains
             tracer_j = tracer(i,j:j+1,k)
             dx_dz = dxv(j)*dz(k)
             ! low order
-            if (vvel.gt.0._wp) then
-              fyl(i,j,k)=vvel*tracer_j(1)*dx_dz*dt  ! m/s*K * m2*s = m3 * K
-            else
-              fyl(i,j,k)=vvel*tracer_j(2)*dx_dz*dt  ! m/s*K * m2*s = m3 * K
-            endif
+            fyl(i,j,k) = vvel * merge(tracer_j(1), tracer_j(2), vvel > 0._wp) * dx_dz * dt  ! m/s*K * m2*s = m3 * K
             ! high order
             fyh=0.5_wp*(tracer_j(1)+tracer_j(2))*vvel*dx_dz*dt
             afy(i,j,k)=fyh-fyl(i,j,k)
@@ -261,11 +251,7 @@ contains
             wvel = u(3,i,j,k)
             tracer_k = tracer(i,j,k:k+1)
             ! low order
-            if (wvel.gt.0._wp) then
-              fzl(i,j,k)=wvel*tracer_k(1)*dx(j)*dy*dt  ! m/s*K * m2*s = m3 * K
-            else
-              fzl(i,j,k)=wvel*tracer_k(2)*dx(j)*dy*dt  ! m/s*K * m2*s = m3 * K
-            endif
+            fzl(i,j,k) = wvel * merge(tracer_k(1), tracer_k(2), wvel > 0._wp) * dx(j)*dy * dt  ! m/s*K * m2*s = m3 * K
             ! high order
             fzh=0.5_wp*(tracer_k(1)+tracer_k(2))*wvel*dx(j)*dy*dt
             afz(i,j,k)=fzh-fzl(i,j,k)
@@ -315,13 +301,9 @@ contains
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          ip1=i+1
-          if (ip1.eq.maxi+1) ip1=1
-          im1=i-1
-          if (im1.eq.0) im1=maxi
-          ip2=i+2
-          if (ip2.eq.maxi+1) ip2=1
-          if (ip2.eq.maxi+2) ip2=2
+          ip1 = modulo(i,maxi) + 1
+          im1 = modulo(i - 2, maxi) + 1
+          ip2 = modulo(i+1, maxi) + 1
           jm1=max(1,j-1)
           jp1=min(maxj,j+1)
           jp2=min(maxj,j+2)
@@ -351,10 +333,8 @@ contains
     do k=1,maxk    
       do j=1,maxj
         do i=1,maxi
-          im1=i-1
-          if (im1.eq.0) im1=maxi
-          ip1=i+1
-          if (ip1.eq.maxi+1) ip1=1              
+          im1 = modulo(i-2, maxi) + 1
+          ip1 = modulo(i,maxi) + 1
           jm1=max(1,j-1)
           jp1=min(maxj,j+1)
           km1=max(1,k-1)
@@ -365,56 +345,29 @@ contains
           pm = max(0._wp,afx(i,j,k))-min(0._wp,afx(im1,j,k))+max(0._wp,afy(i,j,k))-min(0._wp,afy(i,jm1,k))+max(0._wp,afz(i,j,k))-min(0._wp,afz(i,j,km1))
           qp = (xmax-tracer_tmp(i,j,k))*(dx(j)*dy*dz(k)*f_ocn(i,j))
           qm = (tracer_tmp(i,j,k)-xmin)*(dx(j)*dy*dz(k)*f_ocn(i,j))
-          if (pp.lt.1.e-3_wp) then
-            rp(i,j,k) = 0._wp
-          else
-            qdp = qp/pp
-            rp(i,j,k) = min(1._wp,qdp)
-          endif
-          if (pm.lt.1.e-3_wp) then
-            rn(i,j,k) = 0._wp
-          else
-            qdp = qm/pm
-            rn(i,j,k) = min(1._wp,qdp)
-          endif
+          qdp = qp / max(pp, 1.e-3_wp)
+          rp(i,j,k) = merge(min(1._wp, qdp), 0._wp, pp >= 1.e-3_wp)
+          qdp = qm / max(pm, 1.e-3_wp)
+          rn(i,j,k) = merge(min(1._wp, qdp), 0._wp, pm >= 1.e-3_wp)
         enddo
       enddo
     enddo
     !!$omp end parallel do
 
-    !!$omp parallel do collapse(3) private(i,j,k,ip1,cx,cy,cz)
+    !!$omp parallel do collapse(3) private(i,j,k,ip1)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
           if (mask_u(i,j,k).eq.1) then
-            ip1 = i+1
-            if (ip1.eq.maxi+1) ip1=1
-            if (afx(i,j,k).ge.0._wp) then
-              cx = min(rp(ip1,j,k),rn(i,j,k))
-            else 
-              cx = min(rp(i,j,k),rn(ip1,j,k))
-            endif
-            afx(i,j,k) = cx*afx(i,j,k)
+            ip1 = modulo(i,maxi) + 1
+            afx(i,j,k) = afx(i,j,k) * merge(min(rp(ip1,j,k),rn(i,j,k)), min(rp(i,j,k),rn(ip1,j,k)), afx(i,j,k) >= 0._wp)
           endif
-
           if (j.lt.maxj .and. mask_v(i,j,k).eq.1) then
-            if (afy(i,j,k).ge.0._wp) then
-              cy = min(rp(i,j+1,k),rn(i,j,k))
-            else
-              cy = min(rp(i,j,k),rn(i,j+1,k))
-            endif
-            afy(i,j,k) = cy*afy(i,j,k)
+            afy(i,j,k) = afy(i,j,k) * merge(min(rp(i,j+1,k),rn(i,j,k)), min(rp(i,j,k),rn(i,j+1,k)), afy(i,j,k) >= 0._wp)
           endif
-
           if (mask_w(i,j,k).eq.1) then
-            if (afz(i,j,k).ge.0._wp) then
-              cz = min(rp(i,j,k+1),rn(i,j,k))
-            else
-              cz = min(rp(i,j,k),rn(i,j,k+1))
-            endif
-            afz(i,j,k) = cz*afz(i,j,k)
+            afz(i,j,k) = afz(i,j,k) * merge(min(rp(i,j,k+1),rn(i,j,k)), min(rp(i,j,k),rn(i,j,k+1)), afz(i,j,k) >= 0._wp)
           endif
-
         enddo
       enddo
     enddo
