@@ -67,14 +67,10 @@ contains
     do j=1,jm
       do i=1,im 
 
-        ipl=i+1
-        if (ipl.gt.im) ipl=1
-        imi=i-1
-        if (imi.lt.1) imi=im  
-        jpl=j+1
-        if (jpl.gt.jm) jpl=jm
-        jmi=j-1
-        if (jmi.lt.1) jmi=1
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
+        jpl = min(jm,j+1)
+        jmi = max(1,j-1)
 
         !------------------------------------------------------
         ! PBL geostrophic wind components in T-points
@@ -160,10 +156,8 @@ contains
     do j=1,jm
       do i=1,im 
 
-        ipl=i+1
-        if (ipl.gt.im) ipl=1
-        imi=i-1
-        if (imi.lt.1) imi=im  
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
 
         if (j.gt.1 .and. j.lt.jm) then
 
@@ -260,10 +254,8 @@ contains
     do j=1,jm
       do i=1,im 
 
-        ipl=i+1
-        if (ipl.gt.im) ipl=1
-        imi=i-1
-        if (imi.lt.1) imi=im  
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
 
         ! interpolate to t-points and relax in time
         usk(i,j) = 0.1_wp * 0.5_wp*(uk(i,j)+uk(ipl,j)) + 0.9_wp*usk(i,j)

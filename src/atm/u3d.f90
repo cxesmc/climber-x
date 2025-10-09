@@ -93,12 +93,9 @@ contains
     do j=1,jm
       do i=1,im
 
-        ipl=i+1
-        if (ipl.gt.im) ipl=1
-        imi=i-1
-        if (imi.lt.1) imi=im  
-        jmi=j-1
-        if (jmi.lt.1) jmi=1
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
+        jmi = max(1,j-1)
 
         !-------------------------------------------------------
         ! Vertical profile of ageostrophic wind
@@ -219,8 +216,7 @@ contains
         ! x-components
 
         do i=1,im
-          imi=i-1
-          if (imi.lt.1) imi=im 
+          imi = modulo(i - 2, im) + 1
           ! geostrophic zonal wind on u-points, limited to troposphere
           if (pl(k+1).ge.ptopdyn) then
             u_g  = 0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))
@@ -336,8 +332,7 @@ contains
     do j=1,jm
       do i=1,im
 
-        ipl=i+1
-        if (ipl.gt.im) ipl=1
+        ipl = modulo(i,im) + 1
 
         ! column integrated convergence
         fai  = 0._wp
@@ -373,8 +368,7 @@ contains
       do j=1,jm
         do i=1,im
 
-          ipl=i+1
-          if (ipl.gt.im) ipl=1
+          ipl = modulo(i,im) + 1
 
           ug_b = ugb(i,j)    
           vg_b = vgb(i,j)
