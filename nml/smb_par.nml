@@ -35,7 +35,7 @@
   smb_cx_ref_file = "input/CLIMBER-X_SMB_GRL-16KM_clim_1981_2010.nc"     ! CLIMBER-X reference SMB file, used only if l_smb_bias_corr==T
   year_ini_smb_ref = 1981     ! start year over which to compute reference SMB climatology
   year_end_smb_ref = 2010     ! end year over which to compute reference SMB climatology
-  i_t2m_bias_corr = 1         ! present-day near-surface air temperature bias correction
+  i_t2m_bias_corr = 0         ! present-day near-surface air temperature bias correction
                               ! 0 = no bias correction
                               ! 1 = annual bias correction from input file bias_corr_file
                               ! 2 = seasonal bias correction derived from monthly input file bias_corr_file
