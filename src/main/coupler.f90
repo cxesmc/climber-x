@@ -998,13 +998,17 @@ contains
 
 
     ! find index of top 1 km ocean layers for basal melt
-    if (flag_bmb) then
+    if (flag_bmb .and. time_soy_ocn) then
       k_bmb = minloc(abs(ocn%grid%zro+1000._wp),1)
       nk = ocn%grid%nk - k_bmb + 1
-      if (.not.allocated(cmn%z_ocn_bmb)) allocate(cmn%z_ocn_bmb(nk))
-      if (.not.allocated(cmn%mask_ocn_bmb)) allocate(cmn%mask_ocn_bmb(ni,nj,nk))
-      if (.not.allocated(cmn%t_ocn_bmb)) allocate(cmn%t_ocn_bmb(ni,nj,nk))
-      if (.not.allocated(cmn%s_ocn_bmb)) allocate(cmn%s_ocn_bmb(ni,nj,nk))
+      if (allocated(cmn%z_ocn_bmb))    deallocate(cmn%z_ocn_bmb)
+      if (allocated(cmn%mask_ocn_bmb)) deallocate(cmn%mask_ocn_bmb)
+      if (allocated(cmn%t_ocn_bmb))    deallocate(cmn%t_ocn_bmb)
+      if (allocated(cmn%s_ocn_bmb))    deallocate(cmn%s_ocn_bmb)
+      allocate(cmn%z_ocn_bmb(nk))
+      allocate(cmn%mask_ocn_bmb(ni,nj,nk))
+      allocate(cmn%t_ocn_bmb(ni,nj,nk))
+      allocate(cmn%s_ocn_bmb(ni,nj,nk))
       cmn%z_ocn_bmb = -ocn%grid%zro(ocn%grid%nk:k_bmb:-1)
     endif
 
@@ -1389,10 +1393,18 @@ contains
     ! find index of top 1 km ocean layers for basal melt
     if (flag_bmb) then
       nk = size(lnd%z_lake)
-      if (.not.allocated(cmn%z_lake_bmb)) allocate(cmn%z_lake_bmb(nk))
-      if (.not.allocated(cmn%mask_lake_bmb)) allocate(cmn%mask_lake_bmb(ni,nj))
-      if (.not.allocated(cmn%t_lake_bmb)) allocate(cmn%t_lake_bmb(ni,nj,nk))
-      if (.not.allocated(cmn%s_lake_bmb)) allocate(cmn%s_lake_bmb(ni,nj,nk))
+      !if (.not.allocated(cmn%z_lake_bmb))    allocate(cmn%z_lake_bmb(nk))
+      !if (.not.allocated(cmn%mask_lake_bmb)) allocate(cmn%mask_lake_bmb(ni,nj))
+      !if (.not.allocated(cmn%t_lake_bmb))    allocate(cmn%t_lake_bmb(ni,nj,nk))
+      !if (.not.allocated(cmn%s_lake_bmb))    allocate(cmn%s_lake_bmb(ni,nj,nk))
+      if (allocated(cmn%z_lake_bmb))    deallocate(cmn%z_lake_bmb)
+      if (allocated(cmn%mask_lake_bmb)) deallocate(cmn%mask_lake_bmb)
+      if (allocated(cmn%t_lake_bmb))    deallocate(cmn%t_lake_bmb)
+      if (allocated(cmn%s_lake_bmb))    deallocate(cmn%s_lake_bmb)
+      allocate(cmn%z_lake_bmb(nk))
+      allocate(cmn%mask_lake_bmb(ni,nj))
+      allocate(cmn%t_lake_bmb(ni,nj,nk))
+      allocate(cmn%s_lake_bmb(ni,nj,nk))
       cmn%z_lake_bmb = lnd%z_lake
     endif
 
@@ -2575,16 +2587,24 @@ contains
 
 
     nk_ocn = size(cmn%z_ocn_bmb)
-    if (.not.allocated(bmb%z_ocn_in)) allocate(bmb%z_ocn_in(nk_ocn))
-    if (.not.allocated(bmb%t_ocn_in)) allocate(bmb%t_ocn_in(ni,nj,nk_ocn))
-    if (.not.allocated(bmb%s_ocn_in)) allocate(bmb%s_ocn_in(ni,nj,nk_ocn))
-    if (.not.allocated(bmb%mask_ocn_in)) allocate(bmb%mask_ocn_in(ni,nj,nk_ocn))
+    if (allocated(bmb%z_ocn_in))    deallocate(bmb%z_ocn_in)
+    if (allocated(bmb%t_ocn_in))    deallocate(bmb%t_ocn_in)
+    if (allocated(bmb%s_ocn_in))    deallocate(bmb%s_ocn_in)
+    if (allocated(bmb%mask_ocn_in)) deallocate(bmb%mask_ocn_in)
+    allocate(bmb%z_ocn_in(nk_ocn))
+    allocate(bmb%t_ocn_in(ni,nj,nk_ocn))
+    allocate(bmb%s_ocn_in(ni,nj,nk_ocn))
+    allocate(bmb%mask_ocn_in(ni,nj,nk_ocn))
 
     nk_lake = size(cmn%z_lake_bmb)
-    if (.not.allocated(bmb%z_lake_in)) allocate(bmb%z_lake_in(nk_lake))
-    if (.not.allocated(bmb%t_lake_in)) allocate(bmb%t_lake_in(ni,nj,nk_lake))
-    if (.not.allocated(bmb%s_lake_in)) allocate(bmb%s_lake_in(ni,nj,nk_lake))
-    if (.not.allocated(bmb%mask_lake_in)) allocate(bmb%mask_lake_in(ni,nj))
+    if (allocated(bmb%z_lake_in))    deallocate(bmb%z_lake_in)
+    if (allocated(bmb%t_lake_in))    deallocate(bmb%t_lake_in)
+    if (allocated(bmb%s_lake_in))    deallocate(bmb%s_lake_in)
+    if (allocated(bmb%mask_lake_in)) deallocate(bmb%mask_lake_in)
+    allocate(bmb%z_lake_in(nk_lake))
+    allocate(bmb%t_lake_in(ni,nj,nk_lake))
+    allocate(bmb%s_lake_in(ni,nj,nk_lake))
+    allocate(bmb%mask_lake_in(ni,nj))
 
     bmb%z_ocn_in = cmn%z_ocn_bmb
     bmb%t_ocn_in(:,:,:) = cmn%t_ocn_bmb(:,:,:)
@@ -3388,9 +3408,12 @@ contains
       endif
       if (flag_bmb) then
         k_bmb = minloc(abs(bnd%ocn%depth-1000._wp),1)
-        if (.not.allocated(cmn%z_ocn_bmb)) allocate(cmn%z_ocn_bmb(k_bmb))
-        if (.not.allocated(cmn%t_ocn_bmb)) allocate(cmn%t_ocn_bmb(ni,nj,k_bmb))
-        if (.not.allocated(cmn%s_ocn_bmb)) allocate(cmn%s_ocn_bmb(ni,nj,k_bmb))
+        if (allocated(cmn%z_ocn_bmb)) deallocate(cmn%z_ocn_bmb)
+        if (allocated(cmn%t_ocn_bmb)) deallocate(cmn%t_ocn_bmb)
+        if (allocated(cmn%s_ocn_bmb)) deallocate(cmn%s_ocn_bmb)
+        allocate(cmn%z_ocn_bmb(k_bmb))
+        allocate(cmn%t_ocn_bmb(ni,nj,k_bmb))
+        allocate(cmn%s_ocn_bmb(ni,nj,k_bmb))
         cmn%z_ocn_bmb = bnd%ocn%depth(1:k_bmb)
         cmn%t_ocn_bmb = bnd%ocn%t(:,:,1:k_bmb)  ! K         
         cmn%s_ocn_bmb = bnd%ocn%s(:,:,1:k_bmb)  ! psu

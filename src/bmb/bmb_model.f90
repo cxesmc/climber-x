@@ -139,8 +139,10 @@ contains
     bmb%s_ocn_in(:,bmb%grid_in%G%ny,k) = s_npol
   enddo
 
-  if (.not.allocated(bmb%t_ocn)) allocate(bmb%t_ocn(bmb%grid%G%nx,bmb%grid%G%ny,nk_ocn))
-  if (.not.allocated(bmb%s_ocn)) allocate(bmb%s_ocn(bmb%grid%G%nx,bmb%grid%G%ny,nk_ocn))
+  if (allocated(bmb%t_ocn)) deallocate(bmb%t_ocn)
+  if (allocated(bmb%s_ocn)) deallocate(bmb%s_ocn)
+  allocate(bmb%t_ocn(bmb%grid%G%nx,bmb%grid%G%ny,nk_ocn))
+  allocate(bmb%s_ocn(bmb%grid%G%nx,bmb%grid%G%ny,nk_ocn))
 
   ! map shelf temperature and salinity to ice sheet grid
   !$omp parallel do private(k)
@@ -208,8 +210,10 @@ contains
       bmb%mask_lake_in = bmb%mask_lake_in_tmp
     enddo
 
-    if (.not.allocated(bmb%t_lake)) allocate(bmb%t_lake(bmb%grid%G%nx,bmb%grid%G%ny,nk_lake))
-    if (.not.allocated(bmb%s_lake)) allocate(bmb%s_lake(bmb%grid%G%nx,bmb%grid%G%ny,nk_lake))
+    if (allocated(bmb%t_lake)) deallocate(bmb%t_lake)
+    if (allocated(bmb%s_lake)) deallocate(bmb%s_lake)
+    allocate(bmb%t_lake(bmb%grid%G%nx,bmb%grid%G%ny,nk_lake))
+    allocate(bmb%s_lake(bmb%grid%G%nx,bmb%grid%G%ny,nk_lake))
 
     ! map lake temperature and salinity to ice sheet grid
     !$omp parallel do private(k)
