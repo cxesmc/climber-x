@@ -731,15 +731,6 @@ contains
          print *,'Error: unknow value for &ocn_par/i_init', i_init
       endif
 
-      do k=1,maxk
-         print *,'k, zro(k)', k, zro(k), ((5000.0_wp+zro(k))/5000.0_wp)
-         do j=1,maxj
-            !do i=1,maxi
-                print *, j, c(j), ocn%ts(1,j,k,1)
-            !enddo
-         enddo
-      enddo
-
       ! initialize velocity to zero
       ocn%u = 0._wp
 
