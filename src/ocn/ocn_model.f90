@@ -455,7 +455,7 @@ contains
     !do i=1,n_tracers_tot
     !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
     !enddo
-
+    
     !------------------------------------------------------------------------
     ! restore global salinity to reference value
     !------------------------------------------------------------------------
@@ -468,7 +468,7 @@ contains
     ! diagnose free surface elevation, needed by sea ice 
     !------------------------------------------------------------------------
     !$ time1 = omp_get_wtime()
-    call free_surface(ocn%rho, ocn%ssh)
+    call free_surface(ocn%rho, ocn%ssh, ocn%error)
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'free surface',time2-time1
 
@@ -738,6 +738,9 @@ contains
       ocn%psi = 0._wp
       ocn%ub  = 0._wp
 
+      ! sea surface height
+      ocn%ssh = 0._wp
+
       if (age_tracer) then
         ocn%ts(:,:,:,i_age) = 0._wp
       endif
@@ -787,6 +790,20 @@ contains
         ocn%conv_pe(i,j) = 0._wp
       enddo
     enddo
+
+    ! initialize freshwater fluxes
+    ocn%p_e_sic     = 0._wp 
+    ocn%fw_brines   = 0._wp 
+    ocn%runoff      = 0._wp 
+    ocn%runoff_veg  = 0._wp 
+    ocn%runoff_ice  = 0._wp 
+    ocn%runoff_lake = 0._wp 
+    ocn%melt_ice    = 0._wp 
+    ocn%calving     = 0._wp 
+    ocn%bmelt_grd   = 0._wp 
+    ocn%bmelt_flt   = 0._wp 
+    ocn%bmelt       = 0._wp 
+    ocn%fw_dhdt_ice = 0._wp 
 
     ! initialize variables for frictional geostrophic balance equation
     call momentum_init
@@ -1121,6 +1138,8 @@ contains
     call nc_write(fnm,"k1_pot",ocn%grid%k1_pot,  dims=["lon  ","lat  "],long_name="index of bottom layer",units="/")
     call nc_write(fnm,"ocn_area", ocn%grid%ocn_area,  dims=["lon  ","lat  "],long_name="ocean area",units="/")
     call nc_write(fnm,"ocn_vol",  ocn%grid%ocn_vol,   dims=["lon  ","lat  ", "zro  "],long_name="ocean volume",units="/")
+    
+    call nc_write(fnm,"ssh", ocn%ssh,   dims=["lon  ","lat  "],long_name="sea surface height",units="m")
 
     call nc_write(fnm,"u",     ocn%u,    dims=["dir3","lon1","lat1","zro "],long_name="3D velocity field",units="m/s")
     call nc_write(fnm,"ub",    ocn%ub(:,0:maxi,0:maxj),   dims=["dir2 ","lon1 ","lat1 "],long_name="barotropic velocity",units="m/s")
@@ -1168,6 +1187,8 @@ contains
     ! North Pole and South Pole 'islands'
     k1(:,0) = 99
     k1(:,maxj+1) = 99
+
+    call nc_read(fnm,"ssh",   ocn%ssh(:,:))
 
     call nc_read(fnm,"u",     ocn%u(:,0:maxi,0:maxj,1:maxk))
     call nc_read(fnm,"ub",    ocn%ub(:,0:maxi,0:maxj))

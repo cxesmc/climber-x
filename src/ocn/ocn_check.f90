@@ -27,7 +27,7 @@ module ocn_check
 
   use precision, only : wp
   use timer, only : year, doy
-  use ocn_grid, only : k1, maxi, maxj, maxk, dx, dy
+  use ocn_grid, only : k1, maxi, maxj, maxk, dx, dy, mask_u, mask_v, mask_w
   use ocn_params, only : dt
 
   implicit none
@@ -69,48 +69,70 @@ contains
     v_max_CFL =  dy/dt
 
     ! check CFL stability
-    do j=1,maxj
-      do i=1,maxi
-        do k=k1(i,j),maxk
-          if (u(1,i,j,k).gt.u_max_CFL(j)) then
-            print *
-            print *,'WARNING: violation of CFL criterium!'
-            print *,'(i,j,k)',i,j,k
-            print *,'doy',doy
-            print *,'u',u(1,i,j,k)
-            print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
-            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-            if (year>1 .and. doy>1) error = .true.
+    do k=1,maxk
+      do j=1,maxj
+        do i=1,maxi
+          if (mask_u(i,j,k).eq.1) then
+            if (u(1,i,j,k).ne.u(1,i,j,k)) then
+              print *
+              print *,'NaN velocity in ocn!'
+              print *,'(i,j,k)',i,j,k
+              print *,'doy',doy
+              print *,'u',u(1,i,j,k)
+              error = .true.
+            else
+              if (u(1,i,j,k).gt.u_max_CFL(j)) then
+                print *
+                print *,'WARNING: violation of CFL criterium!'
+                print *,'(i,j,k)',i,j,k
+                print *,'doy',doy
+                print *,'u',u(1,i,j,k)
+                print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
+                print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
+                if (year>1 .and. doy>1) error = .true.
+              endif
+              if (u(1,i,j,k).lt.u_min_CFL(j)) then
+                print *
+                print *,'WARNING: violation of CFL criterium!'
+                print *,'(i,j,k)',i,j,k
+                print *,'doy',doy
+                print *,'u',u(1,i,j,k)
+                print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
+                print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
+                if (year>1 .and. doy>1) error = .true.
+              endif
+            endif
           endif
-          if (u(1,i,j,k).lt.u_min_CFL(j)) then
-            print *
-            print *,'WARNING: violation of CFL criterium!'
-            print *,'(i,j,k)',i,j,k
-            print *,'doy',doy
-            print *,'u',u(1,i,j,k)
-            print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
-            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-            if (year>1 .and. doy>1) error = .true.
-          endif
-          if (u(2,i,j,k).gt.v_max_CFL) then
-            print *
-            print *,'WARNING: violation of CFL criterium!'
-            print *,'(i,j,k)',i,j,k
-            print *,'doy',doy
-            print *,'v',u(2,i,j,k)
-            print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
-            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-            if (year>1 .and. doy>1) error = .true.
-          endif
-          if (u(2,i,j,k).lt.v_min_CFL) then
-            print *
-            print *,'WARNING: violation of CFL criterium!'
-            print *,'(i,j,k)',i,j,k
-            print *,'doy',doy
-            print *,'v',u(2,i,j,k)
-            print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
-            print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-            if (year>1 .and. doy>1) error = .true.
+          if (mask_v(i,j,k).eq.1) then
+            if (u(2,i,j,k).ne.u(2,i,j,k)) then
+              print *
+              print *,'NaN velocity in ocn!'
+              print *,'(i,j,k)',i,j,k
+              print *,'doy',doy
+              print *,'v',u(2,i,j,k)
+              error = .true.
+            else
+              if (u(2,i,j,k).gt.v_max_CFL) then
+                print *
+                print *,'WARNING: violation of CFL criterium!'
+                print *,'(i,j,k)',i,j,k
+                print *,'doy',doy
+                print *,'v',u(2,i,j,k)
+                print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
+                print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
+                if (year>1 .and. doy>1) error = .true.
+              endif
+              if (u(2,i,j,k).lt.v_min_CFL) then
+                print *
+                print *,'WARNING: violation of CFL criterium!'
+                print *,'(i,j,k)',i,j,k
+                print *,'doy',doy
+                print *,'v',u(2,i,j,k)
+                print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
+                print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
+                if (year>1 .and. doy>1) error = .true.
+              endif
+            endif
           endif
         enddo
       enddo

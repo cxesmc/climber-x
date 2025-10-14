@@ -857,6 +857,19 @@ contains
         ocn%bmelt_flt = cmn%bmelt_flt_o
         ocn%bmelt     = ocn%bmelt_grd+ocn%bmelt_flt
         ocn%fw_dhdt_ice = cmn%fw_dhdt_ice_o
+      elsewhere
+        ocn%p_e_sic     = 0._wp 
+        ocn%fw_brines   = 0._wp 
+        ocn%runoff      = 0._wp 
+        ocn%runoff_veg  = 0._wp 
+        ocn%runoff_ice  = 0._wp 
+        ocn%runoff_lake = 0._wp 
+        ocn%melt_ice    = 0._wp 
+        ocn%calving     = 0._wp 
+        ocn%bmelt_grd   = 0._wp 
+        ocn%bmelt_flt   = 0._wp 
+        ocn%bmelt       = 0._wp 
+        ocn%fw_dhdt_ice = 0._wp 
       endwhere
     endif
 

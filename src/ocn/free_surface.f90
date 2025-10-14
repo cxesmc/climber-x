@@ -43,12 +43,13 @@ contains
   !   Subroutine :  f r e e _ s u r f a c e
   !   Purpose    :  diagnose elevation of the free surface 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine free_surface(rho, ssh)
+  subroutine free_surface(rho, ssh, error)
 
     implicit none
 
     real(wp), intent(in) :: rho(:,:,:)
     real(wp), intent(out) :: ssh(:,:)
+    logical, intent(inout) :: error
 
     real(wp), allocatable :: rho_tmp(:,:,:)
     real(wp), allocatable :: rho_tmp1(:,:,:)
@@ -78,7 +79,7 @@ contains
 
     n = 0
 
-    do while (flag)
+    loop : do while (flag)
 
       n=n+1
       flag = .false.
@@ -92,30 +93,36 @@ contains
             do k=k_ref,k1(i,j)-1
               if (rho_tmp(i,j,k).eq.misval) then  
                 if (n.gt.1e5) then
-                  print *,'stuck in free_surface loop'
-                  print *,i,j,k
-                  print *,k1(i,j),k_ref
-                  print *,mask_ocn(i,j)
-                  print *,rho_tmp(i,j,k)
                   print *
+                  print *,'ERROR: stuck in ocean free_surface loop'
+                  print *,'i,j,k',i,j,k
+                  print *,'k1,k_ref',k1(i,j),k_ref
+                  print *,'mask_ocn',mask_ocn(i,j)
+                  print *,'rho',rho_tmp(i,j,k)
+                  print *
+                  print *,'mask'
                   print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
                   print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
                   print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),j)
                   print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-1))
                   print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-2))
                   print *
+                  print *,'k1'
                   print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
                   print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
                   print '(5i4)', k1(max(1,i-2):min(maxi,i+2),j)
                   print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-1))
                   print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-2))
                   print *
+                  print *,'rho'
                   print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+2),k)
                   print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+1),k)
                   print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),j,k)
                   print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-1),k)
                   print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-2),k)
-                  stop
+                  !stop
+                  error = .true.
+                  exit loop
                 endif
                 flag = .true.
                 ! mean density from neighbor wet cells at same level
@@ -164,7 +171,7 @@ contains
 
       rho_tmp = rho_tmp1
 
-    enddo
+    enddo loop
 
     ! derive free surface elevation
     do j=1,maxj
