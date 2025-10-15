@@ -497,3 +497,51 @@
   grid_alpha     = 2.5  
 /
 
+&NH-40KM-Pangea-300Ma
+  grid_name      = NH-40KM-Pangea-300Ma
+  grid_type      = polar_stereographic
+  grid_dx        = 40.0
+  grid_nx        = 450
+  grid_ny        = 450
+  grid_x0        = -9000.0
+  grid_y0        = -9000.0
+  grid_lambda    = 0.0
+  grid_phi       = 70.0
+/
+
+&SH-40KM-Pangea-300Ma
+  grid_name      = SH-40KM-Pangea-300Ma
+  grid_type      = polar_stereographic
+  grid_dx        = 40.0
+  grid_nx        = 680
+  grid_ny        = 680
+  grid_x0        = -13600.0
+  grid_y0        = -13600.0
+  grid_lambda    = 0.0
+  grid_phi       = -70.0
+/
+
+&NH-80KM-Pangea-300Ma
+  grid_name      = NH-80KM-Pangea-300Ma
+  grid_type      = polar_stereographic
+  grid_dx        = 80.0
+  grid_nx        = 225
+  grid_ny        = 225
+  grid_x0        = -9000.0
+  grid_y0        = -9000.0
+  grid_lambda    = 60.0
+  grid_phi       = 90.0
+/
+
+&SH-80KM-Pangea-300Ma
+  grid_name      = SH-80KM-Pangea-300Ma
+  grid_type      = polar_stereographic
+  grid_dx        = 80.0
+  grid_nx        = 225
+  grid_ny        = 225
+  grid_x0        = -9000.0
+  grid_y0        = -9000.0
+  grid_lambda    = 0.0
+  grid_phi       = -90.0
+/
+
