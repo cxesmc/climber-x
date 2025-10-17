@@ -473,9 +473,12 @@ contains
       if (i0.eq.i1_old) then
         tair_0 = tair_1
         qair_0 = qair_1
-        rain_0 = rain_1
-        prc_0 = prc_1
-        snow_0 = snow_1
+        if (prc_forcing.eq.0) then
+          rain_0 = rain_1
+          snow_0 = snow_1
+        else if (prc_forcing.eq.1) then
+          prc_0 = prc_1
+        endif
         wind_0 = wind_1
         usur_0 = usur_1
         vsur_0 = vsur_1
@@ -486,11 +489,16 @@ contains
         cld_0 = cld_1
         lwdown_0 = lwdown_1
         swdown_0 = swdown_1
+        swdown_c_0 = swdown_c_1
         call nc_read(trim(fake_atm_var_file),"tair",tair_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
         call nc_read(trim(fake_atm_var_file),"qair",qair_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
-        call nc_read(trim(fake_atm_var_file),"rain",rain_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
-        call nc_read(trim(fake_atm_var_file),"snow",snow_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
-        prc_1(:,:,1:12) = rain_1(:,:,1:12) + snow_1(:,:,1:12)
+        if (prc_forcing.eq.0) then
+          call nc_read(trim(fake_atm_var_file),"rain",rain_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
+          call nc_read(trim(fake_atm_var_file),"snow",snow_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
+          prc_1(:,:,1:12) = rain_1(:,:,1:12) + snow_1(:,:,1:12)
+        else if (prc_forcing.eq.1) then
+          call nc_read(trim(fake_atm_var_file),"prc",prc_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
+        endif
         call nc_read(trim(fake_atm_var_file),"u10",wind_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
         call nc_read(trim(fake_atm_var_file),"v10",wind_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
         call nc_read(trim(fake_atm_var_file),"wind",wind_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
@@ -503,12 +511,20 @@ contains
         call nc_read(trim(fake_atm_var_file),"cld",cld_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
         call nc_read(trim(fake_atm_var_file),"lwdown",lwdown_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
         call nc_read(trim(fake_atm_var_file),"swdown",swdown_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
+        if (flag_smb) then
+          call nc_read(fake_atm_var_file,"swdown_c",swdown_c_1,start=[1,1,1,i1],count=[ni,nj,12,1] )
+        else
+          swdown_c_1 = swdown_1
+        endif
       endif
       tair(:,:,1:12) = w0*tair_0 + w1*tair_1
       qair(:,:,1:12) = w0*qair_0 + w1*qair_1
-      rain(:,:,1:12) = w0*rain_0 + w1*rain_1
-      prc(:,:,1:12) = w0*prc_0 + w1*prc_1
-      snow(:,:,1:12) = w0*snow_0 + w1*snow_1
+      if (prc_forcing.eq.0) then
+        rain(:,:,1:12) = w0*rain_0 + w1*rain_1
+        snow(:,:,1:12) = w0*snow_0 + w1*snow_1
+      else if (prc_forcing.eq.1) then
+        prc(:,:,1:12) = w0*prc_0 + w1*prc_1
+      endif
       usur(:,:,1:12)    = w0*usur_0 + w1*usur_1
       vsur(:,:,1:12)    = w0*vsur_0 + w1*vsur_1
       wind(:,:,1:12) = w0*wind_0 + w1*wind_1
@@ -521,6 +537,7 @@ contains
       cld(:,:,1:12) = w0*cld_0 + w1*cld_1
       lwdown(:,:,1:12) = w0*lwdown_0 + w1*lwdown_1
       swdown(:,:,1:12) = w0*swdown_0 + w1*swdown_1
+      swdown_c(:,:,1:12) = w0*swdown_c_0 + w1*swdown_c_1
 
       atm%tair_min_mon = tair_min_mon
 
@@ -528,14 +545,18 @@ contains
       tair(:,:,0)  = tair(:,:,12)
       qair(:,:,0) = qair(:,:,12)
       cld(:,:,0)  = cld(:,:,12)
-      prc(:,:,0)  = prc(:,:,12)
-      rain(:,:,0)  = rain(:,:,12)
-      snow(:,:,0) = snow(:,:,12)
+      if (prc_forcing.eq.0) then
+        rain(:,:,0)  = rain(:,:,12)
+        snow(:,:,0) = snow(:,:,12)
+      else if (prc_forcing.eq.1) then
+        prc(:,:,0)  = prc(:,:,12)
+      endif
       pressure(:,:,0)  = pressure(:,:,12)
       slp(:,:,0)  = slp(:,:,12)
       tsl(:,:,0)  = tsl(:,:,12)
       htrop(:,:,0)  = htrop(:,:,12)
       swdown(:,:,0) = swdown(:,:,12)
+      swdown_c(:,:,0) = swdown_c(:,:,12)
       lwdown(:,:,0)  = lwdown(:,:,12)
       usur(:,:,0) = usur(:,:,12)
       vsur(:,:,0) = vsur(:,:,12)
@@ -546,14 +567,18 @@ contains
       tair(:,:,13)  = tair(:,:,1)
       qair(:,:,13) = qair(:,:,1)
       cld(:,:,13)  = cld(:,:,1)
-      prc(:,:,13)  = prc(:,:,1)
-      rain(:,:,13)  = rain(:,:,1)
-      snow(:,:,13) = snow(:,:,1)
+      if (prc_forcing.eq.0) then
+        rain(:,:,13)  = rain(:,:,1)
+        snow(:,:,13) = snow(:,:,1)
+      else if (prc_forcing.eq.1) then
+        prc(:,:,13)  = prc(:,:,1)
+      endif
       pressure(:,:,13)  = pressure(:,:,1)
       slp(:,:,13)  = slp(:,:,1)
       tsl(:,:,13)  = tsl(:,:,1)
       htrop(:,:,13)  = htrop(:,:,1)
       swdown(:,:,13) = swdown(:,:,1)
+      swdown_c(:,:,13) = swdown_c(:,:,1)
       lwdown(:,:,13)  = lwdown(:,:,1)
       usur(:,:,13) = usur(:,:,1)
       vsur(:,:,13) = vsur(:,:,1)
@@ -565,9 +590,12 @@ contains
 
     atm%tair  = wtm0(doy)*tair(:,:,m0(doy))    + wtm1(doy)*tair(:,:,m1(doy))
     atm%qair  = wtm0(doy)*qair(:,:,m0(doy))    + wtm1(doy)*qair(:,:,m1(doy))
-    atm%rain  = wtm0(doy)*rain(:,:,m0(doy))    + wtm1(doy)*rain(:,:,m1(doy))
-    atm%snow  = wtm0(doy)*snow(:,:,m0(doy))    + wtm1(doy)*snow(:,:,m1(doy))
-    atm%prc   = wtm0(doy)*prc(:,:,m0(doy))     + wtm1(doy)*prc(:,:,m1(doy))
+    if (prc_forcing.eq.0) then
+      atm%rain  = wtm0(doy)*rain(:,:,m0(doy))    + wtm1(doy)*rain(:,:,m1(doy))
+      atm%snow  = wtm0(doy)*snow(:,:,m0(doy))    + wtm1(doy)*snow(:,:,m1(doy))
+    else if (prc_forcing.eq.1) then
+      atm%prc   = wtm0(doy)*prc(:,:,m0(doy))     + wtm1(doy)*prc(:,:,m1(doy))
+    endif
     atm%usur  = wtm0(doy)*usur(:,:,m0(doy))    + wtm1(doy)*usur(:,:,m1(doy))
     atm%vsur  = wtm0(doy)*vsur(:,:,m0(doy))    + wtm1(doy)*vsur(:,:,m1(doy))
     atm%wind  = wtm0(doy)*wind(:,:,m0(doy))    + wtm1(doy)*wind(:,:,m1(doy))
@@ -580,6 +608,14 @@ contains
     atm%cld   = wtm0(doy)*cld(:,:,m0(doy))     + wtm1(doy)*cld(:,:,m1(doy))
     atm%lwdown  = wtm0(doy)*lwdown(:,:,m0(doy))    + wtm1(doy)*lwdown(:,:,m1(doy))
     atm%swdown  = wtm0(doy)*swdown(:,:,m0(doy))    + wtm1(doy)*swdown(:,:,m1(doy))
+    atm%swdown_c  = wtm0(doy)*swdown_c(:,:,m0(doy))    + wtm1(doy)*swdown_c(:,:,m1(doy))
+
+    ! derive diffuse downward surface radiation
+    where (atm%cld.gt.0.1_wp)
+      atm%swdown_d = (atm%swdown-(1._wp-atm%cld)*atm%swdown_c) / atm%cld
+    elsewhere
+      atm%swdown_d = atm%swdown
+    endwhere
 
     where (atm%qair.lt.1e-6_wp)
       atm%qair = 1.e-6_wp
