@@ -8,7 +8,7 @@ from subprocess import *
 from distutils.dir_util import copy_tree
 
 def usage():
-    print('''
+    print(r'''
     #### USAGE ####
       
       This script will perform actions needed to start running
