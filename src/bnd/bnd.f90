@@ -175,7 +175,8 @@ contains
       endif
       ! if feedback analysis
       if (l_feedbacks) then
-        if (year.gt.nyears/2)   bnd%co2 = co2_const
+        if (year.le.nyears/2)   bnd%co2 = min(2._wp*co2_const, bnd%co2*(1._wp+dco2_dt/100._wp))
+        if (year.gt.nyears/2)   bnd%co2 = max(co2_const, bnd%co2*(1._wp-dco2_dt/100._wp)) 
       endif
 
       ! update atmospheric CO2 concentration for radiation if required
@@ -359,7 +360,7 @@ contains
     endif
     ! if feedback analysis
     if (l_feedbacks) then
-      bnd%co2 = co2_const*2._wp
+      bnd%co2 = 280._wp
     endif
 
     ! initialize atmospheric CO2 for radiation
