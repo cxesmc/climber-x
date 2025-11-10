@@ -33,7 +33,7 @@ module geo_mod
   use coord, only : grid_class, grid_init
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
   use ncio
-  use geo_params, only : i_geo, geo_ref_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
+  use geo_params, only : i_geo, geo_ref_file, i_sigma_subgrid, sigma_subgrid_const, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
   use geo_params, only : z_bed_rel_file, z_bed_1min_file, sigma_filter
   use geo_params, only : geo_params_init, l_connect_ocn, f_crit, n_coast_cells, i_fix_cell_grl
   use geo_params, only : h_ice_min
@@ -116,6 +116,7 @@ contains
     allocate( geo%hires%h_ice_ref(ni_topo,nj_topo))
     allocate( geo%hires%z_topo_ref(ni_topo,nj_topo))
     allocate( geo%hires%mask_ref(ni_topo,nj_topo))
+    allocate( geo%hires%sigma_subgrid(ni_topo,nj_topo))
     allocate( geo%hires%z_bed(ni_topo,nj_topo))
     allocate( geo%hires%z_bed_eq(ni_topo,nj_topo))
     allocate( geo%hires%z_bed_rel(ni_topo,nj_topo))
@@ -187,13 +188,21 @@ contains
     allocate(geo%q_geo(ni,nj))
 
     !-------------------------------------------------------------------
-    ! reference present day bedrock topography
+    ! reference (present day) bedrock topography
     !-------------------------------------------------------------------
 
     call nc_read(trim(geo_ref_file),"bedrock_topography",geo%hires%z_bed_ref)
     call nc_read(trim(geo_ref_file),"ice_thickness",geo%hires%h_ice_ref)
     ! add optional uniform offset to bedrock elevation
     geo%hires%z_bed_ref = geo%hires%z_bed_ref + dz_bed_ini
+    ! standard deviation of subgrid topography
+    if (i_sigma_subgrid.eq.1) then
+      ! read from file
+      call nc_read(trim(geo_ref_file),"sigma_subgrid",geo%hires%sigma_subgrid)
+    else if (i_sigma_subgrid.eq.0) then
+      ! set to constant uniform value
+      geo%hires%sigma_subgrid = sigma_subgrid_const  
+    endif
 
     !------------------------------------------------------------------------
     ! restart 
@@ -845,7 +854,8 @@ contains
   ! derive fractions, topography and runoff on coarse resolution
   !-------------------------------------------------------------------
   !$ time1 = omp_get_wtime()
-  call hires_to_lowres(geo%n_lakes, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, geo%hires%z_bed, geo%hires%z_sur, & ! in
+  call hires_to_lowres(geo%n_lakes, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, &  ! in
+    geo%hires%z_bed, geo%hires%z_sur, geo%hires%sigma_subgrid, & ! in
     geo%hires%map_runoff, geo%hires%i_runoff_coarse, geo%hires%j_runoff_coarse, &   ! in
     geo%f_ocn, geo%f_ocn2, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_ice_flt, geo%f_lake, geo%f_lake_n, &
     geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
@@ -982,6 +992,7 @@ contains
     deallocate(geo%hires%h_ice_ref)
     deallocate(geo%hires%z_topo_ref)
     deallocate(geo%hires%mask_ref)
+    deallocate(geo%hires%sigma_subgrid)
     deallocate(geo%hires%z_bed)
     deallocate(geo%hires%z_bed_eq)
     deallocate(geo%hires%z_bed_rel)

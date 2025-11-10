@@ -28,8 +28,15 @@
  ! reference high resolution geo file 
  !-------------------------------------------------------
  geo_ref_file       = "input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc"
-
  dz_bed_ini = 0.0
+
+ !-------------------------------------------------------
+ ! standard deviation of subgrid topography 
+ !-------------------------------------------------------
+ i_sigma_subgrid = 0            ! standard deviation of subgrid topography on the high-resolution geo grid:
+                                ! 0 = constant uniform value sigma_subgrid_const
+                                ! 1 = read from file (sigma_subgrid variable in geo_ref_file)
+ sigma_subgrid_const = 0.0      ! constant uniform standard deviation of subgrid topography 
 
  !-------------------------------------------------------
  ! icefree bedrock topography at 1 min resolution

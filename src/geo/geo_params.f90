@@ -43,6 +43,8 @@ module geo_params
   real(wp) :: dz_bed_ini
 
   character (len=256) :: geo_ref_file
+  integer :: i_sigma_subgrid
+  real(wp) :: sigma_subgrid_const
   character (len=256) :: geo_eq_file
 
   character (len=256) :: z_bed_rel_file
@@ -136,6 +138,8 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","dz_bed_ini",dz_bed_ini)
     call nml_read(filename,"geo_par","geo_eq_file",geo_eq_file)
     call nml_read(filename,"geo_par","geo_ref_file",geo_ref_file)
+    call nml_read(filename,"geo_par","i_sigma_subgrid",i_sigma_subgrid)
+    call nml_read(filename,"geo_par","sigma_subgrid_const",sigma_subgrid_const)
     call nml_read(filename,"geo_par","z_bed_rel_file",z_bed_rel_file)
     call nml_read(filename,"geo_par","z_bed_1min_file",z_bed_1min_file)
     call nml_read(filename,"geo_par","i_lakes",i_lakes)

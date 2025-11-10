@@ -42,10 +42,11 @@ module hires_to_lowres_mod
 
 contains
 
-  subroutine hires_to_lowres(n_lakes, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, &
+  subroutine hires_to_lowres(n_lakes, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, hires_sigma_subgrid, &
     hires_map_runoff, hires_i_runoff, hires_j_runoff, &  ! in
     f_ocn, f_ocn2, f_lnd, f_ice, f_ice_grd, f_ice_flt, f_lake, f_lake_n, &   ! out
-    z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, z_sur_std, z_sur_smooth_std, z_veg_std, z_sur_lnd_std, &    ! out
+    z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, &   ! out
+    z_sur_std, z_sur_smooth_std, z_veg_std, z_sur_lnd_std, &    ! out
     f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice)   ! out
 
   implicit none
@@ -57,6 +58,7 @@ contains
   real(wp), intent(in) :: hires_z_topo_fil(:,:)
   real(wp), intent(in) :: hires_z_bed(:,:)
   real(wp), intent(in) :: hires_z_sur(:,:)
+  real(wp), intent(in) :: hires_sigma_subgrid(:,:)
   integer, intent(in) :: hires_map_runoff(:,:)
   integer, intent(in) :: hires_i_runoff(:,:)
   integer, intent(in) :: hires_j_runoff(:,:)
@@ -96,6 +98,7 @@ contains
   integer :: i, j, ii, jj, n, nocn, nice, nice_grd, nice_flt, nveg, nlake, nlaken, ncells, nrun_veg, nrun_ice, dir_loc, dir_loc_save, nrun_tot
   real(wp) :: fcrit
   real(wp) :: z_sur_lnd, z_bed_lnd
+  real(wp) :: variance_subgrid, variance_mean
 
   logical, dimension(:), allocatable :: mask_ndir
   integer, dimension(:), allocatable :: i_runoff_cell
@@ -106,6 +109,7 @@ contains
   real(wp), dimension(:), allocatable :: z_topo_fil_cell
   real(wp), dimension(:), allocatable :: z_sur_cell
   real(wp), dimension(:), allocatable :: z_bed_cell
+  real(wp), dimension(:), allocatable :: sigma_subgrid_cell
   real(wp), dimension(:), allocatable :: z_ocn_tmp
   real(wp), dimension(:), allocatable :: z_ocn_tmp2
   integer, dimension(:), allocatable :: map_runoff_cell
@@ -117,6 +121,7 @@ contains
   allocate( z_topo_fil_cell(n_topo_sur) )
   allocate( z_sur_cell(n_topo_sur) )
   allocate( z_bed_cell(n_topo_sur) )
+  allocate( sigma_subgrid_cell(n_topo_sur) )
   allocate( map_runoff_cell(n_topo_sur) )
   allocate( mask_cell_roff(n_topo_sur) )
   allocate( i_runoff_cell(n_topo_sur))
@@ -130,7 +135,8 @@ contains
 
   !$omp parallel do private(i,j,ii,jj,n,fcrit,nocn,nice,nice_grd,nice_flt,nveg,nlake,nlaken,ncells,nrun_veg,nrun_ice) &
   !$omp private(mask_ndir,i_runoff_cell,j_runoff_cell,dir_count,dir_loc,dir_loc_save,nrun_tot) &
-  !$omp private(mask_cell,z_topo_cell,z_topo_fil_cell,z_sur_cell,z_bed_cell,z_ocn_tmp,map_runoff_cell,mask_cell_roff,z_sur_lnd,z_bed_lnd)
+  !$omp private(mask_cell,z_topo_cell,z_topo_fil_cell,z_sur_cell,z_bed_cell,sigma_subgrid_cell,z_ocn_tmp,map_runoff_cell,mask_cell_roff) &
+  !$omp private(z_sur_lnd,z_bed_lnd,variance_subgrid,variance_mean)
   do j=1,nj
     do i=1,ni
 
@@ -139,6 +145,7 @@ contains
       z_topo_fil_cell = pack(hires_z_topo_fil(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
       z_sur_cell = pack(hires_z_sur(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
       z_bed_cell = pack(hires_z_bed(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
+      sigma_subgrid_cell = pack(hires_sigma_subgrid(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
       map_runoff_cell = pack(hires_map_runoff(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
 
       ! ocean fraction
@@ -446,8 +453,16 @@ contains
 
       ! standard deviation of grid cell surface elevation 
       if (f_lnd(i,j).gt.0._wp) then
-        z_sur_std(i,j) = sqrt(sum((max(0._wp,z_topo_cell)-z_sur(i,j))**2) / real(n_topo_sur-1,wp))
-        z_sur_smooth_std(i,j) = sqrt(sum((max(0._wp,z_topo_cell)-max(0._wp,z_topo_fil_cell))**2) / real(n_topo_sur-1,wp))
+        ! mean of variance of subgrid topography
+        variance_subgrid = sum(sigma_subgrid_cell**2) / real(n_topo_sur,wp)
+        ! variance of mean topography on the hires grid
+        variance_mean = sum((max(0._wp,z_topo_cell)-z_sur(i,j))**2) / real(n_topo_sur-1,wp)
+        ! law of total variance: 
+        z_sur_std(i,j) = sqrt( variance_subgrid + variance_mean )
+        ! variance of mean topography on the hires grid
+        variance_mean = sum((max(0._wp,z_topo_cell)-max(0._wp,z_topo_fil_cell))**2) / real(n_topo_sur-1,wp) 
+        ! law of total variance: 
+        z_sur_smooth_std(i,j) = sqrt( variance_subgrid + variance_mean )
       else 
         z_sur_std(i,j) = 0._wp
         z_sur_smooth_std(i,j) = 0._wp
@@ -486,7 +501,12 @@ contains
 
       ! grid-cell mean ice-free standard deviation, including lakes 
       if ((nveg+nlake-1).gt.0) then
-        z_veg_std(i,j) = sqrt(sum((max(0._wp,z_topo_cell)-z_veg(i,j))**2, mask_cell.eq.1 .or. mask_cell.eq.4) / real(nveg+nlake-1,wp))
+        ! mean of variance of subgrid topography
+        variance_subgrid = sum(sigma_subgrid_cell**2,mask_cell.eq.1 .or. mask_cell.eq.4) / real(nveg+nlake,wp)
+        ! variance of mean topography on the hires grid
+        variance_mean = sum((max(0._wp,z_topo_cell)-z_veg(i,j))**2, mask_cell.eq.1 .or. mask_cell.eq.4) / real(nveg+nlake-1,wp)
+        ! law of total variance: 
+        z_veg_std(i,j) = sqrt( variance_subgrid + variance_mean )
       else
         z_veg_std(i,j) = 0._wp
       endif
@@ -511,9 +531,14 @@ contains
       ! grid-cell standard deviation of bedrock elevation over land
       if (nveg+nlake+nice_grd.gt.1) then
         z_sur_lnd = sum(z_topo_cell, mask_cell.eq.0 .or. mask_cell.eq.1 .or. mask_cell.ne.4)/real(nveg+nlake+nice_grd,wp)
-        z_sur_lnd_std(i,j) = sqrt(sum((max(0._wp,z_topo_cell)-max(0._wp,z_sur_lnd))**2, mask_cell.eq.0 .or. mask_cell.eq.1 .or. mask_cell.ne.4) &
-          / real(nveg+nlake+nice_grd-1,wp))
         z_bed_lnd = sum(z_bed_cell, mask_cell.eq.0 .or. mask_cell.eq.1 .or. mask_cell.ne.4)/real(nveg+nlake+nice_grd,wp)
+        ! mean of variance of subgrid topography
+        variance_subgrid = sum(sigma_subgrid_cell**2,mask_cell.eq.0 .or. mask_cell.eq.1 .or. mask_cell.eq.4) / real(nveg+nlake+nice_grd,wp)
+        ! variance of mean topography on the hires grid
+        variance_mean = sqrt(sum((max(0._wp,z_topo_cell)-max(0._wp,z_sur_lnd))**2, mask_cell.eq.0 .or. mask_cell.eq.1 .or. mask_cell.ne.4) &
+            / real(nveg+nlake+nice_grd-1,wp))
+        ! law of total variance: 
+        z_sur_lnd_std(i,j) = sqrt( variance_subgrid + variance_mean )
       else
         z_sur_lnd_std(i,j) = 0._wp
       endif

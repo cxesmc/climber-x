@@ -67,6 +67,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: h_ice_ref     !! present day ice thickness [m]
       real(wp), dimension(:,:), allocatable :: z_topo_ref     !! present day reference topography [m]
       integer,  dimension(:,:), allocatable :: mask_ref     !! present day reference mask [1]
+      real(wp), dimension(:,:), allocatable :: sigma_subgrid    !! standard deviation of subgrid topography on the highres grid, read from file [m]
       real(wp), dimension(:,:), allocatable :: z_topo     !! topography [m]
       real(wp), dimension(:,:), allocatable :: z_topo_fil     !! filtered topography [m]
       real(wp), dimension(:,:), allocatable :: z_topo_fill     !! filled topography [m]
