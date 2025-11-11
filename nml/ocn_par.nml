@@ -25,6 +25,7 @@
                               ! 0 = automatic
                               ! 1 = specify specific islands (l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame), valid for present-day geography
                               ! 2 = specify islands manually by defining number of islands
+ isl_area_min = 0.0           ! mln km2, minimum island area in order to be explicitly considered as an island for barotropic flow, used only if i_isl==0
  l_isl_ant = T                ! is Antarctica considered an island for barotropic flow? Only for i_isl==1
  l_isl_aus = T                ! is Australia considered an island for barotropic flow? Only for i_isl==1
  l_isl_grl = F                ! is Greenland considered an island for barotropic flow? Only for i_isl==1

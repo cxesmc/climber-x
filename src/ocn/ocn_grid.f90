@@ -32,11 +32,11 @@ module ocn_grid
   use ncio
   use timer, only : year
   use constants, only : pi, r_earth
-  use climber_grid, only: ni, nj, lon, lat, basin_mask, i_atlantic
+  use climber_grid, only: ni, nj, lon, lat, basin_mask, i_atlantic, area
   use control, only: in_dir, out_dir
   use ocn_params, only : shelf_depth, nlayers, i_smooth, smooth_fac, zw_in
   use ocn_params, only : z_mix_brines, dbl
-  use ocn_params, only : i_isl, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
+  use ocn_params, only : i_isl, isl_area_min, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
   
   use, intrinsic :: iso_c_binding 
 
@@ -579,6 +579,7 @@ contains
     integer :: flagi, sum1i, sum2i
     logical :: is_mainland
     logical :: is_island
+    real(wp) :: isl_area
     real(wp) :: zfac
     real(dp) :: ocn_vol_tot_1000
     real(dp) :: ocn_vol_tot_old
@@ -914,6 +915,12 @@ contains
                 endwhere
               else
                 n_isles = n_isles+1 ! increase index
+                if (n_isles.gt.maxisles) then
+                  print *
+                  print *,'ERROR: number of islands in the ocean larger than maximum allowed number: ', n_isles, '>', maxisles
+                  print *,'increase maxisles in src/ocn/ocn_grid.f90'
+                  stop 'ERROR: number of islands in the ocean larger than maximum allowed number, increase maxisles in src/ocn/ocn_grid.f90'
+                endif
                 map_edge(:,:,n_isles) = edge
                 where (islands.eq.1)
                   map_isles = n_isles
@@ -945,6 +952,12 @@ contains
                 endwhere
               else
                 n_isles = n_isles+1 ! increase index
+                if (n_isles.gt.maxisles) then
+                  print *
+                  print *,'ERROR: number of islands in the ocean larger than maximum allowed number: ', n_isles, '>', maxisles
+                  print *,'increase maxisles in src/ocn/ocn_grid.f90'
+                  stop 'ERROR: number of islands in the ocean larger than maximum allowed number, increase maxisles in src/ocn/ocn_grid.f90'
+                endif
                 map_edge(:,:,n_isles) = edge
                 where (islands.eq.1)
                   map_isles = n_isles
@@ -960,9 +973,16 @@ contains
 
           if (i_isl.eq.0) then
             ! automatic island determination
-            if (ncells>50) then 
+            isl_area = sum(area, islands==1)*1.e-12_wp      ! mln km2
+            if (isl_area>isl_area_min) then 
               ! create new island
               n_isles = n_isles+1 ! increase index
+              if (n_isles.gt.maxisles) then
+                print *
+                print *,'ERROR: number of islands in the ocean larger than maximum allowed number: ', n_isles, '>', maxisles
+                print *,'increase maxisles in src/ocn/ocn_grid.f90'
+                stop 'ERROR: number of islands in the ocean larger than maximum allowed number, increase maxisles in src/ocn/ocn_grid.f90'
+              endif
               map_edge(:,:,n_isles) = edge
               where (islands.eq.1)
                 map_isles = n_isles

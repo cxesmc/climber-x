@@ -55,6 +55,7 @@ module ocn_params
      real(wp) :: smooth_fac
      real(wp), dimension(:), allocatable :: zw_in
      integer :: i_isl
+     real(wp) :: isl_area_min
      logical :: l_isl_ant
      logical :: l_isl_aus
      logical :: l_isl_grl
@@ -227,6 +228,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","i_smooth",i_smooth)
     call nml_read(filename,"ocn_par","smooth_fac",smooth_fac)
     call nml_read(filename,"ocn_par","i_isl",i_isl)
+    call nml_read(filename,"ocn_par","isl_area_min",isl_area_min)
     call nml_read(filename,"ocn_par","l_isl_ant",l_isl_ant)
     call nml_read(filename,"ocn_par","l_isl_aus",l_isl_aus)
     call nml_read(filename,"ocn_par","l_isl_grl",l_isl_grl)
