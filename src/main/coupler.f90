@@ -2780,8 +2780,8 @@ contains
     allocate(calving_ice_i(cmn%grid%G%nx,cmn%grid%G%ny))
     allocate(bmelt_grd_i(cmn%grid%G%nx,cmn%grid%G%ny))
     allocate(bmelt_flt_i(cmn%grid%G%nx,cmn%grid%G%ny))
-    do i=1,cmn%grid%G%nx
-      do j=1,cmn%grid%G%ny
+    do j=1,cmn%grid%G%ny
+      do i=1,cmn%grid%G%nx
         if (ice%grid_ice_to_cmn%ncells(i,j)>0) then
           calving_ice_i(i,j) = 0._wp
           bmelt_grd_i(i,j) = 0._wp
@@ -2791,9 +2791,8 @@ contains
     enddo
 
     ! integrate over grid cell ice sheet area
-    !!$omp parallel do private(ii,jj,i,j)
-    do ii=1,ice%grid%G%nx
-      do jj=1,ice%grid%G%ny
+    do jj=1,ice%grid%G%ny
+      do ii=1,ice%grid%G%nx
         i = ice%grid_ice_to_cmn%i_lowres(ii,jj)
         j = ice%grid_ice_to_cmn%j_lowres(ii,jj)
         calving_ice_i(i,j) = calving_ice_i(i,j) + &
@@ -2809,11 +2808,10 @@ contains
         endif
       enddo
     enddo
-    !!$omp end parallel do
 
     ! smooth calving and basal melt in time 
-    do i=1,cmn%grid%G%nx
-      do j=1,cmn%grid%G%ny
+    do j=1,cmn%grid%G%ny
+      do i=1,cmn%grid%G%nx
         if (ice%grid_ice_to_cmn%ncells(i,j)>0) then
           cmn%calving_ice_i(i,j) = relax_calv*cmn%calving_ice_i(i,j) + (1._wp-relax_calv)*calving_ice_i(i,j)
           cmn%bmelt_grd_i(i,j) = relax_bmelt*cmn%bmelt_grd_i(i,j) + (1._wp-relax_bmelt)*bmelt_grd_i(i,j)
@@ -2908,8 +2906,8 @@ contains
 
     do n=1,n_ice_domain ! loop over all ice domains
 
-      do i=1, ice(n)%grid%G%nx
-        do j=1, ice(n)%grid%G%ny
+      do j=1, ice(n)%grid%G%ny
+        do i=1, ice(n)%grid%G%nx
           if (ice(n)%H_ice(i,j).gt.0._wp .and. ice(n)%H_ice(i,j).gt.(-ice(n)%z_bed(i,j)*rho_sw/rho_i)) then   ! grounded ice
             ! total grounded ice
             V_grounded = V_grounded + ice(n)%H_ice(i,j) * ice(n)%grid%area(i,j) * 1.e6_wp ! m3
@@ -3372,8 +3370,8 @@ contains
         melt_ice_i_mon(:,:,:) = 0._wp
         cmn%acc_ice_i_mon(:,:,:) = 0._wp
         cmn%dhdt_ice_i_mon(:,:,:) = 0._wp
-        do ii=1,bnd%ice%grid%G%nx
-          do jj=1,bnd%ice%grid%G%ny
+        do jj=1,bnd%ice%grid%G%ny
+          do ii=1,bnd%ice%grid%G%nx
             i = bnd%ice%grid_ice_to_cmn%i_lowres(ii,jj)
             j = bnd%ice%grid_ice_to_cmn%j_lowres(ii,jj)
             if (bnd%ice%h_ice(ii,jj).gt.0._wp) then
@@ -3388,8 +3386,8 @@ contains
         enddo
 
         ! smooth in time 
-        do i=1,cmn%grid%G%nx
-          do j=1,cmn%grid%G%ny
+        do j=1,cmn%grid%G%ny
+          do i=1,cmn%grid%G%nx
             cmn%melt_ice_i_mon(i,j,:) = relax_run*cmn%melt_ice_i_mon(i,j,:) + (1._wp-relax_run)*melt_ice_i_mon(i,j,:)
           enddo
         enddo
