@@ -355,6 +355,7 @@ contains
     call nml_read(filename,"control","smb_restart",smb_restart)
     call nml_read(filename,"control","bmb_restart",bmb_restart)
     call nml_read(filename,"control","restart_in_dir",restart_in_dir)
+    call parse_path_rundir(restart_in_dir)
     call nml_read(filename,"control","i_write_restart",i_write_restart)
     call nml_read(filename,"control","n_year_write_restart",n_year_write_restart)
     years_write_restart(:) = -999999
@@ -394,6 +395,42 @@ contains
    return
 
   end subroutine control_load
+
+  subroutine parse_path_rundir(path)
+
+        implicit none 
+
+        character(len=*), intent(INOUT) :: path
+
+        ! Local variables 
+        character(len=1024) :: cwd 
+        character(len=1024) :: rundir 
+        integer :: n0, n1 
+
+        ! 1. Determine current working directory (full path)
+        ! and trim to the directory name (head of the current path)
+
+        call getcwd(cwd)
+        cwd = trim(adjustl(cwd))
+
+        ! Remove trailing slash if present
+        n1 = len_trim(cwd)
+        if (cwd(n1:n1) .eq. "/") then 
+            cwd = cwd(1:n1-1)
+        end if 
+
+        ! Find last slash and extract current directory basename only
+        n0 = scan(cwd,'/',back=.true.) + 1 
+        n1 = len_trim(cwd)
+        rundir = cwd(n0:n1)
+
+        ! 2. Replace keywords as needed
+
+        call nml_replace(path,"{rundir}",   trim(rundir))
+
+        return 
+
+    end subroutine parse_path_rundir
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   ! Subroutine :  a r g s
