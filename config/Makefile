@@ -8,6 +8,7 @@ srcdir = src
 # Command-line options at make call
 debug  ?= 0  
 openmp ?= 1
+openmp_yelmo ?= $(openmp)
 
 defaulttarget: usage
 
@@ -57,7 +58,7 @@ coord-static:
 	$(MAKE) -C $(COORDROOT) coord-static openmp=$(openmp)
 
 yelmo-static: 
-	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp)
+	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp_yelmo)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
 
 climber-clim: FFLAGS = $(FFLAGS_CLIM)
