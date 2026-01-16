@@ -885,17 +885,10 @@ contains
         ! Write model metrics (model speed, dt, eta)
         call yelmo_write_step_model_metrics(filename,ylmo,n,ncid)
 
-        if (n .eq. 1) then 
-
-            ! Write some constant fields 
-
-            call nc_write(filename,"Q_geo",ylmo%bnd%Q_geo,units="mW/m^2",long_name="Geothermal heat flux", &
-                      dim1="xc",dim2="yc",ncid=ncid)
-        
-        end if 
-
         ! == Boundaries == 
 
+        call nc_write(filename,"Q_geo",ylmo%bnd%Q_geo,units="mW/m^2",long_name="Geothermal heat flux", &
+                      dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
         call nc_write(filename,"z_bed",ylmo%bnd%z_bed,units="m",long_name="Bedrock elevation", &
                       dim1="xc",dim2="yc",dim3="time",start=[1,1,n],ncid=ncid) 
         call nc_write(filename,"z_bed_sd",ylmo%bnd%z_bed_sd,units="m",long_name="Sub-grid standard deviation of bedrock elevation", &

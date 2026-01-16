@@ -390,7 +390,8 @@ def runjob(rundir,cmd,omp):
 
     if omp > 0:
         # && export OMP_THREAD_LIMIT=2"
-        cmd_job = "cd {} && export OMP_NUM_THREADS={} && mpiexec -n {} {} > {} &".format(rundir,omp,omp,cmd,"out.out")
+        #cmd_job = "cd {} && export OMP_NUM_THREADS={} && mpiexec -n {} {} > {} &".format(rundir,omp,omp,cmd,"out.out")
+        cmd_job = "cd {} && export OMP_NUM_THREADS={} && {} > {} &".format(rundir,omp,cmd,"out.out")
     else:
         cmd_job = "cd {} && exec {} > {} &".format(rundir,cmd,"out.out")
         #cmd_job = "cd {} && exec mpiexec -n 1 {} > {} &".format(rundir,cmd,"out.out")
