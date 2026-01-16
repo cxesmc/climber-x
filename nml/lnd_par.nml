@@ -119,7 +119,7 @@
     wind_gust_fac = 0.          ! 1/(1000 m), factor to scale wind to account for topographic roughness-dependent wind gusts
     u0 = 2.                     ! wind velocity threshold [m/s]
     i_fsnow = 1                 ! snow fraction used for dust emission limitation: 1..based on snow thickness | 2..using snow fraction
-    i_theta = 2                 ! soil moisture to use for dust emission limitation: 1..liquid+frozen | 2..only liquid
+    i_theta = 1                 ! soil moisture to use for dust emission limitation: 1..liquid+frozen | 2..only liquid
     sm_t = 0.15                 ! soil moisture of transition [m3/m3]
     sm_n = 10.                  ! normalisation constant
     lai_t = 1.                  ! grass leaf area index of transition [m2/m2]
