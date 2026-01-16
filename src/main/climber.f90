@@ -217,7 +217,7 @@ program climber
       ! loop over ice domains
       do n=1,n_ice_domain
         call ice_init(ice(n),n,ice_model_name,real(year_ini,wp),ice_restart, ice_grid(n), cmn%grid, geo%hires%grid, &
-          geo%hires%z_bed, geo%hires%z_bed_rel, geo%hires%h_ice, geo%hires%q_geo, geo%hires%h_sed)  
+          geo%hires%z_bed, geo%hires%z_bed_rel, geo%hires%h_ice, geo%hires%q_geo_ice, geo%hires%h_sed)  
         where (ice(n)%grid_ice_to_cmn%ncells.gt.0)
           cmn%mask_ice = 1
         endwhere
