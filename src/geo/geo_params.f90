@@ -43,13 +43,13 @@ module geo_params
   real(wp) :: dz_bed_ini
 
   character (len=256) :: geo_ref_file
-  integer :: i_sigma_subgrid
-  real(wp) :: sigma_subgrid_const
+  integer :: i_z_bed_std
+  real(wp) :: z_bed_std_const
+  logical :: l_use_z_bed_std_lowres
+  character (len=256) :: z_bed_std_file
   character (len=256) :: geo_eq_file
 
   character (len=256) :: z_bed_rel_file
-
-  character (len=256) :: z_bed_1min_file
 
   real(wp) :: f_crit
   real(wp) :: f_crit_eq
@@ -138,10 +138,11 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","dz_bed_ini",dz_bed_ini)
     call nml_read(filename,"geo_par","geo_eq_file",geo_eq_file)
     call nml_read(filename,"geo_par","geo_ref_file",geo_ref_file)
-    call nml_read(filename,"geo_par","i_sigma_subgrid",i_sigma_subgrid)
-    call nml_read(filename,"geo_par","sigma_subgrid_const",sigma_subgrid_const)
+    call nml_read(filename,"geo_par","i_z_bed_std",i_z_bed_std)
+    call nml_read(filename,"geo_par","z_bed_std_const",z_bed_std_const)
+    call nml_read(filename,"geo_par","z_bed_std_file",z_bed_std_file)
+    call nml_read(filename,"geo_par","l_use_z_bed_std_lowres",l_use_z_bed_std_lowres)
     call nml_read(filename,"geo_par","z_bed_rel_file",z_bed_rel_file)
-    call nml_read(filename,"geo_par","z_bed_1min_file",z_bed_1min_file)
     call nml_read(filename,"geo_par","i_lakes",i_lakes)
     call nml_read(filename,"geo_par","lake_area_crit",lake_area_crit)
     call nml_read(filename,"geo_par","lake_sea_z_crit",lake_sea_z_crit)

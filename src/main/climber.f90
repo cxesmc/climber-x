@@ -299,7 +299,7 @@ program climber
     if (flag_smb) then
       allocate(smb(n_ice_domain))
       do n=1,n_ice_domain
-        call smb_init(smb_in,smb(n),n,ice_grid(n),cmn%grid,geo%hires%z_bed_1min,geo%hires%lon_1min,geo%hires%lat_1min)  
+        call smb_init(smb_in,smb(n),n,ice_grid(n),cmn%grid)  
         call smb_diag_init(smb(n))
         where (smb(n)%grid_smb_to_cmn%ncells.gt.0)
           cmn%mask_smb = 1
