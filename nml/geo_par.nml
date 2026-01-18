@@ -33,15 +33,12 @@
  !-------------------------------------------------------
  ! standard deviation of subgrid topography 
  !-------------------------------------------------------
- i_sigma_subgrid = 0            ! standard deviation of subgrid topography on the high-resolution geo grid:
-                                ! 0 = constant uniform value sigma_subgrid_const
-                                ! 1 = read from file (sigma_subgrid variable in geo_ref_file)
- sigma_subgrid_const = 0.0      ! constant uniform standard deviation of subgrid topography 
-
- !-------------------------------------------------------
- ! icefree bedrock topography at 1 min resolution
- !-------------------------------------------------------
- z_bed_1min_file  = "input/RTopo-2.0.1_1min.nc"
+ i_z_bed_std = 1                ! standard deviation of subgrid topography on the high-resolution geo grid:
+                                ! 0 = constant uniform value z_bed_std_const
+                                ! 1 = read from file (z_bed_std_file)
+ z_bed_std_const = 0.0          ! constant uniform standard deviation of subgrid topography, used only if i_z_bed_std==0
+ z_bed_std_file = "input/RTopo-2.0.1_0.125deg_DRThydrocorr_std.nc" 
+ l_use_z_bed_std_lowres = F     ! apply standard deviation of high-res subgrid topography to low-res geo fields?
 
  !-------------------------------------------------------
  ! equilibrated bedrock elevation and ice thickness, only for i_geo==2 (VILMA) and geo_restart==F

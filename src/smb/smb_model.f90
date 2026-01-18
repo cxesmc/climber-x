@@ -701,7 +701,7 @@ contains
   !   Subroutine :  s m b _ i n i t
   !   Purpose    :  initialize surface energy and mass balance interface
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smb_init(smb_in,smb,i_domain,grid,cmn_grid,z_bed_1min,lon_1min,lat_1min)
+  subroutine smb_init(smb_in,smb,i_domain,grid,cmn_grid)
 
     implicit none
 
@@ -710,22 +710,11 @@ contains
     integer, intent(in) :: i_domain
     type(grid_class), intent(in) :: grid 
     type(grid_class), intent(in) :: cmn_grid
-    real(wp), intent(in) :: z_bed_1min(:,:)
-    real(wp), intent(in) :: lon_1min(:)
-    real(wp), intent(in) :: lat_1min(:)
 
-    integer :: i, j, n, ii, jj, jj1, jj2, d
+    integer :: i, j, n, ii, jj, d
     real(wp) :: lon1, lon2, lat1, lat2, dlon_sur, dlat_sur
     integer :: nlon, nlat, ncells
-    integer :: n_lon_1min, n_lat_1min, n_lon_1min_ext
     real(wp) :: lon_min, lon_max, dlon, lat_min, lat_max, dlat
-    real(wp) :: z_bed_cell_mean
-    real(wp) :: lon_arr_min, lon_arr_max
-    real(wp) :: lon_arr(4), lat_arr(4)
-    real(wp), allocatable, dimension(:) :: lon_1min_ext
-    real(wp), allocatable, dimension(:,:) :: z_bed_1min_ext
-    real(wp), allocatable, dimension(:) :: z_bed_cell
-    integer, parameter :: ncells_max = 10000
     integer :: ni, nj
     integer :: ppos, spos
     type(grid_class) :: mask_maxice_grid
@@ -773,74 +762,6 @@ contains
 
     ! Generate mapping from cmn to smb/ice
     call map_scrip_init(smb%maps_cmn_to_ice,smb_in%grid,smb%grid,method=map_method,fldr="maps",load=.TRUE.,clean=.FALSE.)
-
-    ! compute standard deviation of sub-grid topography from 1 min resolution bedrock topography
-    allocate(z_bed_cell(ncells_max))
-    allocate(smb%z_bed_std(smb%grid%G%nx,smb%grid%G%ny))
-    lat_min = minval(smb%grid%lat(:,:))
-    lat_max = maxval(smb%grid%lat(:,:))
-    jj1 = minloc(abs(lat_1min-lat_min),1)
-    jj2 = minloc(abs(lat_1min-lat_max),1)
-    n_lon_1min = size(lon_1min)
-    n_lat_1min = size(lat_1min)
-    allocate(lon_1min_ext(3*n_lon_1min))
-    lon_1min_ext(1:n_lon_1min)                = lon_1min - 360._wp
-    lon_1min_ext(n_lon_1min+1:n_lon_1min*2)   = lon_1min
-    lon_1min_ext(n_lon_1min*2+1:n_lon_1min*3) = lon_1min + 360._wp
-    n_lon_1min_ext = size(lon_1min_ext)
-    allocate(z_bed_1min_ext(3*n_lon_1min,n_lat_1min))
-    z_bed_1min_ext(1:n_lon_1min,:)                = z_bed_1min
-    z_bed_1min_ext(n_lon_1min+1:n_lon_1min*2,:)   = z_bed_1min
-    z_bed_1min_ext(n_lon_1min*2+1:n_lon_1min*3,:) = z_bed_1min
-    !$omp parallel do collapse(2) private(i,j,ii,jj,lon_arr,lon_arr_min,lon_arr_max,lat_arr,lon1,lon2,lat1,lat2,ncells,z_bed_cell,z_bed_cell_mean)
-    do j=1,smb%grid%G%ny-1
-      do i=1,smb%grid%G%nx-1
-        lon_arr = (/ smb%grid%lon(i,j),smb%grid%lon(i+1,j),smb%grid%lon(i,j+1),smb%grid%lon(i+1,j+1) /)
-        lon_arr_min = minval(lon_arr)
-        lon_arr_max = maxval(lon_arr)
-        if (lon_arr_max-lon_arr_min .gt. 180._wp) then
-          lon1 = minval(pack(lon_arr,lon_arr>0._wp)) - 360._wp
-          lon2 = maxval(pack(lon_arr,lon_arr<0._wp))
-        else
-          lon1 = lon_arr_min
-          lon2 = lon_arr_max
-        endif
-        lat_arr = (/ smb%grid%lat(i,j),smb%grid%lat(i+1,j),smb%grid%lat(i,j+1),smb%grid%lat(i+1,j+1) /)
-        lat1 = minval(lat_arr)
-        lat2 = maxval(lat_arr)
-        ncells = 0
-        outer: do jj=jj1,jj2
-          if (lat_1min(jj).gt.lat1 .and. lat_1min(jj).le.lat2) then
-            do ii=1,n_lon_1min_ext
-              if (lon_1min_ext(ii).gt.lon1 .and. lon_1min_ext(ii).le.lon2) then
-                ncells = ncells + 1
-                z_bed_cell(ncells) = z_bed_1min_ext(ii,jj)
-                if (ncells.eq.ncells_max) exit outer
-              endif
-            enddo
-          endif
-        enddo outer
-        !if (ncells.eq.ncells_max) then
-        !  print *
-        !  print *,'ncells too large',ncells
-        !  print *,'i,j',i,j
-        !  print *,'lon12,lat12',lon1,lon2,lat1,lat2
-        !  print *,'lon_arr',lon_arr
-        !endif
-        if (ncells.gt.0) then
-          z_bed_cell_mean = sum(z_bed_cell(1:ncells))/ncells
-          smb%z_bed_std(i,j) = sqrt(sum((z_bed_cell(1:ncells)-z_bed_cell_mean)**2) / real(ncells-1,wp))
-        else
-          smb%z_bed_std(i,j) = 0._wp
-        endif
-      enddo
-    enddo
-    !$omp end parallel do
-    smb%z_bed_std(smb%grid%G%nx,:) = smb%z_bed_std(smb%grid%G%nx-1,:)
-    smb%z_bed_std(:,smb%grid%G%ny) = smb%z_bed_std(:,smb%grid%G%ny-1)
-    deallocate(z_bed_cell)
-    deallocate(lon_1min_ext)
-    deallocate(z_bed_1min_ext)
 
     ! generate regular lat-lon grid covering smb domain 
     if (i_smb.eq.3 .or. prc_par%l_slope_effect) then
@@ -957,6 +878,7 @@ contains
     call grid_allocate(smb%grid, smb%z_sur            )
     call grid_allocate(smb%grid, smb%z_sur_eff        )
     call grid_allocate(smb%grid, smb%z_sur_fil        )
+    call grid_allocate(smb%grid, smb%z_bed_std        )
     call grid_allocate(smb%grid, smb%h_ice            )
     call grid_allocate(smb%grid, smb%dz_dx_sur        )
     call grid_allocate(smb%grid, smb%dz_dy_sur        )

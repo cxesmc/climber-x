@@ -61,8 +61,6 @@ module geo_def
 
     type hires_type
       type(grid_class) :: grid
-      real(wp), dimension(:), allocatable :: lon_1min
-      real(wp), dimension(:), allocatable :: lat_1min
       real(wp), dimension(:,:), allocatable :: z_bed_ref     !! present day reference bedrock topography [m]
       real(wp), dimension(:,:), allocatable :: h_ice_ref     !! present day ice thickness [m]
       real(wp), dimension(:,:), allocatable :: z_topo_ref     !! present day reference topography [m]
@@ -79,7 +77,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_bed  !! bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: z_bed_eq  !! equilibrium bedrock elevation (can deviate from h_bed_ref due to ice history) [m]
       real(wp), dimension(:,:), allocatable :: z_bed_rel  !! isostatically relaxed bedrock elevation for icefree conditions [m]
-      real(wp), dimension(:,:), allocatable :: z_bed_1min  !! bedrock elevation on 1 min resolution [m]
+      real(wp), dimension(:,:), allocatable :: z_bed_std  !! standard deviation of subgrid bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: q_geo     !! geothermal heat flux [W/m2]
       real(wp), dimension(:,:), allocatable :: q_geo_ice !! geothermal heat flux for ice sheets [W/m2]
       real(wp), dimension(:,:), allocatable :: h_sed     !! sediment thickness [m]
@@ -123,7 +121,6 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_veg_min     !! grid cell max elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_max     !! grid cell min elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_std     !! standard deviation of grid cell surface elevation, ice-free land part [m]
-      real(wp), dimension(:,:), allocatable :: z_sur_lnd_std     !! standard deviation of grid cell surface elevation over land [m]
       real(wp), dimension(:,:), allocatable :: z_ice     !! grid gell mean elevation of ice sheet [m]
       real(wp), dimension(:,:), allocatable :: z_lake    !! grid gell mean elevation of lakes [m]
       real(wp), dimension(:,:), allocatable :: z_bed     !! grid gell mean bedrock elevation [m]
