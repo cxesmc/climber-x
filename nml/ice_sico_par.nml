@@ -68,11 +68,11 @@
 
 !-------- Time steps --------
 
-    dtime = 0.5
+    dtime = 0.1
 !                       Time step (in a) for computation of velocity
 !                       and topography
 
-    dtime_temp = 1.
+    dtime_temp = 0.1
 !                       Time step (in a) for computation of
 !                       temperature, water content and age of the ice
 
@@ -598,7 +598,7 @@
 
     q_weert = 2         ! Weertman exponent q for the basal pressure (integer value)
 
-    c_slide_sedi = 250.      ! Sliding coefficient over sediments, in m/[a*Pa^(p-q)]
+    c_slide_sedi = 25.      ! Sliding coefficient over sediments, in m/[a*Pa^(p-q)]
 
     p_weert_sedi = 3         ! Weertman exponent p for the basal shear stress (integer value)
 

@@ -97,7 +97,7 @@
   c_fice = 1.                 ! factor for ice fraction dependence on topographic roughness, used only if i_f_ice==2
   z_sur_std_crit = 0.         ! m, critical topographic roughness for ice cover fraction, used only if i_f_ice==2
 
-  i_alb_ice = 1               ! ice sheet albedo parameterisation:
+  i_alb_ice = 0               ! ice sheet albedo parameterisation:
                               ! 0 = use constant ice albedo alb_ice_const
                               ! 1 = variable ice albedo accounting for firn -> ice transition and dirt accumulation 
   i_alb_ice_margin = 1        ! ice sheet margin albedo parameterisation, used only if i_alb_ice==1:

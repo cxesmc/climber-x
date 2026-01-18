@@ -115,7 +115,7 @@ contains
         else if (par%ii_disc.eq.3) then
           ! Calculate scaling factors (roughness, distance to coast and resolution)
           f_sd = tanh(st%zl_std(j,i)/par%zl_std_crit_disc)
-          f_l  = ( dl / (dl + st%cst_dist(j,i)/1000._wp) )**par%m_D
+          f_l  = ( dl / (dl + max(dl,st%cst_dist(j,i)/1000._wp)) )**par%m_D
           f_r  = ( grd%DX/dl )**par%m_R 
           ! Calculate subgrid discharge mass balance rate 
           st%dis_perp(j,i) =  f_sd * f_l * f_r * ((st%H_c(j,i)+st%H_t(j,i)) / par%tau_dmb) 

@@ -1,7 +1,7 @@
 
 &bmb_par
 
-    i_bmb = 1       ! parameterisation of basal mass balance below floating ice
+    i_bmb = 2       ! parameterisation of basal mass balance below floating ice
                     ! 0 = constant and uniform basal mass balance (bmb_const)
                     ! 1 = basal mass balance after Beckmann and Goose 2003 (linear in temperature difference)
                     ! 2 = basal mass balance after Pollard and DeConto 2012, Holland 2008 (quadratic in temperature difference)
@@ -11,7 +11,7 @@
     k_1 = 1.e-4     ! kg/m2/s, basal mass balance transfer factor for linear formulation (i_bmb==1)
     k_2 = 5.e-4     ! kg/m2/s/K, basal mass balance transfer factor for quadratic formulation (i_bmb==2)
 
-    l_fix_depth = F    ! use temperature and salinity at fixed depth (fix_depth) for basal mass balance calculation? Else vertical interpolation is applied.
+    l_fix_depth = T    ! use temperature and salinity at fixed depth (fix_depth) for basal mass balance calculation? Else vertical interpolation is applied.
     fix_depth = 250.   ! m, fixed ocean depth of temperature and salinity used for basal mass balance calculation, used only if l_fix_depth==T
 
     depth_disc = 200.  ! m, fixed ocean depth of temperature and salinity used for small-scale basal mass balance in ice model
