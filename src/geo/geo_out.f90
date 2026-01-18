@@ -215,7 +215,6 @@ contains
       call nc_write(fnm,"z_sur_std", geo%z_sur_std,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="standard deviation of surface elevation",units="m",ncid=ncid)
       call nc_write(fnm,"z_sur_smooth_std", geo%z_sur_smooth_std,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="standard deviation of surface elevation",units="m",ncid=ncid)
       call nc_write(fnm,"z_veg_std", geo%z_veg_std,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="standard deviation of surface elevation, ice-free land only",units="m",ncid=ncid)
-      call nc_write(fnm,"z_sur_lnd_std", geo%z_sur_lnd_std,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="standard deviation of surface elevation, ice-free land only",units="m",ncid=ncid)
       call nc_write(fnm,"i_runoff", geo%i_runoff,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="i index of runoff destination",units="/",ncid=ncid)
       call nc_write(fnm,"j_runoff", geo%j_runoff,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="j index of runoff destination",units="/",ncid=ncid)
       call nc_write(fnm,"i_runoff_veg", geo%i_runoff_veg,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="i index of runoff destination from ice-free land",units="/",ncid=ncid)
@@ -255,6 +254,7 @@ contains
         if (firstcall) then
           call nc_write(fnm,"z_bed_ref", sngl(geo%hires%z_bed_ref),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="present day reference bedrock elevation",units="m",ncid=ncid)
           call nc_write(fnm,"z_bed_eq", sngl(geo%hires%z_bed_eq),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="equilibrium bedrock elevation",units="m",ncid=ncid)
+          call nc_write(fnm,"z_bed_std", sngl(geo%hires%z_bed_std),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="standard deviation of subgrid bedrock elevation",units="m",ncid=ncid)
           call nc_write(fnm,"h_ice_ref", sngl(geo%hires%h_ice_ref),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="reference ice sheet thickness",units="m",ncid=ncid)
           call nc_write(fnm,"h_ice_eq", sngl(geo%hires%h_ice_eq),dims=[dim_lon,dim_lat],start=[1,1],count=[ni,nj],long_name="ice thickness associated with equilibrium bedrock elevation",units="m",ncid=ncid)
           if (i_geo.eq.1) then

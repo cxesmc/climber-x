@@ -33,8 +33,8 @@ module geo_mod
   use coord, only : grid_class, grid_init
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
   use ncio
-  use geo_params, only : i_geo, geo_ref_file, i_sigma_subgrid, sigma_subgrid_const, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
-  use geo_params, only : z_bed_rel_file, z_bed_1min_file, sigma_filter
+  use geo_params, only : i_geo, geo_ref_file, i_z_bed_std, z_bed_std_const, z_bed_std_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
+  use geo_params, only : z_bed_rel_file, sigma_filter
   use geo_params, only : geo_params_init, l_connect_ocn, f_crit, n_coast_cells, i_fix_cell_grl
   use geo_params, only : h_ice_min
   use geo_params, only : l_close_hudson, l_close_baltic
@@ -86,7 +86,6 @@ contains
 
     integer :: i, j, nocn
     integer :: ni_rel, nj_rel
-    integer :: ni_1min, nj_1min
     integer :: ppos
     real(wp) :: dlon_rel, dlat_rel
     character(len=256) :: fnm
@@ -104,6 +103,12 @@ contains
     type(map_scrip_class) :: maps_rel_to_geo
     type(map_scrip_class) :: maps_bndgeo_to_geo
     type(map_scrip_class) :: maps_bndice_to_geo
+    integer :: ni_z_bed_std, nj_z_bed_std
+    real(wp), dimension(:), allocatable :: lon_z_bed_std
+    real(wp), dimension(:), allocatable :: lat_z_bed_std
+    real(wp), dimension(:,:), allocatable :: z_bed_std
+    type(grid_class) :: grid_z_bed_std
+    type(map_scrip_class) :: maps_z_bed_std_to_geo
 
 
     ! read geo parameters
@@ -116,7 +121,7 @@ contains
     allocate( geo%hires%h_ice_ref(ni_topo,nj_topo))
     allocate( geo%hires%z_topo_ref(ni_topo,nj_topo))
     allocate( geo%hires%mask_ref(ni_topo,nj_topo))
-    allocate( geo%hires%sigma_subgrid(ni_topo,nj_topo))
+    allocate( geo%hires%z_bed_std(ni_topo,nj_topo))
     allocate( geo%hires%z_bed(ni_topo,nj_topo))
     allocate( geo%hires%z_bed_eq(ni_topo,nj_topo))
     allocate( geo%hires%z_bed_rel(ni_topo,nj_topo))
@@ -165,7 +170,6 @@ contains
     allocate(geo%z_veg_min(ni,nj))
     allocate(geo%z_veg_max(ni,nj))
     allocate(geo%z_veg_std(ni,nj))
-    allocate(geo%z_sur_lnd_std(ni,nj))
     allocate(geo%z_ice(ni,nj))
     allocate(geo%z_lake(ni,nj))
     allocate(geo%z_bed(ni,nj))
@@ -195,13 +199,38 @@ contains
     call nc_read(trim(geo_ref_file),"ice_thickness",geo%hires%h_ice_ref)
     ! add optional uniform offset to bedrock elevation
     geo%hires%z_bed_ref = geo%hires%z_bed_ref + dz_bed_ini
+
     ! standard deviation of subgrid topography
-    if (i_sigma_subgrid.eq.1) then
-      ! read from file
-      call nc_read(trim(geo_ref_file),"sigma_subgrid",geo%hires%sigma_subgrid)
-    else if (i_sigma_subgrid.eq.0) then
+    if (i_z_bed_std.eq.0) then
       ! set to constant uniform value
-      geo%hires%sigma_subgrid = sigma_subgrid_const  
+
+      geo%hires%z_bed_std = z_bed_std_const  
+
+    else if (i_z_bed_std.eq.1) then
+      ! read from file
+
+      ni_z_bed_std = nc_size(trim(z_bed_std_file),"lon")
+      nj_z_bed_std = nc_size(trim(z_bed_std_file),"lat")
+      allocate( lon_z_bed_std(ni_z_bed_std) )
+      allocate( lat_z_bed_std(nj_z_bed_std) )
+      call nc_read(trim(z_bed_std_file),"lon",lon_z_bed_std)
+      call nc_read(trim(z_bed_std_file),"lat",lat_z_bed_std)
+      allocate(z_bed_std(ni_z_bed_std,nj_z_bed_std))
+      call nc_read(trim(z_bed_std_file),"z_bed_std",z_bed_std)
+      ! map to geo_hires grid
+      if (ni_topo==ni_z_bed_std .and. nj_topo==nj_z_bed_std) then
+        ! same grid, simply assign
+        geo%hires%z_bed_std = z_bed_std
+      else
+        ! different grid, map 
+        call grid_init(grid_z_bed_std,name="z_bed_std",mtype="latlon",units="degrees", x=real(lon_z_bed_std,dp),y=real(lat_z_bed_std,dp))
+        call map_scrip_init(maps_z_bed_std_to_geo,grid_z_bed_std,geo%hires%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_scrip_field(maps_z_bed_std_to_geo,"z_bed_std",z_bed_std,geo%hires%z_bed_std,method="mean",missing_value=-9999._dp)
+      endif
+      deallocate(lon_z_bed_std)
+      deallocate(lat_z_bed_std)
+      deallocate(z_bed_std)
+
     endif
 
     !------------------------------------------------------------------------
@@ -496,21 +525,6 @@ contains
       deallocate( lon_rel )
       deallocate( lat_rel )
 
-    endif
-
-    !-------------------------------------------------------------------
-    ! bedrock topography at 1 min resolution
-    !-------------------------------------------------------------------
-
-    if (flag_smb) then
-      ni_1min = nc_size(trim(z_bed_1min_file),"lon")
-      nj_1min = nc_size(trim(z_bed_1min_file),"lat")
-      allocate( geo%hires%lon_1min(ni_1min) )
-      allocate( geo%hires%lat_1min(nj_1min) )
-      call nc_read(trim(z_bed_1min_file),"lon",geo%hires%lon_1min)
-      call nc_read(trim(z_bed_1min_file),"lat",geo%hires%lat_1min)
-      allocate( geo%hires%z_bed_1min(ni_1min,nj_1min))
-      call nc_read(trim(z_bed_1min_file),"bedrock_topography",geo%hires%z_bed_1min)
     endif
 
     !-------------------------------------------------------------------
@@ -855,11 +869,11 @@ contains
   !-------------------------------------------------------------------
   !$ time1 = omp_get_wtime()
   call hires_to_lowres(geo%n_lakes, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, &  ! in
-    geo%hires%z_bed, geo%hires%z_sur, geo%hires%sigma_subgrid, & ! in
+    geo%hires%z_bed, geo%hires%z_sur, geo%hires%z_bed_std, & ! in
     geo%hires%map_runoff, geo%hires%i_runoff_coarse, geo%hires%j_runoff_coarse, &   ! in
     geo%f_ocn, geo%f_ocn2, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_ice_flt, geo%f_lake, geo%f_lake_n, &
     geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
-    geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, geo%z_sur_lnd_std, &    ! out
+    geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, &    ! out
     geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice)   ! out
   !$ time2 = omp_get_wtime()
   !$ if(l_write_timer) print *,'hires_to_lowres',time2-time1
@@ -992,8 +1006,8 @@ contains
     deallocate(geo%hires%h_ice_ref)
     deallocate(geo%hires%z_topo_ref)
     deallocate(geo%hires%mask_ref)
-    deallocate(geo%hires%sigma_subgrid)
     deallocate(geo%hires%z_bed)
+    deallocate(geo%hires%z_bed_std)
     deallocate(geo%hires%z_bed_eq)
     deallocate(geo%hires%z_bed_rel)
     deallocate(geo%hires%z_topo)
@@ -1040,7 +1054,6 @@ contains
     deallocate(geo%z_veg_min)
     deallocate(geo%z_veg_max)
     deallocate(geo%z_veg_std)
-    deallocate(geo%z_sur_lnd_std)
     deallocate(geo%z_ice)
     deallocate(geo%z_lake)
     deallocate(geo%z_bed)
