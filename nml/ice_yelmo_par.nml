@@ -65,7 +65,7 @@
     ! === discharge mass balance ===
     dmb_method          = 1                 ! 0: no subgrid discharge, 1: subgrid discharge on
     dmb_alpha_max       = 60.0              ! [deg] Maximum angle of slope from coast at which to allow discharge
-    dmb_tau             = 25.0              ! [yr]  Discharge timescale
+    dmb_tau             = 13.0              ! [yr]  Discharge timescale
     dmb_sigma_ref       = 300.0             ! [m]   Reference bed roughness
     dmb_m_d             = 3.0               ! [-]   Discharge distance scaling exponent
     dmb_m_r             = 0.0               ! [-]   Discharge resolution scaling exponent
@@ -160,7 +160,7 @@
     p               = 0.0               ! *neff_method=2* marine connectivity exponent (0: none, 1: full)
     H_w_max         = -1.0              ! < 0: Use ytherm.H_w_max; >= 0: Saturation water thickness for neff_method=3.
     N0              = 1000.0            ! [Pa] *neff_method=3* Reference effective pressure 
-    delta           = 0.04              ! [--] *neff_method=3* Fraction of overburden pressure for saturated till
+    delta           = 0.5               ! [--] *neff_method=3* Fraction of overburden pressure for saturated till
     e0              = 0.69              ! [--] *neff_method=3* Reference void ratio at N0 
     Cc              = 0.12              ! [--] *neff_method=3* Till compressibility    
     s_const         = 0.5               ! [--] *neff_method=4* Imposed constant till water saturation level    
