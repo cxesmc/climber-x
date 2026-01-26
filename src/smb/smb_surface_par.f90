@@ -155,9 +155,9 @@ contains
     ! CROCUS snow model) for Greenland
 
     ! dry snow temperature dependence for snow grain size
-    f_tage1 = exp( snow_par%f_age_t * min(0._wp, (t_skin-T0)) )
+    f_tage1 = exp( snow_par%f_age_t * min(0._wp, (t_skin-(T0-snow_par%dT_age))) )
     ! melting snow temperature dependence for snow grain size
-    f_tage2 = exp( min(0._wp, t_skin-T0) )
+    f_tage2 = exp( min(0._wp, t_skin-(T0-snow_par%dT_age)) )
     ! snow grain size temperature factor
     f_tage = f_tage1 + f_tage2
     ! averaged 'snow age'       

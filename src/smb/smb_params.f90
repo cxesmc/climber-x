@@ -119,6 +119,7 @@ module smb_params
     real(wp) :: snow_grain_fresh ! um, fresh snow grain size
     real(wp) :: snow_grain_old = 1000._wp ! um, old snow grain size
     real(wp) :: f_age_t      ! temperature parameter for snow aging
+    real(wp) :: dT_age
     real(wp) :: snow_0      ! kg/m2/s, critical snowfall rate for aging
     real(wp) :: snow_1      ! kg/m2/s, minimum snowfall rate for aging
     real(wp) :: k_sigma_orog
@@ -143,6 +144,7 @@ module smb_params
     logical :: l_elevation_corr
     real(wp) :: z_sur_crit_fele
     real(wp) :: z_sur_high_fele
+    real(wp) :: dT_rain_snow
     real(wp) :: dP_dT
     logical :: l_slope_effect
     integer :: iwind_synoptic
@@ -297,6 +299,7 @@ subroutine smb_par_load(filename)
     call nml_read(filename,"smb_par","lsnow_aging" ,snow_par%lsnow_aging )
     call nml_read(filename,"smb_par","lsnow_dust" ,snow_par%lsnow_dust )
     call nml_read(filename,"smb_par","f_age_t" ,snow_par%f_age_t)
+    call nml_read(filename,"smb_par","dT_age" ,snow_par%dT_age)
     call nml_read(filename,"smb_par","snow_0" ,snow_par%snow_0 )
     snow_par%snow_0 = snow_par%snow_0/sec_day
     call nml_read(filename,"smb_par","snow_1" ,snow_par%snow_1 )
@@ -340,6 +343,7 @@ subroutine smb_par_load(filename)
     call nml_read(filename,"smb_par","l_elevation_corr" ,prc_par%l_elevation_corr)
     call nml_read(filename,"smb_par","z_sur_crit_fele" ,prc_par%z_sur_crit_fele)
     call nml_read(filename,"smb_par","z_sur_high_fele" ,prc_par%z_sur_high_fele)
+    call nml_read(filename,"smb_par","dT_rain_snow" ,prc_par%dT_rain_snow)
     call nml_read(filename,"smb_par","dP_dT" ,prc_par%dP_dT)
     call nml_read(filename,"smb_par","iwind_synoptic" ,prc_par%iwind_synoptic )
     call nml_read(filename,"smb_par","topo_filter_width" ,prc_par%topo_filter_width )

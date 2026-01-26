@@ -348,8 +348,16 @@ contains
 
      area_ice = sum(smb%grid%area,mask=smb%mask_ice==1)
      ! ice area
-     smb%ann_ts(y)%Aice = area_ice*1.e-6_wp  ! 10^6 km^2
+     smb%ann_ts(y)%A_ice = area_ice*1.e-6_wp  ! 10^6 km^2
      if (area_ice.gt.0._wp) then
+       ! ice area in different elevation classes
+       smb%ann_ts(y)%A_ice_0_100 = sum(smb%grid%area,mask=smb%mask_ice==1 .and. smb%z_sur.lt.100._wp)*1.e-6_wp  ! 10^6 km^2
+       smb%ann_ts(y)%A_ice_0_500 = sum(smb%grid%area,mask=smb%mask_ice==1 .and. smb%z_sur.lt.500._wp)*1.e-6_wp  ! 10^6 km^2
+       smb%ann_ts(y)%A_ice_0_1000 = sum(smb%grid%area,mask=smb%mask_ice==1 .and. smb%z_sur.lt.1000._wp)*1.e-6_wp  ! 10^6 km^2
+       ! ablation area
+       smb%ann_ts(y)%A_abl = sum(smb%grid%area,mask=smb%mask_ice==1 .and. smb%ann_smb.lt.0._wp)*1.e-6_wp  ! 10^6 km^2
+       ! fraction of ice with negative mass balance
+       smb%ann_ts(y)%f_abl = smb%ann_ts(y)%A_abl/smb%ann_ts(y)%A_ice
        ! averaged surface mass balance of ice sheet
        smb%ann_ts(y)%smb_avg = sum(smb%ann_smb*smb%grid%area,mask=smb%mask_ice==1) / area_ice  ! kg/m2/yr 
        ! averaged precipitation on ice sheet
@@ -365,6 +373,14 @@ contains
        ! averaged sublimation of ice sheet
        smb%ann_ts(y)%evp_avg = sum(smb%ann_evp*smb%grid%area,mask=smb%mask_ice==1) / area_ice  ! kg/m2/yr 
      else
+       ! ice area in different elevation classes
+       smb%ann_ts(y)%A_ice_0_100 = 0._wp
+       smb%ann_ts(y)%A_ice_0_500 = 0._wp 
+       smb%ann_ts(y)%A_ice_0_1000 = 0._wp 
+       ! ablation area
+       smb%ann_ts(y)%A_abl = 0._wp 
+       ! fraction of ice with negative mass balance
+       smb%ann_ts(y)%f_abl = 0._wp 
        ! averaged surface mass balance of ice sheet
        smb%ann_ts(y)%smb_avg = 0._wp 
        ! averaged precipitation on ice sheet
@@ -747,8 +763,18 @@ contains
     call nc_open(fnm,ncid)
     call nc_write(fnm,"time", dble([(i,i=(year_now-(y-1)*n_year_smb),(year_now),n_year_smb)]), &
     dim1=dim_time,start=[nout],count=[y],ncid=ncid)
-    call nc_write(fnm,"Aice", vars%Aice, dims=[dim_time],start=[nout],count=[y],&
+    call nc_write(fnm,"A_ice", vars%A_ice, dims=[dim_time],start=[nout],count=[y],&
     long_name="total ice sheet area",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"A_ice_0_100", vars%A_ice_0_100, dims=[dim_time],start=[nout],count=[y],&
+    long_name="Ice sheet area below 100 m elevation",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"A_ice_0_500", vars%A_ice_0_500, dims=[dim_time],start=[nout],count=[y],&
+    long_name="Ice sheet area below 500 m elevation",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"A_ice_0_1000", vars%A_ice_0_1000, dims=[dim_time],start=[nout],count=[y],&
+    long_name="Ice sheet area below 1000 m elevation",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"A_abl", vars%A_abl, dims=[dim_time],start=[nout],count=[y],&
+    long_name="ablation area",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"f_abl", vars%f_abl, dims=[dim_time],start=[nout],count=[y],&
+    long_name="fraction of ice sheet with negative mass balance",units="1",ncid=ncid)
     call nc_write(fnm,"smb", vars%smb, dims=[dim_time],start=[nout],count=[y],&
     long_name="integrated surface mass balance of ice sheets",units="Gt/yr",ncid=ncid)
     call nc_write(fnm,"prc", vars%prc, dims=[dim_time],start=[nout],count=[y],&
