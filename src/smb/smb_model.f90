@@ -53,7 +53,7 @@ module smb_model
   use smb_simple_m, only : smb_simple
   use smb_pdd_m, only : smb_pdd
   use semi_m, only : semi
-  use bias_corr_mod, only : smb_ref_write, smb_bias_corr, t2m_bias_corr, prc_bias_corr
+  use smb_bias_corr_mod, only : smb_ref_write, smb_bias_corr, t2m_bias_corr, prc_bias_corr
 
   implicit none
 
