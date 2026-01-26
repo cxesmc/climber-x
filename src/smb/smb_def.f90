@@ -75,7 +75,10 @@ module smb_def
     end type
 
     type ts_out
-      real(wp) :: Aice
+      real(wp) :: A_ice
+      real(wp) :: A_ice_0_100
+      real(wp) :: A_ice_0_500
+      real(wp) :: A_ice_0_1000
       real(wp) :: smb
       real(wp) :: prc
       real(wp) :: snow
@@ -90,6 +93,8 @@ module smb_def
       real(wp) :: evp_avg
       real(wp) :: melt_avg
       real(wp) :: run_avg
+      real(wp) :: A_abl
+      real(wp) :: f_abl
     end type
 
     type s_out
