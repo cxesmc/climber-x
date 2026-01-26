@@ -89,9 +89,9 @@ contains
   ! +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   ! Temperature dependence for snowfall fraction of precipitation
 
-  if (t2m.lt.T0-5._wp) frsnw=1._wp
-  if (t2m.gt.T0+5._wp) frsnw=0._wp
-  if (t2m.ge.T0-5._wp .and. t2m.le.T0+5._wp) frsnw=0.1_wp*(T0+5._wp-t2m)
+  if (t2m.lt.T0-prc_par%dT_rain_snow) frsnw=1._wp
+  if (t2m.gt.T0+prc_par%dT_rain_snow) frsnw=0._wp
+  if (t2m.ge.T0-prc_par%dT_rain_snow .and. t2m.le.T0+prc_par%dT_rain_snow) frsnw=(T0+prc_par%dT_rain_snow-t2m)/(2._wp*prc_par%dT_rain_snow)
   
   ! ++++++++++++++++++++++++
   ! wind slope effect
