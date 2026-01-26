@@ -91,7 +91,7 @@ module ocn_out
   real(wp), dimension(:,:), allocatable :: s_atl, s_pac, s_ind, s_so
   real(wp), dimension(:,:), allocatable :: rho_atl, rho_pac, rho_ind, rho_so
     
-  real(wp), allocatable, dimension(:,:,:) :: ocn_vol0
+  real(wp), allocatable, dimension(:,:,:) :: ocn_vol0, rho_0
 
   type ts_out
      integer :: ncells
@@ -457,6 +457,7 @@ contains
     allocate(rho_so(maxj,maxk))
  
     allocate(ocn_vol0(maxi,maxj,maxk))
+    allocate(rho_0(maxi,maxj,maxk))
 
     mon_avg = 1._wp/nstep_mon_ocn
     ann_avg = 1._wp/nstep_year_ocn
@@ -1159,6 +1160,7 @@ contains
     if (year.eq.1) then
       ocn_area_tot0 = ocn_area_tot
       ocn_vol0 = ocn_vol
+      rho_0 = ocn%rho
     endif
 
     !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2) &
@@ -1447,12 +1449,25 @@ contains
             if (age_tracer) global_age = global_age + ocn%ts(i,j,k,i_age)*ocnvol/ocn_vol_tot
             ! dye tracer
             if (dye_tracer) global_dye = global_dye + ocn%ts(i,j,k,i_dye)*ocnvol/ocn_vol_tot
-            ! steric sea level
-            rsl_steric = rsl_steric + ocn_vol0(i,j,k)*rho0/ocn%rho(i,j,k) / ocn_area_tot0     ! m
+          endif
+        enddo
+
+        do k=1,maxk
+          if (ocn_vol0(i,j,k).gt.0._wp) then
+            if (ocn_vol(i,j,k).gt.0._wp) then
+              ! steric sea level
+              rsl_steric = rsl_steric + ocn_vol0(i,j,k)*rho0/ocn%rho(i,j,k) / ocn_area_tot0     ! m
+            else
+              ! steric sea level
+              rsl_steric = rsl_steric + ocn_vol0(i,j,k)*rho0/rho_0(i,j,k) / ocn_area_tot0     ! m
+            endif
+          endif
+          if (ocn_vol(i,j,k).gt.0._wp) then
             ! sea level from mass changes
             rsl_mass = rsl_mass + ocn_vol(i,j,k) / ocn_area_tot0     ! m
           endif
         enddo
+
       enddo
     enddo
     !$omp end parallel do
