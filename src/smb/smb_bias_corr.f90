@@ -23,7 +23,7 @@
 ! along with CLIMBER-X.  If not, see <http://www.gnu.org/licenses/>.
 !
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-module bias_corr_mod
+module smb_bias_corr_mod
 
    use precision, only : wp, dp
    use timer, only: doy, nday_year, monthly2daily
@@ -265,4 +265,4 @@ contains
 
    end subroutine prc_bias_corr
 
-end module bias_corr_mod
+end module smb_bias_corr_mod

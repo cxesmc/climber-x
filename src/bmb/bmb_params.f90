@@ -48,6 +48,11 @@ module bmb_params
   logical :: l_depth_scale
   real(wp) :: zl_ref
 
+  integer :: i_Tocn_bias_corr
+  character (len=256) :: bias_corr_file
+  real(wp) :: Tocn_bias_scale_fac
+  real(wp) :: Tocn_bias_corr_uniform
+
   logical :: l_monthly_output
 
 contains
@@ -90,6 +95,10 @@ subroutine bmb_par_load(filename)
     call nml_read(filename,"bmb_par","i_bmb_lake",i_bmb_lake)
     call nml_read(filename,"bmb_par","l_depth_scale",l_depth_scale)
     call nml_read(filename,"bmb_par","zl_ref",zl_ref)
+    call nml_read(filename,"bmb_par","i_Tocn_bias_corr",i_Tocn_bias_corr)
+    call nml_read(filename,"bmb_par","bias_corr_file",bias_corr_file)
+    call nml_read(filename,"bmb_par","Tocn_bias_scale_fac",Tocn_bias_scale_fac)
+    call nml_read(filename,"bmb_par","Tocn_bias_corr_uniform",Tocn_bias_corr_uniform)
     call nml_read(filename,"bmb_par","l_monthly_output",l_monthly_output)
 
    return

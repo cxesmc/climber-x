@@ -124,7 +124,7 @@ obj_ice_sico = $(patsubst %, $(objdir)/%, $(tmp_ice_sico))
 ########################################################################
 # bmb related source files
 dir_bmb = $(srcdir)/bmb/
-files_bmb = bmb_model.f90 bmb_params.f90 bmb_grid.f90 bmb_def.f90 bmb_out.f90 
+files_bmb = bmb_model.f90 bmb_params.f90 bmb_grid.f90 bmb_def.f90 bmb_bias_corr.f90 bmb_out.f90 
 tmp_bmb = $(patsubst %.f90, %.o, $(files_bmb) )
 obj_bmb = $(patsubst %, $(objdir)/%, $(tmp_bmb) )
 # dummy
@@ -193,7 +193,7 @@ obj_sic = $(patsubst %, $(objdir)/%, $(tmp_sic) )
 dir_smb = $(srcdir)/smb/
 files_smb = smb_model.f90 smb_params.f90 smb_grid.f90 smb_def.f90 smb_out.f90 \
 				 	  topo.f90 ice.f90 downscaling.f90 smb_surface_par.f90 smb_ebal.f90 smb_temp.f90 snow.f90 smb_simple.f90 smb_pdd.f90 semi.f90 \
-				 	  fake_atm_hires.f90 bias_corr.f90
+				 	  fake_atm_hires.f90 smb_bias_corr.f90
 tmp_smb = $(patsubst %.f90, %.o, $(files_smb) )
 obj_smb = $(patsubst %, $(objdir)/%, $(tmp_smb) )
 # dummy
@@ -1011,7 +1011,7 @@ $(objdir)/sico_out.o : $(dir_ice_sico)sico_out.f90 $(objdir)/sico_types_m.o $(ob
 # smb rules ####
 $(objdir)/smb_model.o : $(dir_smb)smb_model.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/smb_def.o \
 	$(objdir)/topo.o $(objdir)/ice.o $(objdir)/smb_simple.o $(objdir)/smb_pdd.o $(objdir)/semi.o \
-	$(objdir)/fake_atm_hires.o $(objdir)/bias_corr.o $(objdir)/filter.o
+	$(objdir)/fake_atm_hires.o $(objdir)/smb_bias_corr.o $(objdir)/filter.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_grid.o : $(dir_smb)smb_grid.f90 $(objdir)/smb_params.o
@@ -1057,7 +1057,7 @@ $(objdir)/semi.o : $(dir_smb)semi.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.
 $(objdir)/fake_atm_hires.o : $(dir_smb)fake_atm_hires.f90 $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bias_corr.o : $(dir_smb)bias_corr.f90 $(objdir)/timer.o
+$(objdir)/smb_bias_corr.o : $(dir_smb)smb_bias_corr.f90 $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_out.o : $(dir_smb)smb_out.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/smb_def.o
@@ -1071,7 +1071,7 @@ $(objdir)/.smb_out_dummy.o : $(dir_smb).smb_out_dummy.f90 $(objdir)/smb_def.o
 
 ################
 # bmb rules ####
-$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o 
+$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/bmb_bias_corr.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bmb_grid.o : $(dir_bmb)bmb_grid.f90 $(objdir)/bmb_params.o
@@ -1081,6 +1081,9 @@ $(objdir)/bmb_params.o : $(dir_bmb)bmb_params.f90 $(objdir)/timer.o $(objdir)/co
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bmb_def.o : $(dir_bmb)bmb_def.f90 $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/bmb_bias_corr.o : $(dir_bmb)bmb_bias_corr.f90
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bmb_out.o : $(dir_bmb)bmb_out.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o

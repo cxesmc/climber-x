@@ -47,6 +47,7 @@ module bmb_def
       ! interpolated variables on ice sheet grid
       real(wp), dimension(:,:,:), allocatable :: t_ocn  !! ocean temperature interpolated to ice sheet grid [K]
       real(wp), dimension(:,:,:), allocatable :: s_ocn  !! ocean salinity interpolated to ice sheet grid [psu]
+      real(wp), dimension(:,:), allocatable :: t_ocn_bias  !! ocean temperature bias interpolated to ice sheet grid [K]
       ! bmb variables
       real(wp), dimension(:,:), allocatable :: t_bmb   !! temperature used for basal mass balance [K]
       real(wp), dimension(:,:), allocatable :: s_bmb   !! salinity used for basal mass balance [psu]
@@ -77,6 +78,7 @@ module bmb_def
       real(wp), dimension(:), allocatable :: z_ocn_in  !! depth of ocean layers for temperature and salinity input [m]
       real(wp), dimension(:,:,:), allocatable :: t_ocn_in  !! ocean temperature on coupler grid [K]
       real(wp), dimension(:,:,:), allocatable :: s_ocn_in  !! ocean salinity on coupler grid [psu]
+      real(wp), dimension(:,:), allocatable :: t_ocn_bias_in  !! ocean temperature bias on coupler grid [K]
       integer, dimension(:,:), allocatable :: mask_lake_in  !! lake mask on coupler grid [/]
       integer, dimension(:,:), allocatable :: mask_lake_in_tmp  !! lake mask on coupler grid [/]
       real(wp), dimension(:), allocatable :: z_lake_in  !! depth of lake layers for temperature and salinity input [m]
@@ -92,6 +94,7 @@ module bmb_def
       real(wp), dimension(:,:,:), allocatable :: s_ocn  !! ocean salinity interpolated to ice sheet grid [psu]
       real(wp), dimension(:,:,:), allocatable :: t_lake  !! lake temperature interpolated to ice sheet grid [K]
       real(wp), dimension(:,:,:), allocatable :: s_lake  !! lake salinity interpolated to ice sheet grid [psu]
+      real(wp), dimension(:,:), allocatable :: t_ocn_bias  !! ocean temperature bias interpolated to ice sheet grid [K]
       ! bmb variables
       real(wp), dimension(:,:), allocatable :: t_bmb   !! temperature used for basal mass balance [K]
       real(wp), dimension(:,:), allocatable :: s_bmb   !! salinity used for basal mass balance [psu]

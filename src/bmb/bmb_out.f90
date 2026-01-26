@@ -77,6 +77,7 @@ contains
     allocate(bmb%ann_s%t_disc    (bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(bmb%ann_s%s_disc    (bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(bmb%ann_s%t_freeze   (bmb%grid%G%nx,bmb%grid%G%ny))
+    allocate(bmb%ann_s%t_ocn_bias (bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(bmb%ann_s%bmb        (bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(bmb%ann_s%bmb_ann    (bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(bmb%ann_s%bmb_ann_mask(bmb%grid%G%nx,bmb%grid%G%ny))
@@ -172,6 +173,7 @@ contains
 
       bmb%ann_s%t_disc = bmb%t_disc
       bmb%ann_s%s_disc = bmb%s_disc
+      bmb%ann_s%t_ocn_bias = bmb%t_ocn_bias
 
       bmb%nout = bmb%nout+1
       call bmb_diag_out(bmb,bmb%grid)
@@ -356,6 +358,8 @@ contains
         long_name="water temperature used for small-scale basal melt in ice sheet_model",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_disc", sngl(vars%s_disc   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
         long_name="water salinity used for small-scale basal melt in ice sheet model",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+      call nc_write(fnm,"t_ocn_bias", sngl(vars%t_ocn_bias ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
+        long_name="ocean temperature bias",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
       call nc_write(fnm,"mask_ocn_lake", vars%mask_ocn_lake, dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
         long_name="ocean/lake mask",grid_mapping="polar_stereographic",units="",ncid=ncid) 
       call nc_write(fnm,"mask_ice_shelf", sngl(vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &

@@ -33,7 +33,9 @@ module bmb_model
   use control, only : out_dir, restart_in_dir, bmb_restart
   use bmb_grid, only : bmb_grid_init
   use bmb_params, only : bmb_params_init, dt, i_bmb, bmb_const, k_1, k_2, l_fix_depth, fix_depth, depth_disc, l_depth_scale, zl_ref, i_bmb_lake
+  use bmb_params, only : i_Tocn_bias_corr, bias_corr_file, Tocn_bias_scale_fac, Tocn_bias_corr_uniform
   use bmb_def, only : bmb_class
+  use bmb_bias_corr_mod, only : Tocn_bias_corr
   use coord, only : grid_allocate, grid_class
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
 
@@ -321,6 +323,9 @@ contains
 
       endif
 
+      ! apply optional temperature bias correction
+      bmb%t_bmb(i,j) = bmb%t_bmb(i,j) - bmb%t_ocn_bias(i,j)
+
       ! freezing temperature after Beckmann & Goose 2003 (eq. 2), zb<0
       bmb%t_freeze(i,j) = 0.0939_wp - 0.057_wp*bmb%s_bmb(i,j) + 7.64e-4_wp*bmb%zb(i,j) ! degC
 
@@ -389,6 +394,7 @@ contains
     bmb%grid_in = cmn_grid
 
     ! Allocate arrays 
+    call grid_allocate(bmb%grid_in, bmb%t_ocn_bias_in )
     call grid_allocate(bmb%grid_in, bmb%mask_ocn_in_tmp )
     call grid_allocate(bmb%grid_in, bmb%mask_lake_in_tmp )
     call grid_allocate(bmb%grid, bmb%mask_ocn_lake)
@@ -399,8 +405,21 @@ contains
     call grid_allocate(bmb%grid, bmb%t_disc )
     call grid_allocate(bmb%grid, bmb%s_disc )
     call grid_allocate(bmb%grid, bmb%t_freeze )
+    call grid_allocate(bmb%grid, bmb%t_ocn_bias )
     call grid_allocate(bmb%grid, bmb%bmb )
     call grid_allocate(bmb%grid, bmb%bmb_ann )
+
+    ! initialization for bias correction 
+    if (i_Tocn_bias_corr.eq.1) then
+      ! read bias correction file and initialize
+      call Tocn_bias_corr(i_Tocn_bias_corr, bias_corr_file, bmb%t_ocn_bias_in)
+      ! interpolate to ice sheet grid
+      call map_scrip_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+      ! apply scaling factor and add additional uniform bias correction
+      bmb%t_ocn_bias = Tocn_bias_scale_fac*bmb%t_ocn_bias - Tocn_bias_corr_uniform
+    else
+      bmb%t_ocn_bias = 0._wp
+    endif
 
     if (bmb_restart) then
 
@@ -463,6 +482,7 @@ contains
     deallocate(bmb%mask_ocn_in_tmp)
     deallocate(bmb%t_ocn_in )
     deallocate(bmb%s_ocn_in )
+    deallocate(bmb%t_ocn_bias_in )
     deallocate(bmb%mask_lake_in)
     deallocate(bmb%mask_lake_in_tmp)
     deallocate(bmb%t_lake_in )
