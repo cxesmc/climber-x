@@ -32,7 +32,7 @@
                                 ! 1 = annual bias correction from input file bias_corr_file
     bias_corr_file = "input/Tocn_bias_WOA23_250m.nc"
     Tocn_bias_scale_fac = 1.     ! scaling factor for temperature bias correction
-    Tocn_bias_corr_uniform = 0.  ! K, 2 m temperature bias correction applied uniformely everywhere
+    Tocn_bias_corr_uniform = 0.  ! K, temperature bias correction applied uniformely everywhere
 
     l_monthly_output = T
 /
