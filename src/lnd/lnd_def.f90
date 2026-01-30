@@ -60,6 +60,9 @@ module lnd_def
      real(wp) :: h_lake_mix
      real(wp) :: lake_water_tendency
      real(wp) :: gdd5, gdd5_temp, npp_real, npp13_real, npp14_real
+!###############fire-CO2###########################################################################
+     real(wp) :: fire_c_flux, fire_c_flux13, fire_c_flux14
+!##################################################################################################
      real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
      real(wp) :: theta_fire_cum
      real(wp) :: alt
@@ -113,6 +116,10 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: veg_c_below, veg_c13_below, veg_c14_below
      real(wp), allocatable, dimension(:) :: leaf_c, stem_c, root_c, veg_c13, veg_c14
      real(wp), allocatable, dimension(:) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
+!###############fire-CO2###########################################################################
+     real(wp), allocatable, dimension(:) :: gamma_fire      
+     real(wp), allocatable, dimension(:) :: fire_c_flux_pft, fire_c_flux13_pft, fire_c_flux14_pft    ! Per-PFT fire emissions
+!##################################################################################################
      real(wp), allocatable, dimension(:) :: lambda_soil, lambda_int_soil, cap_soil
      real(wp), allocatable, dimension(:) :: lambda_ice, lambda_int_ice, cap_ice
      real(wp), allocatable, dimension(:) :: lambda_lake, lambda_int_lake, cap_lake 

@@ -214,9 +214,9 @@
     ich4_ftemp       = 2        ! temperature dependence of ch4 emission fraction. 1=Arrhenius, 2=q10
     Ea_ch4           = 0.96     ! eV, activation energy for temperature dependence of ch4 emission fraction, 0.96 in Yvon-Durocher 2014 (only for ich4_ftemp=1)
     q10_ch4          = 1.8      ! q10 for temperature dependence of ch4 emission fraction (only for ich4_ftemp==2)
-    ch4_frac_wet     = 0.066    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
+    ch4_frac_wet     = 0.0725   ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
     ch4_frac_shelf   = 0.0      ! fraction of carbon emitted as methane from ocean shelf
-    ch4_frac_peat    = 0.066    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
+    ch4_frac_peat    = 0.0725   ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------
@@ -245,7 +245,10 @@
     gamma_luc = 1.              ! 1/yr, disturbance rate for land use change
     gamma_ice = 0.              ! 1/yr, disturbance rate from presence of ice sheets in grid cell
     z_veg_std_crit = 100.       ! m, critical sub-grid topography standard deviation for disturbance rate from ice sheets
-    tau_fire = 10.              ! yr, fire disturbance time scale
+!###############fire-CO2#######################################################
+    l_fire_co2_emissions = T    ! .true. = Calculate CO2 emissions from fire, .false. = turn off fire emission calculation
+!##############################################################################
+    tau_fire = 50. 50. 2. 1. 5.              ! yr, fire disturbance time scale
     theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2
     gamma_phen = 15.            ! days, leaf senescence time scale
     t_base_phen = 5. 2. 0. 5. 2.! degC, base temperature for phenology

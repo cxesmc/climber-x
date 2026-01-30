@@ -137,10 +137,13 @@ contains
        do j=1,ny
          do i=1,nx
            if( lnd%l2d(i,j)%mask_lnd.eq.1 ) then
+!###############fire-CO2#####################################################################
              call carbon_flux_atm_lnd(lnd%l2d(i,j)%f_veg,lnd%l2d(i,j)%f_peat,lnd%l2d(i,j)%f_ice_grd,lnd%l2d(i,j)%f_shelf,lnd%l2d(i,j)%f_lake,area(i,j), &
                lnd%l2d(i,j)%npp_real,lnd%l2d(i,j)%npp13_real,lnd%l2d(i,j)%npp14_real,lnd%l2d(i,j)%soil_resp,lnd%l2d(i,j)%soil_resp13,lnd%l2d(i,j)%soil_resp14, &
+               lnd%l2d(i,j)%fire_c_flux,lnd%l2d(i,j)%fire_c_flux13,lnd%l2d(i,j)%fire_c_flux14, &  ! fire related Carbon emit
                lnd%l2d(i,j)%Cflx_atm_lnd,lnd%l2d(i,j)%C13flx_atm_lnd,lnd%l2d(i,j)%C14flx_atm_lnd, &
                lnd%l0d%Cflx_atm_lnd,lnd%l0d%C13flx_atm_lnd,lnd%l0d%C14flx_atm_lnd) 
+!####################################################################################
            endif
          enddo
        enddo
@@ -770,14 +773,18 @@ contains
 
 
       if( time_eom_lnd ) then
-       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum,lnd%gamma_dist_cum)
+!###############fire-CO2######################################################################
+       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum, &
+                   lnd%gamma_dist_cum,lnd%gamma_fire)
+!#####################################################################################
       endif
 
       if( time_call_veg ) then
        ! update vegetation carbon and vegetation distribution
+!###############fire-CO2######################################################################
        call dyn_veg(lndp%co2,lnd%f_veg,lnd%f_veg_old,lnd%f_ice_grd,lnd%f_ice_grd_old,lnd%f_ice_nbr, &
                    lnd%f_lake,lnd%f_lake_old,lnd%f_shelf,lnd%f_shelf_old, lnd%f_crop, lnd%f_pasture, &
-                   lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, &
+                   lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, lnd%gamma_fire, & !add fire
                    lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, &
                    lnd%gamma_leaf, lnd%lambda, &
                    lnd%lai_bal,lnd%sai,lnd%root_frac,lnd%litter_in_frac, &
@@ -789,7 +796,10 @@ contains
                    lnd%veg_h, &
                    lnd%litterfall,lnd%litterfall13,lnd%litterfall14, &
                    lnd%npp_real,lnd%npp13_real,lnd%npp14_real, &
+                   lnd%fire_c_flux,lnd%fire_c_flux13,lnd%fire_c_flux14, & ! add fire-CO2 flux
+                   lnd%fire_c_flux_pft,lnd%fire_c_flux13_pft,lnd%fire_c_flux14_pft, & ! add fire-CO2 flux per PFT
                    lnd%carbon_cons_veg,lnd%carbon13_cons_veg,lnd%carbon14_cons_veg,i,j)
+!#####################################################################################
         ! update surface fractions
         call surface_frac_up(lnd%f_ice,lnd%f_ice_grd,lnd%f_shelf,lnd%f_lake,lnd%f_veg,lnd%pft_frac,lnd%frac_surf)
        endif
@@ -1220,7 +1230,15 @@ end subroutine lnd_update
           lnd%l2d(i,j)%w_snow_max     = 0._wp  
           lnd%l2d(i,j)%npp_ann         = 0._wp 
           lnd%l2d(i,j)%npp13_ann       = 0._wp 
-          lnd%l2d(i,j)%npp14_ann       = 0._wp 
+          lnd%l2d(i,j)%npp14_ann       = 0._wp
+!###############fire-CO2#############################################################
+          lnd%l2d(i,j)%fire_c_flux   = 0._wp
+          lnd%l2d(i,j)%fire_c_flux13 = 0._wp
+          lnd%l2d(i,j)%fire_c_flux14 = 0._wp
+          lnd%l2d(i,j)%fire_c_flux_pft(:)   = 0._wp
+          lnd%l2d(i,j)%fire_c_flux13_pft(:) = 0._wp
+          lnd%l2d(i,j)%fire_c_flux14_pft(:) = 0._wp
+ !############################################################ 
           lnd%l2d(i,j)%lai             = lnd%l2d(i,j)%lai_bal
           lnd%l2d(i,j)%sai             = lnd%l2d(i,j)%lai_bal * veg_par%sai_scale 
           lnd%l2d(i,j)%leaf_c          = lnd%l2d(i,j)%lai_bal / pft_par%sla
@@ -1408,7 +1426,10 @@ end subroutine lnd_update
         lnd%l2d(i,j)%npp_cum         = 0._wp 
         lnd%l2d(i,j)%npp13_cum       = 0._wp 
         lnd%l2d(i,j)%npp14_cum       = 0._wp 
-        lnd%l2d(i,j)%gamma_dist_cum  = 0._wp 
+        lnd%l2d(i,j)%gamma_dist_cum  = 0._wp
+ !###############fire-CO2#############################################################
+        lnd%l2d(i,j)%gamma_fire      = 0._wp
+ !############################################################ 
         lnd%l2d(i,j)%wilt      = 0._wp 
         lnd%l2d(i,j)%litterfall    = 0._wp
         lnd%l2d(i,j)%litterfall13  = 0._wp 
@@ -1690,6 +1711,12 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%gamma_ice       (npft))
         allocate(lnd%l2d(i,j)%gamma_dist      (npft))
         allocate(lnd%l2d(i,j)%gamma_dist_cum  (npft))
+ !###############fire-CO2#############################################################
+        allocate(lnd%l2d(i,j)%gamma_fire      (npft))
+        allocate(lnd%l2d(i,j)%fire_c_flux_pft   (npft))
+        allocate(lnd%l2d(i,j)%fire_c_flux13_pft (npft))
+        allocate(lnd%l2d(i,j)%fire_c_flux14_pft (npft))
+ !############################################################
         allocate(lnd%l2d(i,j)%leaf_c          (npft))
         allocate(lnd%l2d(i,j)%stem_c          (npft))
         allocate(lnd%l2d(i,j)%root_c          (npft))

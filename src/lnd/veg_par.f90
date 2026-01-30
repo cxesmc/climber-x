@@ -214,7 +214,10 @@ contains
   !   Subroutine :  d y n v e g _ p a r
   !   Purpose    :  parameters for dynamic vegetation model
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum)
+!###############fire-CO2#######################################################################
+!  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum)
+  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire)
+!######################################################################################
 
     implicit none
 
@@ -224,12 +227,16 @@ contains
     real(wp), intent(in) :: veg_c_above
     real(wp), intent(inout) :: theta_fire_cum
     real(wp), dimension(:), intent(inout) :: gamma_dist_cum
+!###############fire-CO2#######################################################################
+    real(wp), dimension(:), intent(out) :: gamma_fire
+!######################################################################################
 
     integer :: n
     logical :: lim_bio
     real(wp) :: fac_lim_bio
-    real(wp) :: gamma_fire, theta_fire
-
+!###############fire-CO2#######################################################################
+    real(wp) :: theta_fire
+!######################################################################################
 
     if (mon.eq.1) gamma_dist_cum = 0._wp
 
@@ -243,18 +250,19 @@ contains
       else
         fac_lim_bio = 1._wp
       endif
+!###############fire-CO2#######################################################################
       ! fire disturbance
-      gamma_fire = 1._wp/pft_par%tau_fire(n) &
+      gamma_fire(n) = 1._wp/pft_par%tau_fire(n) &
         * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) !&  ! soil moisture factor
         !* max(0._wp, min(1._wp, (veg_c_above-veg_par%cveg_fire_low)/(veg_par%cveg_fire_high-veg_par%cveg_fire_low)))  ! fuel factor
       ! annual mean disturbance rate
       gamma_dist_cum(n) = gamma_dist_cum(n) &
         + (pft_par%gamma_dist_min(n)*fac_lim_bio &        ! minimum disturbance rate
-        + gamma_fire &                        ! fire disturbance rate
+        + gamma_fire(n) &                        ! fire disturbance rate
         + disturbance(n)) &                   ! additional prescribed disturbance rate
         / real(nmon_year,wp)
     enddo
-
+!######################################################################################
     ! reset cumulated variable
     theta_fire_cum = 0._wp
 

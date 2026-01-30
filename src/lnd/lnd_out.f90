@@ -66,6 +66,9 @@ module lnd_out
     real(wp) :: landc, Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd, d13Cflx_atm_lnd, D14Cflx_atm_lnd
     real(wp) :: Cflx_burial, d13Cflx_burial
     real(wp) :: gpp, npp, npp_pimask, sresp, npp14, sresp14
+!###############fire-CO2##########################################################
+    real(wp) :: fire_c, fire_c_13, fire_c_14
+!#################################################################################
     real(wp) :: runoff, runsur, calving, drain, evp, esur, trans, prc, t, wet, wettrop, wetextrop, inund, peat, peatpot
     real(wp) :: forest, grass, shrub, desert, crop, pasture, vegc, vegc_pimask
     real(wp) :: soilc, soilc60N, litterc, fastc, slowc, minc, peatc, icec, shelfc, lakec, permc, soilc_pimask, inertc
@@ -150,7 +153,11 @@ module lnd_out
   type carbon_out
     real(wp), dimension(nx,ny) :: fpeat, fpeatpot, dCpeatdt, acroh, catoh
     real(wp), dimension(nx,ny,npft) :: lai, sai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, veg_h, pfts, seeds, vegc, lambda
-    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice
+!###############fire-CO2##########################################################
+    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice, gamma_fire
+    real(wp), dimension(nx,ny,npft) :: fire_c_pft, fire_c_pft13, fire_c_pft14
+!#################################################################################
+!    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice
     real(wp), dimension(nx,ny) :: bare
     real(wp), dimension(nx,ny,ncarb) :: sresp, sresp13, sresp14, soilc, litter
     real(wp), allocatable, dimension(:,:,:,:) :: litter_prof, litter13_prof, litter14_prof
@@ -168,6 +175,9 @@ module lnd_out
   end type
   type carbon_g_out
     real(wp), dimension(nx,ny) :: lai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, sresp, sresp13, sresp14, veg_h, litter, vegc, soilc
+!###############fire-CO2##########################################################
+    real(wp), dimension(nx,ny) :: fire_c, fire_c_13, fire_c_14
+!#################################################################################
     real(wp), dimension(nx,ny) :: Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd, d13Cflx_atm_lnd, D14Cflx_atm_lnd 
     real(wp), dimension(nx,ny) :: disc, d13c_veg, d13c_soil, D14c_veg, D14c_soil
   end type
@@ -516,6 +526,9 @@ contains
     ! global values
     real(wp) :: global_gpp
     real(wp) :: global_npp, global_npp_pimask, global_npp13, global_npp14, global_sresp, global_sresp13, global_sresp14
+!###############fire-CO2##########################################################
+    real(wp) :: global_fire_c, global_fire_c_13, global_fire_c_14
+!#################################################################################
     real(wp) :: global_t, global_snow
     real(wp) :: global_run, global_runsur, global_calving, global_drain, global_evp, global_esur, global_trans, global_prc
     real(wp) :: global_wet, global_wettrop, global_wetextrop, global_inund, global_peat, global_peatpot, tmp
@@ -532,6 +545,9 @@ contains
     real(wp) :: global_ch4, global_ch4trop, global_ch4shelf, global_ch4lake, global_ch4extrop, global_c13h4
     real(wp) :: global_dust_e
     real(wp) :: npp_ij, npp13_ij, npp14_ij, sresp_ij, sresp13_ij, sresp14_ij
+!###############fire-CO2##########################################################
+    real(wp) :: fire_ij, fire13_ij, fire14_ij
+!#################################################################################
     real(wp) :: sum_frac
 
 
@@ -656,6 +672,11 @@ contains
       global_sresp  = 0._wp
       global_sresp13= 0._wp
       global_sresp14= 0._wp
+!###############fire-CO2##########################################################
+      global_fire_c  = 0._wp
+      global_fire_c_13= 0._wp
+      global_fire_c_14= 0._wp
+!#################################################################################
       global_peat   = 0._wp
       global_peatpot   = 0._wp
       global_wet = 0._wp
@@ -706,7 +727,7 @@ contains
       global_c13h4  = 0._wp
 
       !$omp parallel do collapse(2) private(i,j,k,n,npp_ij,npp13_ij,npp14_ij,sresp_ij,sresp13_ij,sresp14_ij,tmp,litterc,fastc, slowc,minc,peatc,icec,shelfc,lakec) &
-      !$omp reduction(+:global_npp,global_npp_pimask,global_npp13,global_npp14,global_sresp,global_sresp13,global_sresp14,global_inund) &
+      !$omp reduction(+:global_npp,global_npp_pimask,global_npp13,global_npp14,global_sresp,global_sresp13,global_sresp14,global_fire_c,global_fire_c_13,global_fire_c_14,global_inund) &
       !$omp reduction(+:global_wettrop,global_wet,global_wetextrop,global_peat,global_peatpot) &
       !$omp reduction(+:global_ch4,global_ch4trop,global_ch4extrop,global_ch4shelf,global_ch4lake) &
       !$omp reduction(+:global_c13h4,global_pfts,global_vegc,global_vegc_pimask,global_desert,global_forest,global_grass,global_shrub,global_crop,global_pasture) &
@@ -749,6 +770,18 @@ contains
             global_sresp = global_sresp + sresp_ij
             global_sresp13 = global_sresp13 + sresp13_ij
             global_sresp14 = global_sresp14 + sresp14_ij
+!###############fire-CO2##########################################################
+            ! Fire CO2 emissions
+            fire_ij = lnd(i,j)%fire_c_flux * lnd(i,j)%f_veg &
+            * sec_day*day_mon * area(i,j) * 1.d-12 ! PgC/mon
+            fire13_ij = lnd(i,j)%fire_c_flux13 * lnd(i,j)%f_veg &
+            * sec_day*day_mon * area(i,j) * 1.d-12
+            fire14_ij = lnd(i,j)%fire_c_flux14 * lnd(i,j)%f_veg &
+            * sec_day*day_mon * area(i,j) * 1.d-12
+            global_fire_c = global_fire_c + fire_ij
+            global_fire_c_13 = global_fire_c_13 + fire13_ij
+            global_fire_c_14 = global_fire_c_14 + fire14_ij
+!################################################################################
             ! inundated area excluding peatlands
             global_inund = global_inund + max(0._wp,(lnd(i,j)%f_wetland*lnd(i,j)%f_veg-lnd(i,j)%f_peat)) * area(i,j) * 1.d-12   ! mln km2
             ! wetland area
@@ -961,6 +994,11 @@ contains
       mon_ts(y,mon)%sresp    = global_sresp
       mon_ts(y,mon)%npp14      = global_npp14
       mon_ts(y,mon)%sresp14    = global_sresp14
+!###############fire-CO2##########################################################
+      mon_ts(y,mon)%fire_c    = global_fire_c
+      mon_ts(y,mon)%fire_c_13    = global_fire_c_13
+      mon_ts(y,mon)%fire_c_14    = global_fire_c_14
+!################################################################################
       mon_ts(y,mon)%forest   = global_forest
       mon_ts(y,mon)%grass    = global_grass
       mon_ts(y,mon)%shrub    = global_shrub
@@ -1425,6 +1463,17 @@ contains
               mon_c(mon)%aresp(i,j,:) = mon_c(mon)%aresp(i,j,:) + lnd(i,j)%aresp*real(nday_year,wp)   * mon_avg  ! kgC/m2/yr
               mon_c(mon)%disc(i,j,:)  = mon_c(mon)%disc(i,j,:)  + lnd(i,j)%discrimination*lnd(i,j)%gpp*real(nday_year,wp) * mon_avg  ! permil*kgC/m2/s
             endif
+!###############fire-CO2#########################################################
+            ! Fire emissions by PFT
+            do k=1,npft
+              mon_c(mon)%fire_c_pft(i,j,k) = mon_c(mon)%fire_c_pft(i,j,k) &
+               + lnd(i,j)%fire_c_flux_pft(k) * sec_day * real(nday_year,wp) * mon_avg ! Use per-PFT array
+              mon_c(mon)%fire_c_pft13(i,j,k) = mon_c(mon)%fire_c_pft13(i,j,k) &
+               + lnd(i,j)%fire_c_flux13_pft(k) * sec_day * real(nday_year,wp) * mon_avg ! Use per-PFT array
+              mon_c(mon)%fire_c_pft14(i,j,k) = mon_c(mon)%fire_c_pft14(i,j,k) &
+               + lnd(i,j)%fire_c_flux14_pft(k) * sec_day * real(nday_year,wp) * mon_avg ! Use per-PFT array
+            enddo
+!#################################################################################
           enddo
         enddo
         !!$omp end parallel do
@@ -1612,6 +1661,12 @@ contains
           mon_c_g(mon)%Cflx_atm_lnd  = mon_c_g(mon)%npp*lnd%f_veg - mon_c_g(mon)%sresp ! kgC/m2/yr
           mon_c_g(mon)%C13flx_atm_lnd = mon_c_g(mon)%npp13*lnd%f_veg - mon_c_g(mon)%sresp13 ! kgC/m2/yr 
           mon_c_g(mon)%C14flx_atm_lnd = mon_c_g(mon)%npp14*lnd%f_veg - mon_c_g(mon)%sresp14 ! kgC/m2/yr
+!###############fire-CO2#########################################################
+          ! Sum fire emissions across PFTs for grid-cell average
+          mon_c_g(mon)%fire_c(:,:) = sum(mon_c(mon)%fire_c_pft, dim=3)
+          mon_c_g(mon)%fire_c_13(:,:) = sum(mon_c(mon)%fire_c_pft13, dim=3)
+          mon_c_g(mon)%fire_c_14(:,:) = sum(mon_c(mon)%fire_c_pft14, dim=3)
+!#################################################################################
 
           ! at end of year
           if( time_eoy_lnd ) then
@@ -1626,6 +1681,9 @@ contains
                 ann_c%gamma_dist(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_dist*sec_year)    ! years
                 ann_c%gamma_luc(i,j,:)   = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_luc*sec_year)     ! years
                 ann_c%gamma_ice(i,j,:)   = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_ice*sec_year)     ! years
+!###############fire-CO2#########################################################
+                ann_c%gamma_fire(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_fire*sec_year)    ! years
+!################################################################################
                 ann_c%vegc(i,j,:)   = lnd(i,j)%veg_c
                 ann_c%soilc(i,j,:)  = lnd(i,j)%soil_c_tot
               enddo
@@ -2034,6 +2092,11 @@ contains
     call nc_write(fnm,"A_SH",    sngl(vars%pfts(5)), dim1=dim_time,start=[ndat],count=[y],long_name="Shrubland area",units="mln km^2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Cveg",    sngl(vars%vegc),   dim1=dim_time,start=[ndat],count=[y],long_name="vegetation carbon",units="PgC",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Cveg_pimask",    sngl(vars%vegc_pimask),   dim1=dim_time,start=[ndat],count=[y],long_name="vegetation carbon in pre-industrial permafrost area",units="PgC",missing_value=missing_value,ncid=ncid)
+!###############fire-CO2#########################################################
+    call nc_write(fnm,"fire_c",    sngl(vars%fire_c),   dim1=dim_time,start=[ndat],count=[y],long_name="fire Carbon emissions",units="PgC/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"fire_c_13",    sngl(vars%fire_c_13),   dim1=dim_time,start=[ndat],count=[y],long_name="fire C13 emissions",units="PgC/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"fire_c_14",    sngl(vars%fire_c_14),   dim1=dim_time,start=[ndat],count=[y],long_name="fire C14 emissions",units="PgC/yr",missing_value=missing_value,ncid=ncid)
+!################################################################################
     call nc_write(fnm,"Csoil",   sngl(vars%soilc),  dim1=dim_time,start=[ndat],count=[y],long_name="total soil carbon",units="PgC",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Csoil60N",   sngl(vars%soilc60N),  dim1=dim_time,start=[ndat],count=[y],long_name="total soil carbon north of 60N",units="PgC",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Clitter", sngl(vars%litterc),   dim1=dim_time,start=[ndat],count=[y],long_name="litter carbon",units="PgC",missing_value=missing_value,ncid=ncid)
@@ -2173,6 +2236,11 @@ contains
     ave%ch4extrop = 0._wp
     ave%d13ch4  = 0._wp
     ave%dust_e = 0._wp
+!###############fire-CO2##########################################################
+    ave%fire_c = 0._wp
+    ave%fire_c_13 = 0._wp
+    ave%fire_c_14 = 0._wp
+!#################################################################################
 
     ! Loop over the time indices to sum up
     do k = 1, n
@@ -2244,6 +2312,11 @@ contains
      ave%ch4extrop = ave%ch4extrop    + d(k)%ch4extrop/ div
      ave%d13ch4  = ave%d13ch4     + d(k)%d13ch4/ div
      ave%dust_e     = ave%dust_e        + d(k)%dust_e
+!###############fire-CO2##########################################################
+     ave%fire_c    = ave%fire_c       + d(k)%fire_c
+     ave%fire_c_13 = ave%fire_c_13    + d(k)%fire_c_13
+     ave%fire_c_14 = ave%fire_c_14    + d(k)%fire_c_14
+!#################################################################################     
     end do
       
    return
@@ -2933,6 +3006,10 @@ contains
     call nc_write(fnm,"gamma_dist",sngl(vars%gamma_dist),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate",units="years",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"gamma_luc",sngl(vars%gamma_luc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from land use change",units="years",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"gamma_ice",sngl(vars%gamma_ice),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from ice sheets",units="years",missing_value=missing_value,ncid=ncid)
+!###############fire-CO2#########################################################
+    call nc_write(fnm,"gamma_fire",sngl(vars%gamma_fire),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire disturbance rate",units="years",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"fire_c_pft",sngl(vars%fire_c_pft),dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire Carbon emissions by PFT",units="kgC/m2/yr",missing_value=missing_value,ncid=ncid)
+!#################################################################################
     call nc_write(fnm,"vegc",      sngl(vars%vegc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="vegetation carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"soilc",     sngl(vars%soilc),  dims=[dim_lon,dim_lat,dim_ncarb,dim_time],start=[1,1,1,nout],count=[nx,ny,ncarb,1],long_name="soil carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"sai",       sngl(vars%sai),   dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="stem area index",units="m2/m2",missing_value=missing_value,ncid=ncid)
@@ -2966,6 +3043,9 @@ contains
 
     ! grid cell averages
     call nc_write(fnm,"vegc_g",      sngl(vars_g%vegc),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="vegetation carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
+!###############fire-CO2#########################################################
+    call nc_write(fnm,"fire_c_g",    sngl(vars_g%fire_c),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="fire Carbon emissions",units="kgC/m2/yr",missing_value=missing_value,ncid=ncid)
+!################################################################################
     call nc_write(fnm,"soilc_g",     sngl(vars_g%soilc),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="soil carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"d13C_veg_g",   sngl(vars_g%d13c_veg),   dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="d13C vegetation carbon",units="permil",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"D14C_veg_g",   sngl(vars_g%D14c_veg),   dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="D14C vegetation carbon",units="permil",missing_value=missing_value,ncid=ncid)
@@ -3028,6 +3108,11 @@ contains
     ave_g%aresp    = 0._wp
     ave_g%sresp    = 0._wp
     ave_g%disc     = 0._wp
+!###############fire-CO2##########################################################
+    ave_g%fire_c = 0._wp
+    ave_g%fire_c_13 = 0._wp
+    ave_g%fire_c_14 = 0._wp
+!#################################################################################
 
     ! Loop over the time indices to sum up and average (if necessary)
     do k = 1, n
@@ -3065,6 +3150,11 @@ contains
      ave_g%gpp    = ave_g%gpp    + d_g(k)%gpp   /div
      ave_g%aresp  = ave_g%aresp  + d_g(k)%aresp /div
      ave_g%disc   = ave_g%disc   + d_g(k)%disc*d_g(k)%gpp  /div
+!###############fire-CO2##########################################################
+     ave_g%fire_c = ave_g%fire_c + d_g(k)%fire_c / div
+     ave_g%fire_c_13 = ave_g%fire_c_13 + d_g(k)%fire_c_13 / div
+     ave_g%fire_c_14 = ave_g%fire_c_14 + d_g(k)%fire_c_14 / div
+!#################################################################################
     enddo
     where (ave_g%gpp>0._wp) 
       ave_g%disc = ave_g%disc/ave_g%gpp

@@ -276,6 +276,9 @@ module lnd_params
     real(wp) :: f_veg_crit = 0.2_wp    !! critical vegetation fraction for buried litter []
     real(wp) :: f_lit_to_ice    !! fraction of vegetation buried when ice sheets are expanding []
     integer :: i_deforest
+!###############fire-CO2#######################################################
+    logical :: l_fire_co2_emissions  !! switch for fire CO2 emissions calculation
+!##############################################################################
   end type
   type(veg_par_type) :: veg_par
 
@@ -666,7 +669,7 @@ subroutine lnd_par_load
     integer :: k, n
     real(wp) :: sla_nl, sla_bl, sla_c3, sla_c4, sla_sh
     real(wp) :: gamma_dist_tree, gamma_dist_grass, gamma_dist_shrub
-    real(wp) :: tau_fire
+!    real(wp) :: tau_fire
     real(wp) :: alb_ice
     real(wp) :: alpha_int_w_tree, alpha_int_w_grass
 
@@ -841,8 +844,15 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","sai_scale",veg_par%sai_scale)
     call nml_read(filename,"lnd_par","veg_h_min",veg_par%veg_h_min)
     call nml_read(filename,"lnd_par","f_lit_to_ice",veg_par%f_lit_to_ice)
-    call nml_read(filename,"lnd_par","tau_fire",tau_fire)
-    pft_par%tau_fire = tau_fire*sec_year
+!#############fire-CO2#######################################################
+    call nml_read(filename,"lnd_par","l_fire_co2_emissions",veg_par%l_fire_co2_emissions)
+!############################################################################
+!    call nml_read(filename,"lnd_par","tau_fire",tau_fire)
+!    pft_par%tau_fire = tau_fire*sec_year
+!------fire--disturbance---tau vs pft------------
+    call nml_read(filename,"lnd_par","tau_fire",pft_par%tau_fire)
+    pft_par%tau_fire = pft_par%tau_fire*sec_year
+!-----------------------------------------------
     call nml_read(filename,"lnd_par","theta_fire_crit",veg_par%theta_fire_crit)
     call nml_read(filename,"lnd_par","i_deforest",veg_par%i_deforest)
 
