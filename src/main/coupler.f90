@@ -2487,17 +2487,28 @@ contains
 
     type(map_scrip_class) :: maps_geo_to_smb
 
-    real(wp), allocatable :: h_ice(:,:)
+    real(wp), allocatable :: mask_ice(:,:)
+    real(wp), allocatable :: mask_ice_geo(:,:)
 
 
     ! no ice model, use ice sheets from bnd
-    allocate(h_ice(smb%grid%G%nx,smb%grid%G%ny))
     call map_scrip_init(maps_geo_to_smb,geo%hires%grid,smb%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
     ! map surface elevation
     call map_scrip_field(maps_geo_to_smb,"topo",geo%hires%z_topo,smb%z_sur,method="mean",missing_value=-9999._dp)
     ! map ice thickness
-    call map_scrip_field(maps_geo_to_smb,"h_ice",geo%hires%h_ice,h_ice,method="mean",missing_value=-9999._dp)
-    where (h_ice<10._wp) h_ice = 0._wp
+    call map_scrip_field(maps_geo_to_smb,"h_ice",geo%hires%h_ice,smb%h_ice,method="mean",missing_value=-9999._dp)
+    allocate(mask_ice(smb%grid%G%nx,smb%grid%G%ny))
+    allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
+    where (geo%hires%h_ice>h_ice_min) 
+      mask_ice_geo = 1.
+    elsewhere
+      mask_ice_geo = 0.
+    endwhere
+    call map_scrip_field(maps_geo_to_smb,"mask",mask_ice_geo,mask_ice,method="mean",missing_value=-9999._dp)
+    where (mask_ice<0.5) smb%h_ice = 0._wp
+    deallocate(mask_ice)
+    deallocate(mask_ice_geo)
+      
     ! standard deviation of bedrock topography
     call map_scrip_field(maps_geo_to_smb,"z_bed_std",geo%hires%z_bed_std,smb%z_bed_std,method="mean",missing_value=-9999._dp)
 
@@ -2505,16 +2516,12 @@ contains
       smb%z_sur = 0._Wp
     endwhere
     ! generate ice mask
-    where (h_ice.gt.0._wp) 
+    where (smb%h_ice.gt.0._wp) 
       smb%mask_ice = 1
     elsewhere
       smb%mask_ice = 0
     endwhere
     smb%mask_ice_old = smb%mask_ice
-    ! ice thickness
-    smb%h_ice = h_ice
-    deallocate(h_ice)
-
 
     return
 
@@ -2664,6 +2671,8 @@ contains
     type(map_scrip_class) :: maps_geo_to_bmb
 
     real(wp), allocatable :: h_ice(:,:)
+    real(wp), allocatable :: mask_ice(:,:)
+    real(wp), allocatable :: mask_ice_geo(:,:)
     real(wp), allocatable :: z_bed(:,:)
 
 
@@ -2676,7 +2685,17 @@ contains
     call map_scrip_field(maps_geo_to_bmb,"zb",geo%hires%z_topo-geo%hires%h_ice,bmb%zb,method="mean",missing_value=-9999._dp)
     ! map ice thickness and bedrock elevation
     call map_scrip_field(maps_geo_to_bmb,"h_ice",geo%hires%h_ice,h_ice,method="mean",missing_value=-9999._dp)
-    where (h_ice<10._wp) h_ice = 0._wp
+    allocate(mask_ice(bmb%grid%G%nx,bmb%grid%G%ny))
+    allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
+    where (geo%hires%h_ice>h_ice_min) 
+      mask_ice_geo = 1.
+    elsewhere
+      mask_ice_geo = 0.
+    endwhere
+    call map_scrip_field(maps_geo_to_bmb,"mask",mask_ice_geo,mask_ice,method="mean",missing_value=-9999._dp)
+    where (mask_ice<0.5) h_ice = 0._wp
+    deallocate(mask_ice)
+    deallocate(mask_ice_geo)
     call map_scrip_field(maps_geo_to_bmb,"z_bed",geo%hires%z_bed,z_bed,method="mean",missing_value=-9999._dp)
 
     ! generate ice shelf mask
