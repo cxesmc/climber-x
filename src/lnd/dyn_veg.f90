@@ -34,6 +34,13 @@ module dyn_veg_mod
   use lnd_params, only : dt_v, dt_day_v
   use lnd_params, only : l_dynveg, l_fixlai, veg_par, pft_par
 
+!###########################################################
+  ! SPITFIRE-style combustion completeness parameters
+!###########################################################
+  real(wp), dimension(npft), parameter :: cc_leaf = [0.80_wp, 0.80_wp, 0.90_wp, 0.90_wp, 0.85_wp]
+  real(wp), dimension(npft), parameter :: cc_stem = [0.30_wp, 0.30_wp, 0.80_wp, 0.80_wp, 0.60_wp]
+  real(wp), dimension(npft), parameter :: cc_root = [0.00_wp, 0.00_wp, 0.00_wp, 0.00_wp, 0.00_wp]
+!###########################################################
 
    private
    public :: dyn_veg
@@ -48,13 +55,16 @@ contains
   subroutine dyn_veg(co2, f_veg ,f_veg_old, f_ice_grd, f_ice_grd_old, f_ice_nbr, f_lake, f_lake_old, f_shelf, f_shelf_old, &
                     f_crop, f_pasture, gamma_luc, &
                     z_veg_std, gamma_ice, &
-                    gamma_dist, gamma_dist_cum, npp_ann, npp13_ann, npp14_ann, &
+                    gamma_dist, gamma_dist_cum, gamma_fire, &  ! ADD gamma_fire here ##############
+                    npp_ann, npp13_ann, npp14_ann, &
                     gamma_leaf, lambda, lai_bal, sai, &
                     root_frac, litter_in_frac, &
                     veg_c, veg_c13, veg_c14, leaf_c, stem_c, root_c, &
                     seed_frac, pft_frac, &
                     veg_c_above, veg_c13_above, veg_c14_above, veg_c_below, veg_c13_below, veg_c14_below, &
                     veg_h, litterfall, litterfall13, litterfall14, npp_real, npp13_real, npp14_real, &
+                    fire_c_flux, fire_c_flux13, fire_c_flux14, &  ! ADD these outputs ##############
+                    fire_c_flux_pft, fire_c_flux13_pft, fire_c_flux14_pft, &  ! ADD these outputs ##############
                     carbon_bal_veg, carbon13_bal_veg, carbon14_bal_veg, i,j)
 
     implicit none
@@ -67,6 +77,9 @@ contains
     real(wp), intent(in) :: f_crop, f_pasture
     real(wp), intent(in) :: z_veg_std
     real(wp), dimension(:), intent(inout) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
+!###############fire-CO2##############################################################
+    real(wp), dimension(:), intent(in) :: gamma_fire  ! fire disturbance rate, 1/s
+!###########################################################
     real(wp), dimension(:), intent(inout) :: npp_ann, npp13_ann, npp14_ann
     real(wp), dimension(:), intent(inout) :: gamma_leaf, lambda, lai_bal, sai
     real(wp), dimension(:,:), intent(in) :: root_frac
@@ -81,6 +94,10 @@ contains
     real(wp), dimension(:), intent(out) :: veg_h
     real(wp), dimension(:,:), intent(out) :: litterfall, litterfall13, litterfall14
     real(wp), intent(out) :: npp_real, npp13_real, npp14_real
+!###############fire-CO2##############################################################
+    real(wp), intent(out) :: fire_c_flux, fire_c_flux13, fire_c_flux14
+    real(wp), dimension(:), intent(out) :: fire_c_flux_pft, fire_c_flux13_pft, fire_c_flux14_pft
+!###########################################################
     real(wp), intent(out) :: carbon_bal_veg, carbon13_bal_veg, carbon14_bal_veg
 
     integer :: i, j
@@ -99,6 +116,13 @@ contains
     real(wp), dimension(nl,npft) :: litter_pft, litter_dist_comp
     real(wp), dimension(nl,npft) :: litter13_pft, litter13_dist_comp
     real(wp), dimension(nl,npft) :: litter14_pft, litter14_dist_comp
+!###############fire-CO2##############################################################
+    real(wp), dimension(npft) :: fire_leaf, fire_stem, fire_root
+    real(wp), dimension(npft) :: fire_leaf13, fire_stem13, fire_root13
+    real(wp), dimension(npft) :: fire_leaf14, fire_stem14, fire_root14
+    real(wp) :: gamma_fire_fraction
+    real(wp) :: carbon_loss_rate, fire_carbon_loss
+!###########################################################
     real(wp), dimension(nl) :: litter_shelf, litter13_shelf, litter14_shelf
     real(wp), dimension(nl) :: litter_lake, litter13_lake, litter14_lake
     real(wp), dimension(nl) :: litter_ice_to_veg, litter13_ice_to_veg, litter14_ice_to_veg
@@ -113,6 +137,14 @@ contains
     litterfall = 0._wp
     litterfall13 = 0._wp
     litterfall14 = 0._wp
+!###############fire-CO2#############################################################
+    fire_c_flux = 0._wp
+    fire_c_flux13 = 0._wp
+    fire_c_flux14 = 0._wp
+    fire_c_flux_pft = 0._wp
+    fire_c_flux13_pft = 0._wp
+    fire_c_flux14_pft = 0._wp
+!##########################################################
 
     ! when ice or water area retreating reduce pft fractions to increase bare soil
     if (f_veg.gt.f_veg_old .and. doy.eq.dt_day_v) then
@@ -424,8 +456,73 @@ contains
         endif
 
         ! litter from disturbance and competition
-        litter_dist_comp(:,n)   = - (veg_c_old(n) * (pft_frac(n)-pft_frac_old(n))/dt_v - lambda(n)*npp(n)*pft_frac(n)) &
-          * ((leaf_c_old(n)+stem_c_old(n))*litter_in_frac(:)+root_frac(:,n)*root_c_old(n))/veg_c_old(n)
+!###############fire-CO2######################################
+      ! ================================================================
+      ! Calculate total carbon loss from PFT dynamics
+      ! ================================================================
+
+      ! This term represents carbon leaving the PFT pool
+        carbon_loss_rate = -(veg_c_old(n) * (pft_frac(n)-pft_frac_old(n))/dt_v &
+                    - lambda(n)*npp(n)*pft_frac(n))
+
+      ! ================================================================
+      ! FIRE COMBUSTION EMISSIONS (SPITFIRE-style)
+      ! ================================================================
+        if (veg_par%l_fire_co2_emissions) then
+        ! Calculate fraction of disturbance due to fire
+          if (gamma_dist(n) .gt. 1e-10_wp) then
+            gamma_fire_fraction = gamma_fire(n) / (gamma_dist(n)+gamma_luc(n) + gamma_ice(n))
+          else
+            gamma_fire_fraction = 0._wp
+          endif
+        else
+            gamma_fire_fraction = 0._wp
+        endif
+
+        ! Calculate DIRECT COMBUSTION emissions for each pool
+        ! fire_X = fire_fraction * combustion_completeness * total_loss * (pool_fraction)
+        ! Fire-affected carbon loss
+        fire_carbon_loss = gamma_fire_fraction * carbon_loss_rate
+
+        ! Direct combustion emissions (by pool)
+        fire_leaf(n) = fire_carbon_loss * cc_leaf(n) * (leaf_c_old(n)/veg_c_old(n))
+        fire_stem(n) = fire_carbon_loss * cc_stem(n) * (stem_c_old(n)/veg_c_old(n))
+        fire_root(n) = fire_carbon_loss * cc_root(n) * (root_c_old(n)/veg_c_old(n))
+        
+        ! C13 emissions (same fraction as total carbon)
+        fire_leaf13(n) = fire_leaf(n) * (veg_c13_old(n)/veg_c_old(n))
+        fire_stem13(n) = fire_stem(n) * (veg_c13_old(n)/veg_c_old(n))
+        fire_root13(n) = fire_root(n) * (veg_c13_old(n)/veg_c_old(n))
+
+        ! C14 emissions
+        fire_leaf14(n) = fire_leaf(n) * (veg_c14_old(n)/veg_c_old(n))
+        fire_stem14(n) = fire_stem(n) * (veg_c14_old(n)/veg_c_old(n))
+        fire_root14(n) = fire_root(n) * (veg_c14_old(n)/veg_c_old(n))
+
+        ! Ensure non-negative emissions
+        fire_leaf(n)   = max(0._wp, fire_leaf(n))
+        fire_stem(n)   = max(0._wp, fire_stem(n))
+        fire_root(n)   = max(0._wp, fire_root(n))
+        fire_leaf13(n) = max(0._wp, fire_leaf13(n))
+        fire_stem13(n) = max(0._wp, fire_stem13(n))
+        fire_root13(n) = max(0._wp, fire_root13(n))
+        fire_leaf14(n) = max(0._wp, fire_leaf14(n))
+        fire_stem14(n) = max(0._wp, fire_stem14(n))
+        fire_root14(n) = max(0._wp, fire_root14(n))
+
+      ! ================================================================
+      ! LITTER from disturbance and competition
+      ! Now SUBTRACT the combusted portion - only unburned biomass goes to litter
+      ! ================================================================
+        litter_dist_comp(:,n) = carbon_loss_rate  &
+          * ((leaf_c_old(n)*(1._wp - gamma_fire_fraction*cc_leaf(n)) &
+            + stem_c_old(n)*(1._wp - gamma_fire_fraction*cc_stem(n)))*litter_in_frac(:) &
+            + root_frac(:,n)*root_c_old(n)*(1._wp - gamma_fire_fraction*cc_root(n))) &
+          / veg_c_old(n)
+
+!        litter_dist_comp(:,n)   = - (veg_c_old(n) * (pft_frac(n)-pft_frac_old(n))/dt_v - lambda(n)*npp(n)*pft_frac(n)) &
+!          * ((leaf_c_old(n)+stem_c_old(n))*litter_in_frac(:)+root_frac(:,n)*root_c_old(n))/veg_c_old(n)
+!###########################################################
         litter13_dist_comp(:,n) = veg_c13_old(n)/veg_c_old(n)*litter_dist_comp(:,n)
         litter14_dist_comp(:,n) = veg_c14_old(n)/veg_c_old(n)*litter_dist_comp(:,n)
 
@@ -444,6 +541,18 @@ contains
 
       enddo
 
+!###############fire-CO2######################################
+      ! ================================================================
+      ! SUM TOTAL FIRE CO2 EMISSIONS across all PFTs
+      ! ================================================================
+      fire_c_flux   = sum(fire_leaf + fire_stem + fire_root)        ! kgC/m2/s
+      fire_c_flux13 = sum(fire_leaf13 + fire_stem13 + fire_root13)  ! kgC/m2/s
+      fire_c_flux14 = sum(fire_leaf14 + fire_stem14 + fire_root14)  ! kgC/m2/s
+      ! Per-PFT fire emissions for output
+      fire_c_flux_pft   = fire_leaf + fire_stem + fire_root        ! kgC/m2/s per PFT
+      fire_c_flux13_pft = fire_leaf13 + fire_stem13 + fire_root13  ! kgC/m2/s per PFT
+      fire_c_flux14_pft = fire_leaf14 + fire_stem14 + fire_root14  ! kgC/m2/s per PFT
+!###########################################################
       do k=1,nl
         do n=1,npft
           litterfall(k,ic_min)   = litterfall(k,ic_min)   + pft_frac(n)*litter_pft(k,n)   + litter_dist_comp(k,n)
@@ -457,7 +566,13 @@ contains
 
         do n=1,npft
 
-          if(abs((veg_c(n)-veg_c_old(n)) - (1._wp-lambda(n))*npp(n)*dt_v + sum(litter_pft(:,n))*dt_v) .gt. 1.e-5_wp) then
+!###############fire-CO2###################################### 
+! The carbon balance equation for vegetation is: delta_C_veg = NPP_growth - Litterfall - Fire_emissions
+! The check is: abs( delta_C_veg - NPP_growth + Litterfall + Fire_emissions ) < tolerance
+          !if(abs((veg_c(n)-veg_c_old(n)) - (1._wp-lambda(n))*npp(n)*dt_v + sum(litter_pft(:,n))*dt_v) .gt. 1.e-5_wp) then
+          if(abs((veg_c(n)-veg_c_old(n)) - (1._wp-lambda(n))*npp(n)*dt_v &
+                  + sum(litter_pft(:,n))*dt_v + (fire_leaf(n)+fire_stem(n)+fire_root(n))*dt_v) .gt. 1.e-5_wp) then
+!###########################################################
             print *,''
             print *,'local carbon balance',n,(veg_c(n)-veg_c_old(n)) - (1._wp-lambda(n))*npp(n)*dt_v + sum(litter_pft(:,n))*dt_v
             print *,'lai',lai_bal(n)
@@ -467,10 +582,17 @@ contains
             print *,'vegc,vegc_old',veg_c(n),veg_c_old(n)
             print *,'litter',sum(litter_pft(:,n))
             print *,'dvegc,lambda*npp,litter',veg_c(n)-veg_c_old(n),(1._wp-lambda(n))*npp(n)*dt_v,sum(litter_pft(:,n))*dt_v
+!###############fire-CO2######################################
+            print *,'fire_emissions',(fire_leaf(n)+fire_stem(n)+fire_root(n))*dt_v
+!###########################################################
             stop
           endif
 
-          if(abs((veg_c13(n)-veg_c13_old(n)) - (1._wp-lambda(n))*npp13(n)*dt_v + sum(litter13_pft(:,n))*dt_v) .gt. 1.e-5_wp) then
+!###############fire-CO2######################################
+          !if(abs((veg_c13(n)-veg_c13_old(n)) - (1._wp-lambda(n))*npp13(n)*dt_v + sum(litter13_pft(:,n))*dt_v) .gt. 1.e-5_wp) then
+          if(abs((veg_c13(n)-veg_c13_old(n)) - (1._wp-lambda(n))*npp13(n)*dt_v &
+                  + sum(litter13_pft(:,n))*dt_v + (fire_leaf13(n)+fire_stem13(n)+fire_root13(n))*dt_v) .gt. 1.e-5_wp) then
+!#############################################################
             print *,''
             print *,year,doy
             print *,n
@@ -478,6 +600,9 @@ contains
             print *,'lai',lai_bal(n)
             print *,'lai_old',lai_bal_old(n)
             print *,'dvegc13,lambda*npp13,litter13',veg_c13(n)-veg_c13_old(n),(1._wp-lambda(n))*npp13(n)*dt_v,sum(litter13_pft(:,n))*dt_v
+!###############fire-CO2######################################
+            print *,'fire13_emissions',(fire_leaf13(n)+fire_stem13(n)+fire_root13(n))*dt_v
+!#############################################################            
             print *,'lambda',lambda(n)
             print *,'npp',npp(n)
             print *,'npp13',npp13(n)
@@ -489,13 +614,20 @@ contains
             !stop
           endif
 
-          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v) .gt. 1.e-10_wp) then
+!###############fire-CO2######################################          
+          !if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v) .gt. 1.e-10_wp) then
+          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v &
+                  + sum(litter14_pft(:,n))*dt_v + (fire_leaf14(n)+fire_stem14(n)+fire_root14(n))*dt_v) .gt. 1.e-10_wp) then
+!###########################################################
             print *,''
             print *,year,doy
             print *,'local carbon 14 balance',n,veg_c14(n)-veg_c14_old(n) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v
             print *,'lai',lai_bal(n)
             print *,'lai_old',lai_bal_old(n)
             print *,'dvegc14,lambda*npp14,litter14',veg_c14(n)-veg_c14_old(n),(1._wp-lambda(n))*npp14(n)*dt_v,sum(litter14_pft(:,n))*dt_v
+!###############fire-CO2######################################
+            print *,'fire14_emissions',(fire_leaf14(n)+fire_stem14(n)+fire_root14(n))*dt_v
+!###########################################################
             print *,'lambda',lambda(n)
             print *,'npp',npp(n)
             print *,'npp14',npp14(n)
