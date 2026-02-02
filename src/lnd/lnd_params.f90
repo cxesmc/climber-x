@@ -269,12 +269,19 @@ module lnd_params
     real(wp) :: theta_fire_crit !! critical soil moisture for fire, Thonicke 2001 ~0.4 for relative soil moisture [m3/m3]
     real(wp) :: cveg_fire_low  = 0.2_wp   !! value of aboveground biomass below which no fire [kgC/m2]
     real(wp) :: cveg_fire_high = 1._wp    !! value of aboveground biomass above which no fire limitation by fuel [kgC/m2]
+    logical :: l_fire_co2_emissions  !! switch for fire CO2 emissions calculation
     integer :: iseed    !! seeds parameterisation flag
     real(wp) :: seed_pft_min    !! minimum pft fraction needed to seed neighbouring cells
     real(wp) :: seed_fraction = 0.001_wp  !! PFT seed fraction []
     real(wp) :: seed_lim   = 0.05_wp   !! 
     real(wp) :: f_veg_crit = 0.2_wp    !! critical vegetation fraction for buried litter []
     real(wp) :: f_lit_to_ice    !! fraction of vegetation buried when ice sheets are expanding []
+    real(wp) :: k_mcwd          !! slope parameter for MCWD mortality sigmoid function [1/mm]
+    real(wp) :: M_max           !! maximum MCWD-induced mortality rate [1/yr]
+    real(wp) :: ratio_MCWD         !! MCWD ratio to define the threshold [mm]
+    integer :: i_mcwd_clim         !! MCWD climatology source: 0=fixed value, 1=nc file, 2=restart
+    real(wp) :: MCWD_50_fixed      !! fixed MCWD_50 value when i_mcwd_clim=0 [mm]
+    character (len=256) :: mcwd_clim_file  !! file with MCWD climatology (used if i_mcwd_clim=1)
     integer :: i_deforest
   end type
   type(veg_par_type) :: veg_par
@@ -674,7 +681,6 @@ subroutine lnd_par_load
     integer :: n
     real(wp) :: sla_nl, sla_bl, sla_c3, sla_c4, sla_sh
     real(wp) :: gamma_dist_tree, gamma_dist_grass, gamma_dist_shrub
-    real(wp) :: tau_fire
     real(wp) :: alb_ice
     real(wp) :: alpha_int_w_tree, alpha_int_w_grass
 
@@ -849,9 +855,18 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","sai_scale",veg_par%sai_scale)
     call nml_read(filename,"lnd_par","veg_h_min",veg_par%veg_h_min)
     call nml_read(filename,"lnd_par","f_lit_to_ice",veg_par%f_lit_to_ice)
-    call nml_read(filename,"lnd_par","tau_fire",tau_fire)
-    pft_par%tau_fire = tau_fire*sec_year
     call nml_read(filename,"lnd_par","theta_fire_crit",veg_par%theta_fire_crit)
+    call nml_read(filename,"lnd_par","l_fire_co2_emissions",veg_par%l_fire_co2_emissions)
+    call nml_read(filename,"lnd_par","tau_fire",pft_par%tau_fire)
+    pft_par%tau_fire = pft_par%tau_fire*sec_year
+    call nml_read(filename,"lnd_par","k_mcwd",veg_par%k_mcwd)
+    call nml_read(filename,"lnd_par","M_max",veg_par%M_max)
+    ! convert from 1/yr to 1/s
+    veg_par%M_max = veg_par%M_max/sec_year
+    call nml_read(filename,"lnd_par","ratio_MCWD",veg_par%ratio_MCWD)
+    call nml_read(filename,"lnd_par","i_mcwd_clim",veg_par%i_mcwd_clim)
+    call nml_read(filename,"lnd_par","MCWD_50_fixed",veg_par%MCWD_50_fixed)
+    call nml_read(filename,"lnd_par","mcwd_clim_file",veg_par%mcwd_clim_file)
     call nml_read(filename,"lnd_par","i_deforest",veg_par%i_deforest)
 
     call nml_read(filename,"lnd_par","soil_texture",soil_par%soil_texture)

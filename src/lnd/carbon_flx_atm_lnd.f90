@@ -42,6 +42,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine carbon_flux_atm_lnd(f_veg, f_peat, f_ice_grd, f_shelf, f_lake,area, &
       npp_real, npp13_real, npp14_real, soil_resp, soil_resp13, soil_resp14, &
+      fire_c_flux,fire_c13_flux,fire_c14_flux, &      
       Cflx_atm_lnd_2d, C13flx_atm_lnd_2d, C14flx_atm_lnd_2d, &
       Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd)
 
@@ -50,10 +51,12 @@ contains
     real(wp), intent(in) :: f_veg, f_peat, f_ice_grd, f_shelf, f_lake, area
     real(wp), intent(in) :: npp_real, npp13_real, npp14_real
     real(wp), dimension(:), intent(in) :: soil_resp, soil_resp13, soil_resp14
+    real(wp), intent(in) :: fire_c_flux, fire_c13_flux, fire_c14_flux    
     real(wp), intent(inout) :: Cflx_atm_lnd_2d, C13flx_atm_lnd_2d, C14flx_atm_lnd_2d
     real(wp), intent(inout) :: Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd
 
     real(wp) :: npp_ij, npp13_ij, npp14_ij, sresp_ij, sresp13_ij, sresp14_ij
+    real(wp) :: fire_ij, fire13_ij, fire14_ij
 
 
     ! NPP
@@ -80,14 +83,18 @@ contains
       + soil_resp14(ic_ice)*f_ice_grd) &
       * sec_day*day_mon * area ! kgC/mon
 
-    Cflx_atm_lnd_2d = (npp_ij-sresp_ij) / (sec_day*day_mon)     ! kgC/s
-    C13flx_atm_lnd_2d = (npp13_ij-sresp13_ij) / (sec_day*day_mon)
-    C14flx_atm_lnd_2d = (npp14_ij-sresp14_ij) / (sec_day*day_mon)
+    ! fire emissions
+    fire_ij = fire_c_flux * f_veg * sec_day*day_mon * area ! kgC/mon
+    fire13_ij = fire_c13_flux * f_veg * sec_day*day_mon * area
+    fire14_ij = fire_c14_flux * f_veg * sec_day*day_mon * area
 
-    Cflx_atm_lnd = Cflx_atm_lnd + (npp_ij-sresp_ij)
-    C13flx_atm_lnd = C13flx_atm_lnd + (npp13_ij-sresp13_ij)
-    C14flx_atm_lnd = C14flx_atm_lnd + (npp14_ij-sresp14_ij)
+    Cflx_atm_lnd_2d = (npp_ij-sresp_ij-fire_ij) / (sec_day*day_mon)     ! kgC/s
+    C13flx_atm_lnd_2d = (npp13_ij-sresp13_ij-fire13_ij) / (sec_day*day_mon)
+    C14flx_atm_lnd_2d = (npp14_ij-sresp14_ij-fire14_ij) / (sec_day*day_mon)
 
+    Cflx_atm_lnd = Cflx_atm_lnd + (npp_ij-sresp_ij-fire_ij)
+    C13flx_atm_lnd = C13flx_atm_lnd + (npp13_ij-sresp13_ij-fire13_ij)
+    C14flx_atm_lnd = C14flx_atm_lnd + (npp14_ij-sresp14_ij-fire14_ij)
 
     return
 

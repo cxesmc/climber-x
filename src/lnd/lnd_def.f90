@@ -47,6 +47,7 @@ module lnd_def
 
      integer :: mask_lnd
      real(wp) :: Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd
+     real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux     
      real(wp) :: f_land, f_land0, f_ice, f_ice_old, f_ice_grd, f_ice_grd_old, f_ice_nbr, f_shelf, f_shelf_old, f_lake, f_lake_old, f_veg, f_veg_old
      real(wp) :: z_veg_std, z_veg, z_veg_min, z_veg_max
      real(wp) :: f_crop, f_pasture
@@ -61,6 +62,8 @@ module lnd_def
      real(wp) :: h_lake_mix
      real(wp) :: lake_water_tendency
      real(wp) :: gdd5, gdd5_temp, npp_real, npp13_real, npp14_real
+     real(wp) :: MCWD_ann        !! Annual maximum climatic water deficit [mm]
+     real(wp) :: MCWD_clim       !! Climatological MCWD for threshold calculation [mm]
      real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
      real(wp) :: theta_fire_cum
      real(wp) :: alt
@@ -114,7 +117,8 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: veg_c, veg_h, pft_frac, seed_frac
      real(wp), allocatable, dimension(:) :: veg_c_below, veg_c13_below, veg_c14_below
      real(wp), allocatable, dimension(:) :: leaf_c, stem_c, root_c, veg_c13, veg_c14
-     real(wp), allocatable, dimension(:) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
+     real(wp), allocatable, dimension(:) :: fire_c_flux_pft, fire_c13_flux_pft, fire_c14_flux_pft    ! Per-PFT fire emissions
+     real(wp), allocatable, dimension(:) :: gamma_fire, gamma_fire_cum, gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
      real(wp), allocatable, dimension(:) :: lambda_soil, lambda_int_soil, cap_soil
      real(wp), allocatable, dimension(:) :: lambda_ice, lambda_int_ice, cap_ice
      real(wp), allocatable, dimension(:) :: lambda_lake, lambda_int_lake, cap_lake 

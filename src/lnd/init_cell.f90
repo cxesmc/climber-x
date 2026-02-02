@@ -47,7 +47,7 @@ contains
                           t_skin,t_skin_veg,t_soil,w_can,s_can, &
                           w_snow,w_snow_max,h_snow,mask_snow, &
                           theta,theta_w,theta_i,w_w,w_i, &
-                          alt,gdd5,gdd,phen,phen_acc,lai_bal,lai,sai,root_frac,litter_in_frac,gamma_dist, &
+                          alt,gdd5,gdd,phen,phen_acc,lai_bal,lai,sai,root_frac,litter_in_frac,gamma_dist, gamma_fire, &
                           npp_ann, npp13_ann, npp14_ann, &
                           leaf_c,root_c, &
                           stem_c,veg_h,veg_c,veg_c13,veg_c14, &
@@ -68,7 +68,7 @@ contains
     real(wp), intent(inout) :: w_snow, w_snow_max, h_snow
     integer, intent(inout) :: mask_snow
     real(wp), intent(inout) :: alt, gdd5, t_skin_veg
-    real(wp), dimension(:), intent(inout) :: gdd, phen, phen_acc, lai_bal, lai, sai, gamma_dist
+    real(wp), dimension(:), intent(inout) :: gdd, phen, phen_acc, lai_bal, lai, sai, gamma_dist, gamma_fire
     real(wp), dimension(:,:), intent(inout) :: root_frac
     real(wp), dimension(:), intent(inout) :: litter_in_frac
     real(wp), dimension(:), intent(inout) :: npp_ann, npp13_ann, npp14_ann
@@ -117,6 +117,7 @@ contains
     veg_c13    = veg_c * c13_c12_atm
     veg_c14    = veg_c * c14_c_atm 
     gamma_dist = 0.001_wp
+    gamma_fire = 0._wp
     root_frac  = pft_par%root_frac
     litter_in_frac  = pft_par%litter_in_frac
 

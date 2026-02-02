@@ -140,6 +140,7 @@ contains
            if( lnd%l2d(i,j)%mask_lnd.eq.1 ) then
              call carbon_flux_atm_lnd(lnd%l2d(i,j)%f_veg,lnd%l2d(i,j)%f_peat,lnd%l2d(i,j)%f_ice_grd,lnd%l2d(i,j)%f_shelf,lnd%l2d(i,j)%f_lake,area(i,j), &
                lnd%l2d(i,j)%npp_real,lnd%l2d(i,j)%npp13_real,lnd%l2d(i,j)%npp14_real,lnd%l2d(i,j)%soil_resp,lnd%l2d(i,j)%soil_resp13,lnd%l2d(i,j)%soil_resp14, &
+               lnd%l2d(i,j)%fire_c_flux,lnd%l2d(i,j)%fire_c13_flux,lnd%l2d(i,j)%fire_c14_flux, &  ! fire related Carbon emit               
                lnd%l2d(i,j)%Cflx_atm_lnd,lnd%l2d(i,j)%C13flx_atm_lnd,lnd%l2d(i,j)%C14flx_atm_lnd, &
                lnd%l0d%Cflx_atm_lnd,lnd%l0d%C13flx_atm_lnd,lnd%l0d%C14flx_atm_lnd) 
            endif
@@ -326,7 +327,7 @@ contains
                           lnd%w_snow(is_veg),lnd%w_snow_max(is_veg),lnd%h_snow(is_veg),lnd%mask_snow(is_veg), &
                           lnd%theta,lnd%theta_w,lnd%theta_i,lnd%w_w,lnd%w_i, &
                           lnd%alt,lnd%gdd5,lnd%gdd,lnd%phen,lnd%phen_acc,lnd%lai_bal,lnd%lai,lnd%sai,lnd%root_frac, &
-                          lnd%litter_in_frac,lnd%gamma_dist, &
+                          lnd%litter_in_frac,lnd%gamma_dist,lnd%gamma_fire, &
                           lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, &
                           lnd%leaf_c,lnd%root_c, &
                           lnd%stem_c,lnd%veg_h,lnd%veg_c,lnd%veg_c13,lnd%veg_c14, &
@@ -775,14 +776,15 @@ contains
 
 
       if( time_eom_lnd ) then
-       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum,lnd%gamma_dist_cum)
+       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum, &
+                   lnd%gamma_dist_cum,lnd%gamma_fire_cum,lnd%MCWD_ann,lnd%MCWD_clim)
       endif
 
       if( time_call_veg ) then
        ! update vegetation carbon and vegetation distribution
        call dyn_veg(lndp%co2,lnd%f_veg,lnd%f_veg_old,lnd%f_ice_grd,lnd%f_ice_grd_old,lnd%f_ice_nbr, &
                    lnd%f_lake,lnd%f_lake_old,lnd%f_shelf,lnd%f_shelf_old, lnd%f_crop, lnd%f_pasture, &
-                   lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, &
+                   lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, lnd%gamma_fire, lnd%gamma_fire_cum, &
                    lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, &
                    lnd%gamma_leaf, lnd%lambda, &
                    lnd%lai_bal,lnd%sai,lnd%root_frac,lnd%litter_in_frac, &
@@ -794,6 +796,8 @@ contains
                    lnd%veg_h, &
                    lnd%litterfall,lnd%litterfall13,lnd%litterfall14, &
                    lnd%npp_real,lnd%npp13_real,lnd%npp14_real, &
+                   lnd%fire_c_flux,lnd%fire_c13_flux,lnd%fire_c14_flux, & ! fire-CO2 flux
+                   lnd%fire_c_flux_pft,lnd%fire_c13_flux_pft,lnd%fire_c14_flux_pft, & ! fire-CO2 flux per PFT                   
                    lnd%carbon_cons_veg,lnd%carbon13_cons_veg,lnd%carbon14_cons_veg,i,j)
         ! update surface fractions
         call surface_frac_up(lnd%f_ice,lnd%f_ice_grd,lnd%f_shelf,lnd%f_lake,lnd%f_veg,lnd%pft_frac,lnd%frac_surf)
@@ -1108,6 +1112,26 @@ end subroutine lnd_update
 
       call lnd_read_restart(trim(restart_in_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
 
+      !-----------MCWD-dist--------------------------------------------------------
+      ! Handle MCWD_clim based on i_mcwd_clim setting after restart read
+      if (veg_par%i_mcwd_clim == 0) then
+        ! Override with fixed value
+        do j = 1,nj
+          do i = 1,ni
+            lnd%l2d(i,j)%MCWD_clim = veg_par%MCWD_50_fixed
+          enddo
+        enddo
+      else if (veg_par%i_mcwd_clim == 1) then
+        ! Read from external file (override restart value)
+        do j = 1,nj
+          do i = 1,ni
+            call nc_read(trim(veg_par%mcwd_clim_file),"MCWD_clim",lnd%l2d(i,j)%MCWD_clim,start=[i,j],count=[1,1])
+          enddo
+        enddo
+        print *,'Read MCWD climatology from ',trim(veg_par%mcwd_clim_file)
+      endif
+      ! if i_mcwd_clim == 2, MCWD_clim was already read from restart
+      
       ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake
       ! potentially vegetated fraction
       where (f_lnd.gt.0._wp) 
@@ -1233,6 +1257,12 @@ end subroutine lnd_update
           lnd%l2d(i,j)%npp_ann         = 0._wp 
           lnd%l2d(i,j)%npp13_ann       = 0._wp 
           lnd%l2d(i,j)%npp14_ann       = 0._wp 
+          lnd%l2d(i,j)%fire_c_flux   = 0._wp
+          lnd%l2d(i,j)%fire_c13_flux = 0._wp
+          lnd%l2d(i,j)%fire_c14_flux = 0._wp
+          lnd%l2d(i,j)%fire_c_flux_pft(:)   = 0._wp
+          lnd%l2d(i,j)%fire_c13_flux_pft(:) = 0._wp
+          lnd%l2d(i,j)%fire_c14_flux_pft(:) = 0._wp          
           lnd%l2d(i,j)%lai             = lnd%l2d(i,j)%lai_bal
           lnd%l2d(i,j)%sai             = lnd%l2d(i,j)%lai_bal * veg_par%sai_scale 
           lnd%l2d(i,j)%leaf_c          = lnd%l2d(i,j)%lai_bal / pft_par%sla
@@ -1247,8 +1277,10 @@ end subroutine lnd_update
           lnd%l2d(i,j)%veg_h           = pft_par%awh * lnd%l2d(i,j)%lai_bal
           lnd%l2d(i,j)%seed_frac       = 0._wp 
           lnd%l2d(i,j)%gamma_dist      = 0.001_wp 
+          lnd%l2d(i,j)%gamma_fire      = 0._wp 
           lnd%l2d(i,j)%gamma_luc       = 0._wp 
           lnd%l2d(i,j)%gamma_ice       = 0._wp 
+          lnd%l2d(i,j)%MCWD_clim       = veg_par%MCWD_50_fixed          
           lnd%l2d(i,j)%root_frac       = pft_par%root_frac
           lnd%l2d(i,j)%litter_in_frac  = pft_par%litter_in_frac
           lnd%l2d(i,j)%t_soil          = T0 
@@ -1327,6 +1359,16 @@ end subroutine lnd_update
         enddo
       enddo
 
+      ! Read MCWD climatology from external file if i_mcwd_clim == 1
+      if (veg_par%i_mcwd_clim == 1) then
+        do j = 1,nj
+          do i = 1,ni
+            call nc_read(trim(veg_par%mcwd_clim_file),"MCWD_clim",lnd%l2d(i,j)%MCWD_clim,start=[i,j],count=[1,1])
+          enddo
+        enddo
+        print *,'Read MCWD climatology from ',trim(veg_par%mcwd_clim_file)
+      endif
+      
     endif
 
     deallocate(f_veg)
@@ -1421,6 +1463,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%npp13_cum       = 0._wp 
         lnd%l2d(i,j)%npp14_cum       = 0._wp 
         lnd%l2d(i,j)%gamma_dist_cum  = 0._wp 
+        lnd%l2d(i,j)%gamma_fire_cum  = 0._wp        
         lnd%l2d(i,j)%wilt      = 0._wp 
         lnd%l2d(i,j)%litterfall    = 0._wp
         lnd%l2d(i,j)%litterfall13  = 0._wp 
@@ -1702,6 +1745,11 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%gamma_ice       (npft))
         allocate(lnd%l2d(i,j)%gamma_dist      (npft))
         allocate(lnd%l2d(i,j)%gamma_dist_cum  (npft))
+        allocate(lnd%l2d(i,j)%gamma_fire      (npft))
+        allocate(lnd%l2d(i,j)%gamma_fire_cum  (npft))
+        allocate(lnd%l2d(i,j)%fire_c_flux_pft   (npft))
+        allocate(lnd%l2d(i,j)%fire_c13_flux_pft (npft))
+        allocate(lnd%l2d(i,j)%fire_c14_flux_pft (npft))
         allocate(lnd%l2d(i,j)%leaf_c          (npft))
         allocate(lnd%l2d(i,j)%stem_c          (npft))
         allocate(lnd%l2d(i,j)%root_c          (npft))
@@ -1955,6 +2003,7 @@ end subroutine lnd_update
    call nc_write(fnm,"gdd5",       lnd%gdd5,           dims=[dim_lon,dim_lat],long_name="growing degree days above 5 degC",units="K",ncid=ncid)
    call nc_write(fnm,"t2m_min_mon",lnd%t2m_min_mon,  dims=[dim_lon,dim_lat],long_name="coldest month temperature",units="K",ncid=ncid)
    call nc_write(fnm,"f_lake_ice", lnd%f_lake_ice,     dims=[dim_lon,dim_lat],long_name="lake ice fraction",units="/",ncid=ncid)
+   call nc_write(fnm,"MCWD_clim",  lnd%MCWD_clim,      dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
 
    call nc_write(fnm,"t_skin_veg",      lnd%t_skin_veg,     dims=[dim_lon,dim_lat],long_name="mean cell skin temperature",units="K",ncid=ncid)
 
@@ -2073,6 +2122,12 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"gamma_dist",       var_n,dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="vegetation disturbance rate",units="1/s",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%gamma_fire(:)
+     enddo
+   enddo
+   call nc_write(fnm,"gamma_fire",       var_n,dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="fire disturbance rate",units="1/s",ncid=ncid)
    deallocate(var_n)
 
    do i=1,nx
@@ -2653,6 +2708,12 @@ end subroutine lnd_update
     call nc_read(fnm,"gdd5",             lnd%gdd5,ncid=ncid)
     call nc_read(fnm,"t2m_min_mon",    lnd%t2m_min_mon,ncid=ncid)
     call nc_read(fnm,"f_lake_ice",    lnd%f_lake_ice,ncid=ncid)
+    ! Read MCWD_clim (may not exist in old restart files)
+    if (nc_exists_var(fnm,"MCWD_clim")) then
+      call nc_read(fnm,"MCWD_clim",lnd(i,j)%MCWD_clim,start=[i,j],count=[1,1],ncid=ncid)
+    else
+      lnd(i,j)%MCWD_clim = 0._wp  ! default for as 0.
+    endif
 
     call nc_read(fnm,"t_skin_veg",      lnd%t_skin_veg,ncid=ncid)
 
@@ -2677,6 +2738,11 @@ end subroutine lnd_update
         call nc_read(fnm,"root_c",lnd(i,j)%root_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         call nc_read(fnm,"stem_c",lnd(i,j)%stem_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         call nc_read(fnm,"gamma_dist",lnd(i,j)%gamma_dist,start=[1,i,j],count=[npft,1,1],ncid=ncid)
+        if (nc_exists_var(fnm,"gamma_fire")) then
+          call nc_read(fnm,"gamma_fire",lnd(i,j)%gamma_fire,start=[i,j],count=[1,1],ncid=ncid)
+        else
+          lnd(i,j)%gamma_fire = 0._wp  ! default for as 0.
+        endif
         call nc_read(fnm,"root_frac",lnd(i,j)%root_frac,start=[1,1,i,j],count=[nl,npft,1,1],ncid=ncid)
 
         call nc_read(fnm,"frac_surf",lnd(i,j)%frac_surf,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
