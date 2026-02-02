@@ -775,7 +775,7 @@ contains
       if( time_eom_lnd ) then
 !###############fire-CO2######################################################################
        call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum, &
-                   lnd%gamma_dist_cum,lnd%gamma_fire)
+                   lnd%gamma_dist_cum,lnd%gamma_fire,lnd%MCWD_ann,lnd%MCWD_clim)
 !#####################################################################################
       endif
 
@@ -1105,6 +1105,26 @@ end subroutine lnd_update
     if( lnd_restart ) then
 
       call lnd_read_restart(trim(restart_in_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
+!-----------MCWD-dist--------------------------------------------------------
+      ! Handle MCWD_clim based on i_mcwd_clim setting after restart read
+      if (veg_par%i_mcwd_clim == 0) then
+        ! Override with fixed value
+        do i = 1,ni
+          do j = 1,nj
+            lnd%l2d(i,j)%MCWD_clim = veg_par%MCWD_50_fixed
+          enddo
+        enddo
+      else if (veg_par%i_mcwd_clim == 1) then
+        ! Read from external file (override restart value)
+        do i = 1,ni
+          do j = 1,nj
+            call nc_read(trim(veg_par%mcwd_clim_file),"MCWD_clim",lnd%l2d(i,j)%MCWD_clim,start=[i,j],count=[1,1])
+          enddo
+        enddo
+        print *,'Read MCWD climatology from ',trim(veg_par%mcwd_clim_file)
+      endif
+      ! if i_mcwd_clim == 2, MCWD_clim was already read from restart
+!----------------------------------------------------------------------------
 
       ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake
       ! potentially vegetated fraction
@@ -1276,7 +1296,10 @@ end subroutine lnd_update
           lnd%l2d(i,j)%w_w_sublake     = 0._wp 
           lnd%l2d(i,j)%w_i_sublake     = 0._wp 
           lnd%l2d(i,j)%f_i_lake        = 0._wp 
-          lnd%l2d(i,j)%f_lake_ice      = 0._wp 
+          lnd%l2d(i,j)%f_lake_ice      = 0._wp
+!-----------MCWD-dist--------------------------------------------------------
+          lnd%l2d(i,j)%MCWD_clim       = veg_par%MCWD_50_fixed
+!---------------------------------------------------------------------------- 
           lnd%l2d(i,j)%litter_c        = 0._wp 
           lnd%l2d(i,j)%fast_c          = 0._wp 
           lnd%l2d(i,j)%slow_c          = 0._wp 
@@ -1332,6 +1355,17 @@ end subroutine lnd_update
           lnd%l2d(i,j)%doc14_export     = 0._wp  
         enddo
       enddo
+!-----------MCWD-dist--------------------------------------------------------
+      ! Read MCWD climatology from external file if i_mcwd_clim == 1
+      if (veg_par%i_mcwd_clim == 1) then
+        do i = 1,ni
+          do j = 1,nj
+            call nc_read(trim(veg_par%mcwd_clim_file),"MCWD_clim",lnd%l2d(i,j)%MCWD_clim,start=[i,j],count=[1,1])
+          enddo
+        enddo
+        print *,'Read MCWD climatology from ',trim(veg_par%mcwd_clim_file)
+      endif
+!----------------------------------------------------------------------------
 
     endif
 
@@ -1970,6 +2004,9 @@ end subroutine lnd_update
    call nc_write(fnm,"gdd5",       lnd%gdd5,           dims=[dim_lon,dim_lat],long_name="growing degree days above 5 degC",units="K",ncid=ncid)
    call nc_write(fnm,"t2m_min_mon",lnd%t2m_min_mon,  dims=[dim_lon,dim_lat],long_name="coldest month temperature",units="K",ncid=ncid)
    call nc_write(fnm,"f_lake_ice", lnd%f_lake_ice,     dims=[dim_lon,dim_lat],long_name="lake ice fraction",units="/",ncid=ncid)
+!-----------MCWD-dist--------------------------------------------------------
+   call nc_write(fnm,"MCWD_clim",  lnd%MCWD_clim,      dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
+!----------------------------------------------------------------------------
 
    call nc_write(fnm,"t_skin_veg",      lnd%t_skin_veg,     dims=[dim_lon,dim_lat],long_name="mean cell skin temperature",units="K",ncid=ncid)
 
@@ -2668,6 +2705,14 @@ end subroutine lnd_update
     call nc_read(fnm,"gdd5",             lnd%gdd5,ncid=ncid)
     call nc_read(fnm,"t2m_min_mon",    lnd%t2m_min_mon,ncid=ncid)
     call nc_read(fnm,"f_lake_ice",    lnd%f_lake_ice,ncid=ncid)
+!-----------MCWD-dist--------------------------------------------------------
+    ! Read MCWD_clim (may not exist in old restart files)
+    if (nc_exists_var(fnm,"MCWD_clim")) then
+      call nc_read(fnm,"MCWD_clim",lnd(i,j)%MCWD_clim,start=[i,j],count=[1,1],ncid=ncid)
+    else
+      lnd(i,j)%MCWD_clim = 0._wp  ! default for as 0.
+    endif
+!----------------------------------------------------------------------------
 
     call nc_read(fnm,"t_skin_veg",      lnd%t_skin_veg,ncid=ncid)
 

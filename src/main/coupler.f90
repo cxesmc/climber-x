@@ -30,6 +30,9 @@ module coupler
     use timer, only : doy, mon, year, sec_day, sec_year, nday_year, nmon_year, n_year_geo, nstep_mon_atm
     use timer, only : time_soy_atm, time_eoy_atm, time_soy_ocn, time_soy_sic, time_soy_lnd, time_eoy_lnd
     use timer, only : time_soy_bnd, time_soy_bgc, time_eoy_bgc, time_soy_smb, time_eoy_smb, time_eom_smb
+!---------CWD/MCWD calculation------------------------------------------
+    use timer, only : time_eom_atm
+!-----------------------------------------------------------------------
     use timer, only : dt_atm
     use timer, only : time_call_daily_input_save, time_use_daily_input_save, nyear_avg_offline, nyears_spinup_bgc, nstep_year_ocn, nstep_year_bgc, n_accel
     use timer, only : monthly2daily
@@ -45,6 +48,9 @@ module coupler
     use control, only : restart_in_dir
     use control, only : l_aqua_slab
     use constants, only : fqsat, q_sat_w, q_sat_i, Le, Lf, frac_vu
+!---------PET calculation------------------------------------------------------------------------    
+    use constants, only : e_sat_w, q_to_e, dqsat_dT_w, Rd
+!------------------------------------------------------------------------------------------------    
     use constants, only : rho_w, rho_sw, cap_w, rho_i, T0, c13_c12_std, c14_c_std, pi, ppm_to_PgC
     use constants, only : sigma, cap_a
     use coord, only : grid_class, grid_init
@@ -276,6 +282,16 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: sh !! sensible heat flux over each surface type [W/m2]
       real(wp), dimension(:,:,:), allocatable :: lh !! latent heat flux over each surface type [W/m2]
       real(wp), dimension(:,:,:), allocatable :: evp    !! evaporation from each surface type [kg/m2/s]
+!---------PET calculation------------------------------------------------------------------------
+      real(wp), dimension(:,:,:), allocatable :: pet    !! Potential evapotranspiration [mm/day]
+!---------CWD/MCWD calculation----------------------------------------------------------------
+      ! Monthly water balance diagnostics
+      real(wp), dimension(:,:), allocatable :: prc_month_accum    !! accumulated monthly precipitation [mm]
+      real(wp), dimension(:,:), allocatable :: pet_month_accum  !! accumulated monthly PET [mm]
+      real(wp), dimension(:,:), allocatable :: CWD_monthly      !! monthly climatic water deficit [mm]
+      real(wp), dimension(:,:), allocatable :: MCWD_monthly     !! maximum CWD in year [mm]
+      real(wp), dimension(:,:), allocatable :: MCWD_yearly      !! annual maximum CWD [mm]
+!------------------------------------------------------------------------------------------------
       real(wp), dimension(:,:),   allocatable :: runoff_veg  !! runoff from vegetated grid cell parts [kg/s]
       real(wp), dimension(:,:),   allocatable :: calving_veg !! calving from vegetated grid cell parts [kg/s]
       real(wp), dimension(:,:),   allocatable :: runoff_ice  !! runoff from ice sheets [kg/s]
@@ -554,6 +570,12 @@ contains
     enddo
     !$omp end parallel do
 
+    if (time_soy_atm .and. year.gt.1) then
+      if (atm%t2m_glob_ann.eq.0._wp) atm%t2m_glob_ann = cmn%t2m_glob_ann  ! initialize 
+      atm%dt2m_glob_ann_cum = atm%dt2m_glob_ann_cum + (cmn%t2m_glob_ann - atm%t2m_glob_ann)
+      atm%t2m_glob_ann = cmn%t2m_glob_ann 
+    endif
+
    return
 
   end subroutine cmn_to_atm
@@ -706,13 +728,73 @@ contains
         endif
         if (time_eoy_atm) then
           cmn%t2m_min_mon(i,j) = minval(cmn%t2m_mon_lnd(i,j,:))
-          cmn%t2m_glob_ann = sum( sum(cmn%t2m_mon(:,:,:),3)/nmon_year * area ) / sum(area)
         endif
 
       enddo
     enddo
     !$omp end parallel do
 
+    if (time_eoy_atm) then
+      cmn%t2m_glob_ann = sum( sum(cmn%t2m_mon(:,:,:),3)/nmon_year * area ) / sum(area)
+    endif
+
+!---------PET calculation------------------------------------------------------------------------
+    ! Calculate potential evapotranspiration (FAO-56 Penman-Monteith)
+    call calculate_pet(cmn%t2m, cmn%q2m, cmn%ps, cmn%wind, &
+                       cmn%swnet, cmn%lwd, cmn%lwu, cmn%pet)
+!---------CWD/MCWD calculation----------------------------------------------------------------
+    ! Monthly water balance accumulation and calculation
+    
+    ! Reset at start of year
+    if (time_soy_atm) then
+      cmn%CWD_monthly = 0.0_wp
+      cmn%MCWD_monthly = 0.0_wp
+      cmn%prc_month_accum = 0.0_wp
+      cmn%pet_month_accum = 0.0_wp
+    endif
+
+    ! Accumulate daily values every time step
+    if (doy.gt.0) then
+      block
+        integer :: i, j, n
+        real(wp) :: precip_daily, pet_daily
+        
+        do j = 1, nj
+          do i = 1, ni
+            
+            ! Calculate weighted grid-cell daily values
+            precip_daily = 0.0_wp
+            pet_daily = 0.0_wp
+            
+            do n = 1, nsurf
+              if (cmn%f_stp(i,j,n) > 0.0_wp) then
+                ! Precipitation [kg/m2/s] * 86400 = [mm/day]
+                precip_daily = precip_daily + &
+                  (cmn%rain(i,j,n) + cmn%snow(i,j,n)) * 86400.0_wp * cmn%f_stp(i,j,n)
+                
+                ! PET already in mm/day
+                pet_daily = pet_daily + cmn%pet(i,j,n) * cmn%f_stp(i,j,n)
+              end if
+            end do
+            
+            ! Accumulate monthly totals [mm]
+            cmn%prc_month_accum(i,j) = cmn%prc_month_accum(i,j) + precip_daily
+            cmn%pet_month_accum(i,j) = cmn%pet_month_accum(i,j) + pet_daily
+            
+          end do
+        end do
+      end block
+    endif
+    
+    ! Calculate monthly CWD/MCWD at end of month
+    if (time_eom_atm) then
+      call calculate_monthly_MCWD(cmn)
+    end if
+    ! Copy to yearly value at end of year
+    if (time_eoy_atm) then
+      cmn%MCWD_yearly = cmn%MCWD_monthly
+    endif
+!------------------------------------------------------------------------------------------------
 
    return
 
@@ -1254,6 +1336,15 @@ contains
       where (lnd%l2d%f_veg.lt.1.e-10_wp)
         lnd%l2d%f_veg = 0._wp
       endwhere
+
+!-----------MCWD-dist--------------------------------------------------------
+      ! Pass annual MCWD to land module
+      do j = 1, nj
+        do i = 1, ni
+          lnd%l2d(i,j)%MCWD_ann = cmn%MCWD_yearly(i,j)
+        enddo
+      enddo
+!----------------------------------------------------------------------------
 
       ! standard deviation of topography, ice-free land only
       lnd%l2d%z_veg_std = cmn%z_veg_std
@@ -3956,6 +4047,7 @@ contains
     cmn%t2m_mon = 0._wp
     cmn%t2m_mon_lnd = 0._wp
     cmn%t2m_min_mon = T0+20._wp
+    cmn%t2m_glob_ann = T0+15._wp
     cmn%t_soil = T0 
     cmn%t_shelf = T0 
     cmn%alb_vis_dir = 0._wp
@@ -4189,6 +4281,22 @@ contains
     allocate(cmn%sh(ni,nj,nsurf))
     allocate(cmn%lh(ni,nj,nsurf))
     allocate(cmn%evp(ni,nj,nsurf))
+!---------PET calculation------------------------------------------------------------------------
+    allocate(cmn%pet(ni,nj,nsurf))
+!---------CWD/MCWD calculation----------------------------------------------------------------
+    ! Monthly water balance arrays
+    allocate(cmn%prc_month_accum(ni,nj))
+    allocate(cmn%pet_month_accum(ni,nj))
+    allocate(cmn%CWD_monthly(ni,nj))
+    allocate(cmn%MCWD_monthly(ni,nj))
+    allocate(cmn%MCWD_yearly(ni,nj))
+    ! Initialize
+    cmn%prc_month_accum = 0.0_wp
+    cmn%pet_month_accum = 0.0_wp
+    cmn%CWD_monthly = 0.0_wp
+    cmn%MCWD_monthly = 0.0_wp
+    cmn%MCWD_yearly = 0.0_wp
+!------------------------------------------------------------------------------------------------
     allocate(cmn%runoff_veg(ni,nj)) 
     allocate(cmn%calving_veg(ni,nj))
     allocate(cmn%runoff_ice(ni,nj)) 
@@ -4258,5 +4366,170 @@ contains
 
   end subroutine cmn_alloc
 
+!---------PET calculation------------------------------------------------------------------------
+  !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !
+  !  Subroutine : c a l c u l a t e _ P E T
+  !
+  !  Purpose : Calculate potential evapotranspiration using FAO-56
+  !            Penman-Monteith method with CLIMBER-X functions
+  !
+  !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine calculate_pet(t2m, q2m, ps, wind, swnet, lwd, lwu, pet)
+    
+    implicit none
+    
+    ! Input/output variables
+    real(wp), intent(in) :: t2m(ni,nj,nsurf)      ! 2m temperature [K]
+    real(wp), intent(in) :: q2m(ni,nj,nsurf)      ! 2m specific humidity [kg/kg]
+    real(wp), intent(in) :: ps(ni,nj,nsurf)       ! Surface pressure [Pa]
+    real(wp), intent(in) :: wind(ni,nj,nsurf)     ! Wind speed at 10m [m/s]
+    real(wp), intent(in) :: swnet(ni,nj,nsurf)    ! Net SW radiation [W/m²]
+    real(wp), intent(in) :: lwd(ni,nj,nsurf)      ! Downward LW radiation [W/m²]
+    real(wp), intent(in) :: lwu(ni,nj,nsurf)      ! Upward LW radiation [W/m²]
+    real(wp), intent(out) :: pet(ni,nj,nsurf)     ! Potential ET [mm/day]
+    
+    ! Local variables
+    integer :: i, j, n
+    real(wp) :: T_K, P, es, ea, VPD, dqsat_dT, Delta, gamma, lambda
+    real(wp) :: Rn_Wm2, Rn, G, u2, rho_air, num, denom
+    
+    ! Constants
+    real(wp), parameter :: eps = 0.622_wp         ! Ratio molecular weights
+    real(wp), parameter :: cp = 0.001_wp          ! Specific heat [MJ/kg/K]
+    real(wp), parameter :: W_to_MJday = 0.0864_wp ! W/m² to MJ/m²/day
+    
+    do n = 1, nsurf
+      do j = 1, nj
+        do i = 1, ni
+        
+          T_K = t2m(i,j,n)
+          
+          ! Skip calculation if very cold (frozen conditions)
+          if (T_K < (T0 - 10.0_wp)) then
+            pet(i,j,n) = 0.0_wp
+            cycle
+          end if
+          
+          P = ps(i,j,n)
+          
+          ! ================================================================
+          ! Vapor pressures using CLIMBER-X functions (same as photosynthesis)
+          ! ================================================================
+          es = e_sat_w(T_K)                    ! Saturation VP [Pa]
+          ea = q_to_e(q2m(i,j,n), P)           ! Actual VP [Pa]
+          VPD = max(es - ea, 0.1_wp)           ! Vapor pressure deficit [Pa]
+          
+          ! ================================================================
+          ! Slope of saturation curve using CLIMBER-X function
+          ! ================================================================
+          dqsat_dT = dqsat_dT_w(T_K, P)        ! d(qsat)/dT [kg/kg/K]
+          Delta = (P / eps) * dqsat_dT         ! d(es)/dT [Pa/K]
+          
+          ! ================================================================
+          ! Psychrometric constant
+          ! ================================================================
+          lambda = Le * 1.0e-6_wp              ! Latent heat [MJ/kg]
+          gamma = (cp * P) / (eps * lambda)    ! Psychrometric constant [Pa/K]
+          
+          ! ================================================================
+          ! Net radiation
+          ! ================================================================
+          Rn_Wm2 = swnet(i,j,n) + (lwd(i,j,n) - lwu(i,j,n))  ! [W/m²]
+          Rn = Rn_Wm2 * W_to_MJday                           ! [MJ/m²/day]
+
+          ! ═══════════════════════════════════════════════════════
+          ! Soil heat flux [MJ/m²/day] - FAO-56 Equation 42
+          ! ═══════════════════════════════════════════════════════
+          if (dt_atm >= 86400.0_wp) then
+            G = 0.0_wp  ! Daily: G ≈ 0
+          else
+            ! Sub-daily approximation (FAO-56 Chapter 12)
+            if (Rn > 0.0_wp) then
+              G = 0.1_wp * Rn    ! Daytime: 10% of Rn
+            else
+              G = 0.5_wp * Rn    ! Nighttime: 50% of Rn
+            end if
+          end if 
+         
+          ! ================================================================
+          ! Wind speed adjustment from 10m to 2m
+          ! ================================================================
+          u2 = wind(i,j,n) * 0.748_wp          ! 10m to 2m conversion
+          u2 = max(u2, 0.1_wp)                 ! Minimum wind speed
+          
+          ! ================================================================
+          ! Air density using ideal gas law with Rd from constants
+          ! ================================================================
+          rho_air = P / (Rd * T_K)             ! [kg/m³]
+          
+          ! ================================================================
+          ! FAO-56 Penman-Monteith equation
+          ! ================================================================
+          num = Delta * (Rn - G) + &
+                (rho_air * cp * VPD * u2 / lambda) * W_to_MJday
+          
+          denom = Delta + gamma * (1.0_wp + 0.34_wp * u2)
+          
+          if (denom > 0.0_wp) then
+            pet(i,j,n) = num / denom
+          else
+            pet(i,j,n) = 0.0_wp
+          end if
+          
+          ! Ensure non-negative
+          pet(i,j,n) = max(0.0_wp, pet(i,j,n))
+          
+        end do
+      end do
+    end do
+    
+  end subroutine calculate_pet
+!---------CWD/MCWD calculation----------------------------------------------------------------
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !
+  !  Subroutine : c a l c u l a t e _ m o n t h l y _ M C W D
+  !
+  !  Purpose : Calculate monthly CWD and MCWD from accumulated monthly P and PET
+  !
+  !  Called at: End of each month
+  !  Method:  CWD(t) = min(CWD(t-1) + P - PET, 0),
+  !           MCWD = minimum CWD reached during the year
+  !  References:
+  !    Malhi et al. (2009) PNAS, Aragão et al. (2007) GRL
+  !  Used by:   Land module for fire disturbance
+  !
+  !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine calculate_monthly_MCWD(cmn)
+    
+    implicit none
+    
+    type(cmn_class), intent(inout) :: cmn
+    
+    integer :: i, j
+    real(wp) :: water_balance
+    
+    ! Calculate CWD and MCWD for each grid cell
+    do j = 1, nj
+      do i = 1, ni
+        
+        ! Monthly water balance [mm]
+        water_balance = cmn%prc_month_accum(i,j) - cmn%pet_month_accum(i,j)
+        
+        ! Update CWD (accumulate deficit, cap at zero)
+        cmn%CWD_monthly(i,j) = min(cmn%CWD_monthly(i,j) + water_balance, 0.0_wp)
+        
+        ! Track minimum CWD (maximum deficit)
+        cmn%MCWD_monthly(i,j) = min(cmn%MCWD_monthly(i,j), cmn%CWD_monthly(i,j))
+        
+      end do
+    end do
+    
+    ! Reset monthly accumulation for next month
+    cmn%prc_month_accum = 0.0_wp
+    cmn%pet_month_accum = 0.0_wp
+    
+  end subroutine calculate_monthly_MCWD
+!------------------------------------------------------------------------------------------------
 end module coupler
  

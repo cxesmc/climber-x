@@ -63,6 +63,10 @@ module lnd_def
 !###############fire-CO2###########################################################################
      real(wp) :: fire_c_flux, fire_c_flux13, fire_c_flux14
 !##################################################################################################
+!-----------MCWD-dist--------------------------------------------------------
+     real(wp) :: MCWD_ann        !! Annual maximum climatic water deficit [mm]
+     real(wp) :: MCWD_clim       !! Climatological MCWD for threshold calculation [mm]
+!----------------------------------------------------------------------------
      real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
      real(wp) :: theta_fire_cum
      real(wp) :: alt

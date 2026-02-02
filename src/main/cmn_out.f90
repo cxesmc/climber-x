@@ -63,6 +63,12 @@ module cmn_out
     real(wp), dimension(:,:), allocatable :: f_ocn, f_lnd, f_ice
     real(wp), dimension(:,:), allocatable :: prc, rain, snow, wind
     real(wp), dimension(:,:), allocatable :: lh, evp, sh, lwd, lwu, swn, lwn, lsnow, ebal
+!-----------PET/CWD/MCWD ----------------------------------------------------
+    real(wp), dimension(:,:), allocatable :: pet     !! potential ET [mm/day]
+    real(wp), dimension(:,:), allocatable :: CWD     !! water deficit [mm]
+    real(wp), dimension(:,:), allocatable :: MCWD    !! max deficit [mm]
+    real(wp), dimension(:,:), allocatable :: MCWD_yearly !! annual maximum CWD [mm]
+!----------------------------------------------------------------------------
     real(wp), dimension(:,:), allocatable :: lh_l, sh_l, swn_l, lwn_l, ebal_l
     real(wp), dimension(:,:), allocatable :: lh_o, sh_o, swn_o, lwn_o, ebal_o
     real(wp), dimension(:,:), allocatable :: tskin, t2m, q2m
@@ -112,6 +118,12 @@ contains
      allocate(mon_sur(k)%lh(ni,nj))
      allocate(mon_sur(k)%evp(ni,nj))
      allocate(mon_sur(k)%sh(ni,nj))
+!-----------PET/CWD/MCWD ----------------------------------------------------
+     allocate(mon_sur(k)%pet(ni,nj))
+     allocate(mon_sur(k)%CWD(ni,nj))
+     allocate(mon_sur(k)%MCWD(ni,nj))
+     allocate(mon_sur(k)%MCWD_yearly(ni,nj))
+!----------------------------------------------------------------------------     
      allocate(mon_sur(k)%lwd(ni,nj))
      allocate(mon_sur(k)%lwu(ni,nj))
      allocate(mon_sur(k)%swn(ni,nj))
@@ -158,6 +170,12 @@ contains
      allocate(ann_sur%lh(ni,nj))
      allocate(ann_sur%evp(ni,nj))
      allocate(ann_sur%sh(ni,nj))
+!-----------PET/CWD/MCWD ----------------------------------------------------
+     allocate(ann_sur%pet(ni,nj))
+     allocate(ann_sur%CWD(ni,nj))
+     allocate(ann_sur%MCWD(ni,nj))
+     allocate(ann_sur%MCWD_yearly(ni,nj))
+!----------------------------------------------------------------------------
      allocate(ann_sur%lwd(ni,nj))
      allocate(ann_sur%lwu(ni,nj))
      allocate(ann_sur%swn(ni,nj))
@@ -460,6 +478,11 @@ contains
           mon_sur(m)%rain     = 0._wp
           mon_sur(m)%snow     = 0._wp
           mon_sur(m)%evp      = 0._wp
+!-----------PET/CWD/MCWD ----------------------------------------------------
+          mon_sur(m)%pet       = 0._wp
+          mon_sur(m)%CWD       = 0._wp
+          mon_sur(m)%MCWD      = 0._wp
+!--------------------------------------------------------------------------
           mon_sur(m)%runoff   = 0._wp
           mon_sur(m)%runoff_veg   = 0._wp
           mon_sur(m)%runoff_ice   = 0._wp
@@ -498,6 +521,10 @@ contains
       mon_sur(mon)%snow = mon_sur(mon)%snow + sum(cmn%snow*cmn%f_stp,3) ! kg/m2/s
       mon_sur(mon)%prc = mon_sur(mon)%rain + mon_sur(mon)%snow ! kg/m2/s
       mon_sur(mon)%evp = mon_sur(mon)%evp + sum(cmn%evp*cmn%f_stp,3) ! kg/m2/s
+!-----------PET/CWD/MCWD ----------------------------------------------------
+      ! PET: accumulate for monthly average
+      mon_sur(mon)%pet = mon_sur(mon)%pet + sum(cmn%pet*cmn%f_stp,3) ! mm/day
+!----------------------------------------------------------------------------
       mon_sur(mon)%runoff = mon_sur(mon)%runoff + cmn%runoff_o ! kg/m2/s
       mon_sur(mon)%runoff_veg = mon_sur(mon)%runoff_veg + cmn%runoff_veg_o ! kg/m2/s
       mon_sur(mon)%runoff_ice = mon_sur(mon)%runoff_ice + cmn%runoff_ice_o ! kg/m2/s
@@ -530,10 +557,19 @@ contains
       mon_sur(mon)%alb_dif = mon_sur(mon)%alb_dif + (0.6_wp*sum(cmn%alb_vis_dif*cmn%f_stp,3) + 0.4_wp*sum(cmn%alb_nir_dif*cmn%f_stp,3))
 
       if (time_eom) then
+!-----------PET/CWD/MCWD ----------------------------------------------------
+        ! CWD and MCWD: copy from coupler (already monthly values)
+        mon_sur(mon)%CWD = cmn%CWD_monthly
+        mon_sur(mon)%MCWD = cmn%MCWD_monthly
+!----------------------------------------------------------------------------
         mon_sur(mon)%prc = mon_sur(mon)%prc * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%rain = mon_sur(mon)%rain * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%snow = mon_sur(mon)%snow * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%evp = mon_sur(mon)%evp * mon_avg * sec_day ! kg/m2/day
+!-----------PET/CWD/MCWD ----------------------------------------------------
+        ! Average PET (no sec_day conversion, already in mm/day)
+        mon_sur(mon)%pet = mon_sur(mon)%pet * mon_avg ! mm/day
+!----------------------------------------------------------------------------
         mon_sur(mon)%runoff = mon_sur(mon)%runoff * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%runoff_veg = mon_sur(mon)%runoff_veg * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%runoff_ice = mon_sur(mon)%runoff_ice * mon_avg * sec_day ! kg/m2/day
@@ -589,7 +625,10 @@ contains
 
         ! Get annual values
         call surf_ave(mon_sur,ann_sur)
-
+!-----------PET/CWD/MCWD ----------------------------------------------------
+        ! Copy annual MCWD from coupler
+        ann_sur%MCWD_yearly = cmn%MCWD_yearly      
+!--------------------------------------------------------------------------
         ! net Atlantic freshwater flux integrated from the North Pole
         do j=nj,1,-1
           tmp = 0.
@@ -936,12 +975,20 @@ contains
       call nc_write(fnm,"f_lnd", vars%f_lnd,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="land fraction",units="/",ncid=ncid)
       call nc_write(fnm,"f_ice", vars%f_ice,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="ice fraction",units="/",ncid=ncid)
       call nc_write(fnm,"fw_atl",vars%fw_atl,dims=[dim_lat,dim_time],start=[1,nout],count=[nj,1],long_name="net Atlantic freshwater (P-E+R) integrated from the North Pole",units="Sv",ncid=ncid)
+!-----------MCWD -------------------------------------------------
+      call nc_write(fnm,"MCWD_yearly", vars%MCWD_yearly,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout], count=[ni,nj,1],long_name="annual maximum climatic water deficit",units="mm", ncid=ncid)
+!-----------------------------------------------------------------
     endif
 
     call nc_write(fnm,"prc",     vars%prc, dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="precipitation",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"rain",    vars%rain,   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="rainfall",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"snow",    vars%snow,   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="snowfall",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"evp",     vars%evp,dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="evaporation",units="kg/m2/day",ncid=ncid)
+!-----------PET/CWD/MCWD ----------------------------------------------------
+    call nc_write(fnm,"pet",     vars%pet, dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="potential evapotranspiration",units="mm/day", ncid=ncid)
+    call nc_write(fnm,"CWD",     vars%CWD, dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="cumulative climatic water deficit",units="mm", ncid=ncid)
+    call nc_write(fnm,"MCWD",    vars%MCWD,dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="maximum climatic water deficit", units="mm", ncid=ncid)
+!----------------------------------------------------------------------------
     call nc_write(fnm,"runoff",  vars%runoff,dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="runoff into the ocean",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"runoff_veg",  vars%runoff_veg,dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="runoff into the ocean from vegetated part",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"runoff_ice",  vars%runoff_ice,dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[ni,nj,1,1],long_name="runoff into the ocean from ice sheets",units="kg/m2/day",ncid=ncid)
