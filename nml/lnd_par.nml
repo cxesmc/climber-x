@@ -246,14 +246,7 @@
     sla_c3  = 22.5              ! m2/(kg dry leaf), specific leaf area of C3 grass, TRY database
     sla_c4  = 20.0              ! m2/(kg dry leaf), specific leaf area of C4 grass, TRY database
     sla_sh  = 8.5               ! m2/(kg dry leaf), specific leaf area of shrubs, TRY database
-    gamma_dist_tree = 0.007     ! 1/yr, minimum disturbance rate for trees
-    gamma_dist_grass = 0.05     ! 1/yr, minimum disturbance rate for grass
-    gamma_dist_shrub = 0.02     ! 1/yr, minimum disturbance rate for shrubs 
-    gamma_luc = 1.              ! 1/yr, disturbance rate for land use change
-    gamma_ice = 0.              ! 1/yr, disturbance rate from presence of ice sheets in grid cell
     z_veg_std_crit = 100.       ! m, critical sub-grid topography standard deviation for disturbance rate from ice sheets
-    tau_fire = 10.              ! yr, fire disturbance time scale
-    theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2
     gamma_phen = 15.            ! days, leaf senescence time scale
     t_base_phen = 5. 2. 0. 5. 2.! degC, base temperature for phenology
     gdd5_phen = 0. 600. 0. 0. 900.  ! K, growing degree above 5 degC threshold for decidous
@@ -264,6 +257,30 @@
     veg_h_min = 0.3             ! m, minimum height of vegetation
     hveg_z0_scale = 0.06 0.06 0.12 0.12 0.12         ! scaling from vegetation height to roughness length
     f_lit_to_ice = 1.           ! fraction of vegetation carbon beeing buried under ice when ice sheets are expanding
+
+    !------------------------------------------------------------------------------------
+    ! vegetation disturbance rate
+    !------------------------------------------------------------------------------------
+    gamma_dist_tree = 0.007     ! 1/yr, minimum disturbance rate for trees
+    gamma_dist_grass = 0.05     ! 1/yr, minimum disturbance rate for grass
+    gamma_dist_shrub = 0.02     ! 1/yr, minimum disturbance rate for shrubs 
+    gamma_luc = 1.              ! 1/yr, disturbance rate for land use change
+    gamma_ice = 0.              ! 1/yr, disturbance rate from presence of ice sheets in grid cell
+    ! fire disturbance  
+    !tau_fire = 50. 50. 2. 1. 5.             ! yr, fire disturbance time scale
+    tau_fire = 10. 10. 10. 10. 10.           ! yr, fire disturbance time scale
+    theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2
+    l_fire_co2_emissions = F    ! .true. = enable direct CO2 emissions from fire, .false. = turn off direct fire CO2 emissions
+    ! mean cumulative water deficit (MCDW) disturbance
+    k_mcwd = 0.01               ! 1/mm, slope parameter for MCWD mortality sigmoid function
+    M_max = 0.                  ! 1/yr, maximum MCWD-induced tree mortality rate
+    ratio_MCWD = 0.3            ! ratio of MCWD to climatological MCWD when the mortality rate reaches 50% of M_max
+    i_mcwd_clim = 0             ! MCWD climatology source:
+                                ! 0 = use fixed MCWD_50_fixed value
+                                ! 1 = read from external nc file (mcwd_clim_file)
+                                ! 2 = read from restart file
+    MCWD_50_fixed = -400.0      ! mm, fixed MCWD_50 value (used if i_mcwd_clim=0)
+    mcwd_clim_file = "input/MCWD_climatology.nc"  ! MCWD climatology file (used if i_mcwd_clim=1)
 
     i_deforest = 0              ! deforestation experiments:
                                 ! 0 .. no deforestation

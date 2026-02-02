@@ -28,7 +28,7 @@ module veg_par_mod
   use precision, only : wp
   use timer, only : doy, mon, sec_year, nday_mon, nday_year, nmon_year, time_soy_lnd
   use constants, only : T0
-  use lnd_grid, only : nl, z_int, npft, nsurf, flag_veg
+  use lnd_grid, only : nl, z_int, npft, nsurf, flag_veg, flag_tree
   use lnd_params, only : dt, dt_day
   use lnd_params, only : pft_par, veg_par 
 
@@ -213,7 +213,7 @@ contains
   !   Subroutine :  d y n v e g _ p a r
   !   Purpose    :  parameters for dynamic vegetation model
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum)
+  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire_cum,MCWD_ann,MCWD_clim)
 
     implicit none
 
@@ -223,18 +223,26 @@ contains
     real(wp), intent(in) :: veg_c_above
     real(wp), intent(inout) :: theta_fire_cum
     real(wp), dimension(:), intent(inout) :: gamma_dist_cum
+    real(wp), dimension(:), intent(inout) :: gamma_fire_cum
+    real(wp), intent(in) :: MCWD_ann  ! Annual MCWD [mm]
+    real(wp), intent(in) :: MCWD_clim  ! Climatological MCWD [mm]
 
     integer :: n
     logical :: lim_bio
     real(wp) :: fac_lim_bio
-    real(wp) :: gamma_fire, theta_fire
+    real(wp) :: theta_fire
+    real(wp) :: gamma_fire
+    real(wp) :: gamma_mcwd(npft)
+    real(wp) :: MCWD_50, sigmoid_factor
 
 
     if (mon.eq.1) gamma_dist_cum = 0._wp
+    if (mon.eq.1) gamma_fire_cum = 0._wp
 
     ! fire disturbance rate for vegetation dynamics, Reick 2013
     theta_fire = theta_fire_cum / real(nday_mon,wp) ! monthly average
     do n=1,npft
+
       ! increased disturbance rate if outside bioclimatic limit
       lim_bio = (t2m_min_mon-T0).ge.pft_par%t_cmon_min(n) .and. (t2m_min_mon-T0).le.pft_par%t_cmon_max(n) .and. gdd5.ge.pft_par%gdd5_min(n)
       if (.not.lim_bio) then
@@ -242,15 +250,36 @@ contains
       else
         fac_lim_bio = 1._wp
       endif
+
       ! fire disturbance
       gamma_fire = 1._wp/pft_par%tau_fire(n) &
         * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) !&  ! soil moisture factor
         !* max(0._wp, min(1._wp, (veg_c_above-veg_par%cveg_fire_low)/(veg_par%cveg_fire_high-veg_par%cveg_fire_low)))  ! fuel factor
+      ! annual mean fire disturbance rate
+      gamma_fire_cum(n) = gamma_fire_cum(n) + gamma_fire/real(nmon_year,wp)
+
+      ! MCWD-based tree mortality
+      if (flag_tree(n)) then
+        ! Determine MCWD_50 based on i_mcwd_clim setting
+        if (veg_par%i_mcwd_clim == 0) then
+          ! Use fixed value directly
+          MCWD_50 = veg_par%MCWD_50_fixed
+        else
+          ! Use climatology (from file or restart) with ratio
+          MCWD_50 = veg_par%ratio_MCWD * MCWD_clim
+        endif
+        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (MCWD_ann - veg_par%ratio_MCWD * MCWD_50)))
+        gamma_mcwd(n) = sigmoid_factor
+      else
+        gamma_mcwd(n) = 0.0_wp
+      endif
+        
       ! annual mean disturbance rate
       gamma_dist_cum(n) = gamma_dist_cum(n) &
-        + (pft_par%gamma_dist_min(n)*fac_lim_bio &        ! minimum disturbance rate
-        + gamma_fire &                        ! fire disturbance rate
-        + disturbance(n)) &                   ! additional prescribed disturbance rate
+        + (pft_par%gamma_dist_min(n)*fac_lim_bio &  ! minimum disturbance rate
+        + gamma_fire &                           ! fire disturbance rate
+        + gamma_mcwd(n) &                           ! MCWD related mortality
+        + disturbance(n)) &                         ! additional prescribed disturbance rate
         / real(nmon_year,wp)
     enddo
 
