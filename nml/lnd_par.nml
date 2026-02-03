@@ -15,8 +15,8 @@
     l_fixlai     = F            ! fix leaf area index? If l_fixlai==T, then maximum LAI is read from file lai_fix_file
     lai_fix_file = "input/lai_pi.nc" ! file with prescribed balanced (max) leaf area index, used only if l_fixlai==T
     l_co2_fert_lim = F          ! limit CO2 fertilisation?
-    co2_fert_lim_min = 280.     ! ppm, minimum CO2 concentration for CO2 fertilisation, used only  of l_co2_fert_lim==T
-    co2_fert_lim_max = 280.     ! ppm, maximum CO2 concentration for CO2 fertilisation, used only  of l_co2_fert_lim==T
+    co2_fert_lim_min = 280.     ! ppm, minimum CO2 concentration for CO2 fertilisation, used only if l_co2_fert_lim==T
+    co2_fert_lim_max = 280.     ! ppm, maximum CO2 concentration for CO2 fertilisation, used only if l_co2_fert_lim==T
 
     !------------------------------------------------------------------------------------
     ! time steps 

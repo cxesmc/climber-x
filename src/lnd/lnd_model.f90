@@ -40,7 +40,7 @@ module lnd_model
     use lnd_params, only : dt, rdt, dt_day_c, dt_day_v, dt_day_carb, dt_day_veg
     use lnd_params, only : time_call_veg, time_call_carb, time_call_carb_p
     use lnd_params, only : l_dynveg, pft_fix_file, l_fixlai, lai_fix_file
-    use lnd_params, only : l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max, i_weathering, l_river_export
+    use lnd_params, only : i_weathering, l_river_export
     use lnd_params, only : veg_par, pft_par, snow_par, surf_par, hydro_par, soil_par, soilc_par, peat_par
     use lnd_params, only : mineral, topmodel, dyptop, nmonwet
     use lnd_params, only : weath_gemco2_par, weath_uhh_par
@@ -496,10 +496,6 @@ contains
 
       if( lnd%f_veg .gt. 0._wp ) then
        ! do photosynthesis
-       if (l_co2_fert_lim) then
-         lndp%co2 = min(lndp%co2,co2_fert_lim_max)
-         lndp%co2 = max(lndp%co2,co2_fert_lim_min)
-       endif
        call photosynthesis(lndp%co2,lndp%c13_c12_atm,lndp%c14_c_atm, &
                           lnd%frac_surf,lnd%t2m,lnd%t2m_min_mon,lnd%gdd5,lnd%t_soil(1:nl), &
                           lnd%q2m,lnd%pressure,lnd%swnet,lnd%albedo,lnd%daylength(doy), &

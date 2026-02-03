@@ -73,7 +73,7 @@ module coupler
     use ocn_params, only : n_cells_dist_runoff, n_cells_dist_calving, n_cells_dist_weath
     use ocn_params, only : relax_run, relax_calv, relax_bmelt, scale_runoff_ice, scale_calving_ice, scale_dhdt_ice
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
-    use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi
+    use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
     use lnd_grid, only : is_veg, is_ice, nl
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
@@ -1210,12 +1210,23 @@ contains
     type(lnd_class) :: lnd
 
     integer :: i, j, ii, jj, iii, jjj, n, k
+    real(wp), parameter :: co2_ref = 280._wp
 
 
     if (time_soy_lnd) then
       ! get at start of year
 
-      lnd%l0d%co2         = cmn%co2
+      if (l_co2_fert_lim) then
+        ! limit CO2 fertilisation
+        if (cmn%co2.ge.co2_ref) then
+          lnd%l0d%co2 = co2_ref + (co2_fert_lim_max-co2_ref) * tanh((cmn%co2-co2_ref)/max(0.1_wp,co2_fert_lim_max-co2_ref))
+        else
+          lnd%l0d%co2 = co2_ref + (co2_fert_lim_min-co2_ref) * tanh((cmn%co2-co2_ref)/min(-0.1_wp,co2_fert_lim_min-co2_ref))
+        endif
+      else
+        ! no explicit limitation of CO2 fertilisation
+        lnd%l0d%co2         = cmn%co2
+      endif
       lnd%l0d%c13_c12_atm = cmn%c13_c12_atm
       lnd%l0d%c14_c_atm   = cmn%c14_c_atm
 
