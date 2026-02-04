@@ -274,7 +274,7 @@ contains
           MCWD_50 = veg_par%ratio_MCWD * MCWD_clim
         endif
 
-        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (MCWD_ann - veg_par%ratio_MCWD * MCWD_50)))
+        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (MCWD_ann - MCWD_50)))
         gamma_mcwd(n) = sigmoid_factor
       else
         gamma_mcwd(n) = 0.0_wp

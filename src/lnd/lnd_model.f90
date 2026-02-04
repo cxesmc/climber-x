@@ -2005,7 +2005,7 @@ end subroutine lnd_update
    call nc_write(fnm,"t2m_min_mon",lnd%t2m_min_mon,  dims=[dim_lon,dim_lat],long_name="coldest month temperature",units="K",ncid=ncid)
    call nc_write(fnm,"f_lake_ice", lnd%f_lake_ice,     dims=[dim_lon,dim_lat],long_name="lake ice fraction",units="/",ncid=ncid)
 !-----------MCWD-dist--------------------------------------------------------
-   call nc_write(fnm,"MCWD_clim",  lnd%MCWD_clim,      dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
+   call nc_write(fnm,"MCWD_clim",  lnd%MCWD_ann,      dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
 !----------------------------------------------------------------------------
 
    call nc_write(fnm,"t_skin_veg",      lnd%t_skin_veg,     dims=[dim_lon,dim_lat],long_name="mean cell skin temperature",units="K",ncid=ncid)
