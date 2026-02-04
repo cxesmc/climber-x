@@ -1648,6 +1648,9 @@ contains
     bgc%atm(iatmco2) = cmn%co2  ! ppm
     bgc%atm(iatmc13) = cmn%c13_c12_atm*cmn%co2   ! ppm
     bgc%atm(iatmc14) = cmn%c14_c_atm*cmn%co2    ! ppm
+      
+    ! global annual mean temperature
+    bgc%clim%t2m_glob_ann = cmn%t2m_glob_ann      
 
     ! total runoff
     if (time_soy_bgc) then

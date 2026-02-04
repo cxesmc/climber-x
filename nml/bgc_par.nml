@@ -104,7 +104,8 @@
     i_mor_plan = 0          ! plankton mortality parameterisation: 0..standard HAMOCC, 1..linear monod, 2..linear for PHY and linear+quad for ZOO
     dyphy = 0.008           ! d-1, phytoplankton mortality rate, 0.008 in HAMOCC
     kmor = 1.5e-9           ! kmol P/m3, half saturation constant for plankton mortality
-    l_kill_npp = F          ! kill ocean biology (set NPP=0) after year 0?
+    l_npp_scale = F         ! scale marine primary production with global temperature changes using npp_scale_dT
+    npp_scale_dT = 0.       ! %/K, scaling of NPP with global temperature anomalies, used only if l_npp_scale==T
     i_phosy_ice = 1         ! how to account for sea ice impact on photosynthesis. 0..scale avaliable radiation, 1..scale photosynthesis
     !----------------------------------------------------------------------------
     ! cyanobacteria
@@ -149,8 +150,8 @@
     l_wpoc_const = F        ! use constant POC sinking speed? If not then linear increase with depth (dwpoc_dz) is used, used only for Martin-type sinking (isinkscheme=0)
     wpoc_zconst = 100       ! m, depth below which POC sinking speed increases with depth, used only for Martin-type sinking (isinkscheme=0)
     dwpoc_dz = 0.01         ! s-1, rate of increase of POC sinking speed with depth, used only for Martin-type sinking (isinkscheme=0)
-    l_wpoc_scale = F        ! scale POC sinking speed with factor wpoc_scale for year > 2000 AD?
-    wpoc_scale = 1.         ! factor by which to scale POC sinking speed, used only if l_wpoc_scale==T
+    l_wpoc_scale = F        ! scale POC sinking speed with global temperature changes using wpoc_scale_dT
+    wpoc_scale_dT = 0.      ! %/K, scaling of POC sinking speed with global temperature anomalies, used only if l_wpoc_scale==T
     sinkspeed_poc = 3.0     ! m/d, POC sinking speed, used if lmartin == F, 5 in HAMOCC, used only for prescribed sinking speeds (isinkscheme=0)
     sinkspeed_opal = 30.0   ! m/d, sinking speed of opal, used only if l_ballast==F
     sinkspeed_cal =  30.0   ! m/d, sinking speed of cal, used only if l_ballast==F
