@@ -32,7 +32,7 @@ module ocn_model
     use nml
     use ncio
 
-    use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, year, nyears, nday_year, nstep_year_ocn, doy
+    use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, year_now, year, nyears, nday_year, nstep_year_ocn, doy
     use control, only : ocn_restart, restart_in_dir, out_dir
     use constants, only : pi, cap_w, Lf, omega
     use climber_grid, only : lon, lat
@@ -42,7 +42,7 @@ module ocn_model
     use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, i_brines, i_brines_z, frac_brines
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
-    use ocn_params, only : l_mld, l_hosing, hosing_ini, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
+    use ocn_params, only : l_mld, l_hosing, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
     use ocn_params, only : l_ocn_input_fix, i_ocn_input_fix, l_ocn_input_fix_write, ocn_input_fix_file
     use ocn_params, only : l_noise_fw, l_noise_flx
     use ocn_params, only : tau_scale, ke_tau_coeff
@@ -253,7 +253,7 @@ contains
 
     ! update freshwater hosing and add it to freshwater flux, if needed
     if (l_hosing .and. time_soy_ocn) then
-      call hosing_update(real(year,wp),ocn%f_ocn,ocn%amoc,ocn%hosing,ocn%fw_hosing)
+      call hosing_update(real(year_now,wp),ocn%f_ocn,ocn%fw_hosing,ocn%fw_hosing_tot)
     endif
     ocn%fw_corr = ocn%fw_corr + ocn%fw_hosing 
 
@@ -813,11 +813,9 @@ contains
 
     ! initialize freshwater hosing
     if (l_hosing) then
-      call hosing_init(f_ocn,real(year,wp))
-      ocn%hosing = hosing_ini
+      call hosing_init
     else
       ocn%fw_hosing = 0._wp
-      ocn%hosing = 0._wp
     endif
 
     ! initialize freshwater flux correction
@@ -841,8 +839,6 @@ contains
     endif
 
     ocn%melt_ice(:,:) = 0._wp
-
-    ocn%amoc = 0._wp
 
     ocn%A_bering = A_bering
     ocn%bering_tf = 0._wp

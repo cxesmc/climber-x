@@ -875,6 +875,7 @@ def makejob(params,out,classub,wtime,executable,partition,jobtype,threads,vtune,
 
         # Copy files of interest
         shutil.copy("nml/ice_grids.nml",outfldr)
+        shutil.copy("nml/hosing.nml",outfldr)
         shutil.copy("nml/hyster_ctrl.nml",outfldr)
         shutil.copy(executable, outfldr)
         #copy_tree("restart/vilma/", outfldr+"vilma_restart")

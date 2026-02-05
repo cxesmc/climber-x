@@ -129,18 +129,10 @@ module ocn_params
      logical :: cons_tracer
      logical :: l_cfc
      logical :: l_hosing
-     integer :: i_hosing
-     integer :: hosing_basin
-     integer :: year_hosing_ini
-     integer :: year_hosing_end
-     integer :: year_hosing_ramp
-     real(wp) :: hosing_ini, hosing_trend, hosing_sigma
-     real(wp) :: lat_min_hosing, lat_max_hosing
-     real(wp) :: lon_min_hosing, lon_max_hosing
+     integer, parameter :: n_hosing_domain_max=10  !! maximum number of hosing domains
+     integer :: n_hosing_domain  !! number of hosing domains
+     character (len=256) :: hosing_domain_name(n_hosing_domain_max)
      integer :: hosing_comp_basin
-     real(wp) :: lat_min_hosing_comp, lat_max_hosing_comp
-     real(wp) :: lon_min_hosing_comp, lon_max_hosing_comp
-     character (len=256) :: hosing_file
      logical :: l_noise_fw 
      logical :: is_fw_noise_Sv
      logical :: l_noise_flx 
@@ -218,6 +210,7 @@ subroutine ocn_par_load(filename)
     implicit none
 
     character (len=*) :: filename
+    integer :: n
 
     ! Read parameters from file
     write(*,*) "ocean parameters ==========="
@@ -316,24 +309,16 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","scale_dhdt_ice",scale_dhdt_ice)
 
     call nml_read(filename,"ocn_par","l_hosing",l_hosing)
-    call nml_read(filename,"ocn_par","i_hosing",i_hosing)
-    call nml_read(filename,"ocn_par","hosing_basin",hosing_basin)
-    call nml_read(filename,"ocn_par","lat_min_hosing",lat_min_hosing)
-    call nml_read(filename,"ocn_par","lat_max_hosing",lat_max_hosing)
-    call nml_read(filename,"ocn_par","lon_min_hosing",lon_min_hosing)
-    call nml_read(filename,"ocn_par","lon_max_hosing",lon_max_hosing)
+    call nml_read(filename,"ocn_par","hosing_domain_name",hosing_domain_name)
+    n_hosing_domain = 0
+    do n=1,10
+      if (len_trim(hosing_domain_name(n)).ne.0) n_hosing_domain=n_hosing_domain+1
+    enddo
+    if (n_hosing_domain>n_hosing_domain_max) then
+      print *,'ERROR: too many hosing domains, n_hosing_domain>n_hosing_domain_max',n_hosing_domain,n_hosing_domain_max
+      stop
+    endif
     call nml_read(filename,"ocn_par","hosing_comp_basin",hosing_comp_basin)
-    call nml_read(filename,"ocn_par","lat_min_hosing_comp",lat_min_hosing_comp)
-    call nml_read(filename,"ocn_par","lat_max_hosing_comp",lat_max_hosing_comp)
-    call nml_read(filename,"ocn_par","lon_min_hosing_comp",lon_min_hosing_comp)
-    call nml_read(filename,"ocn_par","lon_max_hosing_comp",lon_max_hosing_comp)
-    call nml_read(filename,"ocn_par","hosing_ini",hosing_ini)
-    call nml_read(filename,"ocn_par","hosing_trend",hosing_trend)
-    call nml_read(filename,"ocn_par","hosing_sigma",hosing_sigma)
-    call nml_read(filename,"ocn_par","year_hosing_ini",year_hosing_ini)
-    call nml_read(filename,"ocn_par","year_hosing_end",year_hosing_end)
-    call nml_read(filename,"ocn_par","year_hosing_ramp",year_hosing_ramp)
-    call nml_read(filename,"ocn_par","hosing_file",hosing_file)
 
     call nml_read(filename,"ocn_par","l_noise_fw   ",l_noise_fw   )
     call nml_read(filename,"ocn_par","is_fw_noise_Sv",is_fw_noise_Sv)

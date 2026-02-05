@@ -66,10 +66,9 @@ module ocn_def
      real(wp) :: dvsf
      real(wp) :: cfc11_atm                  !! atmospheric cfc11 [ppt]
      real(wp) :: cfc12_atm                  !! atmospheric cfc12 [ppt]
-     real(wp) :: hosing                 !! freshwater hosing flux [Sv]
+     real(wp) :: fw_hosing_tot                 !! freshwater hosing flux [Sv]
      real(wp) :: noise_fw                 !! freshwater flux noise [kg/m2/s]
      real(wp) :: noise_flx                !! heat flux noise [W/m2]
-     real(wp) :: amoc                   !! AMOC strength [Sv]
      real(wp) :: bering_tf              !! northward Bering Strait throughflow from parameterisation [Sv]
      real(wp) :: bering_fw              !! northwater freshwater transport through the Bering Strait from parameterisation [Sv]
      real(wp) :: A_bering              !! Bering Strait cross-sectional area [m2]     
