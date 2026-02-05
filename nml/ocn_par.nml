@@ -185,27 +185,12 @@
  ! freshwater hosing settings
  !-------------------------------------------------------------------------------------------
  l_hosing = F                 ! apply additional freshwater hosing?
- hosing_basin = 1             ! ocean basin where to put the hosing freshwater. 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
- lat_min_hosing = 50          ! lower latitude bound for region of freshwater flux
- lat_max_hosing = 70          ! higher latitude bound for region of freshwater flux
- lon_min_hosing = -175        ! western longitude bound for region of freshwater flux
- lon_max_hosing = 175         ! eastern longitude bound for region of freshwater flux
+ hosing_domain_name = 'Atl_50-70N_0.1Sv' 'SO_50-70S_0.1Sv'     ! list of domains where hosing should be applied; need to be defined in hosing.nml
  hosing_comp_basin = 2        ! ocean basin where to compensate the hosing freshwater. -1 = no comp, 0 = Global, 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
  lat_min_hosing_comp = -30    ! lower latitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
  lat_max_hosing_comp = 30     ! higher latitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
- lon_min_hosing_comp = -175   ! western longitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
- lon_max_hosing_comp = 175    ! eastern longitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
- i_hosing = 0                 ! hosing flux settings:
-                              ! 0..using hosing_ini and hosing_trend
-                              ! 1..read hosing time series from hosing_file
-                              ! >=2..hosing flux evolution from code in hosing.f90
- hosing_ini = 0               ! Sv, inital/constant value of hosing flux
- hosing_trend = 0.            ! Sv/kyr, rate at which hosing flux is increased/decreased
- hosing_sigma = 0.            ! Sv, standard deviation of Gaussian white noise added to hosing
- year_hosing_ini = 0          ! years, initial time for hosing
- year_hosing_end = 1e6        ! years, final time for hosing
- year_hosing_ramp = 0         ! years, ramp-up time for hosing
- hosing_file = "input/Calov_Heinrich.nc"  ! hosing time series input file, used only if i_hosing==1
+ lon_min_hosing_comp = -180   ! western longitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
+ lon_max_hosing_comp = 180    ! eastern longitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
 
  !-------------------------------------------------------------------------------------------
  ! freshwater adjustment settings

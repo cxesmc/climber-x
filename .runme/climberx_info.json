@@ -41,7 +41,8 @@
         },
 
     "files" : 
-        ["nml/ice_grids.nml"], 
+        ["nml/ice_grids.nml",
+         "nml/hosing.nml"], 
 
     "dir-special" :
     {

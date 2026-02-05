@@ -115,7 +115,7 @@ module ocn_out
      real(wp) :: buoySw_lab
      real(wp) :: buoySi_NA(nlatv_buoy)
      real(wp) :: buoy_NA(nlatv_buoy)
-     real(wp) :: hosing
+     real(wp) :: fw_hosing
      real(wp) :: noise_fw, noise_flx, fw_noise
      real(wp) :: cfc11, cfc12
      real(wp) :: drhoatl1
@@ -2765,8 +2765,6 @@ contains
            ann_ts(y)%amoc26N = max(ann_ts(y)%amoc26N,ann_o%opsia(J26N,k))
          endif
        enddo
-       ! save in ocn variable
-       ocn%amoc = ann_ts(y)%omaxa
    
        ! Southern ocean
        ann_ts(y)%omins = 0.0
@@ -2792,7 +2790,7 @@ contains
        ann_ts(y)%fmaxa = maxval(ann_o%fwa(1,jsf:))
 
        ! freshwater hosing 
-       ann_ts(y)%hosing = ocn%hosing
+       ann_ts(y)%fw_hosing = ocn%fw_hosing_tot ! Sv
 
        ! noise
        ann_ts(y)%noise_fw = ocn%noise_fw*sec_day    ! kg/m2/day
@@ -3657,7 +3655,7 @@ contains
     call nc_write(fnm,"fw_corr_glob", vars%fw_corr(1),dim1=dim_time,start=[ndat],count=[y],long_name="global corrected net freshwater flux to ocean",units="Sv",ncid=ncid)
     call nc_write(fnm,"saln0", vars%saln0,dim1=dim_time,start=[ndat],count=[y],long_name="reference salinity",units="psu",ncid=ncid)
     call nc_write(fnm,"dvsf", vars%dvsf,dim1=dim_time,start=[ndat],count=[y],long_name="global virtual salinity flux correction",units="Sv",ncid=ncid)
-    call nc_write(fnm,"hosing",  vars%hosing,dim1=dim_time,start=[ndat],count=[y],long_name="Freshwater hosing flux",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fw_hosing",  vars%fw_hosing,dim1=dim_time,start=[ndat],count=[y],long_name="Freshwater hosing flux",units="Sv",ncid=ncid)
     call nc_write(fnm,"fw_noise",  vars%fw_noise,dim1=dim_time,start=[ndat],count=[y],long_name="Global freshwater flux from noise",units="Sv",ncid=ncid)
     call nc_write(fnm,"noise_fw",  vars%noise_fw,dim1=dim_time,start=[ndat],count=[y],long_name="Noise applied to freshwater flux",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"noise_flx",  vars%noise_flx,dim1=dim_time,start=[ndat],count=[y],long_name="Noise applied to heat flux",units="W/m2",ncid=ncid)

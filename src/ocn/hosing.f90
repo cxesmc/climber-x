@@ -2,29 +2,26 @@ module hosing_mod
 
   use precision, only : wp, sp
   use constants, only : pi
-  use timer, only: sec_year, time_soy_ocn
+  use control, only : out_Dir
+  use timer, only: sec_year, time_soy_ocn, year_ini
   use climber_grid, only : lat, lon, basin_mask, i_atlantic, i_pacific, i_southern
   use ocn_grid, only : maxi, maxj, dx, dy
-  use ocn_params, only: dt, rho0, i_hosing, hosing_basin, hosing_ini, hosing_trend, hosing_sigma
-  use ocn_params, only : hosing_file
-  use ocn_params, only : year_hosing_ini, year_hosing_end, year_hosing_ramp, lat_min_hosing, lat_max_hosing, lon_min_hosing, lon_max_hosing
-  use ocn_params, only : hosing_comp_basin, lat_min_hosing_comp, lat_max_hosing_comp, lon_min_hosing_comp, lon_max_hosing_comp
+  use ocn_params, only: dt, rho0
+  use ocn_params, only : n_hosing_domain, n_hosing_domain_max, hosing_domain_name, hosing_comp_basin
   use ncio
+  use nml
 
-!  use hyster 
-  
   implicit none
 
-  integer :: i_hosing_1, i_hosing_2
-  integer :: i_hosing_comp_1, i_hosing_comp_2
-  integer , allocatable :: j_hosing(:,:)
-  integer , allocatable :: j_hosing_comp(:,:)
-  real(wp), allocatable :: rhosing(:,:)
+  real(wp), allocatable, dimension(:,:) :: hosing_comp_mask
 
-  real(wp), allocatable :: hosing_time(:)
-  real(wp), allocatable :: hosing_data(:)
-
-!  type(hyster_class) :: hyst1 
+  type hosing_type
+    real(wp), allocatable, dimension(:) :: time
+    real(wp), allocatable, dimension(:) :: fwf
+    real(wp), allocatable, dimension(:,:) :: mask
+    real(wp) :: area
+  end type
+  type(hosing_type) :: hosing(n_hosing_domain_max)
 
   private
   public :: hosing_init, hosing_update
@@ -35,224 +32,75 @@ contains
   !   Subroutine :  h o s i n g _ u p d a t e
   !   Purpose    :  update freshwater forcing
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hosing_update(time,f_ocn,amoc,hosing,fw_hosing) 
+  subroutine hosing_update(time,f_ocn,fw_hosing,fw_hosing_tot) 
 
     implicit none
 
-    real(wp), intent(in) :: time                          ! [yr] Current model time 
+    real(wp), intent(in) :: time                          ! [yr] Current time, years before 2000 AD
     real(wp), dimension(:,:), intent(in) :: f_ocn
-    real(wp), intent(in) :: amoc                          ! [Sv] current amoc strength
-    real(wp), intent(out) :: hosing
-    real(wp), dimension(:,:), intent(inout) :: fw_hosing
+    real(wp), dimension(:,:), intent(inout) :: fw_hosing    ! kg/m2/s
+    real(wp), intent(inout) :: fw_hosing_tot    ! Sv
 
-    integer :: i, j, i0, i1, imin
+    integer :: n, i0, i1, imin
     real(wp) :: w0, w1
-    real(wp) :: area_hosing
-    real(wp) :: area_hosing_comp
-    real(wp), dimension(2) :: xx
-    real(wp) :: norm
+    real(wp) :: fwf_now
+    real(wp) :: hosing_comp_area
 
 
-    rhosing = 0._wp
-    area_hosing = 0._wp
+    fw_hosing(:,:) = 0._wp
+    fw_hosing_tot = 0._wp
 
-    ! compute total hosing area
-    do i=i_hosing_1,i_hosing_2
-      do j=j_hosing(i,1),j_hosing(i,2)
-        if (hosing_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
+    ! combine freshwater hosing flux from the different hosing domains
 
-    ! derive hosing weight for each cell
-    do i=i_hosing_1,i_hosing_2
-      do j=j_hosing(i,1),j_hosing(i,2)
-        if (hosing_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) rhosing(i,j) = 1.e6_wp/area_hosing  ! m3/s/Sv / m2 = m/s/Sv
-        else if (hosing_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) rhosing(i,j) = 1.e6_wp/area_hosing
-        else if (hosing_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) rhosing(i,j) = 1.e6_wp/area_hosing  ! m3/s/Sv / m2 = m/s/Sv
-        endif
-      enddo
-    enddo
+    do n=1,n_hosing_domain
 
-    ! compute total hosing compensation area
-    do i=1,maxi
-      do j=1,maxj
-        if (hosing_comp_basin.eq.0) then
-          ! Global ocean
-          if (f_ocn(i,j).gt.0._wp) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
-    do i=i_hosing_comp_1,i_hosing_comp_2
-      do j=j_hosing_comp(i,1),j_hosing_comp(i,2)
-        if (hosing_comp_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_comp_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_comp_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
-    if (hosing_comp_basin.eq.0) then
-      area_hosing_comp = area_hosing_comp - area_hosing
-    endif
+      ! compute area of hosing domain
+      call hosing_domain_area(f_ocn, hosing(n)%mask, hosing(n)%area)
 
-    ! derive hosing compensation weight for each cell
-    do i=i_hosing_comp_1,i_hosing_comp_2
-      do j=j_hosing_comp(i,1),j_hosing_comp(i,2)
-        if (hosing_comp_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) rhosing(i,j) = -1.e6_wp/area_hosing_comp  ! m3/s/Sv / m2 = m/s/Sv
-        else if (hosing_comp_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) rhosing(i,j) = -1.e6_wp/area_hosing_comp
-        else if (hosing_comp_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) rhosing(i,j) = -1.e6_wp/area_hosing_comp  ! m3/s/Sv / m2 = m/s/Sv
-        endif
-      enddo
-    enddo
-    if (hosing_comp_basin.eq.0) then
-      where (rhosing.eq.0._wp)
-        rhosing = -1e6_wp/area_hosing_comp ! m3/s/Sv / m2 = m/s/Sv
-      endwhere
-    endif
-
-
-if (.true.) then 
-  ! Old hosing method with constant hosing_trend value 
-
-    if (hosing_sigma.gt.0._wp) then
-      ! Get 2 numbers from uniform distribution between 0 and 1
-      call random_number(xx)
-      ! Convert to normal distribution using the Box-Mueller algorithm
-      norm = sqrt(-2._wp*log(xx(1))) * cos(2._wp*pi*xx(2))
-      ! keep within 3 sigma
-      norm = min(3._wp,norm)
-      norm = max(-3._wp,norm)
-    else
-      norm = 0._wp
-    endif
-
-    ! TODO add option to convert to red noise?
-    ! https://atmos.washington.edu/~breth/classes/AM582/lect/lect8-notes.pdf
-    if (i_hosing.eq.0) then
-
-      if (time.ge.year_hosing_ini .and. time.le.year_hosing_end) then
-        ! update total extra freshwater forcing
-        hosing = min(1._wp,time/max(1,year_hosing_ramp))*hosing_ini + hosing_trend*sec_year*(time-year_hosing_ini)  + hosing_sigma*norm 
-      else 
-        hosing = 0._wp
-      endif
-
-    else if (i_hosing.eq.1) then
-      ! from file
-
-      ! interpolate from hosing_data to current year
-      if (time.le.year_hosing_ini) then
-        hosing = 0._wp 
-      elseif (time.ge.hosing_time(ubound(hosing_time,1))) then
-        hosing = hosing_data(ubound(hosing_data,1))
+      ! interpolate hosing rate to current year
+      if (time.le.hosing(n)%time(1)) then
+        fwf_now = hosing(n)%fwf(1)
+      elseif (time.ge.hosing(n)%time(ubound(hosing(n)%time,1))) then
+        fwf_now = hosing(n)%fwf(ubound(hosing(n)%fwf,1))
       else
-        imin = minloc(abs(hosing_time-time),1) 
-        if (hosing_time(imin).lt.time) then
+        imin = minloc(abs(hosing(n)%time-time),1) 
+        if (hosing(n)%time(imin).lt.time) then
           i0 = imin
           i1 = imin+1
         else
           i0 = imin-1
           i1 = imin
         endif
-        if (hosing_time(i1)-hosing_time(i0).eq.0._wp) then
+        if (hosing(n)%time(i1)-hosing(n)%time(i0).eq.0._wp) then
           w0 = 1._wp
         else
-          w0 = 1._wp - abs(hosing_time(i0)-time)/(hosing_time(i1)-hosing_time(i0))
+          w0 = 1._wp - abs(hosing(n)%time(i0)-time)/(hosing(n)%time(i1)-hosing(n)%time(i0))
         endif
         w1 = 1._wp - w0
-        hosing = w0*hosing_data(i0) + w1*hosing_data(i1)
+        fwf_now = w0*hosing(n)%fwf(i0) + w1*hosing(n)%fwf(i1)
       endif
 
-    else if (i_hosing.eq.2) then
+      ! apply freshwater flux
+      where (f_ocn.gt.0._wp .and. hosing(n)%mask.gt.0._wp)
+        fw_hosing(:,:) = fw_hosing(:,:) + fwf_now*1.e6_wp * rho0 / hosing(n)%area ! m3/s * kg/m3 / m2 = kg/m2/s
+      endwhere
 
-      if (time.lt.year_hosing_ini) then
-        hosing = 0._wp
-      else if (time.ge.year_hosing_ini .and. time.lt.year_hosing_end) then
-        hosing = hosing_ini
-      else if (time.ge.year_hosing_end .and. time.lt.(year_hosing_end+(year_hosing_end-year_hosing_ini))) then
-        hosing = -hosing_ini
-      else
-        hosing = 0._wp
-      endif
+      fw_hosing_tot = fw_hosing_tot + fwf_now   ! Sv
 
-    else if (i_hosing.eq.3) then
+    enddo
 
-      if (time.lt.year_hosing_ini) then
-        hosing = 0._wp
-      else if (time.ge.year_hosing_ini .and. time.lt.year_hosing_end) then
-        hosing = hosing_ini
-      else if (time.ge.year_hosing_end .and. time.lt.(year_hosing_end+(year_hosing_end-year_hosing_ini))) then
-        hosing = -0.5_wp*hosing_ini
-      else
-        hosing = 0._wp
-      endif
+    ! apply compensation flux if needed
 
-    else if (i_hosing.eq.4) then
+    if (hosing_comp_basin.ge.0) then 
 
-      if (time.lt.year_hosing_ini) then
-        hosing = 0._wp
-      else if (time.ge.year_hosing_ini .and. time.lt.year_hosing_end) then
-        hosing = hosing_ini
-      else if (time.ge.year_hosing_end .and. time.lt.(year_hosing_end+(year_hosing_end-year_hosing_ini))) then
-        hosing = -2._wp*hosing_ini
-      else
-        hosing = 0._wp
-      endif
+      ! compute area of hosing compensation domain
+      call hosing_domain_area(f_ocn, hosing_comp_mask, hosing_comp_area)
 
-    else if (i_hosing.eq.5) then
-
-      if (time.lt.year_hosing_ini) then
-        hosing = 0._wp
-      else if (time.ge.year_hosing_ini .and. time.lt.year_hosing_end) then
-        hosing = hosing_ini
-      else if (time.ge.year_hosing_end .and. time.lt.(year_hosing_end+(year_hosing_end-year_hosing_ini))) then
-        hosing = -hosing_ini
-      else
-        hosing = 0._wp
-      endif
+      where (f_ocn.gt.0._wp .and. hosing_comp_mask.gt.0._wp)
+        fw_hosing(:,:) = fw_hosing(:,:) - fw_hosing_tot*1.e6_wp * rho0 / hosing_comp_area ! m3/s * kg/m3 / m2 = kg/m2/s
+      endwhere
 
     endif
-
-else
-!  ! New hosing method using hyster object 
-!
-!    ! Update hysteresis variable 
-!    call hyster_calc_forcing(hyst1,time=real(time,sp),var=real(amoc,sp))
-!
-!    ! update total extra freshwater forcing [Sv]
-!    hosing = hyst1%f_now 
-!
-end if 
-
-    ! update 2D extra freshwater forcing
-    fw_hosing = hosing * rhosing*rho0  ! Sv * m/s/Sv * kg/m3 = kg/m2/s
-
 
    return
 
@@ -263,189 +111,233 @@ end if
   !   Subroutine :  h o s i n g _ i n i t
   !   Purpose    :  initialize freshwater forcing
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hosing_init(f_ocn,time)
+  subroutine hosing_init
 
     implicit none
 
-    real(wp), intent(in) :: f_ocn(:,:)
-    real(wp), intent(in) :: time
-
-    integer :: i, j, ntime
-    logical :: flag
-    real(wp) :: area_hosing
-    real(wp) :: area_hosing_comp
+    integer :: n
   
-    real(wp), allocatable :: hosing_time_tmp(:)
 
-
-    allocate(rhosing(maxi,maxj))
-    allocate(j_hosing(maxi,2))
-    allocate(j_hosing_comp(maxi,2))
-
-    ! find index of western and eastern boundary of box where hosing should be applied
-    do i=2,maxi
-     ! western boundary
-     if ((lon(i-1).le.lon_min_hosing) .and. (lon(i).ge.lon_min_hosing)) then
-        i_hosing_1 = i-1
-     endif
-     ! eastern boundary
-     if ((lon(i-1).le.lon_max_hosing) .and. (lon(i).ge.lon_max_hosing)) then
-        i_hosing_2 = i
-     endif
+    ! initialize hosing domains
+    do n=1,n_hosing_domain
+      call hosing_domain_init(hosing_domain_name(n), hosing(n)%time, hosing(n)%fwf, hosing(n)%mask)
     enddo
 
-    ! find index of western and eastern boundary of box where hosing compensation should be applied
-    do i=2,maxi
-     ! western boundary
-     if ((lon(i-1).le.lon_min_hosing_comp) .and. (lon(i).ge.lon_min_hosing_comp)) then
-        i_hosing_comp_1 = i-1
-     endif
-     ! eastern boundary
-     if ((lon(i-1).le.lon_max_hosing_comp) .and. (lon(i).ge.lon_max_hosing_comp)) then
-        i_hosing_comp_2 = i
-     endif
-    enddo
-
-    ! find index of northern and southern boundary of box where hosing should be applied
-    do j=2,maxj
-     ! southern boundary
-     if ((lat(j-1).le.lat_min_hosing) .and. (lat(j).ge.lat_min_hosing)) then
-        j_hosing(:,1) = j
-     endif
-     ! northern boundary
-     if ((lat(j-1).le.lat_max_hosing) .and. (lat(j).ge.lat_max_hosing)) then
-        j_hosing(:,2) = j-1
-     endif
-    enddo
-
-    ! find index of northern and southern boundary of box where hosing compensation should be applied
-    do j=2,maxj
-     ! southern boundary
-     if ((lat(j-1).le.lat_min_hosing_comp) .and. (lat(j).ge.lat_min_hosing_comp)) then
-        j_hosing_comp(:,1) = j
-     endif
-     ! northern boundary
-     if ((lat(j-1).le.lat_max_hosing_comp) .and. (lat(j).ge.lat_max_hosing_comp)) then
-        j_hosing_comp(:,2) = j-1
-     endif
-    enddo
-
-    ! special case, first ocean cell around Antarctica, if lat_min_hosing==0 and lat_max_hosing==0
-    if (lat_min_hosing==0 .and. lat_max_hosing==0) then
-      do i=1,maxi
-        flag = .false.
-        do j=1,maxj
-          if ( (.not. flag) .and. f_ocn(i,j).gt.0._wp) then  ! first ocean cell from south
-            j_hosing(i,1:2) = j
-            flag = .true.
-          endif
+    ! initialize hosing compensation domain
+    if (hosing_comp_basin.ge.0) then 
+      allocate(hosing_comp_mask(maxi,maxj))
+      call hosing_comp_domain_init(hosing_comp_mask)
+      if (hosing_comp_basin.eq.0) then
+        ! global compensation, but exclude hosing domains
+        do n=1,n_hosing_domain
+          where (hosing(n)%mask.gt.0._wp)
+            hosing_comp_mask = 0._wp
+          endwhere
         enddo
-      enddo
+      endif
     endif
 
-    rhosing = 0._wp
-    area_hosing = 0._wp
-
-    ! compute total hosing area
-    do i=i_hosing_1,i_hosing_2
-      do j=j_hosing(i,1),j_hosing(i,2)
-        if (hosing_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) area_hosing = area_hosing + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
-
-    ! derive hosing weight for each cell
-    do i=i_hosing_1,i_hosing_2
-      do j=j_hosing(i,1),j_hosing(i,2)
-        if (hosing_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) rhosing(i,j) = 1.e6_wp/area_hosing  ! m3/s/Sv / m2 = m/s/Sv
-        else if (hosing_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) rhosing(i,j) = 1.e6_wp/area_hosing
-        else if (hosing_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) rhosing(i,j) = 1.e6_wp/area_hosing  ! m3/s/Sv / m2 = m/s/Sv
-        endif
-      enddo
-    enddo
-
-    ! compute total hosing compensation area
-    do i=1,maxi
-      do j=1,maxj
-        if (hosing_comp_basin.eq.0) then
-          ! Global ocean
-          if (f_ocn(i,j).gt.0._wp) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
-    do i=i_hosing_comp_1,i_hosing_comp_2
-      do j=j_hosing_comp(i,1),j_hosing_comp(i,2)
-        if (hosing_comp_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_comp_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        else if (hosing_comp_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) area_hosing_comp = area_hosing_comp + dx(j)*dy*f_ocn(i,j)
-        endif
-      enddo
-    enddo
-    if (hosing_comp_basin.eq.0) then
-      area_hosing_comp = area_hosing_comp - area_hosing
-    endif
-
-    ! derive hosing compensation weight for each cell
-    do i=i_hosing_comp_1,i_hosing_comp_2
-      do j=j_hosing_comp(i,1),j_hosing_comp(i,2)
-        if (hosing_comp_basin.eq.1) then
-          ! Atlantic
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) rhosing(i,j) = -1.e6_wp/area_hosing_comp  ! m3/s/Sv / m2 = m/s/Sv
-        else if (hosing_comp_basin.eq.2) then
-          ! Pacific
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_pacific) rhosing(i,j) = -1.e6_wp/area_hosing_comp
-        else if (hosing_comp_basin.eq.3) then
-          ! Southern ocean
-          if (f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_southern) rhosing(i,j) = -1.e6_wp/area_hosing_comp  ! m3/s/Sv / m2 = m/s/Sv
-        endif
-      enddo
-    enddo
-    if (hosing_comp_basin.eq.0) then
-      where (rhosing.eq.0._wp)
-        rhosing = -1e6_wp/area_hosing_comp ! m3/s/Sv / m2 = m/s/Sv
-      endwhere
-    endif
-
-
-    ! convert hosing_trend from Sv/ky to Sv/s
-    hosing_trend = hosing_trend/(1.e3_wp*sec_year)
-
-    ! read hosing forcing from file, if required
-    if (i_hosing.eq.1) then
-      ntime = nc_size(trim(hosing_file),"time")
-      allocate( hosing_time_tmp(ntime) )
-      allocate( hosing_time(ntime) )
-      allocate( hosing_data(ntime) )
-      call nc_read(trim(hosing_file),"time",hosing_time_tmp)    
-      call nc_read(trim(hosing_file),"fwf",hosing_data) 
-      hosing_time = hosing_time_tmp - hosing_time_tmp(1) + 1._wp + year_hosing_ini  
-    endif
-    
-!    ! Initialize hysteresis module for transient forcing experiments 
-!    call hyster_init(hyst1,"hyster_ctrl.nml",real(time,sp),"hosing") 
 
     return
 
   end subroutine hosing_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  h o s i n g _ d o m a i n _ i n i t
+  !   Purpose    :  initialize hosing domains
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine hosing_domain_init(domain,time,fwf,mask)
+
+    implicit none
+
+    character(len=*), intent(in)  :: domain
+    real(wp), intent(inout), allocatable :: time(:)
+    real(wp), intent(inout), allocatable :: fwf(:)
+    real(wp), intent(inout), allocatable :: mask(:,:)
+
+    integer :: i, j
+    integer :: ntime
+    character(len=256) :: fnm
+    logical :: l_hosing_rate_from_file, l_hosing_mask_from_file
+
+    real(wp) :: hosing_ini, hosing_trend
+    integer :: year_hosing_ini
+    integer :: year_hosing_end
+    integer :: hosing_basin
+    real(wp) :: lat_min_hosing, lat_max_hosing
+    real(wp) :: lon_min_hosing, lon_max_hosing
+
+    character(len=256) :: hosing_rate_file
+    character(len=256) :: hosing_mask_file
+
+
+    fnm = trim(out_dir)//"/hosing.nml"
+
+    call nml_read(fnm,domain,"l_hosing_rate_from_file",l_hosing_rate_from_file)
+    call nml_read(fnm,domain,"l_hosing_mask_from_file",l_hosing_mask_from_file)
+
+    !---- Hosing rate ----
+
+    if (l_hosing_rate_from_file) then
+ 
+      call nml_read(fnm,domain,"hosing_rate_file",hosing_rate_file)
+      ntime = nc_size(trim(hosing_rate_file),"time")
+      allocate( time(ntime) )
+      allocate( fwf(ntime) )
+      call nc_read(trim(hosing_rate_file),"time",time)    
+      call nc_read(trim(hosing_rate_file),"fwf",fwf) 
+
+    else
+
+      call nml_read(fnm,domain,"hosing_ini      ",hosing_ini      )
+      call nml_read(fnm,domain,"hosing_trend    ",hosing_trend    )
+      call nml_read(fnm,domain,"year_hosing_ini ",year_hosing_ini )
+      call nml_read(fnm,domain,"year_hosing_end ",year_hosing_end )
+      hosing_trend = hosing_trend / 1000._wp    ! convert from Sv/kyr to Sv/yr
+
+      allocate( time(5) )
+      allocate( fwf(5) )
+      time(1) = year_ini - 1._wp
+      fwf(1) = 0._wp
+      time(2) = max(year_ini, year_hosing_ini-1)
+      fwf(2) = 0._wp
+      time(3) = max(year_ini, year_hosing_ini+1)
+      fwf(3) = hosing_ini
+      time(4) = year_hosing_end
+      fwf(4) = hosing_ini + hosing_trend*(year_hosing_end-year_hosing_ini)
+      time(5) = year_hosing_end + 1._wp
+      fwf(5) = 0._wp
+
+    endif
+
+! TODO, allow for 3rd option to prescribed hosing rate from code?
+!      if (time.lt.year_hosing_ini) then
+!        hosing = 0._wp
+!      else if (time.ge.year_hosing_ini .and. time.lt.year_hosing_end) then
+!        hosing = hosing_ini
+!      else if (time.ge.year_hosing_end .and. time.lt.(year_hosing_end+(year_hosing_end-year_hosing_ini))) then
+!        hosing = -hosing_ini
+!      else
+!        hosing = 0._wp
+!      endif
+!
+
+    !---- Hosing mask ----
+
+    allocate(mask(maxi,maxj))
+
+    if (l_hosing_mask_from_file) then
+ 
+      call nml_read(fnm,domain,"hosing_mask_file",hosing_mask_file)
+      call nc_read(trim(hosing_mask_file),"mask",mask) 
+
+    else
+
+      call nml_read(fnm,domain,"hosing_basin",hosing_basin)
+      call nml_read(fnm,domain,"lat_min_hosing",lat_min_hosing)
+      call nml_read(fnm,domain,"lat_max_hosing",lat_max_hosing)
+      call nml_read(fnm,domain,"lon_min_hosing",lon_min_hosing)
+      call nml_read(fnm,domain,"lon_max_hosing",lon_max_hosing)
+
+      ! derive mask 
+      do j=1,maxj
+        do i=1,maxi
+          if (lon(i).ge.lon_min_hosing .and. lon(i).le.lon_max_hosing .and. lat(j).ge.lat_min_hosing .and. lat(j).le.lat_max_hosing) then
+            if ((hosing_basin.eq.1 .and. basin_mask(i,j).eq.i_atlantic) .or. &
+              (hosing_basin.eq.2 .and. basin_mask(i,j).eq.i_pacific) .or. &
+              (hosing_basin.eq.3 .and. basin_mask(i,j).eq.i_southern)) then
+              mask(i,j) = 1._wp
+            else
+              mask(i,j) = 0._wp
+            endif
+          endif
+        enddo
+      enddo
+
+    endif
+
+    return
+
+  end subroutine hosing_domain_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  h o s i n g _ c o m p _ d o m a i n _ i n i t
+  !   Purpose    :  initialize hosing compensation domain
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine hosing_comp_domain_init(mask)
+
+    implicit none
+
+    real(wp), intent(out) :: mask(:,:)
+
+    integer :: i, j
+    character(len=256) :: fnm
+
+    real(wp) :: lat_min_hosing_comp, lat_max_hosing_comp
+    real(wp) :: lon_min_hosing_comp, lon_max_hosing_comp
+
+    fnm = trim(out_dir)//"/ocn_par.nml"
+    call nml_read(fnm,"ocn_par","lat_min_hosing_comp",lat_min_hosing_comp)
+    call nml_read(fnm,"ocn_par","lat_max_hosing_comp",lat_max_hosing_comp)
+    call nml_read(fnm,"ocn_par","lon_min_hosing_comp",lon_min_hosing_comp)
+    call nml_read(fnm,"ocn_par","lon_max_hosing_comp",lon_max_hosing_comp)
+
+    ! derive mask 
+    if (hosing_comp_basin.eq.0) then
+      ! global compensation
+
+      mask(:,:) = 1._wp
+
+    else
+      ! compensation over specific region
+
+      do j=1,maxj
+        do i=1,maxi
+          if (lon(i).ge.lon_min_hosing_comp .and. lon(i).le.lon_max_hosing_comp .and. lat(j).ge.lat_min_hosing_comp .and. lat(j).le.lat_max_hosing_comp) then
+            if ((hosing_comp_basin.eq.1 .and. basin_mask(i,j).eq.i_atlantic) .or. &
+              (hosing_comp_basin.eq.2 .and. basin_mask(i,j).eq.i_pacific) .or. &
+              (hosing_comp_basin.eq.3 .and. basin_mask(i,j).eq.i_southern)) then
+              mask(i,j) = 1._wp
+            else
+              mask(i,j) = 0._wp
+            endif
+          endif
+        enddo
+      enddo
+
+    endif
+
+    return
+
+  end subroutine hosing_comp_domain_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  h o s i n g _ d o m a i n _ a r e a 
+  !   Purpose    :  compute area of hosing domain
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine hosing_domain_area(f_ocn, mask, area)
+
+    implicit none
+
+    real(wp), intent(in) :: f_ocn(:,:)
+    real(wp), intent(in) :: mask(:,:)
+    real(wp), intent(out) :: area
+
+    integer :: i, j
+
+    area = 0._wp
+    do j=1,maxj
+      do i=1,maxi
+        area = area + mask(i,j) * f_ocn(i,j)*dx(j)*dy   ! m2
+      enddo
+    enddo
+
+    return
+
+  end subroutine hosing_domain_area
+
 
 end module hosing_mod
