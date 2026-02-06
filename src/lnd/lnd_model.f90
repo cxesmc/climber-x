@@ -2706,9 +2706,9 @@ end subroutine lnd_update
     call nc_read(fnm,"f_lake_ice",    lnd%f_lake_ice,ncid=ncid)
     ! Read MCWD_clim (may not exist in old restart files)
     if (nc_exists_var(fnm,"MCWD_clim")) then
-      call nc_read(fnm,"MCWD_clim",lnd(i,j)%MCWD_clim,start=[i,j],count=[1,1],ncid=ncid)
+      call nc_read(fnm,"MCWD_clim",lnd%MCWD_clim,ncid=ncid)
     else
-      lnd(i,j)%MCWD_clim = 0._wp  ! default for as 0.
+      lnd%MCWD_clim = 0._wp  ! default for as 0.
     endif
 
     call nc_read(fnm,"t_skin_veg",      lnd%t_skin_veg,ncid=ncid)
@@ -2735,7 +2735,7 @@ end subroutine lnd_update
         call nc_read(fnm,"stem_c",lnd(i,j)%stem_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         call nc_read(fnm,"gamma_dist",lnd(i,j)%gamma_dist,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         if (nc_exists_var(fnm,"gamma_fire")) then
-          call nc_read(fnm,"gamma_fire",lnd(i,j)%gamma_fire,start=[i,j],count=[1,1],ncid=ncid)
+          call nc_read(fnm,"gamma_fire",lnd(i,j)%gamma_fire,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         else
           lnd(i,j)%gamma_fire = 0._wp  ! default for as 0.
         endif
