@@ -33,7 +33,7 @@ contains
   !   Subroutine :  s m b _ i n i t
   !   Purpose    :  initialize surface energy and mass balance interface
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smb_init(smb_in,smb,i_domain,grid,cmn_grid,z_bed_1min,lon_1min,lat_1min)
+  subroutine smb_init(smb_in,smb,i_domain,grid,cmn_grid)
 
     implicit none
 
@@ -42,9 +42,6 @@ contains
     integer, intent(in) :: i_domain
     type(grid_class), intent(in) :: grid 
     type(grid_class), intent(in) :: cmn_grid
-    real(wp), intent(in) :: z_bed_1min(:,:)
-    real(wp), intent(in) :: lon_1min(:)
-    real(wp), intent(in) :: lat_1min(:)
 
   return
 
