@@ -108,6 +108,7 @@ module bgc_def
       real(wp), dimension(:,:),   allocatable :: wind10           ! wind speed at 10m [m/s]
       real(wp), dimension(:,:),   allocatable :: sst_min    ! minimum annual surface layer temperature [degC]
       real(wp), dimension(:,:),   allocatable :: sst_max    ! maximum annual surface layer temperature [degC]
+      real(wp) :: t2m_glob_ann                              ! global mean annual temperature [degC]
     end type
 
     ! daily climate input type
