@@ -775,7 +775,7 @@ contains
       if( time_eom_lnd ) then
 !###############fire-CO2######################################################################
        call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum, &
-                   lnd%gamma_dist_cum,lnd%gamma_fire,lnd%MCWD_ann,lnd%MCWD_clim)
+                   lnd%gamma_dist_cum,lnd%gamma_fire,lnd%MCWD_ann,lnd%MCWD_clim,lnd%gamma_mcwd)
 !#####################################################################################
       endif
 
@@ -1463,6 +1463,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%gamma_dist_cum  = 0._wp
  !###############fire-CO2#############################################################
         lnd%l2d(i,j)%gamma_fire      = 0._wp
+        lnd%l2d(i,j)%gamma_mcwd     = 0._wp
  !############################################################ 
         lnd%l2d(i,j)%wilt      = 0._wp 
         lnd%l2d(i,j)%litterfall    = 0._wp
@@ -1750,6 +1751,7 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%fire_c_flux_pft   (npft))
         allocate(lnd%l2d(i,j)%fire_c_flux13_pft (npft))
         allocate(lnd%l2d(i,j)%fire_c_flux14_pft (npft))
+        allocate(lnd%l2d(i,j)%gamma_mcwd      (npft))
  !############################################################
         allocate(lnd%l2d(i,j)%leaf_c          (npft))
         allocate(lnd%l2d(i,j)%stem_c          (npft))
@@ -1959,6 +1961,9 @@ end subroutine lnd_update
     integer :: i, j
     integer, dimension(:,:,:), allocatable :: vari_n
     real(wp), dimension(:,:,:), allocatable :: var_n
+!-----------MCWD-dist--------------------------------------------------------
+    real(wp), dimension(:,:), allocatable :: var2d
+!----------------------------------------------------------------------------
 
    call nc_create(fnm)
    call nc_write_dim(fnm,"p",x=1)
@@ -2004,11 +2009,17 @@ end subroutine lnd_update
    call nc_write(fnm,"gdd5",       lnd%gdd5,           dims=[dim_lon,dim_lat],long_name="growing degree days above 5 degC",units="K",ncid=ncid)
    call nc_write(fnm,"t2m_min_mon",lnd%t2m_min_mon,  dims=[dim_lon,dim_lat],long_name="coldest month temperature",units="K",ncid=ncid)
    call nc_write(fnm,"f_lake_ice", lnd%f_lake_ice,     dims=[dim_lon,dim_lat],long_name="lake ice fraction",units="/",ncid=ncid)
-!-----------MCWD-dist--------------------------------------------------------
-   call nc_write(fnm,"MCWD_clim",  lnd%MCWD_ann,      dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
-!----------------------------------------------------------------------------
-
    call nc_write(fnm,"t_skin_veg",      lnd%t_skin_veg,     dims=[dim_lon,dim_lat],long_name="mean cell skin temperature",units="K",ncid=ncid)
+!-----------MCWD-dist--------------------------------------------------------
+   allocate(var2d(nx,ny))
+   do i=1,nx
+     do j=1,ny
+       var2d(i,j) = lnd(i,j)%MCWD_ann
+     enddo
+   enddo
+   call nc_write(fnm,"MCWD_clim", var2d,          dims=[dim_lon,dim_lat],long_name="climatological MCWD",units="mm",ncid=ncid)
+   deallocate(var2d)
+!----------------------------------------------------------------------------
 
    allocate(var_n(npft,nx,ny))
    do i=1,nx
@@ -2708,9 +2719,18 @@ end subroutine lnd_update
 !-----------MCWD-dist--------------------------------------------------------
     ! Read MCWD_clim (may not exist in old restart files)
     if (nc_exists_var(fnm,"MCWD_clim")) then
-      call nc_read(fnm,"MCWD_clim",lnd(i,j)%MCWD_clim,start=[i,j],count=[1,1],ncid=ncid)
+      do i = 1, nx
+        do j = 1, ny
+          call nc_read(fnm,"MCWD_clim",lnd(i,j)%MCWD_clim,start=[i,j],count=[1,1],ncid=ncid)
+        end do
+      end do
     else
-      lnd(i,j)%MCWD_clim = 0._wp  ! default for as 0.
+      ! set default value
+      do i = 1, nx
+        do j = 1, ny
+          lnd(i,j)%MCWD_clim = 0._wp
+        end do
+      end do
     endif
 !----------------------------------------------------------------------------
 

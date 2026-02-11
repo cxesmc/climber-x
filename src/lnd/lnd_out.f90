@@ -154,7 +154,7 @@ module lnd_out
     real(wp), dimension(nx,ny) :: fpeat, fpeatpot, dCpeatdt, acroh, catoh
     real(wp), dimension(nx,ny,npft) :: lai, sai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, veg_h, pfts, seeds, vegc, lambda
 !###############fire-CO2##########################################################
-    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice, gamma_fire
+    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice, gamma_fire, gamma_mcwd
     real(wp), dimension(nx,ny,npft) :: fire_c_pft, fire_c_pft13, fire_c_pft14
 !#################################################################################
 !    real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice
@@ -1683,6 +1683,7 @@ contains
                 ann_c%gamma_ice(i,j,:)   = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_ice*sec_year)     ! years
 !###############fire-CO2#########################################################
                 ann_c%gamma_fire(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_fire*sec_year)    ! years
+                ann_c%gamma_mcwd(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_mcwd*sec_year)    ! years
 !################################################################################
                 ann_c%vegc(i,j,:)   = lnd(i,j)%veg_c
                 ann_c%soilc(i,j,:)  = lnd(i,j)%soil_c_tot
@@ -3008,6 +3009,7 @@ contains
     call nc_write(fnm,"gamma_ice",sngl(vars%gamma_ice),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from ice sheets",units="years",missing_value=missing_value,ncid=ncid)
 !###############fire-CO2#########################################################
     call nc_write(fnm,"gamma_fire",sngl(vars%gamma_fire),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire disturbance rate",units="years",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"gamma_mcwd",sngl(vars%gamma_mcwd),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="MCWD disturbance rate",units="years",missing_value=missing_value,ncid=ncid)   
     call nc_write(fnm,"fire_c_pft",sngl(vars%fire_c_pft),dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire Carbon emissions by PFT",units="kgC/m2/yr",missing_value=missing_value,ncid=ncid)
 !#################################################################################
     call nc_write(fnm,"vegc",      sngl(vars%vegc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="vegetation carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)

@@ -216,7 +216,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 !###############fire-CO2#######################################################################
 !  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum)
-  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire,MCWD_ann,MCWD_clim)
+  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire,MCWD_ann,MCWD_clim,gamma_mcwd)
 !######################################################################################
 
     implicit none
@@ -234,7 +234,7 @@ contains
 !######################################################################################
 !-----------MCWD-dist--------------------------------------------------------
     ! MCWD mortality variables
-    real(wp) :: gamma_mcwd(npft)
+    real(wp), dimension(:), intent(out) :: gamma_mcwd
     real(wp) :: MCWD_50, sigmoid_factor
 !----------------------------------------------------------------------------
 

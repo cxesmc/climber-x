@@ -121,7 +121,8 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: leaf_c, stem_c, root_c, veg_c13, veg_c14
      real(wp), allocatable, dimension(:) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
 !###############fire-CO2###########################################################################
-     real(wp), allocatable, dimension(:) :: gamma_fire      
+     real(wp), allocatable, dimension(:) :: gamma_fire     
+     real(wp), allocatable, dimension(:) :: gamma_mcwd
      real(wp), allocatable, dimension(:) :: fire_c_flux_pft, fire_c_flux13_pft, fire_c_flux14_pft    ! Per-PFT fire emissions
 !##################################################################################################
      real(wp), allocatable, dimension(:) :: lambda_soil, lambda_int_soil, cap_soil

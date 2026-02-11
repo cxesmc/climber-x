@@ -4391,13 +4391,18 @@ contains
     
     ! Local variables
     integer :: i, j, n
-    real(wp) :: T_K, P, es, ea, VPD, dqsat_dT, Delta, gamma, lambda
-    real(wp) :: Rn_Wm2, Rn, G, u2, rho_air, num, denom
+    real(wp) :: T_K, P, es, ea, ea_kPa, VPD, dqsat_dT, Delta, gamma, lambda
+    real(wp) :: Rns, Rnl, Rn, G, u2, num, denom
+    real(wp) :: lat_rad, dr, delta_s, omega_s, Ra, Rso, Rs, Rs_Rso_ratio
     
     ! Constants
-    real(wp), parameter :: eps = 0.622_wp         ! Ratio molecular weights
-    real(wp), parameter :: cp = 0.001_wp          ! Specific heat [MJ/kg/K]
-    real(wp), parameter :: W_to_MJday = 0.0864_wp ! W/m² to MJ/m²/day
+    real(wp), parameter :: eps = 0.622_wp           ! Ratio molecular weights
+    real(wp), parameter :: cp = 0.001_wp            ! Specific heat [MJ/kg/K]
+    real(wp), parameter :: W_to_MJday = 0.0864_wp   ! W/m² to MJ/m²/day
+    real(wp), parameter :: sigma_fao = 4.903e-9_wp  ! Stefan-Boltzmann [MJ K^-4 m^-2 day^-1]
+    real(wp), parameter :: Gsc = 0.0820_wp          ! Solar constant [MJ m^-2 min^-1]
+    real(wp), parameter :: pi = 3.14159265_wp
+    real(wp), parameter :: albedo_ref = 0.23_wp     ! Reference crop albedo
     
     do n = 1, nsurf
       do j = 1, nj
@@ -4418,6 +4423,7 @@ contains
           ! ================================================================
           es = e_sat_w(T_K)                    ! Saturation VP [Pa]
           ea = q_to_e(q2m(i,j,n), P)           ! Actual VP [Pa]
+          ea_kPa = ea / 1000.0_wp              ! Convert to kPa for FAO-56
           VPD = max(es - ea, 0.1_wp)           ! Vapor pressure deficit [Pa]
           
           ! ================================================================
@@ -4433,44 +4439,73 @@ contains
           gamma = (cp * P) / (eps * lambda)    ! Psychrometric constant [Pa/K]
           
           ! ================================================================
-          ! Net radiation
+          ! Extraterrestrial radiation Ra (FAO-56 Eq. 21)
           ! ================================================================
-          Rn_Wm2 = swnet(i,j,n) + (lwd(i,j,n) - lwu(i,j,n))  ! [W/m²]
-          Rn = Rn_Wm2 * W_to_MJday                           ! [MJ/m²/day]
+          lat_rad = lat(j) * pi / 180.0_wp
+          dr = 1.0_wp + 0.033_wp * cos(2.0_wp * pi * doy / 365.0_wp)
+          delta_s = 0.409_wp * sin(2.0_wp * pi * doy / 365.0_wp - 1.39_wp)
+          omega_s = acos(max(-1.0_wp, min(1.0_wp, -tan(lat_rad) * tan(delta_s))))
+          
+          Ra = (24.0_wp * 60.0_wp / pi) * Gsc * dr * &
+               (omega_s * sin(lat_rad) * sin(delta_s) + &
+                cos(lat_rad) * cos(delta_s) * sin(omega_s))
+          Ra = max(Ra, 0.1_wp)
+
+          ! ================================================================
+          ! Clear-sky radiation Rso (FAO-56 Eq. 37)
+          ! ================================================================
+          Rso = 0.75_wp * Ra
+
+          ! ================================================================
+          ! Solar radiation Rs from model's swnet
+          ! ================================================================
+          Rs = swnet(i,j,n) * W_to_MJday / 0.77_wp
+          Rs = max(Rs, 0.0_wp)
+
+          ! ================================================================
+          ! Net shortwave radiation Rns (FAO-56 Eq. 38)
+          ! ================================================================
+          Rns = (1.0_wp - albedo_ref) * Rs
+
+          ! ================================================================
+          ! Rs/Rso ratio (cloud factor)
+          ! ================================================================
+          Rs_Rso_ratio = Rs / max(Rso, 0.1_wp)
+          Rs_Rso_ratio = max(0.25_wp, min(1.0_wp, Rs_Rso_ratio))
+
+          ! ================================================================
+          ! Net longwave radiation Rnl (FAO-56 Eq. 39)
+          ! ================================================================
+          Rnl = sigma_fao * T_K**4 * &
+                (0.34_wp - 0.14_wp * sqrt(max(ea_kPa, 0.01_wp))) * &
+                (1.35_wp * Rs_Rso_ratio - 0.35_wp)
+          Rnl = max(Rnl, 0.0_wp)
+
+          ! ================================================================
+          ! Net radiation Rn (FAO-56 Eq. 40)
+          ! ================================================================
+          Rn = Rns - Rnl
 
           ! ═══════════════════════════════════════════════════════
           ! Soil heat flux [MJ/m²/day] - FAO-56 Equation 42
           ! ═══════════════════════════════════════════════════════
-          if (dt_atm >= 86400.0_wp) then
-            G = 0.0_wp  ! Daily: G ≈ 0
-          else
-            ! Sub-daily approximation (FAO-56 Chapter 12)
-            if (Rn > 0.0_wp) then
-              G = 0.1_wp * Rn    ! Daytime: 10% of Rn
-            else
-              G = 0.5_wp * Rn    ! Nighttime: 50% of Rn
-            end if
-          end if 
+          G = 0.0_wp  ! FAO-56: G ≈ 0 for daily calculations
          
           ! ================================================================
           ! Wind speed adjustment from 10m to 2m
           ! ================================================================
-          u2 = wind(i,j,n) * 0.748_wp          ! 10m to 2m conversion
-          u2 = max(u2, 0.1_wp)                 ! Minimum wind speed
-          
-          ! ================================================================
-          ! Air density using ideal gas law with Rd from constants
-          ! ================================================================
-          rho_air = P / (Rd * T_K)             ! [kg/m³]
-          
+          u2 = wind(i,j,n) * 4.87_wp / log(67.8_wp * 10.0_wp - 5.42_wp)  ! FAO-56 Eq. 47
+          u2 = max(u2, 0.5_wp)                 ! Minimum wind speed
+
           ! ================================================================
           ! FAO-56 Penman-Monteith equation
           ! ================================================================
-          num = Delta * (Rn - G) + &
-                (rho_air * cp * VPD * u2 / lambda) * W_to_MJday
+          ! FAO-56 Eq. 6 (Delta, gamma: Pa/K -> kPa/K; VPD: Pa -> kPa)
+          num = 0.408_wp * (Delta/1000.0_wp) * (Rn - G) + &
+                (gamma/1000.0_wp) * (900.0_wp / T_K) * u2 * (VPD/1000.0_wp)
           
-          denom = Delta + gamma * (1.0_wp + 0.34_wp * u2)
-          
+          denom = (Delta/1000.0_wp) + (gamma/1000.0_wp) * (1.0_wp + 0.34_wp * u2)
+
           if (denom > 0.0_wp) then
             pet(i,j,n) = num / denom
           else
