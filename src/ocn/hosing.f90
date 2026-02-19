@@ -82,7 +82,7 @@ contains
 
       ! apply freshwater flux
       where (f_ocn.gt.0._wp .and. hosing(n)%mask.gt.0._wp)
-        fw_hosing(:,:) = fw_hosing(:,:) + fwf_now*1.e6_wp * rho0 / hosing(n)%area ! m3/s * kg/m3 / m2 = kg/m2/s
+        fw_hosing(:,:) = fw_hosing(:,:) + hosing(n)%mask(:,:)*fwf_now*1.e6_wp * rho0 / hosing(n)%area ! m3/s * kg/m3 / m2 = kg/m2/s
       endwhere
 
       fw_hosing_tot = fw_hosing_tot + fwf_now   ! Sv
