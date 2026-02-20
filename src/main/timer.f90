@@ -228,6 +228,16 @@ contains
     dt_bmb = dt_day_bmb * sec_day
     dt_geo = n_year_geo * sec_year
 
+    ! sanity checks: all timesteps must be integer multiples of dt_day_fastest
+    if (abs(step_atm*dt_day_fastest - dt_day_atm) > 1e-10) stop "dt_day_atm is not an integer multiple of dt_day_fastest"
+    if (abs(step_lnd*dt_day_fastest - dt_day_lnd) > 1e-10) stop "dt_day_lnd is not an integer multiple of dt_day_fastest"
+    if (abs(step_ocn*dt_day_fastest - dt_day_ocn) > 1e-10) stop "dt_day_ocn is not an integer multiple of dt_day_fastest"
+    if (abs(step_bgc*dt_day_fastest - dt_day_bgc) > 1e-10) stop "dt_day_bgc is not an integer multiple of dt_day_fastest"
+    if (abs(step_sic*dt_day_fastest - dt_day_sic) > 1e-10) stop "dt_day_sic is not an integer multiple of dt_day_fastest"
+    if (abs(step_smb*dt_day_fastest - dt_day_smb) > 1e-10) stop "dt_day_smb is not an integer multiple of dt_day_fastest"
+    if (abs(step_bmb*dt_day_fastest - dt_day_bmb) > 1e-10) stop "dt_day_bmb is not an integer multiple of dt_day_fastest"
+    if (abs(step_ice*dt_day_fastest - dt_day_ice) > 1e-10) stop "dt_day_ice is not an integer multiple of dt_day_fastest"
+
     ! initialize
     doy = 0
     mon = 0
@@ -300,8 +310,8 @@ contains
     if (flag_atm .and. year_call_accel) then
       time_call_atm = (mod(step,step_atm) .eq. 1) .or. (step_atm.eq.1)
       time_soy_atm = soy .eq. 1
-      time_sod_atm = (mod(soy,nstep_day_atm) .eq. 1) .or. (nstep_day_atm.eq.1)
-      time_eod_atm = (mod(soy,nstep_day_atm) .eq. 0)
+      time_sod_atm = (mod((soy-1)/step_atm, nstep_day_atm) .eq. 0) 
+      time_eod_atm = (mod((soy-1)/step_atm, nstep_day_atm) .eq. nstep_day_atm-1) 
       time_eom_atm = (mod(doy,nday_mon) .eq. 0) .and. time_eod_atm
       time_eoy_atm = (mod(doy,nday_year) .eq. 0) .and. time_eod_atm
       time_out_atm = (mod(year,nyout_atm) .eq. 0) .and. year_now.ge.year_out_start
@@ -324,8 +334,8 @@ contains
       !time_soy_ocn = step_ocn .eq. soy
       time_call_ocn = (mod(step,step_ocn) .eq. 1) .or. (step_ocn.eq.1)
       time_soy_ocn = soy .eq. 1
-      time_sod_ocn = (mod(soy,nstep_day_ocn) .eq. 1) .or. (nstep_day_ocn.eq.1)
-      time_eod_ocn = (mod(soy,nstep_day_ocn) .eq. 0)
+      time_sod_ocn = (mod((soy-1)/step_ocn, nstep_day_ocn) .eq. 0) 
+      time_eod_ocn = (mod((soy-1)/step_ocn, nstep_day_ocn) .eq. nstep_day_ocn-1) 
       time_eom_ocn = (mod(doy,nday_mon) .eq. 0) .and. time_eod_ocn
       time_eoy_ocn = (mod(doy,nday_year) .eq. 0) .and. time_eod_ocn
       time_out_ocn = (mod(year,nyout_ocn) .eq. 0) .and. year_now.ge.year_out_start
@@ -342,12 +352,10 @@ contains
     if (flag_bgc .and. year_call_accel) then
       time_call_bgc = (mod(step,step_bgc) .eq. 1) .or. (step_bgc.eq.1)
       time_soy_bgc = soy .eq. 1
-      time_sod_bgc = (mod(soy,nstep_day_bgc) .eq. 1) .or. (nstep_day_bgc.eq.1)
-      time_eod_bgc = (mod(soy,nstep_day_bgc) .eq. 0)
+      time_sod_bgc = (mod((soy-1)/step_bgc, nstep_day_bgc) .eq. 0) 
+      time_eod_bgc = (mod((soy-1)/step_bgc, nstep_day_bgc) .eq. nstep_day_bgc-1) 
       time_eom_bgc = (mod(doy,nday_mon) .eq. 0) .and. time_eod_bgc
       time_eoy_bgc = (mod(doy,nday_year) .eq. 0) .and. time_eod_bgc
-      !time_eom_bgc = (mod(soy,(nstep_mon_bgc-1)*step_bgc+1) .eq. 0)
-      !time_eoy_bgc = (mod(soy,(nstep_year_bgc-1)*step_bgc+1) .eq. 0)
       time_out_bgc = (mod(year,nyout_bgc) .eq. 0) .and. year_now.ge.year_out_start
     else
       time_call_bgc =.false. 
@@ -362,8 +370,8 @@ contains
     if (flag_lnd .and. year_call_accel) then
       time_call_lnd = (mod(step,step_lnd) .eq. 1) .or. (step_lnd.eq.1)
       time_soy_lnd = soy .eq. 1
-      time_sod_lnd = (mod(soy,nstep_day_lnd) .eq. 1) .or. (nstep_day_lnd.eq.1)
-      time_eod_lnd = (mod(soy,nstep_day_lnd) .eq. 0)
+      time_sod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. 0) 
+      time_eod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. nstep_day_lnd-1) 
       time_eom_lnd = (mod(doy,nday_mon) .eq. 0) .and. time_eod_lnd
       time_eoy_lnd = (mod(doy,nday_year) .eq. 0) .and. time_eod_lnd
       time_out_lnd = (mod(year,nyout_lnd) .eq. 0) .and. year_now.ge.year_out_start
@@ -380,8 +388,8 @@ contains
     if (flag_sic .and. year_call_accel) then
       time_call_sic = (mod(step,step_sic) .eq. 1) .or. (step_sic.eq.1)
       time_soy_sic = soy .eq. 1
-      time_sod_sic = (mod(soy,nstep_day_sic) .eq. 1) .or. (nstep_day_sic.eq.1)
-      time_eod_sic = (mod(soy,nstep_day_sic) .eq. 0)
+      time_sod_sic = (mod((soy-1)/step_sic, nstep_day_sic) .eq. 0) 
+      time_eod_sic = (mod((soy-1)/step_sic, nstep_day_sic) .eq. nstep_day_sic-1) 
       time_eom_sic = (mod(doy,nday_mon) .eq. 0) .and. time_eod_sic
       time_eoy_sic = (mod(doy,nday_year) .eq. 0) .and. time_eod_sic
       time_out_sic = (mod(year,nyout_sic) .eq. 0) .and. year_now.ge.year_out_start
@@ -398,8 +406,8 @@ contains
     if (flag_smb .and. year_call_smb) then 
       time_call_smb = (mod(step,step_smb) .eq. 1) .or. (step_smb.eq.1)
       time_soy_smb = soy .eq. 1
-      time_sod_smb = (mod(soy,nstep_day_smb) .eq. 1) .or. (nstep_day_smb.eq.1)
-      time_eod_smb = (mod(soy,nstep_day_smb) .eq. 0)
+      time_sod_smb = (mod((soy-1)/step_smb, nstep_day_smb) .eq. 0) 
+      time_eod_smb = (mod((soy-1)/step_smb, nstep_day_smb) .eq. nstep_day_smb-1) 
       time_eom_smb = (mod(doy,nday_mon) .eq. 0) .and. time_eod_smb
       time_eoy_smb = (mod(doy,nday_year) .eq. 0) .and. time_eod_smb
       time_out_smb = (mod(year,nyout_smb) .eq. 0) .and. year_now.ge.year_out_start
@@ -416,8 +424,8 @@ contains
     if (flag_bmb .and. year_call_accel) then 
       time_call_bmb = (mod(step,step_bmb) .eq. 1) .or. (step_bmb.eq.1)
       time_soy_bmb = soy .eq. 1
-      time_sod_bmb = (mod(soy,nstep_day_bmb) .eq. 1) .or. (nstep_day_bmb.eq.1)
-      time_eod_bmb = (mod(soy,nstep_day_bmb) .eq. 0)
+      time_sod_bmb = (mod((soy-1)/step_bmb, nstep_day_bmb) .eq. 0) 
+      time_eod_bmb = (mod((soy-1)/step_bmb, nstep_day_bmb) .eq. nstep_day_bmb-1) 
       time_eom_bmb = (mod(soy,(nstep_mon_bmb-1)*step_bmb+1) .eq. 0) .or. (nstep_mon_bmb.eq.1)
       time_eoy_bmb = (mod(soy,(nstep_year_bmb-1)*step_bmb+1) .eq. 0) 
       time_out_bmb = (mod(year,nyout_bmb) .eq. 0) .and. year_now.ge.year_out_start
