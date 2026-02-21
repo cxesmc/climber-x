@@ -66,7 +66,6 @@ module ocn_def
      real(wp) :: dvsf
      real(wp) :: cfc11_atm                  !! atmospheric cfc11 [ppt]
      real(wp) :: cfc12_atm                  !! atmospheric cfc12 [ppt]
-     real(wp) :: fw_hosing_tot                 !! freshwater hosing flux [Sv]
      real(wp) :: noise_fw                 !! freshwater flux noise [kg/m2/s]
      real(wp) :: noise_flx                !! heat flux noise [W/m2]
      real(wp) :: bering_tf              !! northward Bering Strait throughflow from parameterisation [Sv]
@@ -110,6 +109,7 @@ module ocn_def
      real(wp), allocatable :: bmelt_flt(:,:)   !! basal melt of floating shelf ice into the ocean [kg/m2/s] 
      real(wp), allocatable :: fw_dhdt_ice(:,:)   !! freshwater flux into the ocean from prescribed change in ice sheet thickness [kg/m2/s] 
      real(wp), allocatable :: fw_hosing(:,:)    !! freshwater hosing forcing [kg/m2/s]
+     real(wp), allocatable :: fw_hosing_comp(:,:)    !! freshwater hosing compensation forcing [kg/m2/s]
      real(wp), allocatable :: fw_flux_adj(:,:)    !! freshwater flux adjustment [kg/m2/s]
      real(wp), allocatable :: flx_sur(:,:,:)  !! surface tracer input flux to the ocean [m/s * tracer concentration]
      real(wp), allocatable :: flx_bot(:,:,:)  !! bottom tracer input flux to the ocean [m/s * tracer concentration]

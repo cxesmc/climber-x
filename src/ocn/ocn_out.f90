@@ -126,7 +126,7 @@ module ocn_out
      real(wp) :: drake, bering, davis, fram, denmark, medi, indo, agulhas
      real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
      real(wp) :: shelf
-     real(wp) :: rsl_steric, rsl_mass
+     real(wp) :: rsl, rsl_steric, rsl_mass
      real(wp) :: mld_atlN50, mld_lab, mld_irm, mld_gin, mld_bkn, mld_wedd, mld_ross, mld_so
      real(wp) :: mldst_atlN50, mldst_lab, mldst_irm, mldst_gin, mldst_bkn, mldst_wedd, mldst_ross, mldst_so
      real(wp) :: pe_atlN, pe_atlN50, pe_lab, pe_irm, pe_gin, pe_bkn, pe_wedd, pe_ross, pe_so
@@ -1073,6 +1073,7 @@ contains
     real(wp), save :: ocn_area_tot0
     real(wp), save :: rsl_steric0, rsl_mass0
     real(wp) :: rsl_steric, rsl_mass
+    real(wp), save :: rsl_hosing
     logical :: int_drake, int_bering, int_davis, int_medi, int_indo, int_agulhas
     real(wp) :: tf_drake, tf_bering, tf_davis, tf_fram, tf_denmark, tf_medi, tf_indo, tf_agulhas
     real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
@@ -1157,6 +1158,10 @@ contains
     fwpz = 0._wp
     fwaz = 0._wp
 
+    if (year.eq.1 .and. time_soy_ocn) then
+      rsl_hosing = 0._wp
+    endif
+
     if (year.eq.1) then
       ocn_area_tot0 = ocn_area_tot
       ocn_vol0 = ocn_vol
@@ -1179,7 +1184,7 @@ contains
           enddo
           ! freshwater and heat fluxes (1=global, 2=Atlantic, 3=Pacific, 4=Indian, 5=Southern)
           ! Global ocean
-          fw(1) = fw(1) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))  ! kg/m2/s * m2 = kg/s
+          fw(1) = fw(1) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))  ! kg/m2/s * m2 = kg/s
           fw_corr(1) = fw_corr(1) + (ocn%fw_corr(i,j)*ocn%grid%ocn_area(i,j))  ! kg/m2/s * m2 = kg/s
           fw_noise = fw_noise + (ocn%fw_noise(i,j)*ocn%grid%ocn_area(i,j))  ! kg/m2/s * m2 = kg/s
           p_e_sic(1) = p_e_sic(1) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1195,7 +1200,7 @@ contains
           flx(1) = flx(1) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))   ! W/m2 * m2 = W
           ! Atlantic basin cells
           if (bmask.eq.i_atlantic) then
-            fw(2) = fw(2) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+            fw(2) = fw(2) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
             p_e_sic(2) = p_e_sic(2) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff(2) = runoff(2) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff_veg(2) = runoff_veg(2) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1209,7 +1214,7 @@ contains
             flx(2) = flx(2) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).gt.0._wp) then
               ! North Atlantic north of 30N
-              fw(8) = fw(8) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+              fw(8) = fw(8) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
               p_e_sic(8) = p_e_sic(8) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff(8) = runoff(8) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff_veg(8) = runoff_veg(8) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1224,7 +1229,7 @@ contains
             endif
             if (lat(j).gt.30._wp) then
               ! North Atlantic north of 30N
-              fw(6) = fw(6) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+              fw(6) = fw(6) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
               p_e_sic(6) = p_e_sic(6) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff(6) = runoff(6) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff_veg(6) = runoff_veg(6) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1239,7 +1244,7 @@ contains
             endif
             if (lat(j).gt.50._wp) then
               ! North Atlantic north of 50N
-              fw(7) = fw(7) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+              fw(7) = fw(7) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
               p_e_sic(7) = p_e_sic(7) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff(7) = runoff(7) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff_veg(7) = runoff_veg(7) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1254,7 +1259,7 @@ contains
             endif
             if (lat(j).gt.55._wp) then
               ! North Atlantic north of 50N
-              fw(9) = fw(9) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+              fw(9) = fw(9) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
               p_e_sic(9) = p_e_sic(9) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff(9) = runoff(9) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff_veg(9) = runoff_veg(9) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1269,7 +1274,7 @@ contains
             endif
             ! Pacific basin cells
           else if (bmask.eq.i_pacific) then
-            fw(3) = fw(3) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+            fw(3) = fw(3) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
             p_e_sic(3) = p_e_sic(3) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff(3) = runoff(3) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff_veg(3) = runoff_veg(3) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1283,7 +1288,7 @@ contains
             flx(3) = flx(3) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Indian basin cells
           else if (bmask.eq.i_indian) then
-            fw(4) = fw(4) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+            fw(4) = fw(4) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
             p_e_sic(4) = p_e_sic(4) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff(4) = runoff(4) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff_veg(4) = runoff_veg(4) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1297,7 +1302,7 @@ contains
             flx(4) = flx(4) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Southern basin cells
           else if (bmask.eq.i_southern) then
-            fw(5) = fw(5) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+            fw(5) = fw(5) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
             p_e_sic(5) = p_e_sic(5) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff(5) = runoff(5) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             runoff_veg(5) = runoff_veg(5) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -1311,7 +1316,7 @@ contains
             flx(5) = flx(5) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).lt.-60._wp) then
               ! Southern Ocean south of 60S
-              fw(10) = fw(10) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
+              fw(10) = fw(10) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))
               p_e_sic(10) = p_e_sic(10) + ocn%p_e_sic(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff(10) = runoff(10) + ocn%runoff(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               runoff_veg(10) = runoff_veg(10) + ocn%runoff_veg(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
@@ -2319,7 +2324,12 @@ contains
       ann_ts(y)%cfc12      = ann_ts(y)%cfc12      + global_cfc12*1.e-6_wp        * ann_avg ! Mmol
     endif
     ann_ts(y)%rsl_steric = ann_ts(y)%rsl_steric + (rsl_steric-rsl_steric0)    * ann_avg ! m
-    ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0)    * ann_avg ! m
+    if (time_soy_ocn) then
+      ! contribution of freshwater hosing to sea level
+      rsl_hosing = rsl_hosing + sum((ocn%fw_hosing+ocn%fw_hosing_comp)*ocn%grid%ocn_area) / rho0 * sec_year / ocn_area_tot0  ! m
+    endif
+    ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0 + rsl_hosing)    * ann_avg  ! m
+    ann_ts(y)%rsl = ann_ts(y)%rsl_steric + ann_ts(y)%rsl_mass                       
 
     ann_o%opsi  = ann_o%opsi  + opsi(0:maxj,1:maxk)*1e-6  * ann_avg ! Sv
     ann_o%opsia = ann_o%opsia + opsia(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
@@ -2790,7 +2800,7 @@ contains
        ann_ts(y)%fmaxa = maxval(ann_o%fwa(1,jsf:))
 
        ! freshwater hosing 
-       ann_ts(y)%fw_hosing = ocn%fw_hosing_tot ! Sv
+       ann_ts(y)%fw_hosing = sum(ocn%fw_hosing(:,:) * ocn%grid%ocn_area(:,:)) / rho0 * 1.e-6_wp ! kg/m2/s * m2 * m3/kg * 1e-6 = Sv
 
        ! noise
        ann_ts(y)%noise_fw = ocn%noise_fw*sec_day    ! kg/m2/day
@@ -3284,7 +3294,7 @@ contains
       mon_o(mon)%dt_dt_flxsur = mon_o(mon)%dt_dt_flxsur - ocn%flx_sur(:,:,1)/dz(maxk) * sec_year * mon_avg ! °C/year
       mon_o(mon)%ds_dt_flxsur = mon_o(mon)%ds_dt_flxsur - ocn%flx_sur(:,:,2)/dz(maxk) * sec_year * mon_avg ! psu/year
       mon_o(mon)%flx   = mon_o(mon)%flx   + ocn%flx                              * mon_avg ! W/m2
-      mon_o(mon)%fw    = mon_o(mon)%fw    + (ocn%p_e_sic+ocn%runoff+ocn%calving+ocn%bmelt+ocn%fw_hosing+ocn%fw_flux_adj)*sec_day         * mon_avg ! kg/m2/day
+      mon_o(mon)%fw    = mon_o(mon)%fw    + (ocn%p_e_sic+ocn%runoff+ocn%calving+ocn%bmelt+ocn%fw_hosing+ocn%fw_hosing_comp+ocn%fw_flux_adj)*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%vsf   = mon_o(mon)%vsf   + ocn%flx_sur(:,:,2)*rho0/ocn%saln0*sec_day                   * mon_avg ! kg/m2/day
       mon_o(mon)%p_e_sic   = mon_o(mon)%p_e_sic   + ocn%p_e_sic*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%runoff= mon_o(mon)%runoff+ ocn%runoff*sec_day         * mon_avg ! kg/m2/day
@@ -3292,7 +3302,7 @@ contains
       mon_o(mon)%runoffSv_ice= mon_o(mon)%runoffSv_ice+ ocn%runoff_ice*ocn%grid%ocn_area/rho0*1.e-6_wp         * mon_avg ! Sv
       mon_o(mon)%calving= mon_o(mon)%calving+ ocn%calving*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%bmelt = mon_o(mon)%bmelt + ocn%bmelt*sec_day         * mon_avg ! kg/m2/day
-      mon_o(mon)%fw_hosing = mon_o(mon)%fw_hosing + ocn%fw_hosing*sec_day        * mon_avg ! kg/m2/day
+      mon_o(mon)%fw_hosing = mon_o(mon)%fw_hosing + (ocn%fw_hosing+ocn%fw_hosing_comp)*sec_day        * mon_avg ! kg/m2/day
       mon_o(mon)%fw_flux_adj = mon_o(mon)%fw_flux_adj + ocn%fw_flux_adj*sec_day  * mon_avg ! kg/m2/day
       mon_o(mon)%fw_noise = mon_o(mon)%fw_noise + ocn%fw_noise*sec_day       * mon_avg ! kg/m2/day
       mon_o(mon)%flx_noise = mon_o(mon)%flx_noise + ocn%flx_noise        * mon_avg ! W/m2
@@ -3809,8 +3819,9 @@ contains
     call nc_write(fnm,"area",    vars%area,dim1=dim_time,start=[ndat],count=[y],long_name="Total surface ocean area",units="mln km2",ncid=ncid)
     call nc_write(fnm,"vol",     vars%vol,dim1=dim_time,start=[ndat],count=[y],long_name="Total ocean volume",units="mln km3",ncid=ncid)
     call nc_write(fnm,"shelf",   vars%shelf,dim1=dim_time,start=[ndat],count=[y],long_name="Total area of ocean shelf",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"rsl",   vars%rsl,dim1=dim_time,start=[ndat],count=[y],long_name="Total (mass+steric) sea level change relative to first simulation year",units="m",ncid=ncid)
     call nc_write(fnm,"rsl_steric",   vars%rsl_steric,dim1=dim_time,start=[ndat],count=[y],long_name="Steric sea level change relative to first simulation year",units="m",ncid=ncid)
-    call nc_write(fnm,"rsl_mass",   vars%rsl_mass,dim1=dim_time,start=[ndat],count=[y],long_name="Sea level change due to land ice mass changes relative to first simulation year (approx)",units="m",ncid=ncid)
+    call nc_write(fnm,"rsl_mass",   vars%rsl_mass,dim1=dim_time,start=[ndat],count=[y],long_name="Sea level change due to mass changes (land ice + freshwater hosing) relative to first simulation year (approx)",units="m",ncid=ncid)
 
     call nc_write(fnm,"mld_atlN50",   vars%mld_atlN50,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Atlantic >50N",units="m",ncid=ncid)
     call nc_write(fnm,"mld_lab",   vars%mld_lab,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Labrador Sea",units="m",ncid=ncid)
