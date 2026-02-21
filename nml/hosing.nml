@@ -6,9 +6,9 @@
  !--------------------------
  ! parameters for manual hosing rate settings, used only if l_hosing_rate_from_file==F
  hosing_ini = 0.1             ! Sv, inital/constant value of hosing flux
- hosing_trend = 100.            ! Sv/kyr, rate at which hosing flux is increased/decreased
- year_hosing_ini = 3          ! years, initial time for hosing
- year_hosing_end = 8        ! years, final time for hosing
+ hosing_trend = 0.            ! Sv/kyr, rate at which hosing flux is increased/decreased
+ year_hosing_ini = 0          ! years, initial time for hosing
+ year_hosing_end = 1e6        ! years, final time for hosing
  !--------------------------
  ! hosing rate file, used only if l_hosing_rate_from_file==T
  hosing_rate_file = "input/hosing_rate.nc"  

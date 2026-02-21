@@ -126,7 +126,7 @@ module ocn_out
      real(wp) :: drake, bering, davis, fram, denmark, medi, indo, agulhas
      real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
      real(wp) :: shelf
-     real(wp) :: rsl_steric, rsl_mass
+     real(wp) :: rsl, rsl_steric, rsl_mass
      real(wp) :: mld_atlN50, mld_lab, mld_irm, mld_gin, mld_bkn, mld_wedd, mld_ross, mld_so
      real(wp) :: mldst_atlN50, mldst_lab, mldst_irm, mldst_gin, mldst_bkn, mldst_wedd, mldst_ross, mldst_so
      real(wp) :: pe_atlN, pe_atlN50, pe_lab, pe_irm, pe_gin, pe_bkn, pe_wedd, pe_ross, pe_so
@@ -1073,6 +1073,7 @@ contains
     real(wp), save :: ocn_area_tot0
     real(wp), save :: rsl_steric0, rsl_mass0
     real(wp) :: rsl_steric, rsl_mass
+    real(wp), save :: rsl_hosing
     logical :: int_drake, int_bering, int_davis, int_medi, int_indo, int_agulhas
     real(wp) :: tf_drake, tf_bering, tf_davis, tf_fram, tf_denmark, tf_medi, tf_indo, tf_agulhas
     real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
@@ -1156,6 +1157,10 @@ contains
     fwtz = 0._wp
     fwpz = 0._wp
     fwaz = 0._wp
+
+    if (year.eq.1 .and. time_soy_ocn) then
+      rsl_hosing = 0._wp
+    endif
 
     if (year.eq.1) then
       ocn_area_tot0 = ocn_area_tot
@@ -2319,7 +2324,12 @@ contains
       ann_ts(y)%cfc12      = ann_ts(y)%cfc12      + global_cfc12*1.e-6_wp        * ann_avg ! Mmol
     endif
     ann_ts(y)%rsl_steric = ann_ts(y)%rsl_steric + (rsl_steric-rsl_steric0)    * ann_avg ! m
-    ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0)    * ann_avg ! m
+    if (time_soy_ocn) then
+      ! contribution of freshwater hosing to sea level
+      rsl_hosing = rsl_hosing + sum((ocn%fw_hosing+ocn%fw_hosing_comp)*ocn%grid%ocn_area) / rho0 * sec_year / ocn_area_tot0  ! m
+    endif
+    ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0 + rsl_hosing)    * ann_avg  ! m
+    ann_ts(y)%rsl = ann_ts(y)%rsl_steric + ann_ts(y)%rsl_mass                       
 
     ann_o%opsi  = ann_o%opsi  + opsi(0:maxj,1:maxk)*1e-6  * ann_avg ! Sv
     ann_o%opsia = ann_o%opsia + opsia(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
@@ -3809,8 +3819,9 @@ contains
     call nc_write(fnm,"area",    vars%area,dim1=dim_time,start=[ndat],count=[y],long_name="Total surface ocean area",units="mln km2",ncid=ncid)
     call nc_write(fnm,"vol",     vars%vol,dim1=dim_time,start=[ndat],count=[y],long_name="Total ocean volume",units="mln km3",ncid=ncid)
     call nc_write(fnm,"shelf",   vars%shelf,dim1=dim_time,start=[ndat],count=[y],long_name="Total area of ocean shelf",units="mln km2",ncid=ncid)
+    call nc_write(fnm,"rsl",   vars%rsl,dim1=dim_time,start=[ndat],count=[y],long_name="Total (mass+steric) sea level change relative to first simulation year",units="m",ncid=ncid)
     call nc_write(fnm,"rsl_steric",   vars%rsl_steric,dim1=dim_time,start=[ndat],count=[y],long_name="Steric sea level change relative to first simulation year",units="m",ncid=ncid)
-    call nc_write(fnm,"rsl_mass",   vars%rsl_mass,dim1=dim_time,start=[ndat],count=[y],long_name="Sea level change due to land ice mass changes relative to first simulation year (approx)",units="m",ncid=ncid)
+    call nc_write(fnm,"rsl_mass",   vars%rsl_mass,dim1=dim_time,start=[ndat],count=[y],long_name="Sea level change due to mass changes (land ice + freshwater hosing) relative to first simulation year (approx)",units="m",ncid=ncid)
 
     call nc_write(fnm,"mld_atlN50",   vars%mld_atlN50,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Atlantic >50N",units="m",ncid=ncid)
     call nc_write(fnm,"mld_lab",   vars%mld_lab,dim1=dim_time,start=[ndat],count=[y],long_name="Maximum mixed layer depth in Labrador Sea",units="m",ncid=ncid)
