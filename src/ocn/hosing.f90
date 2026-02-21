@@ -32,22 +32,24 @@ contains
   !   Subroutine :  h o s i n g _ u p d a t e
   !   Purpose    :  update freshwater forcing
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hosing_update(time,f_ocn,fw_hosing,fw_hosing_tot) 
+  subroutine hosing_update(time,f_ocn,fw_hosing,fw_hosing_comp) 
 
     implicit none
 
     real(wp), intent(in) :: time                          ! [yr] Current time, years before 2000 AD
     real(wp), dimension(:,:), intent(in) :: f_ocn
     real(wp), dimension(:,:), intent(inout) :: fw_hosing    ! kg/m2/s
-    real(wp), intent(inout) :: fw_hosing_tot    ! Sv
+    real(wp), dimension(:,:), intent(inout) :: fw_hosing_comp    ! kg/m2/s
 
     integer :: n, i0, i1, imin
     real(wp) :: w0, w1
     real(wp) :: fwf_now
+    real(wp) :: fw_hosing_tot
     real(wp) :: hosing_comp_area
 
 
     fw_hosing(:,:) = 0._wp
+    fw_hosing_comp(:,:) = 0._wp
     fw_hosing_tot = 0._wp
 
     ! combine freshwater hosing flux from the different hosing domains
@@ -97,7 +99,7 @@ contains
       call hosing_domain_area(f_ocn, hosing_comp_mask, hosing_comp_area)
 
       where (f_ocn.gt.0._wp .and. hosing_comp_mask.gt.0._wp)
-        fw_hosing(:,:) = fw_hosing(:,:) - fw_hosing_tot*1.e6_wp * rho0 / hosing_comp_area ! m3/s * kg/m3 / m2 = kg/m2/s
+        fw_hosing_comp(:,:) = fw_hosing_comp(:,:) - fw_hosing_tot*1.e6_wp * rho0 / hosing_comp_area ! m3/s * kg/m3 / m2 = kg/m2/s
       endwhere
 
     endif

@@ -253,9 +253,9 @@ contains
 
     ! update freshwater hosing and add it to freshwater flux, if needed
     if (l_hosing .and. time_soy_ocn) then
-      call hosing_update(real(year_now,wp),ocn%f_ocn,ocn%fw_hosing,ocn%fw_hosing_tot)
+      call hosing_update(real(year_now,wp),ocn%f_ocn,ocn%fw_hosing,ocn%fw_hosing_comp)
     endif
-    ocn%fw_corr = ocn%fw_corr + ocn%fw_hosing 
+    ocn%fw_corr = ocn%fw_corr + ocn%fw_hosing + ocn%fw_hosing_comp
 
     ! remove latent heat needed to melt ice reaching the ocean through calving and basal melt below ice shelfs
     ocn%flx = ocn%flx - ocn%calving*Lf - ocn%bmelt_flt*Lf    ! kg/m2/s * J/kg = W/m2 
@@ -816,6 +816,7 @@ contains
       call hosing_init
     else
       ocn%fw_hosing = 0._wp
+      ocn%fw_hosing_comp = 0._wp
     endif
 
     ! initialize freshwater flux correction
@@ -921,6 +922,7 @@ contains
     allocate(ocn%dtav_dz2(2,maxi,maxj))
     allocate(ocn%rho(maxi,maxj,maxk))
     allocate(ocn%fw_hosing(maxi,maxj))
+    allocate(ocn%fw_hosing_comp(maxi,maxj))
     allocate(ocn%fw_flux_adj(maxi,maxj))
     allocate(ocn%fw_noise(maxi,maxj))
     allocate(ocn%flx_noise(maxi,maxj))
@@ -1081,6 +1083,7 @@ contains
     deallocate(ocn%dtav_dz2)
     deallocate(ocn%rho)
     deallocate(ocn%fw_hosing)
+    deallocate(ocn%fw_hosing_comp)
     deallocate(ocn%fw_flux_adj)
     deallocate(ocn%fw_noise)
     deallocate(ocn%flx_noise)

@@ -185,7 +185,7 @@
  ! freshwater hosing settings
  !-------------------------------------------------------------------------------------------
  l_hosing = F                 ! apply additional freshwater hosing?
- hosing_domain_name = 'Atl_50-70N_0.1Sv' 'SO_50-70S_0.1Sv'     ! list of domains where hosing should be applied; need to be defined in hosing.nml
+ hosing_domain_name = 'Atl_50-70N_0.1Sv'   ! list of domains where hosing should be applied; need to be defined in hosing.nml
  hosing_comp_basin = 2        ! ocean basin where to compensate the hosing freshwater. -1 = no comp, 0 = Global, 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
  lat_min_hosing_comp = -30    ! lower latitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
  lat_max_hosing_comp = 30     ! higher latitude bound for region of freshwater flux compensation (used only if hosing_comp_basin>0)
