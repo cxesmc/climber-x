@@ -8,7 +8,7 @@ restart/lgm/geo_restart.nc
 Makefile
 runcx_config
 .runme_config
-climber.x
+climber.x*
 input
 output
 out
