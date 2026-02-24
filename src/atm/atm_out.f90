@@ -71,6 +71,8 @@ module atm_out
     real(wp) :: co2d_wais
     real(wp) :: ch4
     real(wp) :: n2o
+    real(wp) :: cfc11
+    real(wp) :: cfc12
     real(wp) :: so4
     real(wp) :: t2m    
     real(wp) :: tnh
@@ -1402,6 +1404,8 @@ contains
       ann_ts(y)%co2e= atm%co2e
       ann_ts(y)%ch4 = atm%ch4
       ann_ts(y)%n2o = atm%n2o
+      ann_ts(y)%cfc11 = atm%cfc11
+      ann_ts(y)%cfc12 = atm%cfc12
       ann_ts(y)%so4 = sum(atm%so4(:,:)*sqr(:,:))    ! kg SO4
 
       ann_ts(y)%t2m = ann_ts(y)%t2m - T0    ! degC
@@ -2318,6 +2322,8 @@ contains
     endif
     call nc_write(fnm,"ch4     ", vars%ch4     , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric CH4 concentration",units="ppb",ncid=ncid)
     call nc_write(fnm,"n2o     ", vars%n2o     , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric N2O concentration",units="ppb",ncid=ncid)
+    call nc_write(fnm,"cfc11   ", vars%cfc11   , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric CFC11 concentration",units="ppb",ncid=ncid)
+    call nc_write(fnm,"cfc12   ", vars%cfc12   , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric CFC12 concentration",units="ppb",ncid=ncid)
     call nc_write(fnm,"so4     ", vars%so4     , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric SO4 content",units="kg",ncid=ncid)
     call nc_write(fnm,"tg      ", vars%t2m     , dims=[dim_time],start=[nout],count=[y],long_name="global surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"tnh     ", vars%tnh     , dims=[dim_time],start=[nout],count=[y],long_name="NH surface air temperature",units="degC",ncid=ncid)
