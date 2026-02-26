@@ -311,7 +311,7 @@ program climber
     if (flag_bmb) then
       allocate(bmb(n_ice_domain))
       do n=1,n_ice_domain
-        call bmb_init(bmb(n),ice_grid(n),cmn%grid) 
+        call bmb_init(bmb(n),n,ice_grid(n),cmn%grid) 
         call bmb_diag_init(bmb(n))
       enddo
     endif

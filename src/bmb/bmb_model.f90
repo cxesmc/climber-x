@@ -29,13 +29,15 @@ module bmb_model
   use ncio
   use precision, only : wp, dp
   use constants, only : rho_i, rho_sw, Lf, cap_w
-  use timer, only : nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
+  use timer, only : year_ini, year_now, nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
   use control, only : out_dir, restart_in_dir, bmb_restart
   use bmb_grid, only : bmb_grid_init
   use bmb_params, only : bmb_params_init, dt, i_bmb, bmb_const, k_1, k_2, l_fix_depth, fix_depth, depth_disc, l_depth_scale, zl_ref, i_bmb_lake
-  use bmb_params, only : i_Tocn_bias_corr, bias_corr_file, Tocn_bias_scale_fac, Tocn_bias_corr_uniform
+  use bmb_params, only : i_Tocn_bias_corr
+  use bmb_params, only : i_Tocn_offset
   use bmb_def, only : bmb_class
-  use bmb_bias_corr_mod, only : Tocn_bias_corr
+  use bmb_bias_corr_mod, only : Tocn_bias_corr_init, Tocn_bias_corr_update
+  use bmb_bias_corr_mod, only : Tocn_offset_init, Tocn_offset_update
   use coord, only : grid_allocate, grid_class
   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
 
@@ -66,12 +68,28 @@ contains
   real(wp) :: t_sum, s_sum
   real(wp) :: t_npol, s_npol, t_spol, s_spol
   real(wp) :: w1, w2
+  real(wp) :: Tocn_offset_now
 
 
   !---------------------------
   ! ocean
 
   nk_ocn = size(bmb%z_ocn_in)
+
+  ! update bias correction field if needed
+  if (i_Tocn_bias_corr.eq.2) then
+    call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_now,wp), bmb%t_ocn_bias_in)
+    ! interpolate to ice sheet grid
+    call map_scrip_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+  endif
+
+  ! apply additional uniform offset if needed
+  if (i_Tocn_offset.eq.2) then
+    call Tocn_offset_update(i_Tocn_offset, real(year_now,wp), Tocn_offset_now)
+  endif
+  ! integrate offset into bias field
+  bmb%t_ocn_bias = bmb%t_ocn_bias - Tocn_offset_now
+
 
   ! extrapolate ocean temperature and salinity to cells where they are undefined
   do k = 1,nk_ocn
@@ -373,14 +391,16 @@ contains
   !   Subroutine :  b m b _ i n i t
   !   Purpose    :  initialize basal mass balance 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine bmb_init(bmb,grid,cmn_grid)
+  subroutine bmb_init(bmb,i_domain,grid,cmn_grid)
 
     implicit none
 
     type(bmb_class) :: bmb
+    integer, intent(in) :: i_domain
     type(grid_class), intent(in) :: grid 
     type(grid_class), intent(in) :: cmn_grid 
 
+    real(wp) :: Tocn_offset_now
 
     call bmb_params_init
     call bmb_grid_init
@@ -410,16 +430,29 @@ contains
     call grid_allocate(bmb%grid, bmb%bmb_ann )
 
     ! initialization for bias correction 
-    if (i_Tocn_bias_corr.eq.1) then
-      ! read bias correction file and initialize
-      call Tocn_bias_corr(i_Tocn_bias_corr, bias_corr_file, bmb%t_ocn_bias_in)
+    if (i_Tocn_bias_corr.eq.1 .or. i_Tocn_bias_corr.eq.2) then
+      if (i_domain==1) then
+        ! read bias correction file and initialize
+        call Tocn_bias_corr_init(i_Tocn_bias_corr)
+      endif
+      call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_ini,wp), bmb%t_ocn_bias_in)
       ! interpolate to ice sheet grid
       call map_scrip_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
-      ! apply scaling factor and add additional uniform bias correction
-      bmb%t_ocn_bias = Tocn_bias_scale_fac*bmb%t_ocn_bias - Tocn_bias_corr_uniform
     else
       bmb%t_ocn_bias = 0._wp
     endif
+
+    ! apply additional uniform offset if needed
+    if (i_Tocn_offset.eq.1 .or. i_Tocn_offset.eq.2) then
+      if (i_domain==1) then
+        call Tocn_offset_init(i_Tocn_offset)
+      endif
+      call Tocn_offset_update(i_Tocn_offset, real(year_ini,wp), Tocn_offset_now)
+    else
+      Tocn_offset_now = 0._wp
+    endif
+    ! integrate offset into bias field
+    bmb%t_ocn_bias = bmb%t_ocn_bias - Tocn_offset_now
 
     if (bmb_restart) then
 
