@@ -29,10 +29,17 @@
     !-------------------------------------------------------------------
     i_Tocn_bias_corr = 0        ! ocean temperature bias correction
                                 ! 0 = no bias correction
-                                ! 1 = annual bias correction from input file bias_corr_file
+                                ! 1 = constant annual bias correction from input file bias_corr_file
+                                ! 2 = time-dependent constant annual bias correction from input file bias_corr_file
     bias_corr_file = "input/Tocn_bias_WOA23_250m.nc"
-    Tocn_bias_scale_fac = 1.     ! scaling factor for temperature bias correction
-    Tocn_bias_corr_uniform = 0.  ! K, temperature bias correction applied uniformely everywhere
+    Tocn_bias_scale_fac = 1.    ! scaling factor for temperature bias correction
+    ! uniform ocean temperature offset 
+    i_Tocn_offset = 0           ! uniform ocean temperature offset
+                                ! 0 = no offset
+                                ! 1 = constant offset Tocn_offset
+                                ! 2 = time-dependent read from file Tocn_offset_file
+    Tocn_offset = 0.            ! K, constant temperature offset applied uniformely everywhere
+    Tocn_offset_file = "input/Tocn_offset.nc"
 
     l_monthly_output = T
 /

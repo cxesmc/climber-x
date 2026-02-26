@@ -2713,8 +2713,8 @@ end subroutine lnd_update
 
     call nc_read(fnm,"t_skin_veg",      lnd%t_skin_veg,ncid=ncid)
 
-    do i=1,nx
-      do j=1,ny
+    do j=1,ny
+      do i=1,nx
         call nc_read(fnm,"gdd",lnd(i,j)%gdd,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         call nc_read(fnm,"phen",lnd(i,j)%phen,start=[1,i,j],count=[npft,1,1],ncid=ncid)
         call nc_read(fnm,"phen_acc",lnd(i,j)%phen_acc,start=[1,i,j],count=[npft,1,1],ncid=ncid)

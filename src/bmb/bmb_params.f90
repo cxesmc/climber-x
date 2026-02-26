@@ -51,7 +51,9 @@ module bmb_params
   integer :: i_Tocn_bias_corr
   character (len=256) :: bias_corr_file
   real(wp) :: Tocn_bias_scale_fac
-  real(wp) :: Tocn_bias_corr_uniform
+  integer :: i_Tocn_offset
+  real(wp) :: Tocn_offset
+  character (len=256) :: Tocn_offset_file
 
   logical :: l_monthly_output
 
@@ -98,7 +100,9 @@ subroutine bmb_par_load(filename)
     call nml_read(filename,"bmb_par","i_Tocn_bias_corr",i_Tocn_bias_corr)
     call nml_read(filename,"bmb_par","bias_corr_file",bias_corr_file)
     call nml_read(filename,"bmb_par","Tocn_bias_scale_fac",Tocn_bias_scale_fac)
-    call nml_read(filename,"bmb_par","Tocn_bias_corr_uniform",Tocn_bias_corr_uniform)
+    call nml_read(filename,"bmb_par","i_Tocn_offset",i_Tocn_offset)
+    call nml_read(filename,"bmb_par","Tocn_offset",Tocn_offset)
+    call nml_read(filename,"bmb_par","Tocn_offset_file",Tocn_offset_file)
     call nml_read(filename,"bmb_par","l_monthly_output",l_monthly_output)
 
    return
