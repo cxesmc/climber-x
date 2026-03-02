@@ -188,7 +188,7 @@ contains
     n2o_bar = 0.5_wp*(n2o+n2o_ref)
     rf_co2 = (a1*(co2-co2_ref)**2+b1*abs(co2-co2_ref)+c1*n2o_bar+5.36_wp) * log(co2/co2_ref)
     rf_n2o = (a2*co2_bar+b2*n2o_bar+c2*ch4_bar+0.117_wp) * (sqrt(n2o)-sqrt(n2o_ref))
-    rf_ch4 = (a3*ch4_bar+b3*n2o_bar+0.043_wp) * (sqrt(ch4)-sqrt(ch4_ref))
+    rf_ch4 = (a3*min(5000._wp,ch4_bar)+b3*n2o_bar+0.043_wp) * (sqrt(ch4)-sqrt(ch4_ref))
     rf_cfc11 = 0.25_wp*1.e-3_wp*cfc11   ! Myhre et al., 1998, Table 3
     rf_cfc12 = 0.33_wp*1.e-3_wp*cfc12   ! Myhre et al., 1998, Table 3
 
