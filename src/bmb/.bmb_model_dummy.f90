@@ -32,11 +32,12 @@ contains
   !   Subroutine :  b m b _ i n i t
   !   Purpose    :  initialize ice melt to ocean 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine bmb_init(bmb,grid,cmn_grid)
+  subroutine bmb_init(bmb,n,grid,cmn_grid)
 
     implicit none
 
     type(bmb_class) :: bmb
+    integer, intent(in) :: n
     type(grid_class), intent(in) :: grid 
     type(grid_class), intent(in) :: cmn_grid 
 
