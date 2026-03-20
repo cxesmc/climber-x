@@ -278,9 +278,9 @@ module lnd_params
     real(wp) :: f_lit_to_ice    !! fraction of vegetation buried when ice sheets are expanding []
     real(wp) :: k_mcwd          !! slope parameter for MCWD mortality sigmoid function [1/mm]
     real(wp) :: M_max           !! maximum MCWD-induced mortality rate [1/yr]
-    real(wp) :: ratio_MCWD         !! MCWD ratio to define the threshold [mm]
+    real(wp) :: ratio_mcwd         !! MCWD ratio to define the threshold [mm]
     integer :: i_mcwd_clim         !! MCWD climatology source: 0=fixed value, 1=nc file, 2=restart
-    real(wp) :: MCWD_50_fixed      !! fixed MCWD_50 value when i_mcwd_clim=0 [mm]
+    real(wp) :: mcwd_50_fixed      !! fixed MCWD_50 value when i_mcwd_clim=0 [mm]
     character (len=256) :: mcwd_clim_file  !! file with MCWD climatology (used if i_mcwd_clim=1)
     integer :: i_deforest
   end type
@@ -863,9 +863,9 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","M_max",veg_par%M_max)
     ! convert from 1/yr to 1/s
     veg_par%M_max = veg_par%M_max/sec_year
-    call nml_read(filename,"lnd_par","ratio_MCWD",veg_par%ratio_MCWD)
+    call nml_read(filename,"lnd_par","ratio_mcwd",veg_par%ratio_mcwd)
     call nml_read(filename,"lnd_par","i_mcwd_clim",veg_par%i_mcwd_clim)
-    call nml_read(filename,"lnd_par","MCWD_50_fixed",veg_par%MCWD_50_fixed)
+    call nml_read(filename,"lnd_par","mcwd_50_fixed",veg_par%mcwd_50_fixed)
     call nml_read(filename,"lnd_par","mcwd_clim_file",veg_par%mcwd_clim_file)
     call nml_read(filename,"lnd_par","i_deforest",veg_par%i_deforest)
 
