@@ -101,6 +101,8 @@ module lnd_out
     real(wp), allocatable, dimension(:,:) :: inf
     real(wp), allocatable, dimension(:,:) :: alt
     real(wp), allocatable, dimension(:,:) :: vpd
+    real(wp), allocatable, dimension(:,:) :: mcwd
+    real(wp), allocatable, dimension(:,:) :: mcwd_clim
     real(wp), allocatable, dimension(:,:,:) :: alb
     real(wp), allocatable, dimension(:,:,:) :: alb_dif
     real(wp), allocatable, dimension(:,:,:) :: alb_dir
@@ -118,6 +120,7 @@ module lnd_out
     real(wp), allocatable, dimension(:,:,:) :: ecan
     real(wp), allocatable, dimension(:,:,:) :: esur
     real(wp), allocatable, dimension(:,:,:) :: trans
+    real(wp), allocatable, dimension(:,:,:) :: pet
     real(wp), allocatable, dimension(:,:,:) :: sh
     real(wp), allocatable, dimension(:,:,:) :: slh
     real(wp), allocatable, dimension(:,:,:) :: ef
@@ -147,7 +150,7 @@ module lnd_out
     real(wp), allocatable, dimension(:,:) :: n2o
   end type
   type surf_g_out
-    real(wp), dimension(nx,ny) :: le, etot, ecan, esur, trans, sh, slh, ef, swnet, lwnet, g, flx_melt, tskin, tskin_amp, alb, alb_dif, alb_dir, ra, rag, Ri, Ch, rs
+    real(wp), dimension(nx,ny) :: le, etot, ecan, esur, trans, pet, sh, slh, ef, swnet, lwnet, g, flx_melt, tskin, tskin_amp, alb, alb_dif, alb_dir, ra, rag, Ri, Ch, rs
   end type
  
   type carbon_out
@@ -270,6 +273,8 @@ contains
       allocate(mon_su(k)%inf(nx,ny))
       allocate(mon_su(k)%alt(nx,ny))
       allocate(mon_su(k)%vpd(nx,ny))
+      allocate(mon_su(k)%mcwd(nx,ny))
+      allocate(mon_su(k)%mcwd_clim(nx,ny))
       allocate(mon_su(k)%alb(nx,ny,nsurf))
       allocate(mon_su(k)%alb_dif(nx,ny,nsurf))
       allocate(mon_su(k)%alb_dir(nx,ny,nsurf))
@@ -287,6 +292,7 @@ contains
       allocate(mon_su(k)%ecan(nx,ny,nsurf))
       allocate(mon_su(k)%esur(nx,ny,nsurf))
       allocate(mon_su(k)%trans(nx,ny,nsurf))
+      allocate(mon_su(k)%pet(nx,ny,nsurf))
       allocate(mon_su(k)%sh(nx,ny,nsurf))
       allocate(mon_su(k)%slh(nx,ny,nsurf))
       allocate(mon_su(k)%ef(nx,ny,nsurf))
@@ -396,6 +402,8 @@ contains
     allocate(ann_su%inf(nx,ny))
     allocate(ann_su%alt(nx,ny))
     allocate(ann_su%vpd(nx,ny))
+    allocate(ann_su%mcwd(nx,ny))
+    allocate(ann_su%mcwd_clim(nx,ny))
     allocate(ann_su%alb(nx,ny,nsurf))
     allocate(ann_su%alb_dif(nx,ny,nsurf))
     allocate(ann_su%alb_dir(nx,ny,nsurf))
@@ -413,6 +421,7 @@ contains
     allocate(ann_su%ecan(nx,ny,nsurf))
     allocate(ann_su%esur(nx,ny,nsurf))
     allocate(ann_su%trans(nx,ny,nsurf))
+    allocate(ann_su%pet(nx,ny,nsurf))
     allocate(ann_su%sh(nx,ny,nsurf))
     allocate(ann_su%slh(nx,ny,nsurf))
     allocate(ann_su%ef(nx,ny,nsurf))
@@ -1138,6 +1147,7 @@ contains
                   mon_su(m)%ecan(i,j,:)     = 0._wp
                   mon_su(m)%esur(i,j,:)     = 0._wp
                   mon_su(m)%trans(i,j,:)    = 0._wp
+                  mon_su(m)%pet(i,j,:)      = 0._wp
                   mon_su(m)%sh(i,j,:)       = 0._wp
                   mon_su(m)%slh(i,j,:)      = 0._wp
                   mon_su(m)%ef(i,j,:)       = 0._wp
@@ -1193,6 +1203,7 @@ contains
                   mon_su(m)%ecan(i,j,:)     = missing_value 
                   mon_su(m)%esur(i,j,:)     = missing_value 
                   mon_su(m)%trans(i,j,:)    = missing_value 
+                  mon_su(m)%pet(i,j,:)      = missing_value 
                   mon_su(m)%sh(i,j,:)       = missing_value 
                   mon_su(m)%slh(i,j,:)      = missing_value 
                   mon_su(m)%ef(i,j,:)       = missing_value 
@@ -1350,6 +1361,7 @@ contains
               mon_su(mon)%ecan(i,j,:)     = mon_su(mon)%ecan(i,j,:)     + (lnd(i,j)%evap_can+lnd(i,j)%subl_can)*sec_day  * mon_avg ! mm/day
               mon_su(mon)%esur(i,j,:)     = mon_su(mon)%esur(i,j,:)     + lnd(i,j)%evap_surface*sec_day * mon_avg ! mm/day
               mon_su(mon)%trans(i,j,:)    = mon_su(mon)%trans(i,j,:)    + lnd(i,j)%transpiration*sec_day* mon_avg ! mm/day
+              mon_su(mon)%pet(i,j,:)      = mon_su(mon)%pet(i,j,:)      + lnd(i,j)%pet*sec_day* mon_avg ! mm/day
               mon_su(mon)%sh(i,j,:)       = mon_su(mon)%sh(i,j,:)       + lnd(i,j)%flx_sh   * mon_avg
               mon_su(mon)%ef(i,j,:)       = mon_su(mon)%ef(i,j,:)       + min(1._wp,max(0._wp,lnd(i,j)%flx_lh/(lnd(i,j)%flx_lh+lnd(i,j)%flx_sh))) * mon_avg
               mon_su(mon)%slh(i,j,:)      = mon_su(mon)%slh(i,j,:)      + (lnd(i,j)%flx_lh+lnd(i,j)%flx_sh)   * mon_avg
@@ -1551,6 +1563,8 @@ contains
           ann_su%f_land = lnd%f_land
           ann_su%f_veg = lnd%f_veg
           ann_su%alt= lnd%alt
+          ann_su%mcwd= lnd%mcwd
+          ann_su%mcwd_clim= lnd%mcwd_clim
           ann_su%gdd5= lnd%gdd5
           ann_su%t2m_min_mon= lnd%t2m_min_mon - T0  ! degC
           do i=1,nx
@@ -2362,6 +2376,8 @@ end do
       long_name="transpiration from vegetation",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"le",       sngl(vars%le),   dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1], & 
       long_name="latent heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"pet",      sngl(vars%pet),dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1], & 
+      long_name="potential evapotranspiration",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"sh",       sngl(vars%sh),   dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1], & 
       long_name="sensible heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"slh",      sngl(vars%slh),   dims=[dim_lon,dim_lat,dim_nsurf,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsurf,1,1], & 
@@ -2433,6 +2449,7 @@ end do
     call nc_write(fnm,"esur_g",     sngl(vars_g%esur), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="surface evaporation",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"trans_g",    sngl(vars_g%trans),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="transpiration",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"le_g",       sngl(vars_g%le),   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="latent heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"pet_g",      sngl(vars_g%pet), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="potential evapotranspiration",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"sh_g",       sngl(vars_g%sh),   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="sensible heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"slh_g",      sngl(vars_g%slh),   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="sum of sensible and latent heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ef_g",       sngl(vars_g%ef),   dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="evaporative fraction",units="1",missing_value=missing_value,ncid=ncid)
@@ -2459,6 +2476,8 @@ end do
      call nc_write(fnm,"alt",        sngl(vars%alt),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="active layer thickness",units="m",missing_value=missing_value,ncid=ncid)
      call nc_write(fnm,"fwetmax",    sngl(vars%fwetmax),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="maxmiumum monthly wetland extent",units="m",missing_value=missing_value,ncid=ncid)
      call nc_write(fnm,"fwetmaxpot",    sngl(vars%fwetmaxpot), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="potential maximum wetland extent",units="m",missing_value=missing_value,ncid=ncid)
+     call nc_write(fnm,"mcwd",        sngl(vars%mcwd), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="maximum monthly cumulative water deficit",units="kg/m2",missing_value=missing_value,ncid=ncid)
+     call nc_write(fnm,"mcwd_clim",        sngl(vars%mcwd_clim), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="climatological maximum monthly cumulative water deficit",units="kg/m2",missing_value=missing_value,ncid=ncid)
     endif
 
 
@@ -2491,6 +2510,7 @@ end do
     ave%esur    = 0._wp
     ave%trans   = 0._wp
     ave%le      = 0._wp
+    ave%pet     = 0._wp
     ave%sh      = 0._wp
     ave%slh     = 0._wp
     ave%ef      = 0._wp
@@ -2548,6 +2568,7 @@ end do
     d_g(k)%esur    = 0._wp
     d_g(k)%trans   = 0._wp
     d_g(k)%le      = 0._wp
+    d_g(k)%pet     = 0._wp
     d_g(k)%sh      = 0._wp
     d_g(k)%slh     = 0._wp
     d_g(k)%ef      = 0._wp
@@ -2572,6 +2593,7 @@ end do
     ave_g%esur    = 0._wp
     ave_g%trans   = 0._wp
     ave_g%le      = 0._wp
+    ave_g%pet     = 0._wp
     ave_g%sh      = 0._wp
     ave_g%slh     = 0._wp
     ave_g%ef      = 0._wp
@@ -2598,6 +2620,7 @@ end do
       ave%esur    = ave%esur       + d(k)%esur      / div
       ave%trans   = ave%trans      + d(k)%trans     / div
       ave%le      = ave%le         + d(k)%le        / div
+      ave%pet     = ave%pet        + d(k)%pet       / div
       ave%sh      = ave%sh         + d(k)%sh        / div
       ave%slh     = ave%slh        + d(k)%slh       / div
       ave%ef      = ave%ef         + d(k)%ef        / div
@@ -2658,6 +2681,7 @@ end do
       d_g(k)%esur   = d_g(k)%esur   + d(k)%esur(:,:,kk)  * d(k)%frac_surf(:,:,kk)
       d_g(k)%trans  = d_g(k)%trans  + d(k)%trans(:,:,kk) * d(k)%frac_surf(:,:,kk)
       d_g(k)%le     = d_g(k)%le     + d(k)%le(:,:,kk)    * d(k)%frac_surf(:,:,kk)
+      d_g(k)%pet    = d_g(k)%pet    + d(k)%pet(:,:,kk)   * d(k)%frac_surf(:,:,kk)
       d_g(k)%sh     = d_g(k)%sh     + d(k)%sh(:,:,kk)    * d(k)%frac_surf(:,:,kk)
       d_g(k)%slh    = d_g(k)%slh    + d(k)%slh(:,:,kk)   * d(k)%frac_surf(:,:,kk)
       d_g(k)%ef     = d_g(k)%ef     + d(k)%ef(:,:,kk)    * d(k)%frac_surf(:,:,kk)
@@ -2686,6 +2710,7 @@ end do
       ave_g%esur   = ave_g%esur   + ave%esur(:,:,k)  * ave%frac_surf(:,:,k)
       ave_g%trans  = ave_g%trans  + ave%trans(:,:,k) * ave%frac_surf(:,:,k)
       ave_g%le     = ave_g%le     + ave%le(:,:,k)    * ave%frac_surf(:,:,k)
+      ave_g%pet    = ave_g%pet    + ave%pet(:,:,k)   * ave%frac_surf(:,:,k)
       ave_g%sh     = ave_g%sh     + ave%sh(:,:,k)    * ave%frac_surf(:,:,k)
       ave_g%slh    = ave_g%slh    + ave%slh(:,:,k)   * ave%frac_surf(:,:,k)
       ave_g%ef     = ave_g%ef     + ave%ef(:,:,k)    * ave%frac_surf(:,:,k)

@@ -62,8 +62,8 @@ module lnd_def
      real(wp) :: h_lake_mix
      real(wp) :: lake_water_tendency
      real(wp) :: gdd5, gdd5_temp, npp_real, npp13_real, npp14_real
-     real(wp) :: MCWD_ann        !! Annual maximum climatic water deficit [mm]
-     real(wp) :: MCWD_clim       !! Climatological MCWD for threshold calculation [mm]
+     real(wp) :: mcwd            !! Annual maximum climatic water deficit [kg/m2]
+     real(wp) :: mcwd_clim       !! Climatological MCWD for threshold calculation [kg/m2]
      real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
      real(wp) :: theta_fire_cum
      real(wp) :: alt
@@ -109,6 +109,8 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: t_skin, t_skin_old, t_skin_amp
      real(wp), allocatable, dimension(:) :: num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw
      real(wp), allocatable, dimension(:) :: f_sh, f_e, f_t, f_le, f_lt, f_lw, lh_ecan, qsat_e, dqsatdT_e, qsat_t, dqsatdT_t
+     real(wp), allocatable, dimension(:) :: pet
+     real(wp), allocatable, dimension(:) :: cwd_mon
      real(wp), allocatable, dimension(:) :: ci, g_can, gpp, npp, npp13, npp14, aresp
      real(wp), allocatable, dimension(:) :: discrimination
      real(wp), allocatable, dimension(:) :: lai, sai, phen, phen_acc, gdd, gamma_leaf, lambda, lai_bal

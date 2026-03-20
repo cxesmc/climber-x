@@ -139,7 +139,7 @@ dir_lnd = $(srcdir)/lnd/
 files_lnd = lnd_grid.f90 lnd_params.f90 lnd_def.f90 \
 	          soil_par.f90 ice_par.f90 lake_par.f90 lake_rho.f90 shelf_par.f90 surface_par_lnd.f90 veg_par.f90 \
 	          soil_carbon_par.f90 shelf_carbon_par.f90 ice_carbon_par.f90 lake_carbon_par.f90 \
-            photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 \
+            photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 water_deficit.f90 \
             soil_temp.f90 ice_temp.f90 shelf_temp.f90 lake_temp.f90 lake_convection.f90 sublake_temp.f90 soil_hydro.f90 water_check.f90 \
 	          dyn_veg.f90 soil_carbon.f90 peat_carbon.f90 shelf_carbon.f90 ice_carbon.f90 lake_carbon.f90 \
 	          carbon_trans.f90 n2o_emis.f90 dust_emis.f90 weathering.f90 carbon_export.f90 init_cell.f90 end_cell.f90 carbon_inventory.f90 carbon_flx_atm_lnd.f90 \
@@ -518,7 +518,7 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 	$(objdir)/surface_par_lnd.o $(objdir)/ebal_veg.o $(objdir)/ebal_ice.o $(objdir)/ebal_lake.o \
 	$(objdir)/soil_par.o $(objdir)/ice_par.o $(objdir)/shelf_par.o $(objdir)/lake_par.o $(objdir)/lake_rho.o \
 	$(objdir)/soil_temp.o $(objdir)/ice_temp.o $(objdir)/shelf_temp.o $(objdir)/lake_temp.o $(objdir)/lake_convection.o $(objdir)/sublake_temp.o \
-	$(objdir)/surface_hydro.o $(objdir)/soil_hydro.o $(objdir)/water_check.o \
+	$(objdir)/surface_hydro.o $(objdir)/water_deficit.o $(objdir)/soil_hydro.o $(objdir)/water_check.o \
 	$(objdir)/veg_par.o $(objdir)/photosynthesis.o $(objdir)/dyn_veg.o \
 	$(objdir)/soil_carbon.o $(objdir)/peat_carbon.o $(objdir)/shelf_carbon.o $(objdir)/ice_carbon.o $(objdir)/lake_carbon.o \
 	$(objdir)/soil_carbon_par.o $(objdir)/shelf_carbon_par.o $(objdir)/ice_carbon_par.o $(objdir)/lake_carbon_par.o \
@@ -583,7 +583,10 @@ $(objdir)/ebal_ice.o : $(dir_lnd)ebal_ice.f90 $(objdir)/lnd_grid.o $(objdir)/lnd
 $(objdir)/ebal_lake.o : $(dir_lnd)ebal_lake.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/lnd_grid.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/water_deficit.o : $(dir_lnd)water_deficit.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/soil_temp.o : $(dir_lnd)soil_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/tridiag.o

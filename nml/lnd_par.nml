@@ -271,15 +271,15 @@
     tau_fire = 10. 10. 10. 10. 10.           ! yr, fire disturbance time scale
     theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2
     l_fire_co2_emissions = F    ! .true. = enable direct CO2 emissions from fire, .false. = turn off direct fire CO2 emissions
-    ! mean cumulative water deficit (MCDW) disturbance
+    ! maximum cumulative water deficit (MCDW) disturbance
     k_mcwd = 0.01               ! 1/mm, slope parameter for MCWD mortality sigmoid function
     M_max = 0.                  ! 1/yr, maximum MCWD-induced tree mortality rate
-    ratio_MCWD = 0.3            ! ratio of MCWD to climatological MCWD when the mortality rate reaches 50% of M_max
+    ratio_mcwd = 0.3            ! ratio of MCWD to climatological MCWD when the mortality rate reaches 50% of M_max
     i_mcwd_clim = 0             ! MCWD climatology source:
-                                ! 0 = use fixed MCWD_50_fixed value
+                                ! 0 = use fixed mcwd_50_fixed value
                                 ! 1 = read from external nc file (mcwd_clim_file)
                                 ! 2 = read from restart file
-    MCWD_50_fixed = -400.0      ! mm, fixed MCWD_50 value (used if i_mcwd_clim=0)
+    mcwd_50_fixed = 400.0       ! mm, fixed mcwd_50 value (used if i_mcwd_clim=0)
     mcwd_clim_file = "input/MCWD_climatology.nc"  ! MCWD climatology file (used if i_mcwd_clim=1)
 
     i_deforest = 0              ! deforestation experiments:

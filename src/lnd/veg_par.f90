@@ -213,7 +213,7 @@ contains
   !   Subroutine :  d y n v e g _ p a r
   !   Purpose    :  parameters for dynamic vegetation model
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire_cum,MCWD_ann,MCWD_clim)
+  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire_cum,mcwd,mcwd_clim)
 
     implicit none
 
@@ -224,8 +224,8 @@ contains
     real(wp), intent(inout) :: theta_fire_cum
     real(wp), dimension(:), intent(inout) :: gamma_dist_cum
     real(wp), dimension(:), intent(inout) :: gamma_fire_cum
-    real(wp), intent(in) :: MCWD_ann  ! Annual MCWD [mm]
-    real(wp), intent(in) :: MCWD_clim  ! Climatological MCWD [mm]
+    real(wp), intent(in) :: mcwd  ! Maximum monthly cumulative water deficit [mm]
+    real(wp), intent(in) :: mcwd_clim  ! Climatological MCWD [mm]
 
     integer :: n
     logical :: lim_bio
@@ -233,7 +233,7 @@ contains
     real(wp) :: theta_fire
     real(wp) :: gamma_fire
     real(wp) :: gamma_mcwd(npft)
-    real(wp) :: MCWD_50, sigmoid_factor
+    real(wp) :: mcwd_50, sigmoid_factor
 
 
     if (mon.eq.1) gamma_dist_cum = 0._wp
@@ -260,15 +260,8 @@ contains
 
       ! MCWD-based tree mortality
       if (flag_tree(n)) then
-        ! Determine MCWD_50 based on i_mcwd_clim setting
-        if (veg_par%i_mcwd_clim == 0) then
-          ! Use fixed value directly
-          MCWD_50 = veg_par%MCWD_50_fixed
-        else
-          ! Use climatology (from file or restart) with ratio
-          MCWD_50 = veg_par%ratio_MCWD * MCWD_clim
-        endif
-        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (MCWD_ann - veg_par%ratio_MCWD * MCWD_50)))
+        mcwd_50 = veg_par%ratio_mcwd * mcwd_clim
+        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (mcwd - mcwd_50)))
         gamma_mcwd(n) = sigmoid_factor
       else
         gamma_mcwd(n) = 0.0_wp
