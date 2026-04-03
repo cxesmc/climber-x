@@ -26,7 +26,7 @@
 module ocn_grid_update_state_mod
 
   use precision, only : wp
-  use ocn_params, only : n_tracers_tot
+  use ocn_params, only : n_tracers_tot, i_age, i_dye
   use ocn_grid, only : grid_class, maxi, maxj, maxk, mask_u, mask_v, mask_w
 
   implicit none
@@ -128,10 +128,17 @@ contains
     ! change in global ocean concentration needed to conserve tracers
     do l=2,n_tracers_tot
       dtr(l) = (tr_after(l)-tr_before(l))/grid%ocn_vol_tot
-      where (grid%mask_c.eq.1)
-        tracers(:,:,:,l) = tracers(:,:,:,l) - dtr(l)  ! tracer concentration can get negative here, fixme
-      endwhere
+      if (l.eq.i_age .or. l.eq.i_dye) then
+        where (grid%mask_c.eq.1)
+          tracers(:,:,:,l) = tracers(:,:,:,l) - dtr(l)
+        endwhere
+      else
+        where (grid%mask_c.eq.1)
+          tracers(:,:,:,l) = tracers(:,:,:,l) * (1._wp - dtr(l)/max(1.e-30_wp,tr_before(l)))
+        endwhere
+      endif
     enddo
+
 
     ! new total tracer amount after grid update, just to check conservation
     do l=2,n_tracers_tot
