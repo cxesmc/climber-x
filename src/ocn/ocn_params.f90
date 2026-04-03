@@ -200,6 +200,8 @@ contains
     ! read model settings and parameters from namelist
     call ocn_par_load(trim(out_dir)//"/ocn_par.nml")
 
+    i_age = 0
+    i_dye = 0
  
     return
 
