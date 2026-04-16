@@ -266,9 +266,15 @@ module lnd_params
     real(wp) :: gamma_luc   !! disturbance rate for land use change [1/s]
     real(wp) :: gamma_ice   !! disturbance rate from ice sheets [1/s]
     real(wp) :: z_veg_std_crit !! critical sub-grid topography standard deviation for disturbance rate from ice sheets [m]
-    real(wp) :: theta_fire_crit !! critical soil moisture for fire, Thonicke 2001 ~0.4 for relative soil moisture [m3/m3]
+    integer :: i_fire      !! fire disturbance parameterisations
+    real(wp) :: tau_fire    !! fire disturbance time scale [yr]
+    real(wp) :: theta_fire_crit !! critical soil moisture for fire, Thonicke 2001 ~0.4 for relative soil moisture [m3/m3]    
     real(wp) :: cveg_fire_low  = 0.2_wp   !! value of aboveground biomass below which no fire [kgC/m2]
     real(wp) :: cveg_fire_high = 1._wp    !! value of aboveground biomass above which no fire limitation by fuel [kgC/m2]
+    real(wp) :: k_cwd_fire            !! 1/mm, slope parameter for CWD mortality sigmoid function, only for i_fire==2
+    real(wp) :: cwd_0_fire            !! mm, minimum CWD for fire disturbance, only for i_fire==2
+    real(wp) :: fuel_min              !! kgC/m2, minimum fuel for fire disturbance, only for i_fire==2
+    real(wp) :: fuel_half             !! kgC/m2, half-saturation fuel for fire disturbance, only for i_fire==2
     logical :: l_fire_co2_emissions  !! switch for fire CO2 emissions calculation
     integer :: iseed    !! seeds parameterisation flag
     real(wp) :: seed_pft_min    !! minimum pft fraction needed to seed neighbouring cells
@@ -335,7 +341,7 @@ module lnd_params
     real(wp), dimension(npft) :: gamma_root = (/0.15_wp, 0.15_wp, 0.3_wp, 0.5_wp, 0.3_wp/)/sec_year !! root turnover rate from Gill 2000 [1/s]
     real(wp), dimension(npft) :: gamma_stem = (/0.005_wp,0.005_wp,0.1_wp,0.1_wp,0.1_wp/)/sec_year !! stem turnover rate [1/s]
     real(wp), dimension(npft) :: gamma_dist_min  !! minimum disturbance rate [1/s]
-    real(wp), dimension(npft) :: tau_fire   !! fire disturbance time scale [s]
+    real(wp), dimension(npft) :: mort_fire   !! fire disturbance mortality [1]
     real(wp), dimension(npft) :: lai_min !! minimum leaf area index [m2/m2]
     real(wp), dimension(npft) :: lai_max !! maximum leaf area index [m2/m2]
     real(wp), dimension(npft) :: sla    !! specific leaf area, TRY 2011 [m2/(kg dry leaf) * (kg dry leaf)/kgC = m2/kgC]
@@ -855,10 +861,16 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","sai_scale",veg_par%sai_scale)
     call nml_read(filename,"lnd_par","veg_h_min",veg_par%veg_h_min)
     call nml_read(filename,"lnd_par","f_lit_to_ice",veg_par%f_lit_to_ice)
+    call nml_read(filename,"lnd_par","i_fire",veg_par%i_fire)
+    call nml_read(filename,"lnd_par","tau_fire",veg_par%tau_fire)
+    veg_par%tau_fire = veg_par%tau_fire*sec_year
     call nml_read(filename,"lnd_par","theta_fire_crit",veg_par%theta_fire_crit)
+    call nml_read(filename,"lnd_par","k_cwd_fire",veg_par%k_cwd_fire)
+    call nml_read(filename,"lnd_par","cwd_0_fire",veg_par%cwd_0_fire)
+    call nml_read(filename,"lnd_par","fuel_min",veg_par%fuel_min  )
+    call nml_read(filename,"lnd_par","fuel_half",veg_par%fuel_half )
+    call nml_read(filename,"lnd_par","mort_fire",pft_par%mort_fire)
     call nml_read(filename,"lnd_par","l_fire_co2_emissions",veg_par%l_fire_co2_emissions)
-    call nml_read(filename,"lnd_par","tau_fire",pft_par%tau_fire)
-    pft_par%tau_fire = pft_par%tau_fire*sec_year
     call nml_read(filename,"lnd_par","k_mcwd",veg_par%k_mcwd)
     call nml_read(filename,"lnd_par","M_max",veg_par%M_max)
     ! convert from 1/yr to 1/s

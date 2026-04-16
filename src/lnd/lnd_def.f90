@@ -66,6 +66,9 @@ module lnd_def
      real(wp) :: mcwd_clim       !! Climatological MCWD for threshold calculation [kg/m2]
      real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
      real(wp) :: theta_fire_cum
+     real(wp) :: fuel
+     real(wp) :: f_fire_fuel
+     real(wp) :: f_fire_cwd
      real(wp) :: alt
      real(wp) :: k_litter_peat, k_acro, k_litter_peat_anox, k_acro_anox, f_oxic_peat
      real(wp) :: litter_c_peat, acro_c, litter_c13_peat, acro_c13, litter_c14_peat, acro_c14

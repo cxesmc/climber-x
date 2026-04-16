@@ -267,9 +267,18 @@
     gamma_luc = 1.              ! 1/yr, disturbance rate for land use change
     gamma_ice = 0.              ! 1/yr, disturbance rate from presence of ice sheets in grid cell
     ! fire disturbance  
-    !tau_fire = 50. 50. 2. 1. 5.             ! yr, fire disturbance time scale
-    tau_fire = 10. 10. 10. 10. 10.           ! yr, fire disturbance time scale
-    theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2
+    tau_fire = 10.              ! yr, fire disturbance time scale
+    i_fire = 1                  ! fire disturbance parameterisation:
+                                ! 1 = based on soil moisture
+                                ! 2 = based on cumulative water deficit and fuel availability
+    theta_fire_crit = 0.2       ! m3/m3, critical soil moisture for fire, Thonicke 2001 ~0.15-0.2, only for i_fire==1
+    k_cwd_fire = 0.04           ! 1/mm, slope parameter for CWD mortality sigmoid function, only for i_fire==2
+    cwd_0_fire = 200            ! mm, minimum CWD for fire disturbance, only for i_fire==2
+    fuel_min = 0.05             ! kgC/m2, minimum fuel for fire disturbance, only for i_fire==2
+    fuel_half = 0.1             ! kgC/m2, half-saturation fuel for fire disturbance, only for i_fire==2
+    !mort_fire = 0.7 0.7 0.15 0.15 0.4           ! PFT-speficic mortality from fire disturbance
+    mort_fire = 1.0 1.0 1.0 1.0 1.0          ! PFT-speficic mortality from fire disturbance
+
     l_fire_co2_emissions = F    ! .true. = enable direct CO2 emissions from fire, .false. = turn off direct fire CO2 emissions
     ! maximum cumulative water deficit (MCDW) disturbance
     k_mcwd = 0.01               ! 1/mm, slope parameter for MCWD mortality sigmoid function

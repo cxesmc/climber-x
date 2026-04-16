@@ -26,9 +26,9 @@
 module veg_par_mod
 
   use precision, only : wp
-  use timer, only : doy, mon, sec_year, nday_mon, nday_year, nmon_year, time_soy_lnd
+  use timer, only : doy, mon, sec_year, nday_mon, nday_year, nmon_year, time_soy_lnd, time_eoy_lnd
   use constants, only : T0
-  use lnd_grid, only : nl, z_int, npft, nsurf, flag_veg, flag_tree
+  use lnd_grid, only : nl, z_int, dz, npft, nsurf, flag_veg, flag_tree, flag_grass
   use lnd_params, only : dt, dt_day
   use lnd_params, only : pft_par, veg_par 
 
@@ -213,7 +213,9 @@ contains
   !   Subroutine :  d y n v e g _ p a r
   !   Purpose    :  parameters for dynamic vegetation model
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,theta_fire_cum,gamma_dist_cum,gamma_fire_cum,mcwd,mcwd_clim)
+  subroutine dynveg_par(disturbance,t2m_min_mon,gdd5,veg_c_above,f_veg,f_peat,pft_frac, &
+      litter_c,litter_c_peat,lai_bal,mcwd,mcwd_clim, &
+      theta_fire_cum,gamma_dist_cum,gamma_fire_cum,fuel,f_fire_fuel,f_fire_cwd)
 
     implicit none
 
@@ -221,17 +223,27 @@ contains
     real(wp), intent(in) :: t2m_min_mon
     real(wp), intent(in) :: gdd5
     real(wp), intent(in) :: veg_c_above
+    real(wp), intent(in) :: f_veg
+    real(wp), intent(in) :: f_peat
+    real(wp), intent(in) :: pft_frac(:)
+    real(wp), intent(in) :: litter_c        ! kg/m3
+    real(wp), intent(in) :: litter_c_peat   ! kg/m2
+    real(wp), intent(in) :: lai_bal(:)
+    real(wp), intent(in) :: mcwd  ! Maximum monthly cumulative water deficit [mm]
+    real(wp), intent(in) :: mcwd_clim  ! Climatological MCWD [mm]
     real(wp), intent(inout) :: theta_fire_cum
     real(wp), dimension(:), intent(inout) :: gamma_dist_cum
     real(wp), dimension(:), intent(inout) :: gamma_fire_cum
-    real(wp), intent(in) :: mcwd  ! Maximum monthly cumulative water deficit [mm]
-    real(wp), intent(in) :: mcwd_clim  ! Climatological MCWD [mm]
+    real(wp), intent(inout) :: fuel
+    real(wp), intent(inout) :: f_fire_fuel
+    real(wp), intent(inout) :: f_fire_cwd
 
     integer :: n
     logical :: lim_bio
     real(wp) :: fac_lim_bio
     real(wp) :: theta_fire
     real(wp) :: gamma_fire
+    real(wp) :: f_grass, leaf_c_grass, litter_c_fire
     real(wp) :: gamma_mcwd(npft)
     real(wp) :: mcwd_50, sigmoid_factor
 
@@ -252,16 +264,39 @@ contains
       endif
 
       ! fire disturbance
-      gamma_fire = 1._wp/pft_par%tau_fire(n) &
-        * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) !&  ! soil moisture factor
+      if (veg_par%i_fire.eq.1) then
+
+        !gamma_fire = 1._wp/veg_par%tau_fire * pft_par%mort_fire(n) &
+        gamma_fire = 1._wp/veg_par%tau_fire &
+          * max(0._wp, (veg_par%theta_fire_crit-theta_fire)/veg_par%theta_fire_crit) !&  ! soil moisture factor
         !* max(0._wp, min(1._wp, (veg_c_above-veg_par%cveg_fire_low)/(veg_par%cveg_fire_high-veg_par%cveg_fire_low)))  ! fuel factor
-      ! annual mean fire disturbance rate
-      gamma_fire_cum(n) = gamma_fire_cum(n) + gamma_fire/real(nmon_year,wp)
+        ! annual mean fire disturbance rate
+        gamma_fire_cum(n) = gamma_fire_cum(n) + gamma_fire/real(nmon_year,wp)
+
+      else if (veg_par%i_fire.eq.2) then
+
+        ! fraction of grass in grid cell
+        f_grass = sum(pft_frac, flag_grass.eq.1) 
+        ! leaf carbon of grass, weighted average between C3 and C4
+        leaf_c_grass = sum(lai_bal/pft_par%sla*pft_frac, flag_grass.eq.1) / max(1e-10_wp,f_grass)
+        ! litter carbon
+        litter_c_fire = (litter_c*dz(1)*(f_veg-f_peat) + litter_c_peat*f_peat) / max(1.e-10_wp,f_veg) ! kgC/m2
+        ! fuel for fire
+        fuel = litter_c_fire + f_grass*leaf_c_grass  ! kgC/m2
+        ! fuel factor
+        f_fire_fuel = max(fuel-veg_par%fuel_min,0._wp) / ((fuel-veg_par%fuel_min) + veg_par%fuel_half)  ! [0-1]
+        ! CWD factor
+        f_fire_cwd = 1._wp / (1.0_wp + exp(-veg_par%k_cwd_fire * (mcwd - veg_par%cwd_0_fire)))     ! [0-1]
+        ! fire disturbance rate
+        gamma_fire = 1._wp/veg_par%tau_fire * pft_par%mort_fire(n) * f_fire_cwd * f_fire_fuel     ! 1/s
+        gamma_fire_cum(n) = gamma_fire_cum(n) + gamma_fire/real(nmon_year,wp)
+
+      endif
 
       ! MCWD-based tree mortality
       if (flag_tree(n)) then
         mcwd_50 = veg_par%ratio_mcwd * mcwd_clim
-        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(veg_par%k_mcwd * (mcwd - mcwd_50)))
+        sigmoid_factor = veg_par%M_max / (1.0_wp + exp(-veg_par%k_mcwd * (mcwd - mcwd_50)))
         gamma_mcwd(n) = sigmoid_factor
       else
         gamma_mcwd(n) = 0.0_wp

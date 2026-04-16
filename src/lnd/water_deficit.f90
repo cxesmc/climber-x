@@ -154,7 +154,7 @@ contains
     real(wp), intent(in) :: rain(:)           ! rainfall rate [kg/m2/s]
     real(wp), intent(in) :: snow(:)           ! snowfall rate [kg/m2/s]
     real(wp), intent(in) :: pet(:)            ! potential evapotranspiration [kg/m2/s]
-    real(wp), intent(inout) :: cwd_mon(:)        ! cumulative water deficit [kg/m2]
+    real(wp), intent(inout) :: cwd_mon(:)     ! monthly cumulative water deficit [kg/m2]
 
     integer :: n
     real(wp) :: prc_daily, pet_daily

@@ -787,8 +787,9 @@ contains
 
 
       if( time_eom_lnd ) then
-       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%theta_fire_cum, &
-                   lnd%gamma_dist_cum,lnd%gamma_fire_cum,lnd%mcwd,lnd%mcwd_clim)
+       call dynveg_par(lnd%disturbance,lnd%t2m_min_mon,lnd%gdd5,lnd%veg_c_above,lnd%f_veg,lnd%f_peat,lnd%pft_frac, &
+                      lnd%litter_c(1),lnd%litter_c_peat,lnd%lai_bal,lnd%mcwd,lnd%mcwd_clim,lnd%theta_fire_cum, &
+                      lnd%gamma_dist_cum,lnd%gamma_fire_cum,lnd%fuel,lnd%f_fire_fuel,lnd%f_fire_cwd)
       endif
 
       if( time_call_veg ) then
