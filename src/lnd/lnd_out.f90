@@ -40,7 +40,7 @@ module lnd_out
   use lnd_grid, only : ic_min, ic_peat, ic_shelf, ic_ice, ic_lake
   use lnd_grid, only : is_veg, is_ice, is_lake
   use lnd_grid, only : i_bare, i_pft, i_surf, i_soil
-  use lnd_params, only : dt, dt_day, peat_par, soilc_par
+  use lnd_params, only : dt, dt_day, veg_par, peat_par, soilc_par
   use lnd_params, only : i_weathering, weath_gemco2_par, weath_uhh_par
   use lnd_params, only : write_surf, write_surf_n, write_carbon, write_soil, write_soil_par, write_lake, write_cons, l_daily_output
   use lnd_def, only : lnd_2d_class, lnd_0d_class
@@ -158,6 +158,7 @@ module lnd_out
     real(wp), dimension(nx,ny,npft) :: lai, sai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, veg_h, pfts, seeds, vegc, lambda
     real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice, gamma_fire
     real(wp), dimension(nx,ny,npft) :: fire_c, fire_c13, fire_c14
+    real(wp), dimension(nx,ny) :: fuel, f_fire_fuel, f_fire_cwd
     real(wp), dimension(nx,ny) :: bare
     real(wp), dimension(nx,ny,ncarb) :: sresp, sresp13, sresp14, soilc, litter
     real(wp), allocatable, dimension(:,:,:,:) :: litter_prof, litter13_prof, litter14_prof
@@ -1674,10 +1675,10 @@ contains
                 ann_c%seeds(i,j,:)  = lnd(i,j)%seed_frac
                 ann_c%sai(i,j,:)   = lnd(i,j)%sai
                 ann_c%lambda(i,j,:)   = lnd(i,j)%lambda
-                ann_c%gamma_dist(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_dist*sec_year)    ! years
-                ann_c%gamma_fire(i,j,:)  = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_fire*sec_year)    ! years
-                ann_c%gamma_luc(i,j,:)   = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_luc*sec_year)     ! years
-                ann_c%gamma_ice(i,j,:)   = 1._wp/max(1.e-4_wp,lnd(i,j)%gamma_ice*sec_year)     ! years
+                ann_c%gamma_dist(i,j,:)  = lnd(i,j)%gamma_dist*sec_year    ! 1/years
+                ann_c%gamma_fire(i,j,:)  = lnd(i,j)%gamma_fire*sec_year    ! 1/years
+                ann_c%gamma_luc(i,j,:)   = lnd(i,j)%gamma_luc*sec_year     ! 1/years
+                ann_c%gamma_ice(i,j,:)   = lnd(i,j)%gamma_ice*sec_year     ! 1/years
                 ann_c%vegc(i,j,:)   = lnd(i,j)%veg_c
                 ann_c%soilc(i,j,:)  = lnd(i,j)%soil_c_tot
               enddo
@@ -1688,6 +1689,9 @@ contains
             ann_c%dCpeatdt= lnd%dCpeat_dt*sec_year*1.d3 ! gC/m2/yr
             ann_c%acroh= lnd%acro_h
             ann_c%catoh= lnd%cato_h
+            ann_c%fuel = lnd%fuel
+            ann_c%f_fire_fuel = lnd%f_fire_fuel
+            ann_c%f_fire_cwd = lnd%f_fire_cwd
             do i=1,nx
               do j=1,ny
                 ann_c%litterc_prof(i,j,:,ic_min)   = lnd(i,j)%litter_c
@@ -3006,10 +3010,10 @@ end do
     call nc_write(fnm,"pfts",      sngl(vars%pfts),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="pft fraction of icefree area",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"bare",      sngl(vars%bare),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="bare soil fraction of icefree area",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"lambda",sngl(vars%lambda),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="NPP partitioning factor",units="1",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"gamma_dist",sngl(vars%gamma_dist),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate",units="years",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"gamma_luc",sngl(vars%gamma_luc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from land use change",units="years",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"gamma_ice",sngl(vars%gamma_ice),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from ice sheets",units="years",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"gamma_fire",sngl(vars%gamma_fire),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire disturbance rate",units="years",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"gamma_dist",sngl(vars%gamma_dist), dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate",units="years^-1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"gamma_luc",sngl(vars%gamma_luc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from land use change",units="years^-1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"gamma_ice",sngl(vars%gamma_ice),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from ice sheets",units="years^-1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"gamma_fire",sngl(vars%gamma_fire),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="fire disturbance rate",units="years^-1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"vegc",      sngl(vars%vegc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="vegetation carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"soilc",     sngl(vars%soilc),  dims=[dim_lon,dim_lat,dim_ncarb,dim_time],start=[1,1,1,nout],count=[nx,ny,ncarb,1],long_name="soil carbon",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"sai",       sngl(vars%sai),   dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="stem area index",units="m2/m2",missing_value=missing_value,ncid=ncid)
@@ -3023,6 +3027,12 @@ end do
     call nc_write(fnm,"fastc_prof",       sngl(vars%fastc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="fast soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"slowc_prof",       sngl(vars%slowc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="slow soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"soilc_prof",       sngl(vars%soilc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="total soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
+   
+    if (veg_par%i_fire.eq.2) then
+    call nc_write(fnm,"fuel",       sngl(vars%fuel),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="fuel for fire",units="kgC/m2",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"f_fire_fuel", sngl(vars%f_fire_fuel),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="fuel factor for fire disturbance",units="1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"f_fire_cwd", sngl(vars%f_fire_cwd),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="Water deficit factor for fire disturbance",units="1",missing_value=missing_value,ncid=ncid)
+    endif
 
     call nc_write(fnm,"d13C_veg",     sngl(vars%d13c_veg),   dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="d13C vegetation carbon",units="permil",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"D14C_veg",     sngl(vars%D14c_veg),   dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="D14C vegetation carbon",units="permil",missing_value=missing_value,ncid=ncid)
