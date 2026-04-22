@@ -29,9 +29,10 @@
 module ocn_params
 
   use precision, only : wp
-  use nml
   use timer, only : dt_ocn, sec_day
   use control, only : out_dir
+  use nml
+  use ncio
 
   implicit none
 
@@ -116,7 +117,9 @@ module ocn_params
      real(wp) :: relax_bmelt
      real(wp) :: scale_runoff_ice
      real(wp) :: scale_calving_ice
+     integer :: i_scale_dhdt_ice
      real(wp) :: scale_dhdt_ice
+     character (len=256) :: scale_dhdt_ice_file
      ! peak and background temperatures for i_init option 3
      real(wp) :: init3_peak = 25.0_wp
      real(wp) :: init3_bg   = 15.0_wp
@@ -188,6 +191,9 @@ module ocn_params
     
      real(wp), dimension(:,:), allocatable :: rtv, rtv3
 
+     real(wp), allocatable :: scale_dhdt_ice_time(:)
+     real(wp), allocatable :: scale_dhdt_ice_data(:)
+
 contains
 
     subroutine ocn_params_init
@@ -213,6 +219,8 @@ subroutine ocn_par_load(filename)
 
     character (len=*) :: filename
     integer :: n
+    integer :: ntime
+
 
     ! Read parameters from file
     write(*,*) "ocean parameters ==========="
@@ -308,19 +316,16 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","relax_bmelt",relax_bmelt)
     call nml_read(filename,"ocn_par","scale_runoff_ice",scale_runoff_ice)
     call nml_read(filename,"ocn_par","scale_calving_ice",scale_calving_ice)
+    call nml_read(filename,"ocn_par","i_scale_dhdt_ice",i_scale_dhdt_ice)
     call nml_read(filename,"ocn_par","scale_dhdt_ice",scale_dhdt_ice)
-
-    call nml_read(filename,"ocn_par","l_hosing",l_hosing)
-    call nml_read(filename,"ocn_par","hosing_domain_name",hosing_domain_name)
-    n_hosing_domain = 0
-    do n=1,10
-      if (len_trim(hosing_domain_name(n)).ne.0) n_hosing_domain=n_hosing_domain+1
-    enddo
-    if (n_hosing_domain>n_hosing_domain_max) then
-      print *,'ERROR: too many hosing domains, n_hosing_domain>n_hosing_domain_max',n_hosing_domain,n_hosing_domain_max
-      stop
+    call nml_read(filename,"ocn_par","scale_dhdt_ice_file",scale_dhdt_ice_file)
+    if (i_scale_dhdt_ice.eq.1) then
+      ntime = nc_size(trim(scale_dhdt_ice_file),"time")
+      allocate( scale_dhdt_ice_time(ntime) )
+      allocate( scale_dhdt_ice_data(ntime) )
+      call nc_read(trim(scale_dhdt_ice_file),"time",scale_dhdt_ice_time)    
+      call nc_read(trim(scale_dhdt_ice_file),"scale_dhdt_ice",scale_dhdt_ice_data) 
     endif
-    call nml_read(filename,"ocn_par","hosing_comp_basin",hosing_comp_basin)
 
     call nml_read(filename,"ocn_par","l_noise_fw   ",l_noise_fw   )
     call nml_read(filename,"ocn_par","is_fw_noise_Sv",is_fw_noise_Sv)
