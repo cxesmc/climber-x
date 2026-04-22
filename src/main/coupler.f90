@@ -27,7 +27,7 @@
 module coupler
 
     use precision, only : wp, dp
-    use timer, only : doy, mon, year, sec_day, sec_year, nday_year, nmon_year, n_year_geo, nstep_mon_atm
+    use timer, only : doy, mon, year, year_now, sec_day, sec_year, nday_year, nmon_year, n_year_geo, nstep_mon_atm
     use timer, only : time_soy_atm, time_eoy_atm, time_soy_ocn, time_soy_sic, time_soy_lnd, time_eoy_lnd
     use timer, only : time_soy_bnd, time_soy_bgc, time_eoy_bgc, time_soy_smb, time_eoy_smb, time_eom_smb
     use timer, only : dt_atm
@@ -71,7 +71,8 @@ module coupler
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, tau_sst, tau_sss
     use ocn_params, only : l_ocn_input_fix, l_ocn_fix_wind, l_ocn_fix_fw, l_ocn_fix_flx, i_ocn_input_fix
     use ocn_params, only : n_cells_dist_runoff, n_cells_dist_calving, n_cells_dist_weath
-    use ocn_params, only : relax_run, relax_calv, relax_bmelt, scale_runoff_ice, scale_calving_ice, scale_dhdt_ice
+    use ocn_params, only : relax_run, relax_calv, relax_bmelt, scale_runoff_ice, scale_calving_ice
+    use ocn_params, only : i_scale_dhdt_ice, scale_dhdt_ice, scale_dhdt_ice_time, scale_dhdt_ice_data
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
     use lnd_grid, only : is_veg, is_ice, nl
@@ -3689,8 +3690,34 @@ contains
 
     type(cmn_class) :: cmn
 
-    integer :: i, j
+    integer :: i, j, imin, i0, i1
+    real(wp) :: w0, w1
 
+
+    ! interpolate scale_dhdt_ice to current time, if needed
+    if (i_scale_dhdt_ice.eq.1) then
+      if (year_now.le.scale_dhdt_ice_time(1)) then
+        scale_dhdt_ice = scale_dhdt_ice_data(1)
+      elseif (year_now.ge.scale_dhdt_ice_time(ubound(scale_dhdt_ice_time,1))) then
+        scale_dhdt_ice = scale_dhdt_ice_data(ubound(scale_dhdt_ice_data,1))
+      else
+        imin = minloc(abs(scale_dhdt_ice_time-year_now),1) 
+        if (scale_dhdt_ice_time(imin).lt.year_now) then
+          i0 = imin
+          i1 = imin+1
+        else
+          i0 = imin-1
+          i1 = imin
+        endif
+        if (scale_dhdt_ice_time(i1)-scale_dhdt_ice_time(i0).eq.0._wp) then
+          w0 = 1._wp
+        else
+          w0 = 1._wp - abs(scale_dhdt_ice_time(i0)-year_now)/(scale_dhdt_ice_time(i1)-scale_dhdt_ice_time(i0))
+        endif
+        w1 = 1._wp - w0
+        scale_dhdt_ice = w0*scale_dhdt_ice_data(i0) + w1*scale_dhdt_ice_data(i1)
+      endif
+    endif
 
     do j=1,nj
       do i=1,ni

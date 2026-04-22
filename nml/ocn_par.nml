@@ -171,7 +171,11 @@
  relax_bmelt = 0.             ! relaxation factor for basal melt fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  scale_runoff_ice = 1.        ! scaling factor for runoff from ice sheets, used only if SMB model is enabled (flag_smb==T)
  scale_calving_ice = 1.       ! scaling factor for runoff from ice sheets, used only if ice sheets are interactive (flag_ice==T)
- scale_dhdt_ice = 1.          ! scaling factor for freshwater flux from changes in ice sheet thickness, only used if ice sheet evolution is prescribed (ifake_ice==T)
+ i_scale_dhdt_ice = 0         ! scaling of freshwater flux from changes in ice sheet thickness:
+                              ! 0 = constant scaling factor scale_dhdt_ice
+                              ! 1 = time-dependent scaling factor read from scale_dhdt_ice_file
+ scale_dhdt_ice = 1.          ! scaling factor for freshwater flux from changes in ice sheet thickness, only used if ice sheet evolution is prescribed (ifake_ice==T) and i_scale_dhdt_ice==0
+ scale_dhdt_ice_file = "input/scale_dhdt_ice.nc"    ! use only if i_scale_dhdt_ice==1
 
  !-------------------------------------------------------------------------------------------
  ! additional tracers
