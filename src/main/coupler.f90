@@ -187,6 +187,8 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: f_lake_n !! individual lake fraction in each grid cell []
       real(wp), dimension(:,:),   allocatable :: f_crop !! crop fraction of land fraction []
       real(wp), dimension(:,:),   allocatable :: f_pasture !! pasture fraction of land fraction []
+      real(wp), dimension(:,:),   allocatable :: df_crop !! change in crop fraction of land fraction []
+      real(wp), dimension(:,:),   allocatable :: df_pasture !! change in pasture fraction of land fraction []
       real(wp), dimension(:,:,:), allocatable :: disturbance !! vegetation disturbance rate [1/s]
       real(wp), dimension(:,:,:), allocatable :: f_stp  !! surface types fraction []
       real(wp), dimension(:,:,:), allocatable :: f_astp  !! surface types fraction in atmosphere model []
@@ -1276,6 +1278,8 @@ contains
       ! land cover state
       lnd%l2d%f_crop    = cmn%f_crop
       lnd%l2d%f_pasture = cmn%f_pasture
+      lnd%l2d%df_crop    = cmn%df_crop
+      lnd%l2d%df_pasture = cmn%df_pasture
 
       ! disturbance rate
       do j=1,nj
@@ -3361,6 +3365,8 @@ contains
       ! land use state
       cmn%f_crop(:,:)    = bnd%f_crop(:,:)
       cmn%f_pasture(:,:) = bnd%f_pasture(:,:)
+      cmn%df_crop(:,:)    = bnd%df_crop(:,:)
+      cmn%df_pasture(:,:) = bnd%df_pasture(:,:)
 
       ! disturbance rate
       cmn%disturbance(:,:,:) = bnd%disturbance(:,:,:)
@@ -4227,6 +4233,8 @@ contains
     allocate(cmn%f_lake(ni,nj))    
     allocate(cmn%f_crop(ni,nj))    
     allocate(cmn%f_pasture(ni,nj))    
+    allocate(cmn%df_crop(ni,nj))    
+    allocate(cmn%df_pasture(ni,nj))    
     allocate(cmn%disturbance(5,ni,nj))    
     allocate(cmn%z_sur(ni,nj))    
     allocate(cmn%z_sur_n(ni,nj,nsurf_macro))    

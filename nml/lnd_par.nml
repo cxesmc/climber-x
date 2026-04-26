@@ -165,6 +165,9 @@
     psi_min     = -1000.        ! m, matric potential below which no soil respiration, used only if iresp_moist==2
     heat_soc     = F            ! include the effect of heat generation by soil microbial decomposition?
     k_ice        = 1.e4         ! yr, turnover time of carbon below ice sheets
+    gamma_luc_Clitter_crop = 1.    ! 1/yr, litter carbon turnover rate for land use change (cropland)
+    gamma_luc_Clitter_pasture = 1. ! 1/yr, litter carbon turnover rate for land use change (pasture)
+    gamma_luc_Csoil_crop = 0.2     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
 
     !------------------------------------------------------------------------------------
     ! burial of soil carbon
@@ -222,9 +225,10 @@
     !------------------------------------------------------------------------------------
     ! N2O emission params
     !------------------------------------------------------------------------------------
-    k_n2o            = 5.e-7    ! kg N2O-N/m2/day, emission rate at 10 degC and 
-    q10_n2o          = 2.0      ! q10 for temperature dependence of N2O emission
-    theta_exp        = 3.0      ! power of emission dependence on relative soil moisture
+    k_n2o_nit        = 5.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
+    k_n2o_denit      = 5.e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
+    q10_n2o          = 1.0      ! q10 for temperature dependence of N2O emission
+    wfps_crit_denit  = 0.7      ! critical water filled pore space for denitrification
 
     !------------------------------------------------------------------------------------
     ! vegetation params

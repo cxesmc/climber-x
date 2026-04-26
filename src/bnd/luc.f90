@@ -72,7 +72,7 @@ contains
    end subroutine luc_init
 
 
-    subroutine luc_update(iluc, time_now, f_crop, f_pasture)
+    subroutine luc_update(iluc, time_now, f_crop, f_pasture, df_crop, df_pasture)
 
     implicit none
 
@@ -80,10 +80,18 @@ contains
     real(wp), intent(in) :: time_now       ! current year BP
     real(wp), intent(inout) :: f_crop(:,:)  ! current crop fraction
     real(wp), intent(inout) :: f_pasture(:,:)  ! current pasture fraction
+    real(wp), intent(inout) :: df_crop(:,:)  ! change in crop fraction
+    real(wp), intent(inout) :: df_pasture(:,:)  ! change in pasture fraction
 
     integer :: imin, i0, i1
     real(wp) :: w0, w1
+    real(wp), allocatable :: f_crop_old(:,:)
+    real(wp), allocatable :: f_pasture_old(:,:)
 
+
+    ! save fields from previous step
+    f_crop_old(:,:)    = f_crop(:,:)
+    f_pasture_old(:,:) = f_pasture(:,:)
 
     if (iluc.eq.1) then
 
@@ -120,6 +128,9 @@ contains
 
     endif
 
+    ! compute changes in crop and pasture fraction
+    df_crop(:,:) = f_crop(:,:) - f_crop_old(:,:)
+    df_pasture(:,:) = f_pasture(:,:) - f_pasture_old(:,:)
 
    return
 

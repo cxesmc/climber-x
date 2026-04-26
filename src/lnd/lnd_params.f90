@@ -398,6 +398,9 @@ module lnd_params
     real(wp) :: psi_min, psi_max
     real(wp) :: Ea
     real(wp) :: q10_c
+    real(wp) :: gamma_luc_Clitter_crop  !! litter carbon turnover rate due to cropland expansion [1/s]
+    real(wp) :: gamma_luc_Clitter_pasture  !! litter carbon turnover rate due to pasture expansion [1/s]
+    real(wp) :: gamma_luc_Csoil_crop  !! fast soil carbon turnover rate due to cropland expansion [1/s]
     real(wp) :: diff_bio, diff_cryo, diff_shelf, diff_ice, diff_lake
     real(wp) :: diff_min = 0._wp/sec_year   !! minimum soil carbon vertical diffusivity (for stability) [m2/s]
     real(wp) :: z_diff   !! e-folding depth for diffusivity reduction with depth
@@ -425,9 +428,10 @@ module lnd_params
 
   ! N2O parameters
   type n2o_par_type
-    real(wp) :: k_n2o
+    real(wp) :: k_n2o_nit
+    real(wp) :: k_n2o_denit
     real(wp) :: q10_n2o
-    real(wp) :: theta_exp
+    real(wp) :: wfps_crit_denit
   end type
   type(n2o_par_type) :: n2o_par
 
@@ -924,6 +928,12 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","n_alt",soilc_par%n_alt)
     call nml_read(filename,"lnd_par","k_ice",soilc_par%k_ice)
     soilc_par%k_ice = 1._wp/soilc_par%k_ice/sec_year ! 1/s
+    call nml_read(filename,"lnd_par","gamma_luc_Clitter_crop",soilc_par%gamma_luc_Clitter_crop)
+    call nml_read(filename,"lnd_par","gamma_luc_Clitter_pasture",soilc_par%gamma_luc_Clitter_pasture)
+    call nml_read(filename,"lnd_par","gamma_luc_Csoil_crop",soilc_par%gamma_luc_Csoil_crop)
+    soilc_par%gamma_luc_Clitter_crop = soilc_par%gamma_luc_Clitter_crop/sec_year   ! 1/s
+    soilc_par%gamma_luc_Clitter_pasture = soilc_par%gamma_luc_Clitter_pasture/sec_year   ! 1/s
+    soilc_par%gamma_luc_Csoil_crop = soilc_par%gamma_luc_Csoil_crop/sec_year   ! 1/s
 
     call nml_read(filename,"lnd_par","diff_bio",soilc_par%diff_bio)
     call nml_read(filename,"lnd_par","diff_cryo",soilc_par%diff_cryo)
@@ -968,9 +978,10 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","ch4_frac_shelf",ch4_par%ch4_frac_shelf)
     call nml_read(filename,"lnd_par","ch4_frac_lake",ch4_par%ch4_frac_lake)
 
-    call nml_read(filename,"lnd_par","k_n2o",n2o_par%k_n2o)
+    call nml_read(filename,"lnd_par","k_n2o_nit",n2o_par%k_n2o_nit)
+    call nml_read(filename,"lnd_par","k_n2o_denit",n2o_par%k_n2o_denit)
     call nml_read(filename,"lnd_par","q10_n2o",n2o_par%q10_n2o)
-    call nml_read(filename,"lnd_par","theta_exp",n2o_par%theta_exp)
+    call nml_read(filename,"lnd_par","wfps_crit_denit",n2o_par%wfps_crit_denit)
 
     call nml_read(filename,"lnd_par","lithology_uhh_file",lithology_uhh_file)
     call nml_read(filename,"lnd_par","lithology_gemco2_file",lithology_gemco2_file)

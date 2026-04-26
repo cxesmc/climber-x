@@ -51,6 +51,7 @@ module lnd_def
      real(wp) :: f_land, f_land0, f_ice, f_ice_old, f_ice_grd, f_ice_grd_old, f_ice_nbr, f_shelf, f_shelf_old, f_lake, f_lake_old, f_veg, f_veg_old
      real(wp) :: z_veg_std, z_veg, z_veg_min, z_veg_max
      real(wp) :: f_crop, f_pasture
+     real(wp) :: df_crop, df_pasture
      real(wp) :: t2m_min_mon
      real(wp) :: t2m_ann_mean
      real(wp) :: infiltration, w_table, w_table_peat
