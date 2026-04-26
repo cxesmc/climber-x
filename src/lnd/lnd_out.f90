@@ -572,13 +572,9 @@ contains
     global_prc   = 0._wp
     global_snow = 0._wp
     global_dust_e = 0._wp
-    global_n2o    = 0._wp
-    global_n2otrop= 0._wp
-    global_n2oextrop= 0._wp
 
     !$omp parallel do collapse(2) private(i,j,k) &
-    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_calving,global_drain,global_run,global_snow,global_dust_e) &
-    !$omp reduction(+:global_n2o,global_n2otrop,global_n2oextrop) 
+    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_calving,global_drain,global_run,global_snow,global_dust_e)
     do j = 1, ny
       do i = 1, nx
         if( lnd(i,j)%f_land.gt.0._wp ) then
@@ -630,17 +626,6 @@ contains
             * area(i,j) * 1.d-12 ! 10^12 m3
           ! dust emissions
           global_dust_e = global_dust_e + lnd(i,j)%dust_emis * area(i,j) * 1.e-9 * dt ! kg/m2/s*s*m2*Tg/kg = Tg
-          ! N2O
-          tmp = lnd(i,j)%n2o_emis*lnd(i,j)%f_veg * area(i,j) * dt * 1.d-9   ! TgN2O-N
-          global_n2o = global_n2o + tmp
-          ! tropical N2O
-          if (lat(j).ge.-30.and.lat(j).le.30) then
-            global_n2otrop = global_n2otrop + tmp
-          endif
-          ! extratropical N2O
-          if (abs(lat(j)).gt.30) then
-            global_n2oextrop = global_n2oextrop + tmp
-          endif
         endif
       enddo
     enddo
@@ -677,9 +662,6 @@ contains
     mon_ts(y,mon)%t      = mon_ts(y,mon)%t   + (global_t / sum(lnd%f_veg * area))  * mon_avg  ! K
     mon_ts(y,mon)%snow   = mon_ts(y,mon)%snow+ global_snow * mon_avg
     mon_ts(y,mon)%dust_e = mon_ts(y,mon)%dust_e+ global_dust_e
-    mon_ts(y,mon)%n2o       = mon_ts(y,mon)%n2o       + global_n2o
-    mon_ts(y,mon)%n2otrop   = mon_ts(y,mon)%n2otrop   + global_n2otrop
-    mon_ts(y,mon)%n2oextrop = mon_ts(y,mon)%n2oextrop + global_n2oextrop
 
 
     ! at the end of month
@@ -742,6 +724,9 @@ contains
       global_ch4lake  = 0._wp
       global_ch4extrop= 0._wp
       global_c13h4  = 0._wp
+      global_n2o    = 0._wp
+      global_n2otrop= 0._wp
+      global_n2oextrop= 0._wp
 
       !$omp parallel do collapse(2) private(i,j,k,n,npp_ij,npp13_ij,npp14_ij,sresp_ij,sresp13_ij,sresp14_ij,tmp,litterc,fastc, slowc,minc,peatc,icec,shelfc,lakec) &
       !$omp reduction(+:global_npp,global_npp_pimask,global_npp13,global_npp14,global_sresp,global_sresp13,global_sresp14,global_fire_c,global_inund) &
@@ -751,7 +736,8 @@ contains
       !$omp reduction(+:global_litterc,global_fastc,global_slowc,global_soilc60N,global_soilc60N1m) &
       !$omp reduction(+:global_minc,global_peatc,global_icec,global_shelfc,global_lakec,global_permc,global_soilc_pimask,global_inertc) &
       !$omp reduction(+:global_minc1m,global_peatc1m,global_icec1m,global_shelfc1m,global_lakec1m,global_permc1m,global_soilc1m_pimask) &
-      !$omp reduction(+:global_minc3m,global_peatc3m,global_icec3m,global_shelfc3m,global_lakec3m,global_permc3m,global_soilc3m_pimask) 
+      !$omp reduction(+:global_minc3m,global_peatc3m,global_icec3m,global_shelfc3m,global_lakec3m,global_permc3m,global_soilc3m_pimask) &
+      !$omp reduction(+:global_n2o,global_n2otrop,global_n2oextrop) 
       do i = 1, nx
         do j = 1, ny
           if( lnd(i,j)%f_land.gt.0._wp ) then
@@ -831,6 +817,17 @@ contains
             + lnd(i,j)%c13h4_emis_shelf*lnd(i,j)%f_shelf & ! shelf
             + lnd(i,j)%c13h4_emis_peat*lnd(i,j)%f_peat) & ! peatland
             * sec_year * area(i,j) * 1.d-9   ! TgC13H4/yr
+            ! N2O
+            tmp = lnd(i,j)%n2o_emis*lnd(i,j)%f_veg * area(i,j) * sec_year * 1.d-9   ! TgN2O-N
+            global_n2o = global_n2o + tmp
+            ! tropical N2O
+            if (lat(j).ge.-30.and.lat(j).le.30) then
+              global_n2otrop = global_n2otrop + tmp
+            endif
+            ! extratropical N2O
+            if (abs(lat(j)).gt.30) then
+              global_n2oextrop = global_n2oextrop + tmp
+            endif
             do k = 1, npft
               ! PFTs area
               global_pfts(k) = global_pfts(k) + lnd(i,j)%frac_surf(k) * area(i,j) * 1.d-12  ! mln km2
@@ -1056,6 +1053,9 @@ contains
       else
         mon_ts(y,mon)%d13ch4   = 0._wp
       endif
+      mon_ts(y,mon)%n2o       = global_n2o
+      mon_ts(y,mon)%n2otrop   = global_n2otrop
+      mon_ts(y,mon)%n2oextrop = global_n2oextrop
 
     endif ! time_eoy_lnd
 
@@ -2233,6 +2233,8 @@ contains
     ave%ch4extrop = 0._wp
     ave%d13ch4  = 0._wp
     ave%n2o     = 0._wp
+    ave%n2otrop = 0._wp
+    ave%n2oextrop = 0._wp
     ave%dust_e = 0._wp
     ave%fire_c = 0._wp
 
@@ -2305,7 +2307,9 @@ contains
      ave%ch4lake = ave%ch4lake    + d(k)%ch4lake  / div
      ave%ch4extrop = ave%ch4extrop    + d(k)%ch4extrop/ div
      ave%d13ch4  = ave%d13ch4     + d(k)%d13ch4/ div
-     ave%n2o     = ave%n2o        + d(k)%n2o    
+     ave%n2o     = ave%n2o        + d(k)%n2o / div
+     ave%n2otrop = ave%n2otrop        + d(k)%n2otrop / div
+     ave%n2oextrop = ave%n2oextrop    + d(k)%n2oextrop / div
      ave%dust_e  = ave%dust_e     + d(k)%dust_e
      ave%fire_c    = ave%fire_c       + d(k)%fire_c
 end do

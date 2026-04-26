@@ -108,6 +108,8 @@ module bnd_mod
      real(wp), dimension(:,:,:), allocatable :: o3
      real(wp), dimension(:,:), allocatable :: f_crop
      real(wp), dimension(:,:), allocatable :: f_pasture
+     real(wp), dimension(:,:), allocatable :: df_crop
+     real(wp), dimension(:,:), allocatable :: df_pasture
      real(wp), dimension(:,:,:), allocatable :: disturbance
      real(wp) :: sea_level
      real(wp) :: cfc11, cfc12
@@ -233,7 +235,7 @@ contains
 
       ! update land use state if required
       if( iluc.eq.2 ) then
-        call luc_update(iluc, real(year_now,kind=wp), bnd%f_crop, bnd%f_pasture)     
+        call luc_update(iluc, real(year_now,kind=wp), bnd%f_crop, bnd%f_pasture, bnd%df_crop, bnd%df_pasture)     
       endif
 
       ! update vegetation disturbance rate if required
@@ -475,11 +477,13 @@ contains
     if (iluc.eq.0) then
       bnd%f_crop(:,:)    = 0._wp
       bnd%f_pasture(:,:) = 0._wp
+      bnd%df_crop(:,:)    = 0._wp
+      bnd%df_pasture(:,:) = 0._wp
     elseif (iluc.eq.1 .or. iluc.eq.2) then
       ! read luc file
       call luc_init(iluc, luc_file)
       ! get initial luc value
-      call luc_update(iluc,real(year_ini,kind=wp),bnd%f_crop,bnd%f_pasture)
+      call luc_update(iluc,real(year_ini,kind=wp),bnd%f_crop,bnd%f_pasture,bnd%df_crop,bnd%df_pasture)
     endif
 
     ! initialize vegetation disturbance rate
@@ -581,6 +585,8 @@ contains
 
     allocate(bnd%f_crop(ni,nj))
     allocate(bnd%f_pasture(ni,nj))
+    allocate(bnd%df_crop(ni,nj))
+    allocate(bnd%df_pasture(ni,nj))
     allocate(bnd%disturbance(5,ni,nj))
 
     return
@@ -613,6 +619,8 @@ contains
 
     deallocate(bnd%f_crop)
     deallocate(bnd%f_pasture)
+    deallocate(bnd%df_crop)
+    deallocate(bnd%df_pasture)
     deallocate(bnd%disturbance)
 
     deallocate(bnd%atm%taux)

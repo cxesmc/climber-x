@@ -27,7 +27,6 @@ module n2o_emis_mod
 
   use precision, only : wp
   use constants, only : T0
-  use timer, only : sec_day
   use lnd_params, only : n2o_par
 
   implicit none
@@ -41,29 +40,36 @@ contains
   !   Subroutine :  n 2 o _ e m i s s i o n 
   !   Purpose    :  n2o emissions 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine n2o_emission(t_soil, theta_w, theta_sat, &
+  subroutine n2o_emission(soil_resp, t_soil, theta_w, theta_field, theta_sat, &
                       n2o_emis)
 
   implicit none
 
+  real(wp), intent(in) :: soil_resp     !! soil respiration rate [kgC/m2/s]
   real(wp), intent(in) :: t_soil        !! soil temperature of the top layer [K]
   real(wp), intent(in) :: theta_w       !! liquid soil water content of the top layer [m3/m3]
+  real(wp), intent(in) :: theta_field   !! soil water content at field capacity [m3/m3]
   real(wp), intent(in) :: theta_sat     !! soil porosity [m3/m3]
 
   real(wp), intent(out) :: n2o_emis     !! n2o emissions [kg N2O-N/m2/s]
 
-  real(wp) :: fac_t, fac_sm
+  real(wp) :: fac_t, fac_sm_nit, fac_sm_denit
   real(wp), parameter :: t_soil_ref = T0+10._wp  ! K
+  real(wp), parameter :: sigma = 0.2_wp
+  real(wp), parameter :: a = 18._wp
 
 
   ! temperature factor
   fac_t = n2o_par%q10_n2o**((t_soil-t_soil_ref)/10._wp) 
 
   ! soil moisture factor 
-  fac_sm = (theta_w/theta_sat)**n2o_par%theta_exp
+  ! for nitrification, peak at field capacity
+  fac_sm_nit = exp(-((theta_w/theta_sat-theta_field/theta_sat)/sigma)**2)
+  ! for denitricifation, rapid increase close to saturation
+  fac_sm_denit = 1._wp/(1._wp + exp(-a*(theta_w/theta_sat-n2o_par%wfps_crit_denit)))
 
   ! N2O emissions
-  n2o_emis = n2o_par%k_n2o/sec_day * fac_t * fac_sm     ! kg N2O-N/m2/s
+  n2o_emis = soil_resp * fac_t * (n2o_par%k_n2o_nit*fac_sm_nit + n2o_par%k_n2o_denit*fac_sm_denit)     ! kg N2O-N/m2/s
 
   return
 

@@ -316,6 +316,7 @@ contains
 
     integer i, j, n
     real(wp) :: w_lgm
+    real(wp) :: soil_resp
 
 
       if( time_soy_lnd ) then
@@ -818,7 +819,7 @@ contains
        if( time_call_carb ) then 
         ! update soil carbon content
         if( lnd%f_veg .gt. 0._wp ) then
-         call soil_carbon(lnd%f_veg,lnd%f_wetland,lnd%f_peat, &
+         call soil_carbon(lnd%f_veg,lnd%f_wetland,lnd%f_peat,lnd%f_crop,lnd%f_pasture, &
                         lnd%litterfall(:,ic_min),lnd%litterfall13(:,ic_min),lnd%litterfall14(:,ic_min), &
                         lnd%litter_c,lnd%fast_c,lnd%slow_c, &
                         lnd%litter_c13,lnd%fast_c13,lnd%slow_c13, &
@@ -885,6 +886,16 @@ contains
                          lnd%carbon_cons_soil(ic_lake),lnd%carbon13_cons_soil(ic_lake),lnd%carbon14_cons_soil(ic_lake))
         endif
 
+        ! N2O emissions
+        if (lnd%f_veg.gt.0._wp) then
+          soil_resp = lnd%soil_resp(ic_min)*(lnd%f_veg-lnd%f_peat)+lnd%soil_resp(ic_peat)*lnd%f_peat
+          call n2o_emission(soil_resp, lnd%t_soil(1), lnd%theta_w(1), lnd%theta_field(1), lnd%theta_sat(1), &
+                            lnd%n2o_emis)
+        else
+          lnd%n2o_emis = 0._wp
+        endif
+
+
         if (minval(lnd%litter_c).lt.0._wp) then
           print *,'litter<0',doy,year,i,j
           print *,lnd%litter_c
@@ -922,14 +933,6 @@ contains
          lnd%dust_emis_g = 0._wp
          lnd%dust_emis_s = 0._wp
          lnd%dust_emis = 0._wp
-       endif
-
-       ! N2O emissions
-       if (lnd%f_veg.gt.0._wp) then
-         call n2o_emission(lnd%t_soil(1), lnd%theta_w(1), lnd%theta_sat(1), &
-                           lnd%n2o_emis)
-       else
-         lnd%n2o_emis = 0._wp
        endif
 
        if (time_eoy_lnd) then

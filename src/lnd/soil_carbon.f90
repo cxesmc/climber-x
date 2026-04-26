@@ -29,7 +29,7 @@ module soil_carbon_mod
   use timer, only : day_mon
   use constants, only : c14_tdec
   use control, only : check_carbon
-  use lnd_grid, only : dz_c, rdz_c, rdz_pos_c, rdz_neg_c
+  use lnd_grid, only : z, dz_c, rdz_c, rdz_pos_c, rdz_neg_c
   use lnd_grid, only : nl, nlc, ncarb, ic_min
   use lnd_params, only : dt_c, dt_day_c
   use lnd_params, only : soilc_par, ch4_par
@@ -46,7 +46,7 @@ contains
   !   Subroutine :  s o i l _ c a r b o n
   !   Purpose    :  solve soil carbon prognostic equations
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine soil_carbon(f_veg,f_wetland,f_peat,litterfall,litterfall13,litterfall14, &
+  subroutine soil_carbon(f_veg,f_wetland,f_peat,f_crop,f_pasture,litterfall,litterfall13,litterfall14, &
                         litter_c,fast_c,slow_c,litter_c13,fast_c13,slow_c13,litter_c14,fast_c14,slow_c14, &
                         k_litter,k_fast,k_slow,k_litter_wet,k_fast_wet,k_slow_wet,diff_soilc,adv_soilc,ch4_frac_wet, &
                         soil_resp,soil_resp13,soil_resp14,soil_resp_l,soil_c_tot,soil_c13_tot,soil_c14_tot, &
@@ -54,7 +54,7 @@ contains
 
     implicit none
 
-    real(wp), intent(in) :: f_veg, f_wetland, f_peat
+    real(wp), intent(in) :: f_veg, f_wetland, f_peat, f_crop, f_pasture
     real(wp), dimension(:), intent(in) :: litterfall, litterfall13, litterfall14
     real(wp), dimension(:), intent(inout) :: litter_c, fast_c, slow_c, litter_c13, fast_c13, slow_c13, litter_c14, fast_c14, slow_c14
     real(wp), dimension(:), intent(inout) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
@@ -100,6 +100,17 @@ contains
             / real(dt_day_c,wp)*day_mon
     kslow   = ((1._wp-f_inund)*k_slow   + f_inund*k_slow_wet) &
             / real(dt_day_c,wp)*day_mon
+
+    ! add additional contribution due to land use change
+    do k=1,nl
+      ! litter affected by both cropland and pasture expansion
+      klitter(k) = klitter(k) + soilc_par%gamma_luc_Clitter_crop*f_crop + soilc_par%gamma_luc_Clitter_pasture*f_pasture 
+      if (z(k).lt.0.5_wp) then
+        ! fast soil carbon pool affected only by cropland and only in the top 0.5 meter of soil
+        kfast(k) = kfast(k) + soilc_par%gamma_luc_Csoil_crop*f_crop
+      endif
+    enddo
+
     ! vertical carbon diffusivity
     diff = diff_soilc / real(dt_day_c,wp)*day_mon
     ! vertical carbon advection
