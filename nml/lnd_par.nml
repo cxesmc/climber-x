@@ -155,6 +155,7 @@
     Ea         = 0.32           ! eV, activation energy for Arrhenius dependence of soil respiration on temperature only for iresp_temp=2, 
                                 ! 0.32 corresponds roughly to q10=1.5
     q10_c      = 1.5            ! Q10 for temperature dependence of soil respiration, only if iresp_temp=3
+    temp_max_crit_resp = 45.    ! degC, critical soil temperature above which soil respiration is gradually suppressed, reflecting enzyme denaturation 
     iresp_moist = 3             ! param of moisture dependence of soil respiration:
                                 ! 0..no soil respiration dependence on soil moisture
                                 ! 1..Porporato 2003

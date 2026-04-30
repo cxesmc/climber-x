@@ -154,18 +154,21 @@ contains
     do k=1,nl
       if (soilc_par%iresp_temp.eq.1) then ! Lloyd & Taylor 1994
         if( t_soil_mean(k) .gt. 240._wp ) then
-          ftemp(k) = exp(308.56_wp * (1._wp/56.02_wp - 1._wp/(46.02_wp+t_soil_mean(k)-T0)) )
+          ftemp(k) = exp(308.56_wp * (1._wp/56.02_wp - 1._wp/(46.02_wp+t_soil_mean(k)-T0)) ) &
+                   * 1._wp/(1._wp+exp(0.3_wp*(t_soil_mean(k)-(T0+soilc_par%temp_max_crit_resp))))  ! logistic suppression at high temperatures, reflecting enzyme denaturation
         else
           ftemp(k) = 0._wp
         endif
       elseif (soilc_par%iresp_temp.eq.2) then ! Arrhenius
         if( t_soil_mean(k) .gt. 260._wp ) then
-          ftemp(k) = exp(soilc_par%Ea*(1._wp/(k_boltz*283.15_wp)-1._wp/(k_boltz*t_soil_mean(k))))
+          ftemp(k) = exp(soilc_par%Ea*(1._wp/(k_boltz*283.15_wp)-1._wp/(k_boltz*t_soil_mean(k)))) &
+                   * 1._wp/(1._wp+exp(0.3_wp*(t_soil_mean(k)-(T0+soilc_par%temp_max_crit_resp))))  ! logistic suppression at high temperatures, reflecting enzyme denaturation
         else
           ftemp(k) = 0._wp
         endif
       elseif (soilc_par%iresp_temp.eq.3) then ! Q10
-        ftemp(k) = soilc_par%q10_c**((t_soil_mean(k)-283.15_wp)/10._wp)
+        ftemp(k) = soilc_par%q10_c**((t_soil_mean(k)-283.15_wp)/10._wp) &
+                 * 1._wp/(1._wp+exp(0.3_wp*(t_soil_mean(k)-(T0+soilc_par%temp_max_crit_resp))))  ! logistic suppression at high temperatures, reflecting enzyme denaturation
       endif
     enddo
 
