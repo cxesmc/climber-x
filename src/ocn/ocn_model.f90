@@ -42,7 +42,7 @@ module ocn_model
     use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, i_brines, i_brines_z, frac_brines
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
-    use ocn_params, only : l_mld, l_hosing, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
+    use ocn_params, only : l_mld, l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
     use ocn_params, only : l_ocn_input_fix, i_ocn_input_fix, l_ocn_input_fix_write, ocn_input_fix_file
     use ocn_params, only : l_noise_fw, l_noise_flx
     use ocn_params, only : tau_scale, ke_tau_coeff
@@ -254,6 +254,13 @@ contains
     ! update freshwater hosing and add it to freshwater flux, if needed
     if (l_hosing .and. time_soy_ocn) then
       call hosing_update(real(year_now,wp),ocn%f_ocn,ocn%fw_hosing,ocn%fw_hosing_comp)
+    endif
+    ! Volume compensation for hosing flux
+    if (i_hosing_comp.eq.2) then
+      ! update salinity 
+      where (mask_c.eq.1) 
+        ocn%ts(:,:,:,2) = ocn%ts(:,:,:,2) + sum(ocn%fw_hosing(:,:)*ocn%grid%ocn_area(:,:))*ocn%saln0/rho0 / ocn%grid%ocn_vol_tot * dt  ! kg/m2/s * m2 * psu * m3/kg /m3 *s = psu
+      endwhere
     endif
     ocn%fw_corr = ocn%fw_corr + ocn%fw_hosing + ocn%fw_hosing_comp
 
