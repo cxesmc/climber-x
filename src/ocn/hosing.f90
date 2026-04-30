@@ -7,7 +7,7 @@ module hosing_mod
   use climber_grid, only : lat, lon, basin_mask, i_atlantic, i_pacific, i_southern
   use ocn_grid, only : maxi, maxj, dx, dy
   use ocn_params, only: dt, rho0
-  use ocn_params, only : n_hosing_domain, n_hosing_domain_max, hosing_domain_name, hosing_comp_basin
+  use ocn_params, only : n_hosing_domain, n_hosing_domain_max, hosing_domain_name, i_hosing_comp, hosing_comp_basin
   use ncio
   use nml
 
@@ -93,7 +93,7 @@ contains
 
     ! apply compensation flux if needed
 
-    if (hosing_comp_basin.ge.0) then 
+    if (i_hosing_comp.eq.1) then 
 
       ! compute area of hosing compensation domain
       call hosing_domain_area(f_ocn, hosing_comp_mask, hosing_comp_area)
@@ -126,7 +126,7 @@ contains
     enddo
 
     ! initialize hosing compensation domain
-    if (hosing_comp_basin.ge.0) then 
+    if (i_hosing_comp.eq.1) then 
       allocate(hosing_comp_mask(maxi,maxj))
       call hosing_comp_domain_init(hosing_comp_mask)
       if (hosing_comp_basin.eq.0) then
