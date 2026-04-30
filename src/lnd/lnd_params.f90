@@ -398,6 +398,7 @@ module lnd_params
     real(wp) :: psi_min, psi_max
     real(wp) :: Ea
     real(wp) :: q10_c
+    real(wp) :: temp_max_crit_resp
     real(wp) :: gamma_luc_Clitter_crop  !! litter carbon turnover rate due to cropland expansion [1/s]
     real(wp) :: gamma_luc_Clitter_pasture  !! litter carbon turnover rate due to pasture expansion [1/s]
     real(wp) :: gamma_luc_Csoil_crop  !! fast soil carbon turnover rate due to cropland expansion [1/s]
@@ -925,6 +926,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","psi_max",soilc_par%psi_max)
     call nml_read(filename,"lnd_par","Ea",soilc_par%Ea)
     call nml_read(filename,"lnd_par","q10_c",soilc_par%q10_c)
+    call nml_read(filename,"lnd_par","temp_max_crit_resp",soilc_par%temp_max_crit_resp)
     call nml_read(filename,"lnd_par","n_alt",soilc_par%n_alt)
     call nml_read(filename,"lnd_par","k_ice",soilc_par%k_ice)
     soilc_par%k_ice = 1._wp/soilc_par%k_ice/sec_year ! 1/s
