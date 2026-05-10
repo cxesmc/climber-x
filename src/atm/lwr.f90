@@ -634,7 +634,7 @@ contains
         ! equation (6.6) in PIK report 81, valid for a broad range of CO2 concentrations (up to 20 times present day)
         ! modified with additional factor (1.-0.1*(am_co2_kl/1000.)^2) to get increasing CO2 radiative forcing for increasing CO2 
         ! (in agreement with Hansen 2005, Table 1 and Colman & McAvaney 2009, Fig. 1)
-        d_co2 = (1._wp-0.1_wp*(am_co2_kl/1000._wp)**2)*(1._wp+a0_co2*a1_co2*((beta0*am_co2_kl)**beta_co2))/(1._wp+a0_co2*((beta0*am_co2_kl)**beta_co2))
+        d_co2 = (1._wp-min(0.2_wp,0.1_wp*(am_co2_kl/1000._wp)**2))*(1._wp+a0_co2*a1_co2*((beta0*am_co2_kl)**beta_co2))/(1._wp+a0_co2*((beta0*am_co2_kl)**beta_co2))
 
         ! clouds, using optical thickness
         d_cld = exp(-c_lw_clot*am_cld_kl)

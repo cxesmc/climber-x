@@ -94,7 +94,7 @@ contains
 
     else if (ico2.eq.2) then
 
-      ! 1 % increase per year up to 4xCO2
+      ! exponential increase with rate dco2_dt (in %/yr) up to co2_max
       co2 = co2*(1._wp+dco2_dt/100._wp)
       !co2 = min(1120._wp+10._wp,co2)
       co2 = min(co2_max,co2)
