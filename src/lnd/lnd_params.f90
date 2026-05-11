@@ -780,7 +780,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","alpha_int_w_tree",alpha_int_w_tree)
     call nml_read(filename,"lnd_par","alpha_int_w_grass",alpha_int_w_grass)
     do n=1,npft
-      if (flag_tree(n) .or. flag_shrub(n)) then
+      if ((flag_tree(n) .eq. 1) .or. (flag_shrub(n) .eq. 1)) then
         hydro_par%alpha_int_w(n) = alpha_int_w_tree
       else
         hydro_par%alpha_int_w(n) = alpha_int_w_grass
