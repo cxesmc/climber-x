@@ -28,3 +28,109 @@
  hosing_mask_file = "input/hosing_mask.nc"
 /
 
+&Atl_50-70N_hyst_up
+ !---------------------------------------------------------------------------------------
+ !--- define hosing rate
+ !---------------------------------------------------------------------------------------
+ l_hosing_rate_from_file = F         ! 
+ !--------------------------
+ ! parameters for manual hosing rate settings, used only if l_hosing_rate_from_file==F
+ hosing_ini = -0.3            ! Sv, inital/constant value of hosing flux
+ hosing_trend = 0.02          ! Sv/kyr, rate at which hosing flux is increased/decreased
+ year_hosing_ini = 0          ! years, initial time for hosing
+ year_hosing_end = 1e6        ! years, final time for hosing
+ !--------------------------
+ !---------------------------------------------------------------------------------------
+ !--- define hosing region 
+ !---------------------------------------------------------------------------------------
+ l_hosing_mask_from_file = F
+ !--------------------------
+ ! parameters for manual hosing mask settings, used only if l_hosing_mask_from_file==F
+ hosing_basin = 1             ! ocean basin where to put the hosing freshwater. 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
+ lat_min_hosing = 50          ! lower latitude bound for region of freshwater flux
+ lat_max_hosing = 70          ! higher latitude bound for region of freshwater flux
+ lon_min_hosing = -180        ! western longitude bound for region of freshwater flux
+ lon_max_hosing = 180         ! eastern longitude bound for region of freshwater flux
+ !--------------------------
+/
+
+&Atl_50-70N_hyst_down
+ !---------------------------------------------------------------------------------------
+ !--- define hosing rate
+ !---------------------------------------------------------------------------------------
+ l_hosing_rate_from_file = F         ! 
+ !--------------------------
+ ! parameters for manual hosing rate settings, used only if l_hosing_rate_from_file==F
+ hosing_ini = 0.3             ! Sv, inital/constant value of hosing flux
+ hosing_trend = -0.02         ! Sv/kyr, rate at which hosing flux is increased/decreased
+ year_hosing_ini = 0          ! years, initial time for hosing
+ year_hosing_end = 1e6        ! years, final time for hosing
+ !--------------------------
+ !---------------------------------------------------------------------------------------
+ !--- define hosing region 
+ !---------------------------------------------------------------------------------------
+ l_hosing_mask_from_file = F
+ !--------------------------
+ ! parameters for manual hosing mask settings, used only if l_hosing_mask_from_file==F
+ hosing_basin = 1             ! ocean basin where to put the hosing freshwater. 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
+ lat_min_hosing = 50          ! lower latitude bound for region of freshwater flux
+ lat_max_hosing = 70          ! higher latitude bound for region of freshwater flux
+ lon_min_hosing = -180        ! western longitude bound for region of freshwater flux
+ lon_max_hosing = 180         ! eastern longitude bound for region of freshwater flux
+ !--------------------------
+/
+
+&Atl_20-50N_hyst_up
+ !---------------------------------------------------------------------------------------
+ !--- define hosing rate
+ !---------------------------------------------------------------------------------------
+ l_hosing_rate_from_file = F         ! 
+ !--------------------------
+ ! parameters for manual hosing rate settings, used only if l_hosing_rate_from_file==F
+ hosing_ini = -0.3            ! Sv, inital/constant value of hosing flux
+ hosing_trend = 0.02          ! Sv/kyr, rate at which hosing flux is increased/decreased
+ year_hosing_ini = 0          ! years, initial time for hosing
+ year_hosing_end = 1e6        ! years, final time for hosing
+ !--------------------------
+ !---------------------------------------------------------------------------------------
+ !--- define hosing region 
+ !---------------------------------------------------------------------------------------
+ l_hosing_mask_from_file = F
+ !--------------------------
+ ! parameters for manual hosing mask settings, used only if l_hosing_mask_from_file==F
+ hosing_basin = 1             ! ocean basin where to put the hosing freshwater. 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
+ lat_min_hosing = 20          ! lower latitude bound for region of freshwater flux
+ lat_max_hosing = 50          ! higher latitude bound for region of freshwater flux
+ lon_min_hosing = -180        ! western longitude bound for region of freshwater flux
+ lon_max_hosing = 180         ! eastern longitude bound for region of freshwater flux
+ !--------------------------
+/
+
+&Atl_20-50N_hyst_down
+ !---------------------------------------------------------------------------------------
+ !--- define hosing rate
+ !---------------------------------------------------------------------------------------
+ l_hosing_rate_from_file = F         ! 
+ !--------------------------
+ ! parameters for manual hosing rate settings, used only if l_hosing_rate_from_file==F
+ hosing_ini = 0.3             ! Sv, inital/constant value of hosing flux
+ hosing_trend = -0.02         ! Sv/kyr, rate at which hosing flux is increased/decreased
+ year_hosing_ini = 0          ! years, initial time for hosing
+ year_hosing_end = 1e6        ! years, final time for hosing
+ !--------------------------
+ !---------------------------------------------------------------------------------------
+ !--- define hosing region 
+ !---------------------------------------------------------------------------------------
+ l_hosing_mask_from_file = F
+ !--------------------------
+ ! parameters for manual hosing mask settings, used only if l_hosing_mask_from_file==F
+ hosing_basin = 1             ! ocean basin where to put the hosing freshwater. 1 = Atlantic, 2 = Pacific, 3 = Southern Ocean
+ lat_min_hosing = 20          ! lower latitude bound for region of freshwater flux
+ lat_max_hosing = 50          ! higher latitude bound for region of freshwater flux
+ lon_min_hosing = -180        ! western longitude bound for region of freshwater flux
+ lon_max_hosing = 180         ! eastern longitude bound for region of freshwater flux
+ !--------------------------
+/
+
+
+
