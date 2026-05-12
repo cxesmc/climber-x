@@ -938,9 +938,9 @@ contains
     call nc_write(fnm,"str_t ", sngl(vars%str_t  ), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The tension stress tensor component",units="Pa m",ncid=ncid)
     call nc_write(fnm,"str_s ", sngl(vars%str_s  ), dims=[dim_lonu,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The shearing stress tensor component",units="Pa m",ncid=ncid)
 
-    call nc_write(fnm,"fwt   ", sngl(vars%fwt    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice",units="Sv",ncid=ncid)
-    call nc_write(fnm,"fwa   ", sngl(vars%fwa    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Atlantic",units="Sv",ncid=ncid)
-    call nc_write(fnm,"fwp   ", sngl(vars%fwp    ), dims=["type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Indo-Pacific",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwt   ", sngl(vars%fwt    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwa   ", sngl(vars%fwa    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Atlantic",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwp   ", sngl(vars%fwp    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Indo-Pacific",units="Sv",ncid=ncid)
 
     if (l_diag_dyn) then
     call nc_write(fnm,"fxic  ", sngl(vars%fxic   ), dims=[dim_lonu,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="Zonal force due to internal stresses",units="Pa",ncid=ncid)

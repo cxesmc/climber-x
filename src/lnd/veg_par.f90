@@ -294,7 +294,7 @@ contains
       endif
 
       ! MCWD-based tree mortality
-      if (flag_tree(n)) then
+      if (flag_tree(n) .eq. 1) then
         mcwd_50 = veg_par%ratio_mcwd * mcwd_clim
         sigmoid_factor = veg_par%M_max / (1.0_wp + exp(-veg_par%k_mcwd * (mcwd - mcwd_50)))
         gamma_mcwd(n) = sigmoid_factor
