@@ -227,7 +227,7 @@
     ! N2O emission params
     !------------------------------------------------------------------------------------
     k_n2o_nit        = 5.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
-    k_n2o_denit      = 5.e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
+    k_n2o_denit      = 5.7e-4   ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
     q10_n2o          = 1.0      ! q10 for temperature dependence of N2O emission
     wfps_crit_denit  = 0.7      ! critical water filled pore space for denitrification
 

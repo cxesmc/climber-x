@@ -5,7 +5,7 @@
 ############################################################################
 
 # Specify desidered name of output directory
-outdir=bench_v1.4.0
+outdir=bench_v1.4.4
 
 # A complete model benchmark involves the following steps:
 # step=1    : preindustrial equilibrium spinup, climate only
@@ -89,6 +89,8 @@ then
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/2xCO2   -p ctl.nyears=10000 ctl.co2_const=560 atm.l_daily_output=T ocn.l_daily_output=T sic.l_daily_output=T
 # 4xCO2
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/4xCO2   -p ctl.nyears=10000 ctl.co2_const=1120 atm.l_daily_output=T ocn.l_daily_output=T sic.l_daily_output=T
+# 8xCO2
+./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/8xCO2   -p ctl.nyears=10000 ctl.co2_const=2240 atm.l_daily_output=T ocn.l_daily_output=T sic.l_daily_output=T
 
 # with fixed vegetation for vegetation feedback determination
 # 1/2xCO2
@@ -108,12 +110,16 @@ then
 
 # abrupt 0p5xCO2
 ./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt0p5xCO2 -p ctl.nyears=150 ctl.co2_const=140  ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
-
 # abrupt 2xCO2
 ./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt2xCO2   -p ctl.nyears=150 ctl.co2_const=560  ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
-
 # abrupt 4xCO2
 ./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt4xCO2   -p ctl.nyears=150 ctl.co2_const=1120 ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
+# abrupt 8xCO2
+./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt8xCO2   -p ctl.nyears=150 ctl.co2_const=2240 ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
+# abrupt 16xCO2
+./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt16xCO2  -p ctl.nyears=150 ctl.co2_const=4480 ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
+# abrupt 32xCO2
+./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abrupt32xCO2  -p ctl.nyears=150 ctl.co2_const=8960 ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
 
 # abrupt 4% increase in solar constant
 ./runme -rs -q short -w 1:00:00 --omp 32 -o output/$outdir/abruptsolp4p  -p ctl.nyears=150 ctl.sol_const=1416.5 ctl.nyout_atm=150 ctl.nyout_ocn=150 ctl.nyout_sic=150 ctl.nyout_lnd=150
@@ -135,18 +141,18 @@ then
 
 # LGM
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/lgm           -p ctl.nyears=10000 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 ctl.fake_geo_const_file=input/geo_ice_tarasov_lgm.nc         ctl.fake_ice_const_file=input/geo_ice_tarasov_lgm.nc ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 lnd.lithology_uhh_file=input/Lithology_lgm_UHH.nc
-#./runme -rs -q short -w 24:00:00 --omp 32 -o output/bench_v1.3/lgm_deglac -p ctl.nyears=10000 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 ctl.fake_geo_const_file=input/geo_ice_tarasov_deglac_21ka.nc ctl.fake_geo_ref_file=input/geo_ice_tarasov_deglac_0ka.nc ctl.fake_ice_const_file=input/geo_ice_tarasov_deglac_21ka.nc ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 lnd.lithology_uhh_file=input/Lithology_lgm_UHH.nc
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/lgm_fixveg    -p ctl.nyears=10000 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 ctl.fake_geo_const_file=input/geo_ice_tarasov_lgm.nc         ctl.fake_ice_const_file=input/geo_ice_tarasov_lgm.nc ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 lnd.l_dynveg=F lnd.l_co2_fert_lim=T lnd.l_fixlai=T
-./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/lgm_peltier   -p ctl.nyears=10000 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 ctl.fake_geo_const_file=input/geo_ice_peltier_lgm.nc         ctl.fake_geo_ref_file=input/geo_ice_peltier_deglac_0ka.nc ctl.fake_ice_const_file=input/geo_ice_peltier_lgm.nc ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 
+#./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/lgm_peltier   -p ctl.nyears=10000 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 ctl.fake_geo_const_file=input/geo_ice_peltier_lgm.nc         ctl.fake_geo_ref_file=input/geo_ice_peltier_deglac_0ka.nc ctl.fake_ice_const_file=input/geo_ice_peltier_lgm.nc ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 
 
 # hysteresis
-./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst2050/up   -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_ini=-0.3 ocn.hosing_trend=0.02  ocn.lat_min_hosing=20 ocn.lat_max_hosing=50
-./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst2050/down -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_ini=0.3  ocn.hosing_trend=-0.02 ocn.lat_min_hosing=20 ocn.lat_max_hosing=50
-./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst5070/up   -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_ini=-0.3 ocn.hosing_trend=0.02  ocn.lat_min_hosing=50 ocn.lat_max_hosing=70
-./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst5070/down -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_ini=0.3  ocn.hosing_trend=-0.02 ocn.lat_min_hosing=50 ocn.lat_max_hosing=70
+./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst2050/up   -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_domain_name=Atl_20-50N_hyst_up
+./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst2050/down -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_domain_name=Atl_20-50N_hyst_down
+./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst5070/up   -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_domain_name=Atl_50-70N_hyst_up
+./runme -rs -q medium -w 60:00:00 --omp 32 -o output/$outdir/hyst5070/down -p ctl.nyears=30000 ocn.l_hosing=T ocn.hosing_domain_name=Atl_50-70N_hyst_down
 
 # PaleoDEM
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/pliomip -p ctl.nyears=5000 ctl.fake_geo_const_file=input/geo_Pliomip2.nc         ctl.fake_ice_const_file=input/geo_Pliomip2.nc ctl.co2_const=400 geo.geo_ref_file=input/geo_Pliomip2.nc
+./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/eocene  -p ctl.nyears=5000 ctl.fake_geo_const_file=input/geo_ice_DeepMIP_Eocene.nc geo.geo_ref_file=input/geo_ice_DeepMIP_Eocene.nc ctl.fake_ice_const_file=input/geo_ice_DeepMIP_Eocene.nc ctl.atm_restart=F ctl.ocn_restart=F ctl.sic_restart=F ctl.lnd_restart=F ctl.dt_day_ocn=0.5 ocn.i_init=3 ocn.init3_peak=20. ocn.init3_bg=5. ocn.i_isl=0 geo.l_close_panama=F geo.z_bed_std_file=input/geo_ice_DeepMIP_Eocene.nc geo.l_use_z_bed_std_lowres=T
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/65Ma    -p ctl.nyears=5000 ctl.fake_geo_const_file=input/topog_065Ma_climberX.nc ctl.fake_ice_const_file=input/topog_065Ma_climberX.nc ctl.atm_restart=F ctl.ocn_restart=F ctl.sic_restart=F ctl.lnd_restart=F ctl.dt_day_ocn=1 ocn.i_isl=0 ocn.i_init=1 geo.l_close_panama=F geo.geo_ref_file=input/topog_065Ma_climberX.nc
 ./runme -rs -q short -w 24:00:00 --omp 32 -o output/$outdir/250Ma   -p ctl.nyears=5000 ctl.fake_geo_const_file=input/topog_250Ma_climberX.nc ctl.fake_ice_const_file=input/topog_250Ma_climberX.nc ctl.atm_restart=F ctl.ocn_restart=F ctl.sic_restart=F ctl.lnd_restart=F ctl.dt_day_ocn=1 ocn.i_isl=0 ocn.i_init=1 geo.l_close_panama=F geo.geo_ref_file=input/topog_250Ma_climberX.nc 
 fi
