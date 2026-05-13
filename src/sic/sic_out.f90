@@ -27,7 +27,7 @@ module sic_out
 
   use precision, only : wp
   use constants, only : pi, g, cap_w, Lf
-  use dim_name, only: dim_lon, dim_lat, dim_depth, dim_time, dim_month, dim_day
+  use dim_name, only: dim_lon, dim_lonu, dim_lat, dim_latv, dim_depth, dim_time, dim_month, dim_day, dim_type
   use timer, only : n_accel, nyears, year, year_clim, year_now, sec_day, mon, nmon_year, doy, nday_year
   use timer, only : nstep_year_sic, nstep_mon_sic, nyout_sic, ny_out_ts, y_out_ts_clim, time_out_ts_clim
   use timer, only : time_soy_sic, time_eoy_sic, time_out_sic
@@ -851,9 +851,9 @@ contains
     units="months", ncid=ncid)
     call nc_write_dim(fnm, dim_lon, x=lon, axis="x", ncid=ncid)
     call nc_write_dim(fnm, dim_lat, x=lat, axis="y", ncid=ncid)
-    call nc_write_dim(fnm,"lonu",x=lonu(2:maxi+1),axis="y",ncid=ncid)
-    call nc_write_dim(fnm,"latv",x=latv(2:maxj+1),axis="y",ncid=ncid)
-    call nc_write_dim(fnm,"type",x=1._wp,dx=1._wp,nx=3,units="[tot,adv,diff]",ncid=ncid)
+    call nc_write_dim(fnm, dim_lonu,x=lonu(2:maxi+1),axis="y",ncid=ncid)
+    call nc_write_dim(fnm, dim_latv,x=latv(2:maxj+1),axis="y",ncid=ncid)
+    call nc_write_dim(fnm, dim_type,x=1._wp,dx=1._wp,nx=3,units="[tot,adv,diff]",ncid=ncid)
     call nc_close(ncid)
 
    return
@@ -874,8 +874,6 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, ncid
 
-    character(len=4), parameter :: dim_lonu = "lonu"
-    character(len=4), parameter :: dim_latv = "latv"
     
     if (ndat.eq.13) then
     call nc_write(fnm,"focn",  sngl(vars%focn),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="ocean fraction",units="/",ncid=ncid)
@@ -938,9 +936,9 @@ contains
     call nc_write(fnm,"str_t ", sngl(vars%str_t  ), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The tension stress tensor component",units="Pa m",ncid=ncid)
     call nc_write(fnm,"str_s ", sngl(vars%str_s  ), dims=[dim_lonu,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="The shearing stress tensor component",units="Pa m",ncid=ncid)
 
-    call nc_write(fnm,"fwt   ", sngl(vars%fwt    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice",units="Sv",ncid=ncid)
-    call nc_write(fnm,"fwa   ", sngl(vars%fwa    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Atlantic",units="Sv",ncid=ncid)
-    call nc_write(fnm,"fwp   ", sngl(vars%fwp    ), dims=[character(len=10) :: "type",dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Indo-Pacific",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwt   ", sngl(vars%fwt    ), dims=[dim_type,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwa   ", sngl(vars%fwa    ), dims=[dim_type,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Atlantic",units="Sv",ncid=ncid)
+    call nc_write(fnm,"fwp   ", sngl(vars%fwp    ), dims=[dim_type,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[3,maxj,1,1],long_name="Meridional freshwater transport by sea ice in the Indo-Pacific",units="Sv",ncid=ncid)
 
     if (l_diag_dyn) then
     call nc_write(fnm,"fxic  ", sngl(vars%fxic   ), dims=[dim_lonu,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="Zonal force due to internal stresses",units="Pa",ncid=ncid)
@@ -1003,8 +1001,6 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, ncid
 
-    character(len=4), parameter :: dim_lonu = "lonu"
-    character(len=4), parameter :: dim_latv = "latv"
     
     call nc_write(fnm,"hsic",  sngl(vars%hsic),  dims=[dim_lon,dim_lat,dim_day,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mean gridcell ice thickness",units="m",ncid=ncid)
     call nc_write(fnm,"hsnow", sngl(vars%hsnow), dims=[dim_lon,dim_lat,dim_day,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mean gridcell snow thickness",units="m",ncid=ncid)
