@@ -31,8 +31,12 @@ module dim_name
   integer, parameter :: len = 10
 
   character(len=len), parameter :: dim_lon = "lon"
+  character(len=len), parameter :: dim_lonu = "lonu"
   character(len=len), parameter :: dim_lat = "lat"
+  character(len=len), parameter :: dim_latv = "latv"
+  character(len=len), parameter :: dim_latv1 = "latv1"
   character(len=len), parameter :: dim_lev = "lev"
+  character(len=len), parameter :: dim_levw = "levw"
   character(len=len), parameter :: dim_x = "x"
   character(len=len), parameter :: dim_y = "y"
   character(len=len), parameter :: dim_day = "day"
