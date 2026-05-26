@@ -2102,7 +2102,9 @@ contains
 !    call nc_write(fnm,"d13Cflx_atm_lnd",    sngl(vars%d13Cflx_atm_lnd),   dim1=dim_time,start=[ndat],count=[y],long_name="d13C of net atmosphere-land carbon flux",units="permil",missing_value=missing_value,ncid=ncid)
 !    call nc_write(fnm,"D14Cflx_atm_lnd",    sngl(vars%D14Cflx_atm_lnd),   dim1=dim_time,start=[ndat],count=[y],long_name="D14C of net atmosphere-land carbon flux",units="permil",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Cflx_burial", sngl(vars%Cflx_burial),  dim1=dim_time,start=[ndat],count=[y],long_name="carbon burial flux (lost from the system)",units="PgC/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"d13Cflx_burial", sngl(vars%d13Cflx_burial),  dim1=dim_time,start=[ndat],count=[y],long_name="d13C of carbon burial flux",units="permil",missing_value=missing_value,ncid=ncid)
+    if (soilc_par%l_burial) then
+      call nc_write(fnm,"d13Cflx_burial", sngl(vars%d13Cflx_burial),  dim1=dim_time,start=[ndat],count=[y],long_name="d13C of carbon burial flux",units="permil",missing_value=missing_value,ncid=ncid)
+    endif
     call nc_write(fnm,"gpp",     sngl(vars%gpp),    dim1=dim_time,start=[ndat],count=[y],long_name="gross primary productivity",units="PgC/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"npp",     sngl(vars%npp),    dim1=dim_time,start=[ndat],count=[y],long_name="net primary productivity",units="PgC/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"npp_pimask",     sngl(vars%npp_pimask),    dim1=dim_time,start=[ndat],count=[y],long_name="net primary productivity in pre-industrial permafrost area",units="PgC/yr",missing_value=missing_value,ncid=ncid)
