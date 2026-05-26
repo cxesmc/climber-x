@@ -42,6 +42,7 @@ module lnd_out
   use lnd_grid, only : i_bare, i_pft, i_surf, i_soil
   use lnd_params, only : dt, dt_day, veg_par, peat_par, soilc_par
   use lnd_params, only : i_weathering, weath_gemco2_par, weath_uhh_par
+  use wiso_params, only : l_wiso, i_o18, Rstd_o18, wiso_ratio, delta_from_ratio
   use lnd_params, only : write_surf, write_surf_n, write_carbon, write_soil, write_soil_par, write_lake, write_cons, l_daily_output
   use lnd_def, only : lnd_2d_class, lnd_0d_class
 
@@ -183,6 +184,8 @@ module lnd_out
 
   type soil_out
     real(wp), allocatable, dimension(:,:,:) :: tsoil, tice, tsublake, thetaw, thetai, theta, thetas, fthetas
+    real(wp), allocatable, dimension(:,:,:) :: d18O_w_w, d18O_w_i
+    real(wp), allocatable, dimension(:,:,:) :: d18O_w_w_n, d18O_w_i_n   ! counters of valid samples (bulk>0)
   end type
 
   type soil_par_out
@@ -330,6 +333,10 @@ contains
       allocate(mon_s(k)%theta(nx,ny,nl))
       allocate(mon_s(k)%thetas(nx,ny,nl))
       allocate(mon_s(k)%fthetas(nx,ny,nl))
+      allocate(mon_s(k)%d18O_w_w(nx,ny,nl))
+      allocate(mon_s(k)%d18O_w_i(nx,ny,nl))
+      allocate(mon_s(k)%d18O_w_w_n(nx,ny,nl))
+      allocate(mon_s(k)%d18O_w_i_n(nx,ny,nl))
 
       allocate(mon_sp(k)%lambda_if(nx,ny,0:nl))
       allocate(mon_sp(k)%cap_if(nx,ny,0:nl))
@@ -459,6 +466,10 @@ contains
     allocate(ann_s%theta(nx,ny,nl))
     allocate(ann_s%thetas(nx,ny,nl))
     allocate(ann_s%fthetas(nx,ny,nl))
+    allocate(ann_s%d18O_w_w(nx,ny,nl))
+    allocate(ann_s%d18O_w_i(nx,ny,nl))
+    allocate(ann_s%d18O_w_w_n(nx,ny,nl))
+    allocate(ann_s%d18O_w_i_n(nx,ny,nl))
 
     allocate(ann_c%litter_prof(nx,ny,nlc,ncarb))
     allocate(ann_c%litter13_prof(nx,ny,nlc,ncarb))
@@ -1281,6 +1292,10 @@ contains
             mon_s(m)%theta  = 0._wp
             mon_s(m)%thetas = 0._wp
             mon_s(m)%fthetas = 0._wp
+            mon_s(m)%d18O_w_w = 0._wp
+            mon_s(m)%d18O_w_i = 0._wp
+            mon_s(m)%d18O_w_w_n = 0._wp
+            mon_s(m)%d18O_w_i_n = 0._wp
           endif
 
           if( write_soil_par ) then
@@ -1510,16 +1525,44 @@ contains
               mon_s(mon)%thetai(i,j,:) = mon_s(mon)%thetai(i,j,:) + lnd(i,j)%theta_i                 * mon_avg
               mon_s(mon)%theta(i,j,:)  = mon_s(mon)%theta(i,j,:)  + lnd(i,j)%theta                   * mon_avg
               mon_s(mon)%thetas(i,j,:) = mon_s(mon)%thetas(i,j,:) + lnd(i,j)%theta_sat       * mon_avg
+              if (l_wiso) then
+                do k=1,nl
+                  if (lnd(i,j)%w_w(k) .gt. 0._wp) then
+                    mon_s(mon)%d18O_w_w(i,j,k) = mon_s(mon)%d18O_w_w(i,j,k) &
+                         + delta_from_ratio(wiso_ratio(lnd(i,j)%w_w_iso(k,i_o18), lnd(i,j)%w_w(k)), Rstd_o18)
+                    mon_s(mon)%d18O_w_w_n(i,j,k) = mon_s(mon)%d18O_w_w_n(i,j,k) + 1._wp
+                  endif
+                  if (lnd(i,j)%w_i(k) .gt. 0._wp) then
+                    mon_s(mon)%d18O_w_i(i,j,k) = mon_s(mon)%d18O_w_i(i,j,k) &
+                         + delta_from_ratio(wiso_ratio(lnd(i,j)%w_i_iso(k,i_o18), lnd(i,j)%w_i(k)), Rstd_o18)
+                    mon_s(mon)%d18O_w_i_n(i,j,k) = mon_s(mon)%d18O_w_i_n(i,j,k) + 1._wp
+                  endif
+                enddo
+              endif
             endif
           enddo
         enddo
         !!$omp end parallel do
-        if( time_eom_lnd ) then 
+        if( time_eom_lnd ) then
           do k=1,nl
-            where (lnd%f_land.gt.0._wp) 
+            where (lnd%f_land.gt.0._wp)
               mon_s(mon)%fthetas(:,:,k) = mon_s(mon)%theta(:,:,k)/mon_s(mon)%thetas(:,:,k)
             endwhere
           enddo
+          if (l_wiso) then
+            do k=1,nl
+              where (mon_s(mon)%d18O_w_w_n(:,:,k) .gt. 0._wp)
+                mon_s(mon)%d18O_w_w(:,:,k) = mon_s(mon)%d18O_w_w(:,:,k) / mon_s(mon)%d18O_w_w_n(:,:,k)
+              elsewhere
+                mon_s(mon)%d18O_w_w(:,:,k) = real(missing_value, wp)
+              endwhere
+              where (mon_s(mon)%d18O_w_i_n(:,:,k) .gt. 0._wp)
+                mon_s(mon)%d18O_w_i(:,:,k) = mon_s(mon)%d18O_w_i(:,:,k) / mon_s(mon)%d18O_w_i_n(:,:,k)
+              elsewhere
+                mon_s(mon)%d18O_w_i(:,:,k) = real(missing_value, wp)
+              endwhere
+            enddo
+          endif
         endif
       endif
 
@@ -3222,9 +3265,14 @@ end do
     call nc_write(fnm,"thetas",    sngl(vars%thetas),  dims=[dim_lon,dim_lat,dim_depth,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nl,1,1],long_name="soil porosity",units="m3/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fthetas",   sngl(vars%fthetas),  dims=[dim_lon,dim_lat,dim_depth,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nl,1,1],long_name="fraction of porosity filled with water",units="/",missing_value=missing_value,ncid=ncid)
 
+    if (l_wiso) then
+      call nc_write(fnm,"d18O_w_w", sngl(vars%d18O_w_w), dims=[dim_lon,dim_lat,dim_depth,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nl,1,1],long_name="delta18O of soil liquid water",units="permil",missing_value=missing_value,ncid=ncid)
+      call nc_write(fnm,"d18O_w_i", sngl(vars%d18O_w_i), dims=[dim_lon,dim_lat,dim_depth,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nl,1,1],long_name="delta18O of soil frozen water",units="permil",missing_value=missing_value,ncid=ncid)
+    endif
+
 
     return
-    
+
   end subroutine soil_nc_write
    
   
@@ -3254,6 +3302,12 @@ end do
     ave%theta      = 0._wp
     ave%thetas     = 0._wp
     ave%fthetas    = 0._wp
+    if (l_wiso) then
+      ave%d18O_w_w   = 0._wp
+      ave%d18O_w_i   = 0._wp
+      ave%d18O_w_w_n = 0._wp
+      ave%d18O_w_i_n = 0._wp
+    endif
 
 
     ! Loop over the time indices to sum up and average (if necessary)
@@ -3266,7 +3320,29 @@ end do
       ave%theta      = ave%theta         + d(k)%theta     / div
       ave%thetas     = ave%thetas        + d(k)%thetas    / div
       ave%fthetas    = ave%fthetas       + d(k)%fthetas   / div
+      if (l_wiso) then
+        where (d(k)%d18O_w_w .ne. real(missing_value, wp))
+          ave%d18O_w_w   = ave%d18O_w_w   + d(k)%d18O_w_w
+          ave%d18O_w_w_n = ave%d18O_w_w_n + 1._wp
+        endwhere
+        where (d(k)%d18O_w_i .ne. real(missing_value, wp))
+          ave%d18O_w_i   = ave%d18O_w_i   + d(k)%d18O_w_i
+          ave%d18O_w_i_n = ave%d18O_w_i_n + 1._wp
+        endwhere
+      endif
     end do
+    if (l_wiso) then
+      where (ave%d18O_w_w_n .gt. 0._wp)
+        ave%d18O_w_w = ave%d18O_w_w / ave%d18O_w_w_n
+      elsewhere
+        ave%d18O_w_w = real(missing_value, wp)
+      endwhere
+      where (ave%d18O_w_i_n .gt. 0._wp)
+        ave%d18O_w_i = ave%d18O_w_i / ave%d18O_w_i_n
+      elsewhere
+        ave%d18O_w_i = real(missing_value, wp)
+      endwhere
+    endif
     
    return
     

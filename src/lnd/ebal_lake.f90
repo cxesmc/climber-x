@@ -32,6 +32,7 @@ module ebal_lake_mod
    use lnd_grid, only : i_lake, i_ice, z_l
    use lnd_params, only : dt, rdt
    use lnd_params, only : surf_par, l_diurnal_cycle
+   use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
 
    implicit none
 
@@ -255,11 +256,13 @@ contains
   !              :  and re-diagnose surface energy fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine update_tskin_lake(mask_snow, t_skin_old, dflxg_dT, tatm, qatm, swnet, lwdown, &
-                         t_lake, t_lake_old, flx_g, flx_melt, & 
+                         t_lake, t_lake_old, flx_g, flx_melt, &
                          t_skin, flx_sh, flx_lwu, flx_lh, evap_surface, et, &
                          num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw, &
                          f_sh, f_e, f_le, f_lw, qsat_e, dqsatdT_e, &
-                         energy_cons_surf2, i, j)
+                         energy_cons_surf2, i, j, &
+                         w_snow_lake, w_snow_lake_iso, w_w_lake_top, w_w_lake_iso_top, &
+                         evap_surface_iso, et_iso)
 
     implicit none
 
@@ -275,7 +278,12 @@ contains
     real(wp), intent(inout) :: num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw
     real(wp), intent(inout) :: f_sh, f_e, f_le, f_lw, qsat_e, dqsatdT_e
     real(wp), intent(inout) :: energy_cons_surf2
+    ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
+    real(wp), intent(in)    :: w_snow_lake, w_w_lake_top
+    real(wp), dimension(:), intent(in)    :: w_snow_lake_iso, w_w_lake_iso_top
+    real(wp), dimension(:), intent(inout) :: evap_surface_iso, et_iso
 
+    integer :: iso
     real(wp) :: num, denom
 
 
@@ -308,6 +316,24 @@ contains
     endif
 
     et = evap_surface
+
+    ! water-isotope ET (passive: at snow ratio if snow on lake, else at top lake-water ratio)
+    if (l_wiso) then
+      do iso=1,nwiso
+        if (evap_surface.ge.0._wp) then
+          if (mask_snow.eq.1 .and. w_snow_lake.gt.0._wp) then
+            evap_surface_iso(iso) = evap_surface * w_snow_lake_iso(iso)/w_snow_lake
+          elseif (w_w_lake_top.gt.0._wp) then
+            evap_surface_iso(iso) = evap_surface * w_w_lake_iso_top(iso)/w_w_lake_top
+          else
+            evap_surface_iso(iso) = evap_surface * Rstd(iso)
+          endif
+        else
+          evap_surface_iso(iso) = evap_surface * Rstd(iso)
+        endif
+        et_iso(iso) = evap_surface_iso(iso)
+      enddo
+    endif
 
 
     if( check_energy ) then

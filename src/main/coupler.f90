@@ -57,6 +57,7 @@ module coupler
     use bgc_def, only : bgc_class, BGC_NTRA
     use sic_def, only : sic_class
     use lnd_def, only : lnd_class
+    use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
     use ice_def, only : ice_class
     use co2_def, only : co2_class
     use ch4_def, only : ch4_class
@@ -1375,6 +1376,12 @@ contains
             lnd%l2d(i,j)%wind(n)  = cmn%wind(i,j,i_surf_lnd(n))
             lnd%l2d(i,j)%rain(n)  = cmn%rain(i,j,i_surf_lnd(n))
             lnd%l2d(i,j)%snow(n)  = cmn%snow(i,j,i_surf_lnd(n))
+            if (l_wiso) then
+              ! Phase 1: tag incoming precip at VSMOW (delta18O = 0 permil).
+              ! Atm-side isotopes (Phase 2/3) will replace Rstd here with cmn%rain_iso/cmn%snow_iso.
+              lnd%l2d(i,j)%rain_iso(n,i_o18) = Rstd(i_o18) * cmn%rain(i,j,i_surf_lnd(n))
+              lnd%l2d(i,j)%snow_iso(n,i_o18) = Rstd(i_o18) * cmn%snow(i,j,i_surf_lnd(n))
+            endif
             if (flag_atm) then
               lnd%l2d(i,j)%swnet(n)  = cmn%swnet(i,j,i_surf_lnd(n))
             else
