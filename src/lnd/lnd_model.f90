@@ -35,7 +35,7 @@ module lnd_model
     use lnd_grid, only : z, z_l, z_c, z_int, dz
     use lnd_grid, only : nx, ny, npft, nsurf, nsoil, ncarb, nl, nl_l, nlc, rdz_pos, rdz_neg
     use lnd_grid, only : ic_min, ic_peat, ic_shelf, ic_ice, ic_lake
-    use lnd_grid, only : i_bare, i_ice, i_lake, i_surf, i_pft, i_soil, is_lake
+    use lnd_grid, only : i_bare, i_ice, i_lake, i_surf, i_pft, i_soil, is_veg, is_ice, is_lake
     use lnd_params, only : lnd_params_init, i_init_veg
     use lnd_params, only : dt, rdt, dt_day_c, dt_day_v, dt_day_carb, dt_day_veg
     use lnd_params, only : time_call_veg, time_call_carb, time_call_carb_p
@@ -45,6 +45,7 @@ module lnd_model
     use lnd_params, only : mineral, topmodel, dyptop, nmonwet
     use lnd_params, only : weath_gemco2_par, weath_uhh_par
     use lnd_def, only : lnd_class, lnd_0d_class, lnd_2d_class
+    use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
     use ncio
 
 
@@ -338,12 +339,23 @@ contains
                           lnd%cato_c,lnd%cato_c13,lnd%cato_c14,lnd%litter_c_peat,lnd%litter_c13_peat,lnd%litter_c14_peat, &
                           lnd%acro_c,lnd%acro_c13,lnd%acro_c14,lnd%f_peat,lnd%f_peat_pot,lnd%w_table_min,lnd%w_table_peat,lnd%dCpeat_dt, &
                           lnd%z0m)
+        if (l_wiso) then
+          ! cold-start: tag fresh land water at VSMOW so delta18O = 0 permil
+          lnd%w_w_iso(:,i_o18)        = Rstd(i_o18) * lnd%w_w
+          lnd%w_i_iso(:,i_o18)        = Rstd(i_o18) * lnd%w_i
+          lnd%w_can_iso(:,i_o18)      = Rstd(i_o18) * lnd%w_can
+          lnd%s_can_iso(:,i_o18)      = Rstd(i_o18) * lnd%s_can
+          lnd%w_snow_iso(is_veg,i_o18) = Rstd(i_o18) * lnd%w_snow(is_veg)
+        endif
        endif
 
        ! initialize ice if newly formed ice grid cell fraction
        if (lnd%f_ice.gt.0._wp .and. lnd%f_ice_old.eq.0._wp) then
         call init_cell_ice(lnd%frac_surf,lnd%t_skin,lnd%t_ice, &
                           lnd%w_snow(is_ice),lnd%w_snow_max(is_ice),lnd%h_snow(is_ice),lnd%mask_snow(is_ice))
+        if (l_wiso) then
+          lnd%w_snow_iso(is_ice,i_o18) = Rstd(i_o18) * lnd%w_snow(is_ice)
+        endif
        endif
 
        ! initialize soil carbon below ice if newly formed grounded ice 
@@ -371,6 +383,11 @@ contains
                           lnd%litter_c_lake,lnd%litter_c13_lake,lnd%litter_c14_lake, &
                           lnd%fast_c_lake,lnd%fast_c13_lake,lnd%fast_c14_lake, &
                           lnd%slow_c_lake,lnd%slow_c13_lake,lnd%slow_c14_lake)
+        if (l_wiso) then
+          lnd%w_snow_iso(is_lake,i_o18) = Rstd(i_o18) * lnd%w_snow(is_lake)
+          lnd%w_w_lake_iso(:,i_o18)     = Rstd(i_o18) * lnd%w_w_lake
+          lnd%w_i_lake_iso(:,i_o18)     = Rstd(i_o18) * lnd%w_i_lake
+        endif
        endif
 
        ! transfer soil carbon between different pools to account for changes in ice/shelf/lake area
@@ -518,7 +535,10 @@ contains
       call canopy_water(lnd%frac_surf,lnd%lai,lnd%sai,lnd%r_a,lnd%t_skin, &
                        lnd%pressure,lnd%qatm,lnd%rain,lnd%snow, &
                        lnd%w_can,lnd%w_can_old,lnd%s_can,lnd%s_can_old, &
-                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can,lnd%f_wat_can)
+                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can,lnd%f_wat_can, &
+                       lnd%rain_iso,lnd%snow_iso, &
+                       lnd%w_can_iso,lnd%w_can_iso_old,lnd%s_can_iso,lnd%s_can_iso_old, &
+                       lnd%rain_ground_iso,lnd%snow_ground_iso,lnd%evap_can_iso,lnd%subl_can_iso)
 
       ! update soil thermal properties 
       if( lnd%f_veg .gt. 0._wp ) then
@@ -579,6 +599,14 @@ contains
                     lnd%energy_cons_surf1(i_lake),i,j)
       endif
 
+      ! water-isotope: snapshot iso state of soil/snow before temperature/phase-change steps
+      ! (bulk *_old arrays get refreshed inside soil_temp/ice_temp/lake_temp at their entry)
+      if (l_wiso) then
+        lnd%w_w_iso_old        = lnd%w_w_iso
+        lnd%w_i_iso_old        = lnd%w_i_iso
+        lnd%w_snow_iso_old     = lnd%w_snow_iso
+      endif
+
       ! compute new soil temperature profile, including latent heat effects of water phase changes
       if( lnd%f_veg .gt. 0._wp ) then
        call soil_temp(lnd%mask_snow(is_veg),lnd%h_snow(is_veg), &
@@ -592,12 +620,63 @@ contains
                      lnd%w_w_old,lnd%w_i_old, &
                      lnd%w_w_phase,lnd%w_i_phase, &
                      lnd%energy_cons_soil,i,j)
+       ! water-isotope: passive freeze/thaw redistribution within each soil layer
+       ! plus snow-melt iso contribution if soil_temp produced snowmelt
+       if (l_wiso) then
+         block
+           integer :: kl
+           real(wp) :: tot_iso(nwiso), r_lay(nwiso), dws_iso(nwiso), dws_b
+           ! mirror bulk: soil_temp resets snowmelt = 0 at its entry
+           lnd%snowmelt_iso(is_veg,:) = 0._wp
+           ! snow-to-soil meltwater iso transfer (consistent with bulk snowmelt over the explicit-layer branch)
+           dws_b = lnd%w_snow_old(is_veg) - lnd%w_snow(is_veg)   ! bulk mass that left snowpack
+           if (dws_b.gt.0._wp .and. lnd%w_snow_old(is_veg).gt.0._wp) then
+             ! all of it became snowmelt (the same flux soil_temp added to lnd%snowmelt)
+             do kl=1,nwiso
+               dws_iso(kl) = (lnd%w_snow_iso_old(is_veg,kl)/lnd%w_snow_old(is_veg)) * dws_b
+               lnd%w_snow_iso(is_veg,kl)   = lnd%w_snow_iso_old(is_veg,kl) - dws_iso(kl)
+               lnd%snowmelt_iso(is_veg,kl) = lnd%snowmelt_iso(is_veg,kl) + dws_iso(kl) * rdt
+             enddo
+           endif
+           ! freeze/thaw redistribution per layer (well-mixed assumption, passive)
+           do kl=1,nl
+             if (lnd%w_w(kl) + lnd%w_i(kl) .gt. 0._wp) then
+               tot_iso(:) = lnd%w_w_iso_old(kl,:) + lnd%w_i_iso_old(kl,:)
+               r_lay(:)   = tot_iso(:) / (lnd%w_w(kl) + lnd%w_i(kl))
+               lnd%w_w_iso(kl,:) = r_lay(:) * lnd%w_w(kl)
+               lnd%w_i_iso(kl,:) = r_lay(:) * lnd%w_i(kl)
+             endif
+           enddo
+         end block
+       endif
       endif
 
       if( lnd%f_ice .gt. 0._wp ) then
        call ice_temp(lnd%mask_snow(is_ice),lnd%h_snow(is_ice),lnd%cap_ice,lnd%lambda_int_ice,lnd%flx_g(i_ice),lnd%dflxg_dT(i_ice),lnd%flx_melt(i_ice), &
                     lnd%t_ice,lnd%w_snow(is_ice),lnd%snowmelt(is_ice),lnd%icemelt(is_ice),lnd%t_ice_old,lnd%w_snow_old(is_ice), &
                     lnd%energy_cons_ice,i,j)
+       ! water-isotope: snow-to-runoff melt iso transfer over ice
+       if (l_wiso) then
+         block
+           real(wp) :: dws_b, dws_i(nwiso)
+           integer :: kl
+           ! mirror bulk: ice_temp resets snowmelt=0, icemelt=0 at its entry
+           lnd%snowmelt_iso(is_ice,:) = 0._wp
+           lnd%icemelt_iso(is_ice,:)  = 0._wp
+           dws_b = lnd%w_snow_old(is_ice) - lnd%w_snow(is_ice)
+           if (dws_b.gt.0._wp .and. lnd%w_snow_old(is_ice).gt.0._wp) then
+             do kl=1,nwiso
+               dws_i(kl) = (lnd%w_snow_iso_old(is_ice,kl)/lnd%w_snow_old(is_ice)) * dws_b
+               lnd%w_snow_iso(is_ice,kl)   = lnd%w_snow_iso_old(is_ice,kl) - dws_i(kl)
+               lnd%snowmelt_iso(is_ice,kl) = lnd%snowmelt_iso(is_ice,kl) + dws_i(kl) * rdt
+             enddo
+           endif
+           ! icemelt iso: placeholder at VSMOW (ice sheet ice has no iso state in Phase 1)
+           do kl=1,nwiso
+             lnd%icemelt_iso(is_ice,kl) = lnd%icemelt(is_ice) * Rstd(kl)
+           enddo
+         end block
+       endif
       endif
 
       if( lnd%f_lake .gt. 0._wp ) then
@@ -608,6 +687,34 @@ contains
                      lnd%t_lake_old,lnd%w_snow_old(is_lake), &
                      lnd%h_lake_conv, lnd%h_lake_mix, &
                      lnd%energy_cons_lake,i,j)
+
+       ! water-isotope: snow-to-meltwater iso transfer and passive freeze/thaw within each lake layer
+       if (l_wiso) then
+         block
+           integer :: kl
+           real(wp) :: tot_iso(nwiso), r_lay(nwiso), dws_b, dws_i(nwiso)
+           ! mirror bulk: lake_temp resets snowmelt = 0 at its entry
+           lnd%snowmelt_iso(is_lake,:) = 0._wp
+           ! snowmelt iso from explicit-layer melt over lake
+           dws_b = lnd%w_snow_old(is_lake) - lnd%w_snow(is_lake)
+           if (dws_b.gt.0._wp .and. lnd%w_snow_old(is_lake).gt.0._wp) then
+             do kl=1,nwiso
+               dws_i(kl) = (lnd%w_snow_iso_old(is_lake,kl)/lnd%w_snow_old(is_lake)) * dws_b
+               lnd%w_snow_iso(is_lake,kl)   = lnd%w_snow_iso_old(is_lake,kl) - dws_i(kl)
+               lnd%snowmelt_iso(is_lake,kl) = lnd%snowmelt_iso(is_lake,kl) + dws_i(kl) * rdt
+             enddo
+           endif
+           ! freeze/thaw redistribution per lake layer (well-mixed, passive)
+           do kl=1,nl_l
+             if (lnd%w_w_lake(kl) + lnd%w_i_lake(kl) .gt. 0._wp) then
+               tot_iso(:) = lnd%w_w_lake_iso(kl,:) + lnd%w_i_lake_iso(kl,:)
+               r_lay(:)   = tot_iso(:) / (lnd%w_w_lake(kl) + lnd%w_i_lake(kl))
+               lnd%w_w_lake_iso(kl,:) = r_lay(:) * lnd%w_w_lake(kl)
+               lnd%w_i_lake_iso(kl,:) = r_lay(:) * lnd%w_i_lake(kl)
+             endif
+           enddo
+         end block
+       endif
 
        ! use bottom layer lake temperature as top boundary condition for sublake temperature profile
        lnd%t_sublake(0) = lnd%t_lake(nl_l)
@@ -644,8 +751,9 @@ contains
                        lnd%evap_surface,lnd%transpiration,lnd%et, &
                        lnd%num_lh,lnd%num_sh,lnd%num_sw,lnd%num_lw,lnd%denom_lh,lnd%denom_sh,lnd%denom_lw, &
                        lnd%f_sh,lnd%f_e,lnd%f_t,lnd%f_le,lnd%f_lt,lnd%f_lw,lnd%lh_ecan,lnd%qsat_e,lnd%dqsatdT_e,lnd%qsat_t,lnd%dqsatdT_t, &
-                       lnd%energy_cons_surf2)
-
+                       lnd%energy_cons_surf2, &
+                       lnd%w_w,lnd%w_w_iso,lnd%wilt,lnd%evap_can_iso,lnd%subl_can_iso, &
+                       lnd%evap_surface_iso,lnd%transpiration_iso,lnd%et_iso)
       endif
 
       if( lnd%f_ice .gt. 0._wp ) then
@@ -660,7 +768,9 @@ contains
                        lnd%num_lh(i_ice),lnd%num_sh(i_ice),lnd%num_sw(i_ice),lnd%num_lw(i_ice), &
                        lnd%denom_lh(i_ice),lnd%denom_sh(i_ice),lnd%denom_lw(i_ice), &
                        lnd%f_sh(i_ice),lnd%f_e(i_ice),lnd%f_le(i_ice),lnd%f_lw(i_ice),lnd%qsat_e(i_ice),lnd%dqsatdT_e(i_ice), &
-                       lnd%energy_cons_surf2(i_ice),i,j)
+                       lnd%energy_cons_surf2(i_ice),i,j, &
+                       lnd%w_snow(is_ice),lnd%w_snow_iso(is_ice,:), &
+                       lnd%evap_surface_iso(i_ice,:),lnd%et_iso(i_ice,:))
       endif
 
       if( lnd%f_lake .gt. 0._wp ) then
@@ -675,13 +785,16 @@ contains
                        lnd%num_lh(i_lake),lnd%num_sh(i_lake),lnd%num_sw(i_lake),lnd%num_lw(i_lake), &
                        lnd%denom_lh(i_lake),lnd%denom_sh(i_lake),lnd%denom_lw(i_lake), &
                        lnd%f_sh(i_lake),lnd%f_e(i_lake),lnd%f_le(i_lake),lnd%f_lw(i_lake),lnd%qsat_e(i_lake),lnd%dqsatdT_e(i_lake), &
-                       lnd%energy_cons_surf2(i_lake),i,j)
+                       lnd%energy_cons_surf2(i_lake),i,j, &
+                       lnd%w_snow(is_lake),lnd%w_snow_iso(is_lake,:), &
+                       lnd%w_w_lake(1),lnd%w_w_lake_iso(1,:), &
+                       lnd%evap_surface_iso(i_lake,:),lnd%et_iso(i_lake,:))
       endif
 
       ! surface hydrology
       call surface_hydrology(lnd%frac_surf,lnd%mask_snow, &
                             lnd%evap_surface,lnd%rain_ground,lnd%snow_ground, &
-                            lnd%snowmelt, lnd%icemelt, &
+                            lnd%snowmelt, lnd%icemelt, lnd%icesub, lnd%et, &
                             lnd%theta, &
                             lnd%theta_sat,lnd%theta_field,lnd%k_sat, &
                             lnd%cap_soil(1),lnd%cap_lake(1), &
@@ -690,8 +803,12 @@ contains
                             lnd%w_snow_old,lnd%w_snow,lnd%w_snow_max,lnd%w_w,lnd%w_i, &
                             lnd%w_table_cum,lnd%f_wet_cum,lnd%t_soil,lnd%t_lake, &
                             lnd%h_snow,lnd%calving,lnd%runoff_sur, &
-                            lnd%infiltration,lnd%w_table,lnd%f_wet,lnd%f_wet_max,lnd%cti_lim,lnd%lake_water_tendency)
- 
+                            lnd%infiltration,lnd%w_table,lnd%f_wet,lnd%f_wet_max,lnd%cti_lim,lnd%lake_water_tendency, &
+                            lnd%evap_surface_iso,lnd%rain_ground_iso,lnd%snow_ground_iso, &
+                            lnd%snowmelt_iso,lnd%icemelt_iso,lnd%icesub_iso,lnd%et_iso, &
+                            lnd%w_snow_iso_old,lnd%w_snow_iso,lnd%w_w_iso,lnd%w_i_iso, &
+                            lnd%calving_iso,lnd%runoff_sur_iso,lnd%infiltration_iso)
+
       ! if any soil
       if( lnd%f_veg .gt. 0._wp ) then
        ! update hydrological soil properties if any soil
@@ -707,12 +824,14 @@ contains
                       lnd%transpiration,lnd%evap_surface,lnd%infiltration,lnd%wilt, &
                       lnd%w_snow(is_veg),lnd%w_w,lnd%w_i, &
                       lnd%theta_w,lnd%theta_i,lnd%theta,lnd%theta_w_cum,lnd%theta_i_cum,lnd%theta_fire_cum, &
-                      lnd%drainage)
+                      lnd%drainage, &
+                      lnd%transpiration_iso,lnd%evap_surface_iso,lnd%infiltration_iso, &
+                      lnd%w_w_iso,lnd%drainage_iso)
 
       else
        lnd%drainage = 0._wp
       endif
-  
+
       ! potential evapotranspiration
       call calculate_pet(lnd%frac_surf, lnd%t2m, lnd%q2m, lnd%pressure, lnd%swnet, lnd%lwdown, lnd%flx_lwu, lnd%r_a, &    ! in
                           lnd%pet)      ! out
@@ -731,18 +850,31 @@ contains
       lnd%runoff(is_veg) = lnd%runoff_sur(is_veg)+lnd%drainage(is_veg)   ! runoff from vegetated grid cell fraction
       lnd%runoff(is_ice) = lnd%runoff_sur(is_ice)+lnd%drainage(is_ice)     ! runoff from glacier grid cell fraction
       lnd%runoff(is_lake)= lnd%runoff_sur(is_lake)+lnd%drainage(is_lake)  ! runoff from lake cell fraction, fixme
+      if (l_wiso) then
+        lnd%runoff_iso(is_veg,:)  = lnd%runoff_sur_iso(is_veg,:)  + lnd%drainage_iso(is_veg,:)
+        lnd%runoff_iso(is_ice,:)  = lnd%runoff_sur_iso(is_ice,:)  + lnd%drainage_iso(is_ice,:)
+        lnd%runoff_iso(is_lake,:) = lnd%runoff_sur_iso(is_lake,:) + lnd%drainage_iso(is_lake,:)
+      endif
 
       ! cumulate runoff over the year for weathering, vegetated part only fixme?
       lnd%runoff_ann = lnd%runoff_ann + lnd%runoff(is_veg)*dt ! kg/m2
 
       if( check_water ) then
       if( (lnd%f_veg .gt. 0._wp .and. lnd%f_veg_old .gt. 0._wp) .or. (lnd%f_ice .gt. 0._wp .and. lnd%f_ice_old .gt. 0._wp) ) then
-       ! water conservation check
-       call water_check(i,j,lnd%frac_surf,lnd%f_veg,lnd%rain,lnd%snow, &
-                         lnd%et,lnd%runoff_sur,lnd%calving,lnd%drainage,lnd%icemelt, &
-                         lnd%w_w,lnd%w_i,lnd%w_snow,lnd%w_can,lnd%s_can, &
-                         lnd%w_w_old,lnd%w_i_old,lnd%w_snow_old,lnd%w_can_old,lnd%s_can_old,lnd%lake_water_tendency, &
-                         lnd%water_cons)
+       ! combined bulk + iso conservation check
+       call water_balance_check(i, j, lnd%frac_surf, lnd%f_veg, &
+                                lnd%rain, lnd%snow, lnd%et, &
+                                lnd%runoff_sur, lnd%calving, lnd%drainage, lnd%icemelt, lnd%icesub, &
+                                lnd%w_w, lnd%w_i, lnd%w_snow, lnd%w_can, lnd%s_can, &
+                                lnd%w_w_old, lnd%w_i_old, lnd%w_snow_old, lnd%w_can_old, lnd%s_can_old, &
+                                lnd%lake_water_tendency, &
+                                lnd%rain_iso, lnd%snow_iso, lnd%et_iso, &
+                                lnd%runoff_sur_iso, lnd%calving_iso, lnd%drainage_iso, &
+                                lnd%icemelt_iso, lnd%icesub_iso, &
+                                lnd%w_w_iso, lnd%w_i_iso, lnd%w_snow_iso, lnd%w_can_iso, lnd%s_can_iso, &
+                                lnd%w_w_iso_old, lnd%w_i_iso_old, lnd%w_snow_iso_old, &
+                                lnd%w_can_iso_old, lnd%s_can_iso_old, &
+                                lnd%water_cons, lnd%water_iso_cons)
       endif
       endif
 
@@ -1434,7 +1566,8 @@ end subroutine lnd_update
         lnd%l2d(i,j)%alb_snow_nir_dif  = 0._wp
         lnd%l2d(i,j)%w_snow_old     = 0._wp  
         lnd%l2d(i,j)%snowmelt       = 0._wp  
-        lnd%l2d(i,j)%icemelt        = 0._wp  
+        lnd%l2d(i,j)%icemelt        = 0._wp
+        lnd%l2d(i,j)%icesub         = 0._wp
 
         lnd%l2d(i,j)%snow_grain     = 0._wp  
         lnd%l2d(i,j)%dust_con       = 0._wp  
@@ -1702,6 +1835,7 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%w_snow_old       (nsoil))
         allocate(lnd%l2d(i,j)%snowmelt         (nsoil))
         allocate(lnd%l2d(i,j)%icemelt          (nsoil))
+        allocate(lnd%l2d(i,j)%icesub           (nsoil))
         allocate(lnd%l2d(i,j)%snow_grain       (nsoil))
         allocate(lnd%l2d(i,j)%dust_con         (nsoil))
         allocate(lnd%l2d(i,j)%runoff           (nsoil))
@@ -1820,10 +1954,71 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%t_sublake_cum (nl)) 
         allocate(lnd%l2d(i,j)%theta_w_sublake_cum (nl)) 
         allocate(lnd%l2d(i,j)%theta_i_sublake_cum (nl)) 
-        allocate(lnd%l2d(i,j)%w_w_lake         (nl_l)) 
-        allocate(lnd%l2d(i,j)%w_i_lake         (nl_l)) 
-        allocate(lnd%l2d(i,j)%f_i_lake         (nl_l)) 
-        allocate(lnd%l2d(i,j)%psi              (nl)) 
+        allocate(lnd%l2d(i,j)%w_w_lake         (nl_l))
+        allocate(lnd%l2d(i,j)%w_i_lake         (nl_l))
+        allocate(lnd%l2d(i,j)%f_i_lake         (nl_l))
+        ! water isotopes — allocated unconditionally; values are 0 unless l_wiso=.true.
+        allocate(lnd%l2d(i,j)%rain_iso          (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%snow_iso          (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%rain_ground_iso   (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%snow_ground_iso   (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%evap_can_iso      (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%subl_can_iso      (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%transpiration_iso (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%evap_surface_iso  (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%et_iso            (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%w_can_iso         (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%w_can_iso_old     (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%s_can_iso         (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%s_can_iso_old     (nsurf,nwiso))
+        allocate(lnd%l2d(i,j)%w_snow_iso        (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%w_snow_iso_old    (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%snowmelt_iso      (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%icemelt_iso       (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%icesub_iso        (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%runoff_iso        (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%runoff_sur_iso    (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%drainage_iso      (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%calving_iso       (nsoil,nwiso))
+        allocate(lnd%l2d(i,j)%w_w_iso           (nl,nwiso))
+        allocate(lnd%l2d(i,j)%w_i_iso           (nl,nwiso))
+        allocate(lnd%l2d(i,j)%w_w_iso_old       (nl,nwiso))
+        allocate(lnd%l2d(i,j)%w_i_iso_old       (nl,nwiso))
+        allocate(lnd%l2d(i,j)%w_w_lake_iso      (nl_l,nwiso))
+        allocate(lnd%l2d(i,j)%w_i_lake_iso      (nl_l,nwiso))
+        allocate(lnd%l2d(i,j)%infiltration_iso  (nwiso))
+        allocate(lnd%l2d(i,j)%water_iso_cons    (nsoil,nwiso))
+        lnd%l2d(i,j)%rain_iso          = 0._wp
+        lnd%l2d(i,j)%snow_iso          = 0._wp
+        lnd%l2d(i,j)%rain_ground_iso   = 0._wp
+        lnd%l2d(i,j)%snow_ground_iso   = 0._wp
+        lnd%l2d(i,j)%evap_can_iso      = 0._wp
+        lnd%l2d(i,j)%subl_can_iso      = 0._wp
+        lnd%l2d(i,j)%transpiration_iso = 0._wp
+        lnd%l2d(i,j)%evap_surface_iso  = 0._wp
+        lnd%l2d(i,j)%et_iso            = 0._wp
+        lnd%l2d(i,j)%w_can_iso         = 0._wp
+        lnd%l2d(i,j)%w_can_iso_old     = 0._wp
+        lnd%l2d(i,j)%s_can_iso         = 0._wp
+        lnd%l2d(i,j)%s_can_iso_old     = 0._wp
+        lnd%l2d(i,j)%w_snow_iso        = 0._wp
+        lnd%l2d(i,j)%w_snow_iso_old    = 0._wp
+        lnd%l2d(i,j)%snowmelt_iso      = 0._wp
+        lnd%l2d(i,j)%icemelt_iso       = 0._wp
+        lnd%l2d(i,j)%icesub_iso        = 0._wp
+        lnd%l2d(i,j)%runoff_iso        = 0._wp
+        lnd%l2d(i,j)%runoff_sur_iso    = 0._wp
+        lnd%l2d(i,j)%drainage_iso      = 0._wp
+        lnd%l2d(i,j)%calving_iso       = 0._wp
+        lnd%l2d(i,j)%w_w_iso           = 0._wp
+        lnd%l2d(i,j)%w_i_iso           = 0._wp
+        lnd%l2d(i,j)%w_w_iso_old       = 0._wp
+        lnd%l2d(i,j)%w_i_iso_old       = 0._wp
+        lnd%l2d(i,j)%w_w_lake_iso      = 0._wp
+        lnd%l2d(i,j)%w_i_lake_iso      = 0._wp
+        lnd%l2d(i,j)%infiltration_iso  = 0._wp
+        lnd%l2d(i,j)%water_iso_cons    = 0._wp
+        allocate(lnd%l2d(i,j)%psi              (nl))
         allocate(lnd%l2d(i,j)%k_exp            (nl)) 
         allocate(lnd%l2d(i,j)%psi_exp          (nl)) 
         allocate(lnd%l2d(i,j)%ftemp            (nl)) 
@@ -1969,6 +2164,9 @@ end subroutine lnd_update
    call nc_write_dim(fnm,dim_npft,x=i_pft,units="n/a")
    call nc_write_dim(fnm,dim_nsurf,x=i_surf,units="n/a")
    call nc_write_dim(fnm,dim_nsoil,x=i_soil,units="n/a")
+   if (l_wiso) then
+     call nc_write_dim(fnm,"wiso",x=[(i,i=1,nwiso)],units="n/a")
+   endif
 
 
    call nc_open(fnm,ncid)
@@ -2653,6 +2851,56 @@ end subroutine lnd_update
    call nc_write(fnm,"doc13_export",   lnd%doc13_export,  dims=[dim_lon,dim_lat],long_name="DOC 13 export rate",units="kgC/m2/yr",ncid=ncid)
    call nc_write(fnm,"doc14_export",   lnd%doc14_export,  dims=[dim_lon,dim_lat],long_name="DOC 14 export rate",units="kgC/m2/yr",ncid=ncid)
 
+   ! ----- water isotopes (only when l_wiso=.true.) -----
+   if (l_wiso) then
+     block
+       real(wp), allocatable :: tmp_l (:,:,:)   ! (nl,ni,nj)
+       real(wp), allocatable :: tmp_s (:,:,:)   ! (nsurf,ni,nj)
+       real(wp), allocatable :: tmp_so(:,:,:)   ! (nsoil,ni,nj)
+       real(wp), allocatable :: tmp_ll(:,:,:)   ! (nl_l,ni,nj)
+       integer :: ii, jj, iwiso
+       allocate(tmp_l (nl,   ni,nj))
+       allocate(tmp_s (nsurf,ni,nj))
+       allocate(tmp_so(nsoil,ni,nj))
+       allocate(tmp_ll(nl_l, ni,nj))
+       do iwiso=1,nwiso
+         do jj=1,nj; do ii=1,ni
+           tmp_l (:,ii,jj) = lnd(ii,jj)%w_w_iso(:,iwiso)
+           tmp_so(:,ii,jj) = lnd(ii,jj)%w_snow_iso(:,iwiso)
+           tmp_s (:,ii,jj) = lnd(ii,jj)%w_can_iso(:,iwiso)
+           tmp_ll(:,ii,jj) = lnd(ii,jj)%w_w_lake_iso(:,iwiso)
+         enddo; enddo
+         call nc_write(fnm,"w_w_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nl,ni,nj,1],&
+                       long_name="soil liquid water isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"w_snow_iso", tmp_so, dims=[dim_nsoil,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nsoil,ni,nj,1],&
+                       long_name="snowpack isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"w_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nsurf,ni,nj,1],&
+                       long_name="canopy liquid water isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"w_w_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nl_l,ni,nj,1],&
+                       long_name="lake liquid water isotope mass",units="kg/m2",ncid=ncid)
+         do jj=1,nj; do ii=1,ni
+           tmp_l (:,ii,jj) = lnd(ii,jj)%w_i_iso(:,iwiso)
+           tmp_s (:,ii,jj) = lnd(ii,jj)%s_can_iso(:,iwiso)
+           tmp_ll(:,ii,jj) = lnd(ii,jj)%w_i_lake_iso(:,iwiso)
+         enddo; enddo
+         call nc_write(fnm,"w_i_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nl,ni,nj,1],&
+                       long_name="soil ice isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"s_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nsurf,ni,nj,1],&
+                       long_name="canopy snow isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"w_i_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,1,iwiso],count=[nl_l,ni,nj,1],&
+                       long_name="lake ice isotope mass",units="kg/m2",ncid=ncid)
+       enddo
+       deallocate(tmp_l, tmp_s, tmp_so, tmp_ll)
+     end block
+   endif
+
    call nc_close(ncid)
 
    return
@@ -2862,6 +3110,54 @@ end subroutine lnd_update
     call nc_read(fnm,"doc_export",     lnd%doc_export,ncid=ncid)
     call nc_read(fnm,"doc13_export",   lnd%doc13_export,ncid=ncid)
     call nc_read(fnm,"doc14_export",   lnd%doc14_export,ncid=ncid)
+
+    ! ----- water isotopes -----
+    ! If l_wiso=T but restart lacks iso fields, initialize iso = R_std * bulk so delta18O = 0 at start.
+    if (l_wiso) then
+      block
+        real(wp), allocatable :: tmp_l (:,:,:), tmp_s (:,:,:), tmp_so(:,:,:), tmp_ll(:,:,:)
+        integer :: ii, jj, iwiso
+        logical :: have_iso
+        have_iso = nc_exists_var(fnm,"w_w_iso")
+        if (have_iso) then
+          allocate(tmp_l (nl,   nx,ny))
+          allocate(tmp_s (nsurf,nx,ny))
+          allocate(tmp_so(nsoil,nx,ny))
+          allocate(tmp_ll(nl_l, nx,ny))
+          do iwiso=1,nwiso
+            call nc_read(fnm,"w_w_iso",     tmp_l, start=[1,1,1,iwiso],count=[nl,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_w_iso(:,iwiso) = tmp_l(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_i_iso",     tmp_l, start=[1,1,1,iwiso],count=[nl,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_i_iso(:,iwiso) = tmp_l(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_snow_iso",  tmp_so,start=[1,1,1,iwiso],count=[nsoil,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_snow_iso(:,iwiso) = tmp_so(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_can_iso",   tmp_s, start=[1,1,1,iwiso],count=[nsurf,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_can_iso(:,iwiso) = tmp_s(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"s_can_iso",   tmp_s, start=[1,1,1,iwiso],count=[nsurf,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%s_can_iso(:,iwiso) = tmp_s(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_w_lake_iso",tmp_ll,start=[1,1,1,iwiso],count=[nl_l,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_w_lake_iso(:,iwiso) = tmp_ll(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_i_lake_iso",tmp_ll,start=[1,1,1,iwiso],count=[nl_l,nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_i_lake_iso(:,iwiso) = tmp_ll(:,ii,jj); enddo; enddo
+          enddo
+          deallocate(tmp_l, tmp_s, tmp_so, tmp_ll)
+        else
+          ! cold-start iso state from bulk × Rstd so delta18O = 0 permil
+          print *,'restart lacks water-isotope fields; initializing iso = Rstd * bulk'
+          do jj=1,ny; do ii=1,nx
+            do iwiso=1,nwiso
+              lnd(ii,jj)%w_w_iso(:,iwiso)      = Rstd(iwiso) * lnd(ii,jj)%w_w
+              lnd(ii,jj)%w_i_iso(:,iwiso)      = Rstd(iwiso) * lnd(ii,jj)%w_i
+              lnd(ii,jj)%w_snow_iso(:,iwiso)   = Rstd(iwiso) * lnd(ii,jj)%w_snow
+              lnd(ii,jj)%w_can_iso(:,iwiso)    = Rstd(iwiso) * lnd(ii,jj)%w_can
+              lnd(ii,jj)%s_can_iso(:,iwiso)    = Rstd(iwiso) * lnd(ii,jj)%s_can
+              lnd(ii,jj)%w_w_lake_iso(:,iwiso) = Rstd(iwiso) * lnd(ii,jj)%w_w_lake
+              lnd(ii,jj)%w_i_lake_iso(:,iwiso) = Rstd(iwiso) * lnd(ii,jj)%w_i_lake
+            enddo
+          enddo; enddo
+        endif
+      end block
+    endif
 
     call nc_close(ncid)
 

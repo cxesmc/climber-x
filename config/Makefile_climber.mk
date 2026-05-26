@@ -136,7 +136,7 @@ obj_bmb_dummy = $(patsubst %, $(objdir)/%, $(tmp_bmb_dummy) )
 ########################################################################
 # land model related source files
 dir_lnd = $(srcdir)/lnd/
-files_lnd = lnd_grid.f90 lnd_params.f90 lnd_def.f90 \
+files_lnd = lnd_grid.f90 wiso_params.f90 lnd_params.f90 lnd_def.f90 \
 	          soil_par.f90 ice_par.f90 lake_par.f90 lake_rho.f90 shelf_par.f90 surface_par_lnd.f90 veg_par.f90 \
 	          soil_carbon_par.f90 shelf_carbon_par.f90 ice_carbon_par.f90 lake_carbon_par.f90 \
             photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 water_deficit.f90 \
@@ -280,17 +280,17 @@ $(objdir)/climber_clim_ice.o : $(dir_main)climber.f90 \
 
 $(objdir)/coupler.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
-	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o \
+	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/wiso_params.o \
 	$(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o 
-	$(FC) $(LDFLAGS) -c -o $@ $<	
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/coupler_nobgc.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
-	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o \
+	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/wiso_params.o \
 	$(objdir)/.bgc_params.o $(objdir)/.bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o 
-	$(FC) $(LDFLAGS) -c -o $@ $<	
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/cmn_out.o : $(dir_main)cmn_out.f90 $(objdir)/coupler.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
@@ -514,7 +514,7 @@ $(objdir)/sic_out.o : $(dir_sic)sic_out.f90 $(objdir)/sic_grid.o $(objdir)/sic_p
 
 #################
 # land rules ####
-$(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lnd_def.o \
+$(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/lnd_def.o \
 	$(objdir)/surface_par_lnd.o $(objdir)/ebal_veg.o $(objdir)/ebal_ice.o $(objdir)/ebal_lake.o \
 	$(objdir)/soil_par.o $(objdir)/ice_par.o $(objdir)/shelf_par.o $(objdir)/lake_par.o $(objdir)/lake_rho.o \
 	$(objdir)/soil_temp.o $(objdir)/ice_temp.o $(objdir)/shelf_temp.o $(objdir)/lake_temp.o $(objdir)/lake_convection.o $(objdir)/sublake_temp.o \
@@ -529,7 +529,10 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 $(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90
+$(objdir)/wiso_params.o : $(dir_lnd)wiso_params.f90 $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lnd_def.o : $(dir_lnd)lnd_def.f90 $(objdir)/precision.o $(objdir)/lnd_grid.o
@@ -574,16 +577,16 @@ $(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o
 $(objdir)/photosynthesis.o : $(dir_lnd)photosynthesis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_veg.o : $(dir_lnd)ebal_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o
+$(objdir)/ebal_veg.o : $(dir_lnd)ebal_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_ice.o : $(dir_lnd)ebal_ice.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o
+$(objdir)/ebal_ice.o : $(dir_lnd)ebal_ice.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_lake.o : $(dir_lnd)ebal_lake.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o
+$(objdir)/ebal_lake.o : $(dir_lnd)ebal_lake.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/lnd_grid.o 
+$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/lnd_grid.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/water_deficit.o : $(dir_lnd)water_deficit.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
@@ -607,10 +610,10 @@ $(objdir)/lake_convection.o : $(dir_lnd)lake_convection.f90 $(objdir)/lnd_grid.o
 $(objdir)/sublake_temp.o : $(dir_lnd)sublake_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_hydro.o : $(dir_lnd)soil_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
+$(objdir)/soil_hydro.o : $(dir_lnd)soil_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/water_check.o : $(dir_lnd)water_check.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/water_check.o : $(dir_lnd)water_check.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/dyn_veg.o : $(dir_lnd)dyn_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
