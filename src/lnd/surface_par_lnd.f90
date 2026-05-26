@@ -922,7 +922,7 @@ contains
     ! vegetation
     do n=1,npft
       if( frac_surf(n) .gt. 0._wp ) then
-        r_s(n) = 1._wp / max(1.e-5_wp, 1.6_wp*g_can(n)) ! s/m   , factor 1.6 is to convert from CO2 to H2O conductance
+        r_s(n) = 1._wp / max(1.e-30_wp, 1.6_wp*g_can(n)) ! s/m   , factor 1.6 is to convert from CO2 to H2O conductance
         beta_s(n) = 1._wp
         ! for evaporation from soil below canopy use bare soil resistance
         r_s_can(n) = r_s(i_bare)
