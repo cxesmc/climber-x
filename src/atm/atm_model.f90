@@ -233,9 +233,9 @@ contains
 
     ! initialize precipitation to be cumulated over fast time steps
     prc_save = atm%prc
-    atm%prc  = 0._wp 
-    atm%prcw = 0._wp 
-    atm%prcs = 0._wp 
+    atm%prc  = 0._wp
+    atm%prcw = 0._wp
+    atm%prcs = 0._wp
 
     do niter=1,nstep_fast
 
@@ -301,7 +301,7 @@ contains
       ! vertical profiles of temperature, humidity and dust
       !$ time1 = omp_get_wtime()
       call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
-        atm%wcon, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
+        atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'vesta',(time2-time1)*nstep_fast
 
@@ -349,7 +349,7 @@ contains
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%hqeff, atm%sam, atm%eke, atm%sam2, &   ! in
+      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
         atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
@@ -452,6 +452,8 @@ contains
          atm%ram(i,j) = 0.8_wp
          atm%hqeff(i,j) = 2000._wp
          atm%wcon(i,j) = 1._wp
+         atm%A_trop(i,j) = 1._wp
+         atm%W_strat(i,j) = 0._wp
          atm%prc(i,j) = 0._wp
          atm%prcs(i,j,:) = 0._wp
          atm%prcw(i,j,:) = 0._wp
@@ -524,7 +526,9 @@ contains
          atm%vterf = 0._wp
 
          call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
-           atm%wcon, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
+           atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
+         ! initialize column water from vesta's reconstruction: wcon = ram·A_trop + W_strat
+         atm%wcon = atm%ram*atm%A_trop + atm%W_strat
 
     endif
 
@@ -603,7 +607,9 @@ contains
      allocate(atm%dam(im,jm))  
      allocate(atm%hrm(im,jm))  
      allocate(atm%hqeff(im,jm)) 
-     allocate(atm%wcon(im,jm)) 
+     allocate(atm%wcon(im,jm))
+     allocate(atm%A_trop(im,jm))
+     allocate(atm%W_strat(im,jm))
      allocate(atm%cld_rh(im,jm)) 
      allocate(atm%cld_low(im,jm)) 
      allocate(atm%cld(im,jm)) 
@@ -861,7 +867,9 @@ contains
      deallocate(atm%dam)  
      deallocate(atm%hrm)  
      deallocate(atm%hqeff) 
-     deallocate(atm%wcon) 
+     deallocate(atm%wcon)
+     deallocate(atm%A_trop)
+     deallocate(atm%W_strat)
      deallocate(atm%cld_rh) 
      deallocate(atm%cld_low) 
      deallocate(atm%cld) 
@@ -1188,8 +1196,8 @@ contains
     call nc_read(fnm,"r2       ",     atm%r2      ) 
     call nc_read(fnm,"r2a      ",     atm%r2a     ) 
     call nc_read(fnm,"hqeff    ",     atm%hqeff   ) 
-    call nc_read(fnm,"wcon     ",     atm%wcon    ) 
-    call nc_read(fnm,"prc      ",     atm%prc     ) 
+    call nc_read(fnm,"wcon     ",     atm%wcon    )
+    call nc_read(fnm,"prc      ",     atm%prc     )
     call nc_read(fnm,"cld      ",     atm%cld     ) 
     call nc_read(fnm,"cld_rh   ",     atm%cld_rh  ) 
     call nc_read(fnm,"cld_low  ",     atm%cld_low ) 

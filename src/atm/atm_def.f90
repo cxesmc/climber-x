@@ -98,7 +98,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: dam        !! surface dust mass mixing ratio (kg/kg)
       real(wp), allocatable, dimension(:,:) :: hrm        !! vertical scale for relative humidity(m)
       real(wp), allocatable, dimension(:,:) :: hqeff      !! effective vertical scale for specific humidity (m)
-      real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2)
+      real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2), prognostic, budget-conserving
+      real(wp), allocatable, dimension(:,:) :: A_trop     !! tropospheric coefficient ∂wcon/∂ram (kg m-2), from vesta
+      real(wp), allocatable, dimension(:,:) :: W_strat    !! stratospheric column water intercept (kg m-2), from vesta
       real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
