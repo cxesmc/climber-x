@@ -26,7 +26,7 @@
 module water_check_mod
 
    use precision, only : wp
-   use lnd_grid, only : nveg, is_veg, is_ice, i_ice
+   use lnd_grid, only : nveg, is_veg, is_ice, is_lake, i_ice, i_lake
    use lnd_params, only : dt, hydro_par
    use wiso_params, only : l_wiso, nwiso
 
@@ -197,8 +197,47 @@ contains
 
     endif
 
-    ! Lake water is treated as inexhaustible in this model; no budget enforcement here.
-    ! lake_water_tendency is accepted as an argument for diagnostic purposes only.
+    !----------------------------------------------------------------
+    ! lake grid part
+    !----------------------------------------------------------------
+    ! The lake reservoir itself is treated as inexhaustible (w_w_lake not tracked here),
+    ! but the lake-cell surface budget should close:
+    !   P + S + (M from snow) - et - runoff_sur - calving - dw_snow = 0
+    ! where runoff_sur(is_lake) = rain_ground + snowmelt - evaporation (i.e. P + M - E).
+    if (frac_surf(i_lake) .gt. 0._wp) then
+
+      in_b    = (rain(i_lake) + snow(i_lake)) * dt
+      out_b   = (runoff_sur(is_lake) + calving(is_lake) + et(i_lake)) * dt
+      store_b = w_snow(is_lake) - w_snow_old(is_lake)
+      water_cons(is_lake) = in_b - out_b - store_b
+
+      if (abs(water_cons(is_lake)) .gt. tol_water) then
+        call print_bulk_failure('is_lake', i, j, water_cons(is_lake), &
+                                rain(i_lake)*dt, snow(i_lake)*dt, 0._wp, 0._wp, &
+                                et(i_lake)*dt, runoff_sur(is_lake)*dt, 0._wp, calving(is_lake)*dt, &
+                                0._wp, 0._wp, w_snow(is_lake)-w_snow_old(is_lake), 0._wp)
+        if (abs(water_cons(is_lake)) .gt. stop_water) stop 'water_balance_check: bulk imbalance over LAKE exceeds stop_water'
+      endif
+
+      if (l_wiso) then
+        do iso = 1, nwiso
+          in_i    = (rain_iso(i_lake,iso) + snow_iso(i_lake,iso)) * dt
+          out_i   = (runoff_sur_iso(is_lake,iso) + calving_iso(is_lake,iso) + et_iso(i_lake,iso)) * dt
+          store_i = w_snow_iso(is_lake,iso) - w_snow_iso_old(is_lake,iso)
+          water_iso_cons(is_lake,iso) = in_i - out_i - store_i
+
+          if (abs(water_iso_cons(is_lake,iso)) .gt. tol_water) then
+            call print_iso_failure('is_lake', i, j, iso, water_iso_cons(is_lake,iso), &
+                                   rain_iso(i_lake,iso)*dt, snow_iso(i_lake,iso)*dt, 0._wp, 0._wp, &
+                                   et_iso(i_lake,iso)*dt, runoff_sur_iso(is_lake,iso)*dt, &
+                                   0._wp, calving_iso(is_lake,iso)*dt, &
+                                   0._wp, 0._wp, w_snow_iso(is_lake,iso)-w_snow_iso_old(is_lake,iso), 0._wp)
+            if (abs(water_iso_cons(is_lake,iso)) .gt. stop_water) stop 'water_balance_check: iso imbalance over LAKE exceeds stop_water'
+          endif
+        enddo
+      endif
+
+    endif
 
     return
 
