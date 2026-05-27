@@ -30,6 +30,7 @@ module time_step_mod
   use timer, only : sec_day
   use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
   use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3, c_wrt_4
+  use control, only : check_water
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
   use vesta_mod, only : t_prof
   !$ use omp_lib
@@ -45,7 +46,7 @@ contains
   !   Subroutine :  t i m e _ s t e p
   !   Purpose    :  time integration of equations for temperature, humidity and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, wcon, hqeff, sam, eke, sam2, &
+  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, wcon, A_trop, W_strat, sam, eke, sam2, &
       tskin, convdse, rb_atm, rb_sur, sha, gams, gamb, gamt, &
       convdst, dust_emis, dust_dep, hdust, &
       convco2, co2flx, &
@@ -63,8 +64,9 @@ contains
     real(wp), intent(in   ) :: slope(:,:)
     real(wp), intent(in   ) :: evpa(:,:)
     real(wp), intent(in   ) :: convwtr(:,:)
-    real(wp), intent(in   ) :: wcon(:,:)
-    real(wp), intent(in   ) :: hqeff(:,:)
+    real(wp), intent(inout) :: wcon(:,:)
+    real(wp), intent(in   ) :: A_trop(:,:)
+    real(wp), intent(in   ) :: W_strat(:,:)
     real(wp), intent(in   ) :: sam(:,:)
     real(wp), intent(in   ) :: eke(:,:)
     real(wp), intent(in   ) :: sam2(:,:)
@@ -114,13 +116,16 @@ contains
     real(wp) :: prc_tmp, prcw_tmp, prcs_tmp
     real(wp) :: prc_ocn, prc_ocn_conv, prc_ocn_wcon
     real(wp) :: prc_lnd, prc_lnd_conv, prc_lnd_wcon
-    real(wp) :: qold
+    real(wp) :: qold, A_loc, wcon_budget, wcon_in, water_res
     real(wp) :: frocn
     real(wp), dimension(nm) :: rskin
 
+    real(wp), parameter :: A_trop_min = 1.e-3_wp   ! safeguard against division by ~0 in extreme cold profile
+    real(wp), parameter :: water_check_tol = 1.e-9_wp  ! kg/m2 per fast step; anything above is real, not round-off
+
 
     !$omp parallel do private(i,j,n,rr,convwtr_slope,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
-    !$omp private(frocn,heff,qold,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin) 
+    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin)
     do j=1,jm
       do i=1,im
 
@@ -159,40 +164,58 @@ contains
         !-------------------------------------
 
         ! column water content tendency
-        dwdt = evpa(i,j)-prc_tmp+convwtr(i,j)  ! kg/s * kg/kg / m2 = kg/m2/s 
-        ! effective height scale
-        heff = hqeff(i,j)    ! m
-        ! new atmospheric specific humidity
-        qam(i,j) = qam(i,j)+dwdt/(heff*ra)*tstep    ! kg/m2/s / m * m3/kg * s 
+        dwdt = evpa(i,j)-prc_tmp+convwtr(i,j)  ! kg/m2/s
 
-        ! Saturated specific humidity
+        ! snapshot column water before the budget update (for optional per-column check)
+        if (check_water) wcon_in = wcon(i,j)
+
+        ! prognostic update of column water content
+        wcon(i,j) = wcon(i,j) + dwdt*tstep
+        ! save post-budget wcon (pre-cap) for the mass-conservative prc correction
+        wcon_budget = wcon(i,j)
+
+        ! invert vesta's linear relation wcon = ram·A_trop + W_strat
+        ! to derive surface relative humidity ram from the prognostic wcon
+        A_loc = max(A_trop(i,j), A_trop_min)
+        ram(i,j) = (wcon(i,j) - W_strat(i,j)) / A_loc
+
+        ! saturated specific humidity at the surface 
         qsat = fqsat(tam(i,j),psa(i,j))
+        qam(i,j) = ram(i,j)*qsat
 
-        ! overflow: precipitation correction 
+        ! overflow: cap ram at rh_max 
         prc_over(i,j) = 0._wp
-        if (qam(i,j).gt.rh_max*qsat) then
-          qold = qam(i,j)
-          qam(i,j) = rh_max*qsat
-          prc_over(i,j) = (qold-qam(i,j))*(heff*ra)/tstep
-          prc_tmp = prc_tmp+prc_over(i,j)
+        if (ram(i,j).gt.rh_max) then
+          ram(i,j) = rh_max
+          qam(i,j) = ram(i,j)*qsat
+          wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
 
-        ! underflow: precipitation correction
+        ! underflow: cap qam at 1e-6
         if (qam(i,j).lt.1.e-6_wp) then
-          qold = qam(i,j)
           qam(i,j) = 1.e-6_wp
-          prc_tmp = prc_tmp+qold*(heff*ra)/tstep 
+          if (qsat.gt.0._wp) ram(i,j) = qam(i,j)/qsat
+          wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
+
+        ! mass-consistent precipitation correction: water added/removed by capping is reflected in the precipitation 
+        prc_over(i,j) = (wcon_budget - wcon(i,j))/tstep
+        prc_tmp = prc_tmp + prc_over(i,j)
 
         if (prc_tmp.lt.0._wp) then
           print *,'WARNING: prc<0 ',prc_tmp,' in (i,j) ',i,j
           if (prc_tmp.lt.-1.) error = .true.
           prc_tmp = 0._wp
-          qam(i,j) = ram(i,j)*qsat
         endif
 
-        ! new atmospheric relative humidity
-        ram(i,j)=qam(i,j)/qsat
+        ! per-column water-budget consistency check:
+        ! (wcon_new - wcon_old) should equal (E - P + CW)·dt 
+        if (check_water) then
+          water_res = (wcon(i,j) - wcon_in) - (evpa(i,j) - prc_tmp + convwtr(i,j))*tstep
+          if (abs(water_res) .gt. water_check_tol) then
+            print *,'WARNING: atm water budget residual ',water_res,' kg/m2 in (i,j) ',i,j
+          endif
+        endif
 
         ! separate precipitation into rain and snow using 2m temperature,
         ! separately for each macro surface type
@@ -244,7 +267,6 @@ contains
         dcdt = convco2(i,j) + co2flx(i,j) ! kgCO2/m2/s
         ! new CO2 
         cam(i,j) = cam(i,j) + dcdt/(hatm*ra2a(i,j))*tstep     ! kgCO2/m2/s / m * m3/kg * s = kgCO2/kg
-        !cam(i,j) = cam(i,j) + dcdt/(hatm*ra)*tstep     ! kgCO2/m2/s / m * m3/kg * s = kgCO2/kg
 
         !-------------------------------------
         ! update atmospheric prognostic temperature

@@ -198,8 +198,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: prc        !! total precipitation (kg m-2 s-1)
     real(wp), allocatable, dimension(:,:) :: prcw       !! rain(kg m-2 s-1)
     real(wp), allocatable, dimension(:,:) :: prcs       !! snowfall(kg m-2 s-1)
-    real(wp), allocatable, dimension(:,:) :: prc_conv 
-    real(wp), allocatable, dimension(:,:) :: prc_wcon  
+    real(wp), allocatable, dimension(:,:) :: prc_conv
+    real(wp), allocatable, dimension(:,:) :: prc_wcon
     real(wp), allocatable, dimension(:,:) :: prc_over
     real(wp), allocatable, dimension(:,:) :: hcld       !! cloud height (m)
     real(wp), allocatable, dimension(:,:) :: ctt        !! top cloud temperature (K)
@@ -1488,9 +1488,9 @@ contains
           mon_a(m)%prc         = 0. 
           mon_a(m)%prcw        = 0. 
           mon_a(m)%prcs        = 0. 
-          mon_a(m)%prc_conv    = 0. 
-          mon_a(m)%prc_wcon    = 0. 
-          mon_a(m)%prc_over    = 0. 
+          mon_a(m)%prc_conv    = 0.
+          mon_a(m)%prc_wcon    = 0.
+          mon_a(m)%prc_over    = 0.
           mon_a(m)%hcld        = 0. 
           mon_a(m)%ctt         = 0. 
           mon_a(m)%clot        = 0. 
