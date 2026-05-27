@@ -10,27 +10,27 @@ LIB_NC  = -L${NETCDFF_ROOT}/lib -Wl\,-rpath=${NETCDFF_ROOT}/lib -lnetcdff -L${NE
 # the -rpath options ensure that the same shared libraries are found at runtime
 
 # coordinates
-COORDROOT = src/utils/coordinates_gfortran
+COORDROOT = coordinates_gfortran
 INC_COORD = -I${COORDROOT}/libcoordinates/include
 LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
-FESMUTILSROOT=src/utils/fesm-utils_gfortran/utils
+FESMUTILSROOT=fesm-utils_gfortran/utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
 
 # FFTW
-FFTWROOT = src/utils/fesm-utils_gfortran/fftw-omp
+FFTWROOT = fesm-utils_gfortran/fftw-omp
 INC_FFTW = -I${FFTWROOT}/include
 LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 #-lfftw3f_omp -lfftw3f
 
 # LIS
-LISROOT = src/utils/fesm-utils_gfortran/lis-omp
+LISROOT = fesm-utils_gfortran/lis-omp
 INC_LIS = -I${LISROOT}/include 
 LIB_LIS = -L${LISROOT}/lib/ -llis
 
 # Yelmo
-YELMOROOT = src/yelmo_gfortran
+YELMOROOT = yelmo_gfortran
 INC_YELMO = -I${YELMOROOT}/libyelmo/include
 LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 
