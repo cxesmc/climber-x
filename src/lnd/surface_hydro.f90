@@ -859,9 +859,15 @@ contains
       ! net lake surface water balance
       lake_water_tendency = rain_ground(i_lake) + snowmelt(is_lake) - evaporation ! kg/m2/s
 
-      ! runoff from lakes is computed in the coupler!
-      runoff_sur(is_lake) = 0._wp
-      if (l_wiso) runoff_sur_iso(is_lake,:) = 0._wp
+      ! route the lake surface water balance (P + M - E) to runoff_sur(is_lake);
+      ! the coupler transfers it to the ocean (when interactive lakes are off)
+      ! evaporation is included as negative runoff in order to close the lake water budget
+      runoff_sur(is_lake) = lake_water_tendency
+      if (l_wiso) then
+        do iso=1,nwiso
+          runoff_sur_iso(is_lake,iso) = rain_ground_iso(i_lake,iso) + snowmelt_iso(is_lake,iso) - evaporation_iso(iso)
+        enddo
+      endif
 
       ! update snow mask
       if( w_snow(is_lake) .gt. snow_par%w_snow_crit ) then

@@ -38,6 +38,7 @@ module coupler
     use control, only : ico2_rad, ich4_rad, in2o_rad, id13c, iD14c, prc_forcing
     use control, only : ocn_restore_temp, ocn_restore_sal, atm_fix_tau
     use control, only : flag_co2, flag_ch4, flag_n2o, flag_atm, flag_ocn, flag_bgc, flag_sic, flag_lnd, flag_dust, flag_smb, flag_bmb, flag_ice, flag_geo, flag_lakes
+    use control, only : check_water
     use control, only : geo_restart
     use control, only : ifake_ice
     use control, only : l_spinup_cc
@@ -76,7 +77,7 @@ module coupler
     use ocn_params, only : i_scale_dhdt_ice, scale_dhdt_ice, scale_dhdt_ice_time, scale_dhdt_ice_data
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
-    use lnd_grid, only : is_veg, is_ice, nl
+    use lnd_grid, only : is_veg, is_ice, is_lake, nl
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
     use geo_params, only : h_ice_min
@@ -297,6 +298,8 @@ module coupler
       real(wp), dimension(:,:),   allocatable :: bmelt_flt !! basal melt from floating ice shelfs [kg/s]
       real(wp), dimension(:,:),   allocatable :: runoff_ice_l  !! runoff from ice sheets computed by land model [kg/s]
       real(wp), dimension(:,:),   allocatable :: calving_ice_l !! calving from ice sheets computed by land model [kg/s]
+      real(wp), dimension(:,:),   allocatable :: runoff_lake  !! runoff from lakes computed by land model [kg/s]
+      real(wp), dimension(:,:),   allocatable :: calving_lake !! calving from lakes computed by land model [kg/s]
       real(wp), dimension(:,:,:), allocatable :: melt_ice_i_mon  !! monthly ice sheet melt [kg/s]
       real(wp), dimension(:,:,:), allocatable :: acc_ice_i_mon  !! monthly ice sheet net accumulation from prescribed bnd ice thickness changes [kg/s]
       real(wp), dimension(:,:,:), allocatable :: dhdt_ice_i_mon  !! monthly change in freshwater flux from prescribed bnd ice thickness changes [kg/s]
@@ -1489,6 +1492,8 @@ contains
         cmn%calving_veg(i,j)   = lnd%l2d(i,j)%calving(is_veg) * area(i,j)*(cmn%f_lnd(i,j)-cmn%f_lake(i,j)-cmn%f_ice_grd(i,j)) ! kg/m2/s -> kg/s
         cmn%runoff_ice_l(i,j)  = lnd%l2d(i,j)%runoff(is_ice)  * area(i,j)*cmn%f_ice(i,j)  ! kg/m2/s -> kg/s
         cmn%calving_ice_l(i,j) = lnd%l2d(i,j)%calving(is_ice) * area(i,j)*cmn%f_ice(i,j)  ! kg/m2/s -> kg/s
+        cmn%runoff_lake(i,j)  = lnd%l2d(i,j)%runoff(is_lake)  * area(i,j)*cmn%f_lake(i,j) ! kg/m2/s -> kg/s
+        cmn%calving_lake(i,j) = lnd%l2d(i,j)%calving(is_lake) * area(i,j)*cmn%f_lake(i,j) ! kg/m2/s -> kg/s
 
         if (flag_bmb) then
           ! temperature and salinity for ice shelf basal melt
@@ -3915,19 +3920,152 @@ contains
           !  + cmn%bmelt_flt(i,j) / area_nbr    ! kg/m2/s
         enddo
       enddo
+    else
+      ! interactive lakes off: route the per-cell lake surface water balance through the
+      ! cell's veg drainage map so the global water cycle still closes
+      do j=1,nj
+        do i=1,ni
+          if (cmn%f_drain_veg(0,i,j) > 0._wp .and. cmn%f_lake(i,j) > 0._wp) then
+            ir = cmn%i_runoff_veg(i,j)
+            jr = cmn%j_runoff_veg(i,j)
+            ! runoff
+            area_nbr = 0._wp
+            nbr = min(cmn%coast_nbr(ir,jr), n_cells_dist_runoff)
+            do nr=1,nbr
+              ii = cmn%i_coast_nbr(ir,jr,nr)
+              jj = cmn%j_coast_nbr(ir,jr,nr)
+              area_nbr = area_nbr + area(ii,jj)*cmn%f_ocn(ii,jj)
+            enddo
+            do nr=1,nbr
+              ii = cmn%i_coast_nbr(ir,jr,nr)
+              jj = cmn%j_coast_nbr(ir,jr,nr)
+              cmn%runoff_lake_o(ii,jj) = cmn%runoff_lake_o(ii,jj) &
+                + cmn%runoff_lake(i,j) * cmn%f_drain_veg(0,i,j) / area_nbr   ! kg/m2/s
+            enddo
+            ! 'calving'
+            area_nbr = 0._wp
+            nbr = min(cmn%coast_nbr(ir,jr), n_cells_dist_calving)
+            do nr=1,nbr
+              ii = cmn%i_coast_nbr(ir,jr,nr)
+              jj = cmn%j_coast_nbr(ir,jr,nr)
+              area_nbr = area_nbr + area(ii,jj)*cmn%f_ocn(ii,jj)
+            enddo
+            do nr=1,nbr
+              ii = cmn%i_coast_nbr(ir,jr,nr)
+              jj = cmn%j_coast_nbr(ir,jr,nr)
+              cmn%calving_lake_o(ii,jj) = cmn%calving_lake_o(ii,jj) &
+                + cmn%calving_lake(i,j) * cmn%f_drain_veg(0,i,j) / area_nbr  ! kg/m2/s
+            enddo
+          endif
+        enddo
+      enddo
     endif
     
     cmn%runoff_o  = cmn%runoff_veg_o  + cmn%runoff_ice_o  + cmn%runoff_lake_o
     cmn%calving_o = cmn%calving_veg_o + cmn%calving_ice_o + cmn%calving_lake_o
     cmn%bmelt_o   = cmn%bmelt_grd_o   + cmn%bmelt_flt_o
 
-    ! annual mean runoff 
+    ! annual mean runoff
     cmn%runoff_o_ann = cmn%runoff_o_ann + cmn%runoff_o/real(nday_year,wp)
+
+    ! water-conservation check for the lnd/ice/lake -> ocean routing.
+    if (check_water) then
+      call runoff_to_ocn_water_check(cmn)
+    endif
 
 
    return
 
   end subroutine runoff_to_ocn
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  r u n o f f _ t o _ o c n _ w a t e r _ c h e c k
+  ! Purpose    :  verify that lnd/ice/lake -> ocean mass routing conserves
+  !               water, per flux pathway
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine runoff_to_ocn_water_check(cmn)
+
+    implicit none
+
+    type(cmn_class) :: cmn
+
+    integer :: n
+    real(wp) :: src_veg_run, src_veg_cal
+    real(wp) :: src_ice_run, src_ice_cal, src_ice_mlt, src_ice_bg, src_ice_bf, src_ice_dh
+    real(wp) :: src_lak_run, src_lak_cal
+    real(wp) :: dst_veg_run, dst_veg_cal
+    real(wp) :: dst_ice_run, dst_ice_cal, dst_ice_mlt, dst_ice_bg, dst_ice_bf, dst_ice_dh
+    real(wp) :: dst_lak_run, dst_lak_cal
+    real(wp) :: res
+    ! tolerance: per-pathway global flux residual. typical global runoff
+    ! ~3e7 kg/s; machine eps over ~5000 cells gives ~1e-5 kg/s of noise.
+    ! 1e-3 kg/s (~30 t/yr) is well above noise and tight enough that any
+    ! real leak (e.g. silently-dropped source cells with no coast nbrs)
+    ! shows up immediately.
+    real(wp), parameter :: tol = 1.e-3_wp  ! kg/s per pathway
+
+
+    ! source totals: water leaving land/ice/lake subsystems towards the ocean
+    src_veg_run = sum(cmn%runoff_veg  * cmn%f_drain_veg(0,:,:))
+    src_veg_cal = sum(cmn%calving_veg * cmn%f_drain_veg(0,:,:))
+    src_ice_run = sum(cmn%runoff_ice  * cmn%f_drain_ice(0,:,:))
+    src_ice_cal = sum(cmn%calving_ice * cmn%f_drain_ice(0,:,:))
+    src_ice_mlt = sum(cmn%melt_ice    * cmn%f_drain_ice(0,:,:))
+    src_ice_bg  = sum(cmn%bmelt_grd   * cmn%f_drain_ice(0,:,:))
+    src_ice_bf  = sum(cmn%bmelt_flt   * cmn%f_drain_ice(0,:,:))
+    src_ice_dh  = sum(cmn%fw_dhdt_ice * cmn%f_drain_ice(0,:,:))
+    src_lak_run = 0._wp
+    src_lak_cal = 0._wp
+    if (flag_lakes) then
+      do n=1,cmn%n_lakes
+        src_lak_run = src_lak_run + cmn%lake(n)%runoff
+        src_lak_cal = src_lak_cal + cmn%lake(n)%calving
+      enddo
+    else
+      ! interactive lakes off: lake P+M-E from land model is routed via veg drainage
+      src_lak_run = sum(cmn%runoff_lake  * cmn%f_drain_veg(0,:,:))
+      src_lak_cal = sum(cmn%calving_lake * cmn%f_drain_veg(0,:,:))
+    endif
+
+    ! destination totals: water arriving on the ocean grid (kg/m2/s * m2 -> kg/s)
+    dst_veg_run = sum(cmn%runoff_veg_o  * area * cmn%f_ocn)
+    dst_veg_cal = sum(cmn%calving_veg_o * area * cmn%f_ocn)
+    dst_ice_run = sum(cmn%runoff_ice_o  * area * cmn%f_ocn)
+    dst_ice_cal = sum(cmn%calving_ice_o * area * cmn%f_ocn)
+    dst_ice_mlt = sum(cmn%melt_ice_o    * area * cmn%f_ocn)
+    dst_ice_bg  = sum(cmn%bmelt_grd_o   * area * cmn%f_ocn)
+    dst_ice_bf  = sum(cmn%bmelt_flt_o   * area * cmn%f_ocn)
+    dst_ice_dh  = sum(cmn%fw_dhdt_ice_o * area * cmn%f_ocn)
+    dst_lak_run = sum(cmn%runoff_lake_o  * area * cmn%f_ocn)
+    dst_lak_cal = sum(cmn%calving_lake_o * area * cmn%f_ocn)
+
+    ! per-pathway residuals
+    res = src_veg_run - dst_veg_run
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn veg runoff leak ',res,' kg/s (src=',src_veg_run,' dst=',dst_veg_run,')'
+    res = src_veg_cal - dst_veg_cal
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn veg calving leak ',res,' kg/s (src=',src_veg_cal,' dst=',dst_veg_cal,')'
+    res = src_ice_run - dst_ice_run
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice runoff leak ',res,' kg/s (src=',src_ice_run,' dst=',dst_ice_run,')'
+    res = src_ice_cal - dst_ice_cal
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice calving leak ',res,' kg/s (src=',src_ice_cal,' dst=',dst_ice_cal,')'
+    res = src_ice_mlt - dst_ice_mlt
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice melt leak ',res,' kg/s (src=',src_ice_mlt,' dst=',dst_ice_mlt,')'
+    res = src_ice_bg - dst_ice_bg
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice bmelt_grd leak ',res,' kg/s (src=',src_ice_bg,' dst=',dst_ice_bg,')'
+    res = src_ice_bf - dst_ice_bf
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice bmelt_flt leak ',res,' kg/s (src=',src_ice_bf,' dst=',dst_ice_bf,')'
+    res = src_ice_dh - dst_ice_dh
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn ice fw_dhdt leak ',res,' kg/s (src=',src_ice_dh,' dst=',dst_ice_dh,')'
+    res = src_lak_run - dst_lak_run
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn lake runoff leak ',res,' kg/s (src=',src_lak_run,' dst=',dst_lak_run,')'
+    res = src_lak_cal - dst_lak_cal
+    if (abs(res).gt.tol) print *,'WARNING: runoff_to_ocn lake calving leak ',res,' kg/s (src=',src_lak_cal,' dst=',dst_lak_cal,')'
+
+
+    return
+
+  end subroutine runoff_to_ocn_water_check
 
 
   subroutine aqua_init(cmn)
@@ -4145,6 +4283,8 @@ contains
     cmn%fw_dhdt_ice = 0._wp
     cmn%runoff_ice_l = 0._wp
     cmn%calving_ice_l = 0._wp
+    cmn%runoff_lake = 0._wp
+    cmn%calving_lake = 0._wp
     cmn%melt_ice_i_mon = 0._wp
     cmn%acc_ice_i_mon = 0._wp
     cmn%dhdt_ice_i_mon = 0._wp
@@ -4341,6 +4481,8 @@ contains
     allocate(cmn%fw_dhdt_ice(ni,nj)) 
     allocate(cmn%runoff_ice_l(ni,nj))
     allocate(cmn%calving_ice_l(ni,nj))
+    allocate(cmn%runoff_lake(ni,nj))
+    allocate(cmn%calving_lake(ni,nj))
     allocate(cmn%melt_ice_i_mon(ni,nj,nmon_year)) 
     allocate(cmn%acc_ice_i_mon(ni,nj,nmon_year)) 
     allocate(cmn%dhdt_ice_i_mon(ni,nj,nmon_year)) 
