@@ -46,6 +46,7 @@
     dHdt_dyn_lim        = 100.0             ! [m/yr] Maximum allowed ice thickness change due to dynamics
     margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
     margin_flt_subgrid  = False             ! Allow fractional ice area for floating margins
+    f_ice_method        = "upstream"        ! "upstream" (H_ice/H_neighb) or "lsf" (geometric LSF area fraction)
     use_bmb             = True              ! Use basal mass balance in mass conservation equation
     topo_fixed          = False             ! Keep ice thickness fixed, perform other ytopo calculations
     topo_rel            = 0                 ! 0: No relaxation; 1: relax shelf; 2: relax shelf + gl; 3: all points 
@@ -78,7 +79,9 @@
 &ycalv
     ! === calving method & law ===
     use_lsf             = False             ! use level-set method
+    lsf_method          = "snap"            ! "snap" (legacy neighbour-snap) or "redist" (Sussman/Osher)
     dt_lsf              = -1                ! [yr] lsf update timescale. If negative: no reset.
+    lsf_redist_n_iter   = 5                 ! Sussman/Osher LSF redistancing iterations. redist mode only.
     calv_flt_method     = "vm-l19"          ! "zero", "simple", "flux", "vm-l19", "kill"
     calv_grnd_method    = "zero"            ! "zero", "stress-b12"
     
@@ -126,7 +129,9 @@
     eps_0               = 1e-6            ! [1/a] Regularization term for effective viscosity - minimum strain rate
     scale_T             = 1               ! 0: no scaling of c_bed with T, 1: linearly increase c_bed to c_bed_frozen=cf_ref*N_eff for cold ice
     T_frz               = -3.0            ! Temperature below which ice considered fully frozen (linear increase in friction )
-    ssa_lis_opt         = "-i minres -p jacobi -maxiter 100 -tol 1.0e-1 -initx_zeros false"  ! See Lis library !-omp_num_threads 2
+    ssa_solver          = "residual"    ! "residual" | "energy"
+    ssa_lis_opt_residual= "-i minres -p jacobi -maxiter 100 -tol 1.0e-2 -initx_zeros false"  ! See Lis library !-omp_num_threads 2
+    ssa_lis_opt_energy  = "-i cg -p jacobi -maxiter 200 -tol 1.0e-4 -initx_zeros false"       ! SPD => CG (matches Yelmo.jl default)
     ssa_lat_bc          = "floating"      ! "all", "marine", "floating", "none", "slab"
     ssa_beta_max        = 1e20            ! [Pa a m-1] Maximum value of beta for which ssa should be calculated 
     ssa_vel_max         = 5000.0          ! [m a-1] SSA velocity limit to avoid spurious results 
