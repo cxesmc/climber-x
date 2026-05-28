@@ -1,6 +1,0 @@
-set -x
-git pull
-git -C input pull
-git -C src/bgc pull
-git -C src/vilma pull
-git -C src/yelmo pull
