@@ -218,10 +218,10 @@ Then install with `configme install climber-x -m awi_albedo -c ifx`.
 
 ```bash
 # Tools
-module load cdo/2.4.0-gcc-11.2.0
+module load cdo/2.6.0-gcc-11.2.0
 module load esmvaltool/2.5.0
 module load ncview/2.1.8-gcc-11.2.0
-module load git/2.43.3-gcc-11.2.0
+module load git/2.43.7-gcc-11.2.0
 module load python3/2023.01-gcc-11.2.0
 
 # Compilers and libs
