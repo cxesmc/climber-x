@@ -86,10 +86,9 @@ contains
   ! apply additional uniform offset if needed
   if (i_Tocn_offset.eq.2) then
     call Tocn_offset_update(i_Tocn_offset, real(year_now,wp), Tocn_offset_now)
+    ! integrate offset into bias field
+    bmb%t_ocn_bias = bmb%t_ocn_bias - Tocn_offset_now
   endif
-  ! integrate offset into bias field
-  bmb%t_ocn_bias = bmb%t_ocn_bias - Tocn_offset_now
-
 
   ! extrapolate ocean temperature and salinity to cells where they are undefined
   do k = 1,nk_ocn
