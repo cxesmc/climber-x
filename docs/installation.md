@@ -1,127 +1,144 @@
 # Installing CLIMBER-X
 
-Here you can find the basic information and steps needed to install **CLIMBER-X**.
+Here you can find the steps needed to install and build **CLIMBER-X**.
 
 There are currently four different flavors of **CLIMBER-X** that can be set up:
 
 - `climber-clim`: minimal climate model configuration with atmosphere, ocean, sea ice and land (including dynamic vegetation)
-- `climber-clim-bgc`: coupled climate-carbon cycle model configuration; clim plus with ocean biogeochemistry
-- `climber-clim-ice`: coupled climate-ice sheet model configuration; clim plus with ice sheets
-- `climber-clim-bgc-ice`: fully coupled model configuration; clim plus with ocean biogeochemistry and ice sheets
+- `climber-clim-bgc`: coupled climate-carbon cycle model configuration; clim plus ocean biogeochemistry
+- `climber-clim-ice`: coupled climate-ice sheet model configuration; clim plus ice sheets
+- `climber-clim-bgc-ice`: fully coupled model configuration; clim plus ocean biogeochemistry and ice sheets
 
-The model dependencies vary according to the desired model configuration:
+## System dependencies
 
-- Dependencies are: NetCDF, coordinates, Python3.x, runme, CDO
-- Additional dependencies if using coupled ice sheets are: Yelmo, LIS
+CLIMBER-X is configured and built with [`configme`](https://github.com/fesmc/configme),
+which clones, configures, links, and builds the whole stack for you (see
+[Quick start](#quick-start) below). The only dependencies you must install
+yourself are:
 
-See: [Dependencies](dependencies.md) for more details.
+- **netCDF** (C and Fortran libraries) — see [Dependencies](dependencies.md#installing-netcdf-preferably-version-4.0-or-higher) for installation tips.
+- **CDO** ([Climate Data Operators](https://code.mpimet.mpg.de/projects/cdo/)) — only needed to (re)generate maps that transform between coordinate grids.
 
-Follow the steps below to (1) obtain the code, (2) configure the Makefile(s) for your system,
-(3) compile an executable program.
+Everything else — `coordinates`, the `fesm-utils` libraries (LIS + FFTW + utils),
+`yelmo`, and `runme` — is managed by `configme`. For the full dependency list see
+[Dependencies](dependencies.md).
 
-## CLIMBER-X climate model
+## Install configme (one time)
+
+`configme` is a small Python tool that detects your netCDF installation,
+configures every package in the stack for your machine and compiler, and
+clones/links/builds the whole thing with one command. It is installed once,
+globally, and provides the `configme` command on your `PATH`:
 
 ```bash
+pip install git+https://github.com/fesmc/configme
+```
 
-### Download the CLIMBER-X code ###
+To upgrade it later, add `--upgrade` to the same command. If the `configme`
+command is not found afterwards, your Python user bin directory is probably not
+on your `PATH`; add it in your `~/.bashrc` / `~/.zshrc`:
 
-# Clone repository
-git clone https://github.com/cxesmc/climber-x.git
-git clone git@github.com:cxesmc/climber-x.git # via ssh
+```bash
+export PATH="${PATH}:${HOME}/.local/bin"
+```
 
-# Enter directory 
-cd climber-x
+## Quick start
 
-# Run configuration script
-python config.py config/pik_hpc2024_ifx   # Or config file for your system
+With `configme` installed, build the whole CLIMBER-X stack with a single command
+from the directory where you want the checkout to live:
 
-# Clone input file directory
-git clone https://gitlab.pik-potsdam.de/cxesmc/climber-x-input.git input
-git clone git@gitlab.pik-potsdam.de:cxesmc/climber-x-input.git input    # via ssh
+```bash
+configme install climber-x
+```
 
-# Download and configure coordinates
-cd src/utils/
-git clone git@github.com:fesmc/coordinates.git
-cd coordinates
-python3 config.py config/pik_hpc2024_ifx   # Or config file for your system
-cd ../../..   # Return to climber-x parent directory
+This clones CLIMBER-X and its component repositories (`fesm-utils`,
+`coordinates`, and `yelmo` on its `climber-x` branch), configures each for your
+machine and compiler, links them into the CLIMBER-X directory, builds
+`fesm-utils` (LIS + FFTW + utils, which can take 10-30 min), installs `runme`,
+creates a `.runme_config`, and clones the large input-data repository into
+`input/`. If `configme` can detect your machine from the hostname it does so,
+otherwise it prompts you.
 
-# Step back out of climber-x parente directory and 
-# clone and install external libraries repository
-cd ..
-git clone git@github.com:fesmc/fesm-utils.git
-cd fesm-utils
-./install_pik.sh ifx   # Use install_dkrz.sh as needed
-FESMUSRC=$PWD
-cd ../climber-x/       # Return to climber-x parent directory
-ln -s $FESMUSRC ./src/utils/
+It also *attempts* to clone the private `bgc` and `vilma` components (needed for
+the `bgc` and `ice` flavors). If you do not have access these are skipped with a
+note rather than failing the install — see [Private components](#private-components-bgc-and-vilma).
 
-# Install other external utils library
-cd src/utils/fesm-utils/utils
-python config.py config/pik_hpc2024_ifx  # replace with config file for your system
+Common options:
+
+```bash
+configme install climber-x -m pik_hpc2024 -c ifx   # pick the machine + compiler explicitly
+configme install climber-x -d https                 # clone over HTTPS (no GitHub SSH key needed)
+configme install climber-x --dir ~/models/climber-x # put the checkout here instead of ./climber-x
+configme install climber-x --overwrite              # re-clone over an existing checkout
+configme install climber-x --build-deps             # rebuild dependency packages without prompting
+```
+
+Run `configme list` for the supported machines and compilers, and
+`configme --help` for the full command surface. The exact
+clone/configure/link/build commands `configme install climber-x` runs for you
+are recorded in a `.install.sh` script in the checkout, and are also shown for
+context on the [configme install details](configme-install-details.md) page —
+these are for reference only; `configme install` is the recommended path and you
+do not need to run them by hand.
+
+## Private components (bgc and vilma)
+
+Two components are needed only for the carbon-cycle and ice-sheet flavors and
+live in private repositories. `configme install climber-x` attempts to clone
+them on every run, but skips them with a summary note if you do not yet have
+access.
+
+- **`bgc`** (HAMOCC ocean biogeochemistry — required for `climber-clim-bgc`).
+  Since the HAMOCC model code is not open source, the `bgc` repository is private
+  and you need to be given permission to access it. HAMOCC is covered by the Max
+  Planck Institute for Meteorology software licence agreement as part of the
+  MPI-ESM ([MPI-ESM_SLA_v3.4.pdf](https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf)).
+  A pre-requisite to access the `bgc` repository is therefore that you agree to
+  the MPI-ESM license by following the steps outlined here:
+  [https://code.mpimet.mpg.de/projects/mpi-esm-license](https://code.mpimet.mpg.de/projects/mpi-esm-license).
+  Once you have done so, send an email to
+  [Matteo Willeit](mailto:matteo.willeit@gmail.com?subject=[GitHub]%20bgc%20source%20code)
+  and you will be granted permission.
+
+- **`vilma`** (VILMA solid-Earth model — required for `climber-clim-ice`).
+  Since the VILMA model code is not open source, the `vilma` repository is
+  private and you need to be given permission to access it. Please send an email
+  to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz-potsdam.de?subject=[GitHub]%20VILMA%20access)
+  and you will be granted permission.
+
+After being granted access, re-run `configme install climber-x` (optionally with
+`--overwrite`) to clone the components you can now reach.
+
+## Compile and run
+
+`configme install climber-x` configures the Makefiles but leaves the choice of
+flavor to you. From the `climber-x` directory, compile the executable you want
+and run a test simulation with `runme`. The executable `climber.x` is produced
+in the main directory.
+
+### Climate model
+
+The climate-only version `climber-clim` corresponds to the version described by
+Willeit et al. (2022). It requires neither the private `bgc`/`vilma` code nor the
+LIS library.
+
+```bash
 make clean
-make fesmutils-static openmp=0    # serial version
-make fesmutils-static openmp=1    # parallel version
-cd ../../../.. # Return to climber-x parent directory
-
-### Compile and run ###
-
-# Compile the climate model 
-make cleanall
 make climber-clim
-
-# Set up your `runme` config file for your system
-cp .runme/runme_config .runme_config
-# - Edit hpc and account name to match your settings
-
-# Make sure to install the `runme` package too
-pip install https://github.com/fesmc/runme 
 
 # Run a pre-industrial equilibrium climate-only test simulation
 runme -rs -q short --omp 32 -o output/clim
 ```
 
-The climate only version `climber-clim` corresponds to the version described by Willeit et al. (2022). This particular model setup does not require non-climate source code or the LIS library for compilation.
+To compile with debug flags enabled use `make climber-clim debug=1`. By default
+the model is compiled with OpenMP; `make climber-clim openmp=0` builds the serial
+version (which should typically not be used).
 
-That's it. The executable `climber.x` should now be available in the main directory.
+### Climate and carbon cycle model
 
-To compile the model with debug flags enabled use:
-
-```bash
-make climber-clim debug=1
-```
-
-By default, the model is compiled with `openmp`. To compile the model without openmp use:
+Requires the private `bgc` component (see [Private components](#private-components-bgc-and-vilma)).
 
 ```bash
-make climber-clim openmp=0
-```
-
-This version should typically not be used.
-
-## CLIMBER-X climate and carbon cycle model
-
-If you would also like to run CLIMBER-X with an interactive carbon cycle, then the **HAMOCC**
-ocean biogeochemistry (`bgc`) code must also be downloaded:
-
-```bash
-# bgc
-cd src/
-git clone git@github.com:cxesmc/bgc.git
-cd bgc/
-git submodule update --init --recursive     # for submodule M4AGO 
-cd ../..
-```
-
-Since the HAMOCC model code is not open source, the `bgc` repository is private at the moment and
-you need to be given permission in order to access it. HAMOCC is covered by the Max Planck Institute for
-Meteorology software licence agreement as part of the MPI-ESM ([https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf](https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf)).
-A pre-requisite to access the `bgc` repository is therefore that you agree to the MPI-ESM license
-by following the steps outlined here: [https://code.mpimet.mpg.de/projects/mpi-esm-license](https://code.mpimet.mpg.de/projects/mpi-esm-license).
-Once you have done so, send an email to [Matteo Willeit](mailto:matteo.willeit@gmail.com?subject=[GitHub]%20bgc%20source%20code) and you will be granted permission to access the `bgc` repository.
-
-```bash
-# Compile the climate and carbon cycle model 
 make clean
 make climber-clim-bgc
 
@@ -129,104 +146,75 @@ make climber-clim-bgc
 runme -rs -q short --omp 16 -o output/clim-bgc -p ctl.flag_bgc=T
 ```
 
-## CLIMBER-X climate and ice sheet model
+### Climate and ice sheet model
 
-If you would also like to run with an interactive ice sheet, the **Yelmo** ice-sheet code
-must be downloaded and configured and the solid Earth model **VILMA** libraries must be
-downloaded before compiling:
-
-```bash
-# yelmo
-cd src
-git clone git@github.com:palma-ice/yelmo.git
-cd yelmo
-git checkout climber-x                     # Get climber-x branch
-python3 config.py config/pik_hpc2024_ifx   # Or config file for your system
-ln -s $FESMUSRC .              # Link absolute path
-cd ../..            # Return to climber-x parent directory
-
-# vilma
-cd src/
-git clone git@github.com:cxesmc/vilma.git  # private repository, premission needed
-cd ..
-```
-
-Since the VILMA model code is not open source, the `vilma` repository is private at the moment and you need to be given permission in order to access it. Please send an email to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz-potsdam.de?subject=[GitHub]%20VILMA%20access) and you will be granted permission to access the `vilma` repository.
+Uses the `yelmo` ice-sheet model (cloned by `configme`) and requires the private
+`vilma` solid-Earth component (see [Private components](#private-components-bgc-and-vilma)).
 
 ```bash
-# Compile the climate and ice sheet model
 make clean
 make climber-clim-ice
 
-# Run pre-industrial equilibrium simulation with interactive Greenland ice sheet
+# Run a pre-industrial equilibrium simulation with an interactive Greenland ice sheet
 runme -rs -q short --omp 16 -o output/clim-ice -p ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM
 ```
 
-## Fully coupled CLIMBER-X configuration
+### Fully coupled configuration
 
-If you have followed all steps above you will also be ready to run fully coupled simulations:
+With both `bgc` and `vilma` available you can build the fully coupled model:
 
 ```bash
-# Compile the fully coupled model
 make clean
-make climber-clim-bgc-ice  # or equivalently make climber
+make climber-clim-bgc-ice  # or equivalently: make climber
 
-# Run pre-industrial equilibrium simulation with ocean biogeochemistry and interactive Greenland ice sheet
+# Run a pre-industrial equilibrium simulation with biogeochemistry and an interactive Greenland ice sheet
 runme -s -q short --omp 16 -o output/clim-bgc-ice -p ctl.flag_bgc=T ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM
 ```
 
+See the [runme notes](runme-notes.md) to learn how `runme` stages and submits
+simulations, or use the benchmark script `run_bench.sh` in the main repository.
+
 ## Notes for specific systems
+
+On HPC systems, load the netCDF and compiler modules before running `configme
+install` and `make`. For convenience you can add these commands to your
+`.profile`/`.bashrc`.
 
 ### Running at PIK on HPC2024 (foote)
 
-The following modules have to be loaded in order to compile and run the model.
-For convenience you can also add those commands to your `.profile` file in your home directory.
-
 ```bash
-    module purge
-    module use /p/system/modulefiles/compiler \
-               /p/system/modulefiles/gpu \
-               /p/system/modulefiles/libraries \
-               /p/system/modulefiles/parallel \
-               /p/system/modulefiles/tools
+module purge
+module use /p/system/modulefiles/compiler \
+           /p/system/modulefiles/gpu \
+           /p/system/modulefiles/libraries \
+           /p/system/modulefiles/parallel \
+           /p/system/modulefiles/tools
 
-    module load intel/oneAPI/2024.0.0
-    module load netcdf-c/4.9.2
-    module load netcdf-fortran-intel/4.6.1
-    module load udunits/2.2.28
-    module load ncview/2.1.10
-    module load cdo/2.4.2
+module load intel/oneAPI/2024.0.0
+module load netcdf-c/4.9.2
+module load netcdf-fortran-intel/4.6.1
+module load udunits/2.2.28
+module load ncview/2.1.10
+module load cdo/2.4.2
 ```
 
-When installing `fesm-utils` (see [Dependencies](dependencies.md)) use the `pik` script:
-
-```bash
-./install_pik.sh ifx
-```
+Then install with `configme install climber-x -m pik_hpc2024 -c ifx`.
 
 ### Running at AWI on albedo
 
-Load the following modules in your `.bashrc` file in your home directory.
-
 ```bash
-    module load intel-oneapi-compilers/2024.0.0
-    module load netcdf-c/4.8.1-openmpi4.1.3-oneapi2022.1.0
-    module load netcdf-fortran/4.5.4-oneapi2022.1.0
-    module load udunits/2.2.28
-    module load ncview/2.1.8
-    module load cdo/2.2.0
-    module load python/3.10.4
+module load intel-oneapi-compilers/2024.0.0
+module load netcdf-c/4.8.1-openmpi4.1.3-oneapi2022.1.0
+module load netcdf-fortran/4.5.4-oneapi2022.1.0
+module load udunits/2.2.28
+module load ncview/2.1.8
+module load cdo/2.2.0
+module load python/3.10.4
 ```
 
-When installing `fesm-utils` (see [Dependencies](dependencies.md)) use the `awi` script (which is actually a link to the `dkrz` script since they work the same way):
-
-```bash
-./install_awi.sh ifx
-```
+Then install with `configme install climber-x -m awi_albedo -c ifx`.
 
 ### Running at DKRZ on levante
-
-Load the following modules in your `.bashrc` file in your home directory.
 
 ```bash
 # Tools
@@ -242,8 +230,4 @@ module load netcdf-c/4.8.1-openmpi-4.1.2-intel-2021.5.0
 module load netcdf-fortran/4.5.3-openmpi-4.1.2-intel-2021.5.0
 ```
 
-When installing `fesm-utils` (see [Dependencies](dependencies.md)) use the `dkrz` script:
-
-```bash
-./install_dkrz.sh ifx
-```
+Then install with `configme install climber-x -m dkrz_levante -c ifx`.

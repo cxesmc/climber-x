@@ -41,5 +41,5 @@ The ice sheet model coupling and the ice sheet surface mass balance scheme are d
 The **CLIMBER-X** code repository can be found here:
 [https://github.com/cxesmc/climber-x](https://github.com/cxesmc/climber-x)
 
-See [Getting started](getting-started.md) to see how to get the code,
+See [Installation](installation.md) to see how to get the code,
 compile a test program and run simulations.

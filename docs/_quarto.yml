@@ -23,7 +23,7 @@ website:
     background: primary
     search: true
     left:
-      - href: getting-started.md
+      - href: installation.md
         text: Getting started
       - href: use-cases/01-pi_spinup/index.md
         text: Use cases
@@ -38,10 +38,9 @@ website:
       - href: index.md
         text: Home
       - section: "Getting started"
-        href: getting-started.md
+        href: installation.md
         contents:
           - dependencies.md
-          - installation.md
           - runme-notes.md
           - repositories.md
       - section: "Use cases"
