@@ -371,7 +371,7 @@ contains
                 
                 ! Allow ice to grow over the whole domain by default
                 ! (later this will be set by ice%mask_extent)
-                ylmo%bnd%ice_allowed = .TRUE. 
+                ylmo%bnd%mask_ice = 2
 
                 ! Set reference ice thickness and bed elevation to initial one
                 ! (only useful for comparisons, probably not used in climber) 
@@ -398,7 +398,7 @@ contains
                 file1D = trim(out_dir)//"/ice_"//trim(ylmo%par%grid_name)//"_ts.nc"
 
                 call yelmo_write_reg_init(ylmo,file1D,time_init=real(time,wp_yelmo),units="years", &
-                                                            mask=ylmo%bnd%ice_allowed)
+                                                            mask=ylmo%bnd%mask_ice.ne.0)
                 call yelmo_write_reg_step(ylmo,file1D,time=real(time,wp_yelmo))  
 
                 ! Disassociate the local pointer ylmo 
@@ -493,7 +493,7 @@ contains
         ! so providing it here is a bit circular. But it is done 
         ! for consistency for now.
         ice%mask_extent = 0 
-        where(ylmo%bnd%ice_allowed) ice%mask_extent =  1 
+        where(ylmo%bnd%mask_ice .ne. 0) ice%mask_extent =  1 
 
         ! ice thickness 
         ice%H_ice = ylmo%tpo%now%H_ice 
