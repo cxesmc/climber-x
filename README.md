@@ -1,5 +1,7 @@
 # CLIMBER-X Earth System Model
 
+[![Documentation](https://img.shields.io/badge/docs-CLIMBER--X-blue?logo=quarto&logoColor=white)](https://cxesmc.github.io/climber-x/)
+
 CLIMBER-X is a comprehensive fast Earth System Model, designed to simulate the evolution of the Earth system on time scales ranging from decades to glacial-interglacial cycles. It includes the following components:
 - semi-empirical statistical-dynamical Atmosphere model (SESAM)
 - 3-D frictional-geostrophic Ocean model (GOLDSTEIN): [Edwards and Marsh 2005](https://link.springer.com/article/10.1007/s00382-004-0508-8)
@@ -55,6 +57,6 @@ to the name to allow distinguishing versions (format **CLIMBER-X-suffix**).
 
 ## Getting started
 
-See [climber-docs](https://cxesmc.github.io/climber-docs/) for further details on how to get started using **CLIMBER-X**.
+See the [CLIMBER-X documentation](https://cxesmc.github.io/climber-x/) for further details on how to get started using **CLIMBER-X**.
 
 
