@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>getting-started – CLIMBER-X</title>
+<title>configme-install-details – CLIMBER-X</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -23,6 +23,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -33,8 +68,6 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./dependencies.html" rel="next">
-<link href="./index.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -94,7 +127,7 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./getting-started.html" aria-current="page"> 
+    <a class="nav-link active" href="./installation.html" aria-current="page"> 
 <span class="menu-text">Getting started</span></a>
   </li>  
   <li class="nav-item">
@@ -120,7 +153,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./getting-started.html">Getting started</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -140,7 +173,7 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a href="./getting-started.html" class="sidebar-item-text sidebar-link active">
+            <a href="./installation.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Getting started</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -151,12 +184,6 @@ ul.task-list li input[type="checkbox"] {
   <div class="sidebar-item-container"> 
   <a href="./dependencies.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Dependencies</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="./installation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text">Installing CLIMBER-X</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -240,9 +267,9 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#getting-started" id="toc-getting-started" class="nav-link active" data-scroll-target="#getting-started">Getting started</a></li>
+  <li><a href="#what-configme-install-climber-x-does" id="toc-what-configme-install-climber-x-does" class="nav-link active" data-scroll-target="#what-configme-install-climber-x-does">What <code>configme install climber-x</code> does</a></li>
   </ul>
-<div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/getting-started.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+<div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/configme-install-details.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"></header>
@@ -250,24 +277,60 @@ ul.task-list li input[type="checkbox"] {
 
 
 
-<section id="getting-started" class="level1">
-<h1>Getting started</h1>
-<p>Here you can find the basic information and steps needed to get <strong>CLIMBER-X</strong> running.</p>
-<p>For a quick start, see <a href="./installation.html">Installation</a>.</p>
-<p>There are currently four different flavors of <strong>CLIMBER-X</strong> that can be set up:</p>
-<ul>
-<li><code>climber-clim</code>: minimal climate model configuration with atmosphere, ocean, sea ice and land (including dynamic vegetation)</li>
-<li><code>climber-clim-bgc</code>: coupled climate-carbon cycle model configuration; clim plus with ocean biogeochemistry</li>
-<li><code>climber-clim-ice</code>: coupled climate-ice sheet model configuration; clim plus with ice sheets</li>
-<li><code>climber-clim-bgc-ice</code>: fully coupled model configuration; clim plus with ocean biogeochemistry and ice sheets</li>
-</ul>
-<p>The model dependencies vary according to the desired model configuration:</p>
-<ul>
-<li>Dependencies are: NetCDF, coordinates, Python3.x, runme, CDO</li>
-<li>Additional dependencies if using coupled ice sheets are: Yelmo, LIS</li>
-</ul>
-<p>See: <a href="./dependencies.html">Dependencies</a> for more details.</p>
-<p>Follow the steps in <a href="./installation.html">Installation</a> to get the code and compile the model and then you are ready to run your first simulations. Learn about how to use the <code>runme</code> script to prepare simulations automatically (<a href="./runme-notes.html">runme-notes</a>) or within the benchmark script in the main repository (<code>run_bench.sh</code>).</p>
+<section id="what-configme-install-climber-x-does" class="level1">
+<h1>What <code>configme install climber-x</code> does</h1>
+<p>This page is for context only. The recommended way to install CLIMBER-X is to run <code>configme install climber-x</code> (see the <a href="./installation.html#quick-start">Quick start</a>); you do <strong>not</strong> need to run any of the commands below by hand. They are reproduced here so you can see exactly what <code>configme</code> clones, configures, links, and builds on your behalf.</p>
+<p><code>configme install</code> performs the following phases:</p>
+<ol type="1">
+<li><strong>Clone</strong> the CLIMBER-X checkout and each component repository it needs. The open components (<code>fesm-utils</code>, <code>coordinates</code>, <code>yelmo</code>) are cloned at the CLIMBER-X root; <code>yelmo</code> is pinned to its <code>climber-x</code> branch. The private components (<code>bgc</code>, <code>vilma</code>) are attempted too, but a clone failure (no access) is a soft skip recorded as “unavailable” — never a hard failure. They live inside CLIMBER-X’s own <code>src/</code> tree.</li>
+<li><strong>Manifest</strong> — write <code>.configme/manifest.toml</code> so the checkout is self-describing regardless of its directory name.</li>
+<li><strong>Link</strong> each component into the directories where the build expects it (e.g.&nbsp;<code>yelmo/fesm-utils -&gt; ../fesm-utils</code>).</li>
+<li><strong>Configure</strong> — generate a system-specific <code>Makefile</code> for every package from shared machine/compiler fragments, with the netCDF paths detected automatically.</li>
+<li><strong>Build</strong> <code>fesm-utils</code> (LIS + FFTW + utils). This is the slow step (~10-30 min), which is why it is folded into the install rather than run separately.</li>
+<li><strong>Extras</strong> — install <code>runme</code> if it is missing, create <code>.runme_config</code>, and clone the CLIMBER-X input-data repository (hosted on GitLab) into <code>input/</code>.</li>
+</ol>
+<p>Each run also writes the exact commands it executed to a <code>.install.sh</code> script in the checkout, so any install is reproducible. The script below is the equivalent for the <code>pik_hpc2024</code> machine with the <code>ifx</code> compiler; substitute your own machine and compiler, and note that the netCDF paths (<code>NC_FROOT</code> / <code>NC_CROOT</code>) and the install root (<code>$CLIMBERXROOT</code>) are filled in automatically for your system.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#!/usr/bin/env bash</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Generated by `configme install` — reproduces this install.</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="bu">set</span> <span class="at">-euo</span> pipefail</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># target=climber-x  machine=pik_hpc2024  compiler=ifx</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co"># --- clone ---</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/climber-x.git <span class="va">$CLIMBERXROOT</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/fesm-utils.git <span class="va">$CLIMBERXROOT</span>/fesm-utils</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils/utils: component of fesm-utils (not cloned)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/coordinates.git <span class="va">$CLIMBERXROOT</span>/coordinates</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/yelmo.git <span class="va">$CLIMBERXROOT</span>/yelmo</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="fu">git</span> checkout climber-x<span class="kw">)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/bgc.git <span class="va">$CLIMBERXROOT</span>/src/bgc          <span class="co"># private (soft skip without access)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/src/bgc <span class="kw">&amp;&amp;</span> <span class="fu">git</span> submodule update <span class="at">--init</span> <span class="at">--recursive</span><span class="kw">)</span>  <span class="co"># M4AGO submodule</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/vilma.git <span class="va">$CLIMBERXROOT</span>/src/vilma      <span class="co"># private (soft skip without access)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co"># --- manifest ---</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> <span class="va">$CLIMBERXROOT</span>/.configme  <span class="co"># write .configme/manifest.toml</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># --- links ---</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">ln</span> <span class="at">-s</span> ../fesm-utils <span class="va">$CLIMBERXROOT</span>/yelmo/fesm-utils</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co"># --- configure (per package) ---</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils: build with autotools (slow, ~10-30 min):</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils <span class="kw">&amp;&amp;</span> <span class="va">NC_FROOT</span><span class="op">=&lt;</span>auto-detected<span class="op">&gt;</span> NC_CROOT=<span class="op">&lt;</span>auto-detected<span class="op">&gt;</span> ./build.py <span class="ex">--variant</span> both <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config fesm-utils/utils <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils/utils: build (serial, omp):</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=0 fesmutils-static<span class="kw">)</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=1 fesmutils-static<span class="kw">)</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/coordinates <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config coordinates <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config yelmo <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="co"># bgc: clone-only (configme does not configure it)</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="co"># vilma: clone-only (configme does not configure it)</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span> <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config climber-x <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="co"># --- extras ---</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="bu">command</span> <span class="at">-v</span> runme <span class="op">&gt;</span>/dev/null <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">||</span> <span class="ex">pip</span> install git+https://github.com/fesmc/runme</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="co"># runme_config: create .runme_config and set hpc/account</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--config</span>  <span class="co"># or: cp .runme/runme_config .runme_config</span></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://gitlab.pik-potsdam.de/cxesmc/climber-x-input.git <span class="va">$CLIMBERXROOT</span>/input</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Once <code>configme install</code> finishes, choose a model flavor and build it as shown in <a href="./installation.html#compile-and-run">Compile and run</a>.</p>
 
 
 </section>
@@ -678,21 +741,9 @@ ul.task-list li input[type="checkbox"] {
     }
   });
   </script>
-<nav class="page-navigation">
-  <div class="nav-page nav-page-previous">
-      <a href="./index.html" class="pagination-link" aria-label="Home">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Home</span>
-      </a>          
-  </div>
-  <div class="nav-page nav-page-next">
-      <a href="./dependencies.html" class="pagination-link" aria-label="Dependencies">
-        <span class="nav-page-text">Dependencies</span> <i class="bi bi-arrow-right-short"></i>
-      </a>
-  </div>
-</nav>
 </div> <!-- /content -->
 
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/getting-started.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/configme-install-details.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

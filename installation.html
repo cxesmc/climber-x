@@ -68,8 +68,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./runme-notes.html" rel="next">
-<link href="./dependencies.html" rel="prev">
+<link href="./dependencies.html" rel="next">
+<link href="./index.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
@@ -129,7 +129,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./getting-started.html" aria-current="page"> 
+    <a class="nav-link active" href="./installation.html" aria-current="page"> 
 <span class="menu-text">Getting started</span></a>
   </li>  
   <li class="nav-item">
@@ -155,7 +155,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./getting-started.html">Getting started</a></li><li class="breadcrumb-item"><a href="./installation.html">Installing CLIMBER-X</a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./installation.html">Getting started</a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -175,7 +175,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a href="./getting-started.html" class="sidebar-item-text sidebar-link">
+            <a href="./installation.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Getting started</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -186,12 +186,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="./dependencies.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Dependencies</span></a>
-  </div>
-</li>
-          <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
-  <a href="./installation.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text">Installing CLIMBER-X</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -277,10 +271,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#installing-climber-x" id="toc-installing-climber-x" class="nav-link active" data-scroll-target="#installing-climber-x">Installing CLIMBER-X</a>
   <ul class="collapse">
-  <li><a href="#climber-x-climate-model" id="toc-climber-x-climate-model" class="nav-link" data-scroll-target="#climber-x-climate-model">CLIMBER-X climate model</a></li>
-  <li><a href="#climber-x-climate-and-carbon-cycle-model" id="toc-climber-x-climate-and-carbon-cycle-model" class="nav-link" data-scroll-target="#climber-x-climate-and-carbon-cycle-model">CLIMBER-X climate and carbon cycle model</a></li>
-  <li><a href="#climber-x-climate-and-ice-sheet-model" id="toc-climber-x-climate-and-ice-sheet-model" class="nav-link" data-scroll-target="#climber-x-climate-and-ice-sheet-model">CLIMBER-X climate and ice sheet model</a></li>
-  <li><a href="#fully-coupled-climber-x-configuration" id="toc-fully-coupled-climber-x-configuration" class="nav-link" data-scroll-target="#fully-coupled-climber-x-configuration">Fully coupled CLIMBER-X configuration</a></li>
+  <li><a href="#system-dependencies" id="toc-system-dependencies" class="nav-link" data-scroll-target="#system-dependencies">System dependencies</a></li>
+  <li><a href="#install-configme-one-time" id="toc-install-configme-one-time" class="nav-link" data-scroll-target="#install-configme-one-time">Install configme (one time)</a></li>
+  <li><a href="#quick-start" id="toc-quick-start" class="nav-link" data-scroll-target="#quick-start">Quick start</a></li>
+  <li><a href="#private-components-bgc-and-vilma" id="toc-private-components-bgc-and-vilma" class="nav-link" data-scroll-target="#private-components-bgc-and-vilma">Private components (bgc and vilma)</a></li>
+  <li><a href="#compile-and-run" id="toc-compile-and-run" class="nav-link" data-scroll-target="#compile-and-run">Compile and run</a>
+  <ul class="collapse">
+  <li><a href="#climate-model" id="toc-climate-model" class="nav-link" data-scroll-target="#climate-model">Climate model</a></li>
+  <li><a href="#climate-and-carbon-cycle-model" id="toc-climate-and-carbon-cycle-model" class="nav-link" data-scroll-target="#climate-and-carbon-cycle-model">Climate and carbon cycle model</a></li>
+  <li><a href="#climate-and-ice-sheet-model" id="toc-climate-and-ice-sheet-model" class="nav-link" data-scroll-target="#climate-and-ice-sheet-model">Climate and ice sheet model</a></li>
+  <li><a href="#fully-coupled-configuration" id="toc-fully-coupled-configuration" class="nav-link" data-scroll-target="#fully-coupled-configuration">Fully coupled configuration</a></li>
+  </ul></li>
   <li><a href="#notes-for-specific-systems" id="toc-notes-for-specific-systems" class="nav-link" data-scroll-target="#notes-for-specific-systems">Notes for specific systems</a>
   <ul class="collapse">
   <li><a href="#running-at-pik-on-hpc2024-foote" id="toc-running-at-pik-on-hpc2024-foote" class="nav-link" data-scroll-target="#running-at-pik-on-hpc2024-foote">Running at PIK on HPC2024 (foote)</a></li>
@@ -292,196 +293,147 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/installation.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./getting-started.html">Getting started</a></li><li class="breadcrumb-item"><a href="./installation.html">Installing CLIMBER-X</a></li></ol></nav></header>
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"></header>
 
 
 
 
 <section id="installing-climber-x" class="level1">
 <h1>Installing CLIMBER-X</h1>
-<p>Here you can find the basic information and steps needed to install <strong>CLIMBER-X</strong>.</p>
+<p>Here you can find the steps needed to install and build <strong>CLIMBER-X</strong>.</p>
 <p>There are currently four different flavors of <strong>CLIMBER-X</strong> that can be set up:</p>
 <ul>
 <li><code>climber-clim</code>: minimal climate model configuration with atmosphere, ocean, sea ice and land (including dynamic vegetation)</li>
-<li><code>climber-clim-bgc</code>: coupled climate-carbon cycle model configuration; clim plus with ocean biogeochemistry</li>
-<li><code>climber-clim-ice</code>: coupled climate-ice sheet model configuration; clim plus with ice sheets</li>
-<li><code>climber-clim-bgc-ice</code>: fully coupled model configuration; clim plus with ocean biogeochemistry and ice sheets</li>
+<li><code>climber-clim-bgc</code>: coupled climate-carbon cycle model configuration; clim plus ocean biogeochemistry</li>
+<li><code>climber-clim-ice</code>: coupled climate-ice sheet model configuration; clim plus ice sheets</li>
+<li><code>climber-clim-bgc-ice</code>: fully coupled model configuration; clim plus ocean biogeochemistry and ice sheets</li>
 </ul>
-<p>The model dependencies vary according to the desired model configuration:</p>
+<section id="system-dependencies" class="level2">
+<h2 class="anchored" data-anchor-id="system-dependencies">System dependencies</h2>
+<p>CLIMBER-X is configured and built with <a href="https://github.com/fesmc/configme"><code>configme</code></a>, which clones, configures, links, and builds the whole stack for you (see <a href="#quick-start">Quick start</a> below). The only dependencies you must install yourself are:</p>
 <ul>
-<li>Dependencies are: NetCDF, coordinates, Python3.x, runme, CDO</li>
-<li>Additional dependencies if using coupled ice sheets are: Yelmo, LIS</li>
+<li><strong>netCDF</strong> (C and Fortran libraries) — see <a href="./dependencies.html#installing-netcdf-preferably-version-4.0-or-higher">Dependencies</a> for installation tips.</li>
+<li><strong>CDO</strong> (<a href="https://code.mpimet.mpg.de/projects/cdo/">Climate Data Operators</a>) — only needed to (re)generate maps that transform between coordinate grids.</li>
 </ul>
-<p>See: <a href="./dependencies.html">Dependencies</a> for more details.</p>
-<p>Follow the steps below to (1) obtain the code, (2) configure the Makefile(s) for your system, (3) compile an executable program.</p>
-<section id="climber-x-climate-model" class="level2">
-<h2 class="anchored" data-anchor-id="climber-x-climate-model">CLIMBER-X climate model</h2>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co">### Download the CLIMBER-X code </span><span class="al">###</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone repository</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/cxesmc/climber-x.git</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/climber-x.git <span class="co"># via ssh</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Enter directory </span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> climber-x</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Run configuration script</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> config.py config/pik_hpc2024_ifx   <span class="co"># Or config file for your system</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone input file directory</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://gitlab.pik-potsdam.de/cxesmc/climber-x-input.git input</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@gitlab.pik-potsdam.de:cxesmc/climber-x-input.git input    <span class="co"># via ssh</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Download and configure coordinates</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> src/utils/</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/coordinates.git</span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> coordinates</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> config.py config/pik_hpc2024_ifx   <span class="co"># Or config file for your system</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ../../..   <span class="co"># Return to climber-x parent directory</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Step back out of climber-x parente directory and </span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="co"># clone and install external libraries repository</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ..</span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/fesm-utils.git</span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> fesm-utils</span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="ex">./install_pik.sh</span> ifx   <span class="co"># Use install_dkrz.sh as needed</span></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="va">FESMUSRC</span><span class="op">=</span><span class="va">$PWD</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ../climber-x/       <span class="co"># Return to climber-x parent directory</span></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="fu">ln</span> <span class="at">-s</span> <span class="va">$FESMUSRC</span> ./src/utils/</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="co"># Install other external utils library</span></span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> src/utils/fesm-utils/utils</span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> config.py config/pik_hpc2024_ifx  <span class="co"># replace with config file for your system</span></span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> fesmutils-static openmp=0    <span class="co"># serial version</span></span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> fesmutils-static openmp=1    <span class="co"># parallel version</span></span>
-<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ../../../.. <span class="co"># Return to climber-x parent directory</span></span>
-<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a><span class="co">### Compile and run </span><span class="al">###</span></span>
-<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a><span class="co"># Compile the climate model </span></span>
-<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> cleanall</span>
-<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim</span>
-<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a><span class="co"># Set up your `runme` config file for your system</span></span>
-<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> .runme/runme_config .runme_config</span>
-<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a><span class="co"># - Edit hpc and account name to match your settings</span></span>
-<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a><span class="co"># Make sure to install the `runme` package too</span></span>
-<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install https://github.com/fesmc/runme </span>
-<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium climate-only test simulation</span></span>
-<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 32 <span class="at">-o</span> output/clim</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The climate only version <code>climber-clim</code> corresponds to the version described by Willeit et al.&nbsp;(2022). This particular model setup does not require non-climate source code or the LIS library for compilation.</p>
-<p>That’s it. The executable <code>climber.x</code> should now be available in the main directory.</p>
-<p>To compile the model with debug flags enabled use:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim debug=1</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>By default, the model is compiled with <code>openmp</code>. To compile the model without openmp use:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim openmp=0</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This version should typically not be used.</p>
+<p>Everything else — <code>coordinates</code>, the <code>fesm-utils</code> libraries (LIS + FFTW + utils), <code>yelmo</code>, and <code>runme</code> — is managed by <code>configme</code>. For the full dependency list see <a href="./dependencies.html">Dependencies</a>.</p>
 </section>
-<section id="climber-x-climate-and-carbon-cycle-model" class="level2">
-<h2 class="anchored" data-anchor-id="climber-x-climate-and-carbon-cycle-model">CLIMBER-X climate and carbon cycle model</h2>
-<p>If you would also like to run CLIMBER-X with an interactive carbon cycle, then the <strong>HAMOCC</strong> ocean biogeochemistry (<code>bgc</code>) code must also be downloaded:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># bgc</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> src/</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/bgc.git</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> bgc/</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> submodule update <span class="at">--init</span> <span class="at">--recursive</span>     <span class="co"># for submodule M4AGO </span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ../..</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Since the HAMOCC model code is not open source, the <code>bgc</code> repository is private at the moment and you need to be given permission in order to access it. HAMOCC is covered by the Max Planck Institute for Meteorology software licence agreement as part of the MPI-ESM (<a href="https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf">https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf</a>). A pre-requisite to access the <code>bgc</code> repository is therefore that you agree to the MPI-ESM license by following the steps outlined here: <a href="https://code.mpimet.mpg.de/projects/mpi-esm-license">https://code.mpimet.mpg.de/projects/mpi-esm-license</a>. Once you have done so, send an email to <a href="mailto:matteo.willeit@gmail.com?subject=%5BGitHub%5D%20bgc%20source%20code">Matteo Willeit</a> and you will be granted permission to access the <code>bgc</code> repository.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compile the climate and carbon cycle model </span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-bgc</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium simulation with ocean biogeochemistry</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-bgc <span class="at">-p</span> ctl.flag_bgc=T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="install-configme-one-time" class="level2">
+<h2 class="anchored" data-anchor-id="install-configme-one-time">Install configme (one time)</h2>
+<p><code>configme</code> is a small Python tool that detects your netCDF installation, configures every package in the stack for your machine and compiler, and clones/links/builds the whole thing with one command. It is installed once, globally, and provides the <code>configme</code> command on your <code>PATH</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install git+https://github.com/fesmc/configme</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>To upgrade it later, add <code>--upgrade</code> to the same command. If the <code>configme</code> command is not found afterwards, your Python user bin directory is probably not on your <code>PATH</code>; add it in your <code>~/.bashrc</code> / <code>~/.zshrc</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span><span class="st">"</span><span class="va">${PATH}</span><span class="st">:</span><span class="va">${HOME}</span><span class="st">/.local/bin"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
-<section id="climber-x-climate-and-ice-sheet-model" class="level2">
-<h2 class="anchored" data-anchor-id="climber-x-climate-and-ice-sheet-model">CLIMBER-X climate and ice sheet model</h2>
-<p>If you would also like to run with an interactive ice sheet, the <strong>Yelmo</strong> ice-sheet code must be downloaded and configured and the solid Earth model <strong>VILMA</strong> libraries must be downloaded before compiling:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># yelmo</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> src</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:palma-ice/yelmo.git</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> yelmo</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> checkout climber-x                     <span class="co"># Get climber-x branch</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> config.py config/pik_hpc2024_ifx   <span class="co"># Or config file for your system</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="fu">ln</span> <span class="at">-s</span> <span class="va">$FESMUSRC</span> .              <span class="co"># Link absolute path</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ../..            <span class="co"># Return to climber-x parent directory</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="co"># vilma</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> src/</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/vilma.git  <span class="co"># private repository, premission needed</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> ..</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Since the VILMA model code is not open source, the <code>vilma</code> repository is private at the moment and you need to be given permission in order to access it. Please send an email to <a href="mailto:matteo.willeit@gmail.com,volker.klemann@gfz-potsdam.de?subject=%5BGitHub%5D%20VILMA%20access">Matteo Willeit and Volker Klemann</a> and you will be granted permission to access the <code>vilma</code> repository.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compile the climate and ice sheet model</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-ice</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Run pre-industrial equilibrium simulation with interactive Greenland ice sheet</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-ice <span class="at">-p</span> ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="quick-start" class="level2">
+<h2 class="anchored" data-anchor-id="quick-start">Quick start</h2>
+<p>With <code>configme</code> installed, build the whole CLIMBER-X stack with a single command from the directory where you want the checkout to live:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>This clones CLIMBER-X and its component repositories (<code>fesm-utils</code>, <code>coordinates</code>, and <code>yelmo</code> on its <code>climber-x</code> branch), configures each for your machine and compiler, links them into the CLIMBER-X directory, builds <code>fesm-utils</code> (LIS + FFTW + utils, which can take 10-30 min), installs <code>runme</code>, creates a <code>.runme_config</code>, and clones the large input-data repository into <code>input/</code>. If <code>configme</code> can detect your machine from the hostname it does so, otherwise it prompts you.</p>
+<p>It also <em>attempts</em> to clone the private <code>bgc</code> and <code>vilma</code> components (needed for the <code>bgc</code> and <code>ice</code> flavors). If you do not have access these are skipped with a note rather than failing the install — see <a href="#private-components-bgc-and-vilma">Private components</a>.</p>
+<p>Common options:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx   <span class="co"># pick the machine + compiler explicitly</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">-d</span> https                 <span class="co"># clone over HTTPS (no GitHub SSH key needed)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">--dir</span> ~/models/climber-x <span class="co"># put the checkout here instead of ./climber-x</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">--overwrite</span>              <span class="co"># re-clone over an existing checkout</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">--build-deps</span>             <span class="co"># rebuild dependency packages without prompting</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Run <code>configme list</code> for the supported machines and compilers, and <code>configme --help</code> for the full command surface. The exact clone/configure/link/build commands <code>configme install climber-x</code> runs for you are recorded in a <code>.install.sh</code> script in the checkout, and are also shown for context on the <a href="./configme-install-details.html">configme install details</a> page — these are for reference only; <code>configme install</code> is the recommended path and you do not need to run them by hand.</p>
 </section>
-<section id="fully-coupled-climber-x-configuration" class="level2">
-<h2 class="anchored" data-anchor-id="fully-coupled-climber-x-configuration">Fully coupled CLIMBER-X configuration</h2>
-<p>If you have followed all steps above you will also be ready to run fully coupled simulations:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compile the fully coupled model</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-bgc-ice  <span class="co"># or equivalently make climber</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Run pre-industrial equilibrium simulation with ocean biogeochemistry and interactive Greenland ice sheet</span></span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-s</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-bgc-ice <span class="at">-p</span> ctl.flag_bgc=T ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="private-components-bgc-and-vilma" class="level2">
+<h2 class="anchored" data-anchor-id="private-components-bgc-and-vilma">Private components (bgc and vilma)</h2>
+<p>Two components are needed only for the carbon-cycle and ice-sheet flavors and live in private repositories. <code>configme install climber-x</code> attempts to clone them on every run, but skips them with a summary note if you do not yet have access.</p>
+<ul>
+<li><p><strong><code>bgc</code></strong> (HAMOCC ocean biogeochemistry — required for <code>climber-clim-bgc</code>). Since the HAMOCC model code is not open source, the <code>bgc</code> repository is private and you need to be given permission to access it. HAMOCC is covered by the Max Planck Institute for Meteorology software licence agreement as part of the MPI-ESM (<a href="https://code.mpimet.mpg.de/attachments/download/26986/MPI-ESM_SLA_v3.4.pdf">MPI-ESM_SLA_v3.4.pdf</a>). A pre-requisite to access the <code>bgc</code> repository is therefore that you agree to the MPI-ESM license by following the steps outlined here: <a href="https://code.mpimet.mpg.de/projects/mpi-esm-license">https://code.mpimet.mpg.de/projects/mpi-esm-license</a>. Once you have done so, send an email to <a href="mailto:matteo.willeit@gmail.com?subject=%5BGitHub%5D%20bgc%20source%20code">Matteo Willeit</a> and you will be granted permission.</p></li>
+<li><p><strong><code>vilma</code></strong> (VILMA solid-Earth model — required for <code>climber-clim-ice</code>). Since the VILMA model code is not open source, the <code>vilma</code> repository is private and you need to be given permission to access it. Please send an email to <a href="mailto:matteo.willeit@gmail.com,volker.klemann@gfz-potsdam.de?subject=%5BGitHub%5D%20VILMA%20access">Matteo Willeit and Volker Klemann</a> and you will be granted permission.</p></li>
+</ul>
+<p>After being granted access, re-run <code>configme install climber-x</code> (optionally with <code>--overwrite</code>) to clone the components you can now reach.</p>
+</section>
+<section id="compile-and-run" class="level2">
+<h2 class="anchored" data-anchor-id="compile-and-run">Compile and run</h2>
+<p><code>configme install climber-x</code> configures the Makefiles but leaves the choice of flavor to you. From the <code>climber-x</code> directory, compile the executable you want and run a test simulation with <code>runme</code>. The executable <code>climber.x</code> is produced in the main directory.</p>
+<section id="climate-model" class="level3">
+<h3 class="anchored" data-anchor-id="climate-model">Climate model</h3>
+<p>The climate-only version <code>climber-clim</code> corresponds to the version described by Willeit et al.&nbsp;(2022). It requires neither the private <code>bgc</code>/<code>vilma</code> code nor the LIS library.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium climate-only test simulation</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 32 <span class="at">-o</span> output/clim</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>To compile with debug flags enabled use <code>make climber-clim debug=1</code>. By default the model is compiled with OpenMP; <code>make climber-clim openmp=0</code> builds the serial version (which should typically not be used).</p>
+</section>
+<section id="climate-and-carbon-cycle-model" class="level3">
+<h3 class="anchored" data-anchor-id="climate-and-carbon-cycle-model">Climate and carbon cycle model</h3>
+<p>Requires the private <code>bgc</code> component (see <a href="#private-components-bgc-and-vilma">Private components</a>).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-bgc</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium simulation with ocean biogeochemistry</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-bgc <span class="at">-p</span> ctl.flag_bgc=T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="climate-and-ice-sheet-model" class="level3">
+<h3 class="anchored" data-anchor-id="climate-and-ice-sheet-model">Climate and ice sheet model</h3>
+<p>Uses the <code>yelmo</code> ice-sheet model (cloned by <code>configme</code>) and requires the private <code>vilma</code> solid-Earth component (see <a href="#private-components-bgc-and-vilma">Private components</a>).</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-ice</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium simulation with an interactive Greenland ice sheet</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-ice <span class="at">-p</span> ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="fully-coupled-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="fully-coupled-configuration">Fully coupled configuration</h3>
+<p>With both <code>bgc</code> and <code>vilma</code> available you can build the fully coupled model:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> clean</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> climber-clim-bgc-ice  <span class="co"># or equivalently: make climber</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run a pre-industrial equilibrium simulation with biogeochemistry and an interactive Greenland ice sheet</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-s</span> <span class="at">-q</span> short <span class="at">--omp</span> 16 <span class="at">-o</span> output/clim-bgc-ice <span class="at">-p</span> ctl.flag_bgc=T ctl.flag_ice=T ctl.flag_geo=T ctl.flag_smb=T ctl.flag_imo=T ctl.ice_model_name=yelmo ctl.ice_domain_name=GRL-16KM</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>See the <a href="./runme-notes.html">runme notes</a> to learn how <code>runme</code> stages and submits simulations, or use the benchmark script <code>run_bench.sh</code> in the main repository.</p>
+</section>
 </section>
 <section id="notes-for-specific-systems" class="level2">
 <h2 class="anchored" data-anchor-id="notes-for-specific-systems">Notes for specific systems</h2>
+<p>On HPC systems, load the netCDF and compiler modules before running <code>configme install</code> and <code>make</code>. For convenience you can add these commands to your <code>.profile</code>/<code>.bashrc</code>.</p>
 <section id="running-at-pik-on-hpc2024-foote" class="level3">
 <h3 class="anchored" data-anchor-id="running-at-pik-on-hpc2024-foote">Running at PIK on HPC2024 (foote)</h3>
-<p>The following modules have to be loaded in order to compile and run the model. For convenience you can also add those commands to your <code>.profile</code> file in your home directory.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> purge</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> use /p/system/modulefiles/compiler <span class="dt">\</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>               /p/system/modulefiles/gpu <span class="dt">\</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>               /p/system/modulefiles/libraries <span class="dt">\</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>               /p/system/modulefiles/parallel <span class="dt">\</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>               /p/system/modulefiles/tools</span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> purge</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> use /p/system/modulefiles/compiler <span class="dt">\</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>           /p/system/modulefiles/gpu <span class="dt">\</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>           /p/system/modulefiles/libraries <span class="dt">\</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>           /p/system/modulefiles/parallel <span class="dt">\</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>           /p/system/modulefiles/tools</span>
 <span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load intel/oneAPI/2024.0.0</span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load netcdf-c/4.9.2</span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load netcdf-fortran-intel/4.6.1</span>
-<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load udunits/2.2.28</span>
-<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load ncview/2.1.10</span>
-<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load cdo/2.4.2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>When installing <code>fesm-utils</code> (see <a href="./dependencies.html">Dependencies</a>) use the <code>pik</code> script:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./install_pik.sh</span> ifx</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load intel/oneAPI/2024.0.0</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-c/4.9.2</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-fortran-intel/4.6.1</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load udunits/2.2.28</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load ncview/2.1.10</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load cdo/2.4.2</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Then install with <code>configme install climber-x -m pik_hpc2024 -c ifx</code>.</p>
 </section>
 <section id="running-at-awi-on-albedo" class="level3">
 <h3 class="anchored" data-anchor-id="running-at-awi-on-albedo">Running at AWI on albedo</h3>
-<p>Load the following modules in your <code>.bashrc</code> file in your home directory.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load intel-oneapi-compilers/2024.0.0</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load netcdf-c/4.8.1-openmpi4.1.3-oneapi2022.1.0</span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load netcdf-fortran/4.5.4-oneapi2022.1.0</span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load udunits/2.2.28</span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load ncview/2.1.8</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load cdo/2.2.0</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="ex">module</span> load python/3.10.4</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>When installing <code>fesm-utils</code> (see <a href="./dependencies.html">Dependencies</a>) use the <code>awi</code> script (which is actually a link to the <code>dkrz</code> script since they work the same way):</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./install_awi.sh</span> ifx</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load intel-oneapi-compilers/2024.0.0</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-c/4.8.1-openmpi4.1.3-oneapi2022.1.0</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-fortran/4.5.4-oneapi2022.1.0</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load udunits/2.2.28</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load ncview/2.1.8</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load cdo/2.2.0</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load python/3.10.4</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Then install with <code>configme install climber-x -m awi_albedo -c ifx</code>.</p>
 </section>
 <section id="running-at-dkrz-on-levante" class="level3">
 <h3 class="anchored" data-anchor-id="running-at-dkrz-on-levante">Running at DKRZ on levante</h3>
-<p>Load the following modules in your <code>.bashrc</code> file in your home directory.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tools</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load cdo/2.4.0-gcc-11.2.0</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load esmvaltool/2.5.0</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load ncview/2.1.8-gcc-11.2.0</span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load git/2.43.3-gcc-11.2.0</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load python3/2023.01-gcc-11.2.0</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Compilers and libs</span></span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load intel-oneapi-compilers/2023.2.1-gcc-11.2.0</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-c/4.8.1-openmpi-4.1.2-intel-2021.5.0</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-fortran/4.5.3-openmpi-4.1.2-intel-2021.5.0</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>When installing <code>fesm-utils</code> (see <a href="./dependencies.html">Dependencies</a>) use the <code>dkrz</code> script:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">./install_dkrz.sh</span> ifx</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tools</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load cdo/2.4.0-gcc-11.2.0</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load esmvaltool/2.5.0</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load ncview/2.1.8-gcc-11.2.0</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load git/2.43.3-gcc-11.2.0</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load python3/2023.01-gcc-11.2.0</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Compilers and libs</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load intel-oneapi-compilers/2023.2.1-gcc-11.2.0</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-c/4.8.1-openmpi-4.1.2-intel-2021.5.0</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="ex">module</span> load netcdf-fortran/4.5.3-openmpi-4.1.2-intel-2021.5.0</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Then install with <code>configme install climber-x -m dkrz_levante -c ifx</code>.</p>
 
 
 </section>
@@ -896,13 +848,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   </script>
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
-      <a href="./dependencies.html" class="pagination-link" aria-label="Dependencies">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Dependencies</span>
+      <a href="./index.html" class="pagination-link" aria-label="Home">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Home</span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./runme-notes.html" class="pagination-link" aria-label="Running CLIMBER-X with `runme`">
-        <span class="nav-page-text">Running CLIMBER-X with <code>runme</code></span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./dependencies.html" class="pagination-link" aria-label="Dependencies">
+        <span class="nav-page-text">Dependencies</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>
