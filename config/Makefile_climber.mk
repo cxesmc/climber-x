@@ -1074,8 +1074,8 @@ $(objdir)/.smb_out_dummy.o : $(dir_smb).smb_out_dummy.f90 $(objdir)/smb_def.o
 
 ################
 # bmb rules ####
-$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/bmb_bias_corr.o
-	$(FC) $(LDFLAGS) -O2 -c -o $@ $<   # -O2 overrides -Ofast: ifx ICEs on this file at -Ofast -march=core-avx2
+$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/bmb_bias_corr.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bmb_grid.o : $(dir_bmb)bmb_grid.f90 $(objdir)/bmb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
