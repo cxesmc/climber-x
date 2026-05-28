@@ -31,6 +31,7 @@ module ebal_ice_mod
    use control, only : check_energy
    use lnd_grid, only : i_ice, z, nl
    use lnd_params, only : surf_par, hydro_par, l_diurnal_cycle, dt, rdt
+   use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
 
    implicit none
 
@@ -320,11 +321,12 @@ contains
   !              :  and re-diagnose surface energy fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine update_tskin_ice(mask_snow, t_skin_old, dflxg_dT, tatm, qatm, swnet, lwdown, &
-                         t_ice, t_ice_old, flx_g, flx_melt, & 
+                         t_ice, t_ice_old, flx_g, flx_melt, &
                          t_skin, flx_sh, flx_lwu, flx_lh, evap_surface, et, &
                          num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw, &
                          f_sh, f_e, f_lh, f_lw, qsat, dqsatdT, &
-                         energy_cons_surf2, i, j)
+                         energy_cons_surf2, i, j, &
+                         w_snow_ice, w_snow_ice_iso, evap_surface_iso, et_iso)
 
     implicit none
 
@@ -340,7 +342,12 @@ contains
     real(wp), intent(inout) :: num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw
     real(wp), intent(inout) :: f_sh, f_e, f_lh, f_lw, qsat, dqsatdT
     real(wp), intent(inout) :: energy_cons_surf2
+    ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
+    real(wp), intent(in)    :: w_snow_ice
+    real(wp), dimension(:), intent(in)    :: w_snow_ice_iso
+    real(wp), dimension(:), intent(inout) :: evap_surface_iso, et_iso
 
+    integer :: iso
     real(wp) :: num, denom
 
 
@@ -365,6 +372,18 @@ contains
     evap_surface = f_e * (qsat + dqsatdT*(t_skin-t_skin_old) - qatm)
 
     et = evap_surface
+
+    ! water-isotope ET (passive: at snow ratio if snow on ice, else VSMOW)
+    if (l_wiso) then
+      do iso=1,nwiso
+        if (evap_surface.ge.0._wp .and. mask_snow.eq.1 .and. w_snow_ice.gt.0._wp) then
+          evap_surface_iso(iso) = evap_surface * w_snow_ice_iso(iso)/w_snow_ice
+        else
+          evap_surface_iso(iso) = evap_surface * Rstd(iso)
+        endif
+        et_iso(iso) = evap_surface_iso(iso)
+      enddo
+    endif
 
     if( check_energy ) then
       ! energy conservation check

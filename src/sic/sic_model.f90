@@ -29,7 +29,7 @@ module sic_model
     use constants, only : T0, Lf, sigma
     use timer, only: sec_day, nday_year, doy, time_soy_sic
     use climber_grid, only: lon, lat, dlon, dlat
-    use control, only: out_dir, restart_in_dir, sic_restart
+    use control, only: out_dir, restart_in_dir, sic_restart, check_water
 
     use sic_grid, only: maxi, maxj, area, area_old, dx, dy
     use sic_grid, only : sic_grid_init, sic_grid_update
@@ -69,12 +69,34 @@ contains
     real(wp) :: t_freeze
     real(wp), dimension(maxi,maxj) :: flx_sic_cut, fw_sic_cut
 
+    ! per-cell + global water-budget check (only used when check_water is on)
+    real(wp), dimension(maxi,maxj) :: water_mass_old, fw_ocn_pre_redist
+    real(wp) :: water_mass_new, flux_per_area, water_res, fw_cut_per_area
+    real(wp) :: water_res_global
+    real(wp) :: water_mass_old_tot, water_mass_new_tot, water_flux_tot, water_res_tot
+    integer  :: n_cell_fail
+    real(wp), parameter :: water_check_tol_sic = 1.e-6_wp  ! kg/m2 per step
+    real(wp), parameter :: water_check_tol_sic_glob = 1.e4_wp  ! kg per step
+
 
     if (time_soy_sic) then
       ! update ocean area accounting for actual ocean fraction
       call sic_grid_update(sic%f_ocn)
       ! account for ocean area changes, kill dead cells and init new cells
       call sic_update_cells(sic)
+    endif
+
+    ! snapshot per-cell sea ice + snow water mass for the water-budget check
+    if (check_water) then
+      do j=1,maxj
+        do i=1,maxi
+          if (sic%f_ocn(i,j).gt.0._wp) then
+            water_mass_old(i,j) = sic%h_sic_mean(i,j)*rho_sic + sic%h_snow_mean(i,j)*rho_snow  ! kg/m2
+          else
+            water_mass_old(i,j) = 0._wp
+          endif
+        enddo
+      enddo
     endif
 
     !$omp parallel do collapse(2) private(i,j,t_freeze)
@@ -164,12 +186,15 @@ contains
           sic%h_snow_mean(i,j)      = 0._wp 
         endif
 
-        ! average fluxes
+        ! average fluxes (must use the f_sic that drove the dh_*_dt_therm / h_*_mean update above
         sic%flx_sh(i,j) = (sic%f_sic(i,j)*sic%flx_sh_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%flx_sh_ocn(i,j))  ! W/m2
         sic%flx_lh(i,j) = (sic%f_sic(i,j)*sic%flx_lh_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%flx_lh_ocn(i,j))  ! W/m2
         sic%flx_lwu(i,j) = (sic%f_sic(i,j)*sic%flx_lwu_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%flx_lwu_ocn(i,j))  ! W/m2
         sic%evp(i,j) = (sic%f_sic(i,j)*sic%evp_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%evp_ocn(i,j))  ! W/m2
+        sic%flx_ocn(i,j) = (sic%f_sic(i,j)*sic%flx_ocn_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%flx_ocn_ocn(i,j))  ! W/m2
+        sic%fw_ocn(i,j)  = (sic%f_sic(i,j)*sic%fw_ocn_sic(i,j)  + (1._wp-sic%f_sic(i,j))*sic%fw_ocn_ocn(i,j))   ! kg/m2/s
 
+        ! update sea ice fraction, thermodynamic contribution only
         if (i_fsic.eq.2 .or. i_fsic.eq.3) then
           ! prognostic sea ice fraction following Fichefet et al, 1997, and MPIOMv1.1 manual
           if (sic%f_ocn(i,j).gt.0._wp) then
@@ -238,38 +263,29 @@ contains
         ! set sea ice concentration to 1 when threshold thickness crossed
         if (sic%h_sic_mean(i,j)>h_sic_max/2._wp) sic%f_sic(i,j) = 1._wp 
 
-        ! snow to ice conversion
-        if (sic%h_snow(i,j) .gt. h_snow_max) then
-          sic%h_sic_mean(i,j) = sic%h_sic_mean(i,j) + sic%f_sic(i,j)*((sic%h_snow(i,j)-h_snow_max)*rho_snow/rho_sic)
+        ! snow to ice conversion: when snow on ice exceeds h_snow_max, convert
+        ! the excess (per ice area) into sea ice. 
+        if (sic%f_sic(i,j) .gt. 0._wp .and. sic%h_snow_mean(i,j) .gt. sic%f_sic(i,j)*h_snow_max) then
+          sic%h_sic_mean(i,j)  = sic%h_sic_mean(i,j) &
+            + (sic%h_snow_mean(i,j) - sic%f_sic(i,j)*h_snow_max)*rho_snow/rho_sic
           sic%h_snow_mean(i,j) = sic%f_sic(i,j)*h_snow_max
         endif
 
-        if(sic%h_sic_mean(i,j).lt.0._wp) then
-          if(sic%h_sic_mean(i,j).lt.-1e-1_wp) then
-            print *
-            print *,'warning, sea ice thickness < 0'
-            print *,'h_sic_mean,fsic',sic%h_sic_mean(i,j),sic%f_sic(i,j),i,j,sic%f_ocn(i,j)
-            print *,'dhis,dhis_sic,dhis_ocn',sic%dh_sic_dt_therm(i,j)*dt,sic%dh_sic_sic(i,j),sic%dh_sic_ocn(i,j)
-            !if (sic%h_sic_mean(i,j).lt.-2.) sic%error = .true.
-          endif
-          sic%h_sic_mean(i,j) = 0._wp
+        ! warn for unphysically large negative grid-mean thicknesses
+        if (sic%h_sic_mean(i,j).lt.-1e-1_wp) then
+          print *
+          print *,'warning, sea ice thickness < 0'
+          print *,'h_sic_mean,fsic',sic%h_sic_mean(i,j),sic%f_sic(i,j),i,j,sic%f_ocn(i,j)
+          print *,'dhis,dhis_sic,dhis_ocn',sic%dh_sic_dt_therm(i,j)*dt,sic%dh_sic_sic(i,j),sic%dh_sic_ocn(i,j)
         endif
-        if(sic%h_snow_mean(i,j).lt.0._wp) then
-          if(sic%h_snow_mean(i,j).lt.-1e-1_wp) then
-            print *
-            print *,'warning, snow thickness < 0'
-            print *,'h_snow_mean,fsic',sic%h_snow_mean(i,j),sic%f_sic(i,j),i,j,sic%f_ocn(i,j)
-            print *,'dhsnow',sic%dh_snow_dt_therm(i,j)*dt
-            !if (sic%h_snow_mean(i,j).lt.-2.) sic%error = .true.
-          endif
-          sic%h_snow_mean(i,j) = 0._wp
+        if (sic%h_snow_mean(i,j).lt.-1e-1_wp) then
+          print *
+          print *,'warning, snow thickness < 0'
+          print *,'h_snow_mean,fsic',sic%h_snow_mean(i,j),sic%f_sic(i,j),i,j,sic%f_ocn(i,j)
+          print *,'dhsnow',sic%dh_snow_dt_therm(i,j)*dt
         endif
 
         if (sic%f_ocn(i,j).gt.0._wp) then
-          ! grid average of energy fluxes, W/m2
-          sic%flx_ocn(i,j) = sic%f_sic(i,j)*sic%flx_ocn_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%flx_ocn_ocn(i,j)
-          ! grid average freshwater flux (from sea ice changes only) to the ocean, kg/m2/s, runoff to be added in the coupler
-          sic%fw_ocn(i,j)  = sic%f_sic(i,j)*sic%fw_ocn_sic(i,j) + (1._wp-sic%f_sic(i,j))*sic%fw_ocn_ocn(i,j)
           ! grid average freshwater flux related to brine rejection (negative)
           sic%fw_brines(i,j) = -max(0._wp,sic%dh_sic_dt_therm(i,j)*rho_sic)  ! kg/m2/s
         else
@@ -362,10 +378,76 @@ contains
     enddo
     !$omp end parallel do
 
+    ! save fw_ocn before global redistribution of the h_sic_max cut, so the
+    ! per-cell water-budget check below sees the actual local fw_ocn 
+    if (check_water) fw_ocn_pre_redist = sic%fw_ocn
+
     ! distribute heat flux from cutting sea ice/snow over the whole ocean surface
     sic%flx_ocn(:,:) = sic%flx_ocn(:,:) + sum(flx_sic_cut)/sum(area) ! W/m2
     ! distribute freshwater flux from cutting sea ice/snow over the whole ocean surface
     sic%fw_ocn(:,:)  = sic%fw_ocn(:,:)  + sum(fw_sic_cut)/sum(area) ! kg/m2/s
+
+    ! per-cell water-budget check
+    ! the budget per unit ocean area, over a single sic_update step, is
+    !   ( m_new - m_old ) = ( rain + snow - evp - fw_ocn_local
+    !                       + dh_sic_dt_dyn*rho_sic + dh_snow_dt_dyn*rho_snow
+    !                       - fw_sic_cut/area ) * dt
+    ! where m = h_sic_mean*rho_sic + h_snow_mean*rho_snow [kg/m2].
+    if (check_water) then
+      water_res_global = 0._wp
+      water_mass_old_tot = 0._wp
+      water_mass_new_tot = 0._wp
+      water_flux_tot     = 0._wp
+      n_cell_fail = 0
+      do j=1,maxj
+        do i=1,maxi
+          if (sic%f_ocn(i,j).gt.0._wp) then
+            water_mass_new = sic%h_sic_mean(i,j)*rho_sic + sic%h_snow_mean(i,j)*rho_snow  ! kg/m2
+            fw_cut_per_area = fw_sic_cut(i,j)/area(i,j)  ! kg/m2/s; nonzero only where h_sic_max cut
+            flux_per_area = sic%snow(i,j) + sic%rain(i,j) - sic%evp(i,j) - fw_ocn_pre_redist(i,j) &
+              + sic%dh_sic_dt_dyn(i,j)*rho_sic + sic%dh_snow_dt_dyn(i,j)*rho_snow &
+              - fw_cut_per_area  ! kg/m2/s
+            water_res = (water_mass_new - water_mass_old(i,j)) - flux_per_area*dt  ! kg/m2
+            water_res_global = water_res_global + water_res*area(i,j)
+            ! independent global accumulators
+            ! d(total water)/dt = sum( (rain + snow - evp - fw_ocn) * area )
+            water_mass_old_tot = water_mass_old_tot + water_mass_old(i,j)*area(i,j)
+            water_mass_new_tot = water_mass_new_tot + water_mass_new*area(i,j)
+            water_flux_tot     = water_flux_tot &
+              + (sic%snow(i,j) + sic%rain(i,j) - sic%evp(i,j) - sic%fw_ocn(i,j))*area(i,j)*dt
+            if (abs(water_res).gt.water_check_tol_sic) then
+              n_cell_fail = n_cell_fail + 1
+              if (n_cell_fail.le.5) then
+                print *,''
+                print *,'WARNING: sic per-cell water budget residual ',water_res,' kg/m2 at (i,j) ',i,j
+                print *,'  m_old, m_new                  [kg/m2]    = ',water_mass_old(i,j), water_mass_new
+                print *,'  (rain+snow)*dt                [kg/m2]    = ',(sic%snow(i,j)+sic%rain(i,j))*dt
+                print *,'  evp*dt                        [kg/m2]    = ',sic%evp(i,j)*dt
+                print *,'  fw_ocn_local*dt               [kg/m2]    = ',fw_ocn_pre_redist(i,j)*dt
+                print *,'  fw_sic_cut/area*dt            [kg/m2]    = ',fw_cut_per_area*dt
+                print *,'  transport_div*dt              [kg/m2]    = ', &
+                  (sic%dh_sic_dt_dyn(i,j)*rho_sic + sic%dh_snow_dt_dyn(i,j)*rho_snow)*dt
+                print *,'  f_ocn, f_sic                             = ',sic%f_ocn(i,j), sic%f_sic(i,j)
+              endif
+            endif
+          endif
+        enddo
+      enddo
+      if (n_cell_fail.gt.0) then
+        print *,'WARNING: sic per-cell water budget failed in ',n_cell_fail,' cell(s); ', &
+          'domain-integrated residual ',water_res_global,' kg per step'
+      endif
+      ! independent global check: storage change should equal integrated
+      ! atmospheric + ocean fluxes (transport is domain-conservative). 
+      water_res_tot = (water_mass_new_tot - water_mass_old_tot) - water_flux_tot
+      if (abs(water_res_tot).gt.water_check_tol_sic_glob) then
+        print *,''
+        print *,'WARNING: sic global water budget residual ',water_res_tot,' kg per step'
+        print *,'  mass_old_total [kg]      = ',water_mass_old_tot
+        print *,'  mass_new_total [kg]      = ',water_mass_new_tot
+        print *,'  flux_total*dt  [kg]      = ',water_flux_tot
+      endif
+    endif
 
 
    return

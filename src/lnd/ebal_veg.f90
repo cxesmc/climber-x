@@ -33,6 +33,8 @@ module ebal_veg_mod
    use lnd_grid, only : npft, nsurf, nveg, nl, z, flag_veg, i_bare, flag_pft
    use lnd_params, only : dt, rdt
    use lnd_params, only : surf_par, l_diurnal_cycle
+   use lnd_params, only : pft_par
+   use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
 
    implicit none
 
@@ -682,7 +684,9 @@ contains
                          flx_sh, flx_lwu, lwnet, flx_lh, evap_surface, transpiration, et, &
                          num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw, &
                          f_sh, f_e, f_t, f_le, f_lt, f_lw, lh_ecan, qsat_e, dqsatdT_e, qsat_t, dqsatdT_t, &
-                         energy_cons_surf2)
+                         energy_cons_surf2, &
+                         w_w,w_w_iso,wilt,evap_canopy_iso,subl_canopy_iso, &
+                         evap_surface_iso,transpiration_iso,et_iso)
 
     implicit none
 
@@ -698,9 +702,14 @@ contains
     real(wp), dimension(:), intent(inout) :: f_sh, f_e, f_t, f_le, f_lt, f_lw, lh_ecan, qsat_e, dqsatdT_e, qsat_t, dqsatdT_t
     real(wp), dimension(:), intent(inout) :: energy_cons_surf2
     real(wp), intent(out) :: t_skin_veg
+    ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
+    real(wp), dimension(:),   intent(in)    :: w_w
+    real(wp), dimension(:,:), intent(in)    :: w_w_iso, wilt
+    real(wp), dimension(:,:), intent(in)    :: evap_canopy_iso, subl_canopy_iso
+    real(wp), dimension(:,:), intent(inout) :: evap_surface_iso, transpiration_iso, et_iso
 
-    integer :: n
-    real(wp) :: num, denom, f_veg
+    integer :: n, k, iso
+    real(wp) :: num, denom, f_veg, wilt_tot, r_top, r_xylem(nwiso)
 
 
     t_skin_veg = 0._wp
@@ -709,14 +718,24 @@ contains
     et(:) = 0._wp
     evap_surface(:) = 0._wp
     transpiration(:) = 0._wp
+    if (l_wiso) then
+      et_iso(:,:)            = 0._wp
+      evap_surface_iso(:,:)  = 0._wp
+      transpiration_iso(:,:) = 0._wp
+    endif
 
     f_veg = sum(frac_surf,mask=flag_veg.eq.1)
+
+    ! top-soil iso ratio for surface evaporation (donor = layer 1)
+    if (l_wiso .and. w_w(1).gt.0._wp) then
+      ! r_top is just a scalar at the top-layer ratio for each iso species; used inline below
+    endif
 
     do n=1,nveg
 
       if( frac_surf(n) .gt. 0._wp ) then
 
-        ! update soil heat flux 
+        ! update soil heat flux
         if( mask_snow .eq. 1 ) then
           flx_g(n)  = flx_g(n) + dflxg_dT(n) * (t_soil(0) - t_soil_old(0))
         else
@@ -725,30 +744,65 @@ contains
 
         num   = num_sw(n) + num_lw(n) + num_sh(n) + num_lh(n)  &
           - flx_g(n) - flx_melt(n)
-        denom = denom_lw(n) + denom_sh(n) + denom_lh(n)  
+        denom = denom_lw(n) + denom_sh(n) + denom_lh(n)
 
-        ! new skin temperature 
+        ! new skin temperature
         t_skin(n) = num/denom
 
-        ! diagnose surface energy fluxes from skin temperature 
+        ! diagnose surface energy fluxes from skin temperature
         flx_sh(n)  = f_sh(n) * (t_skin(n) - tatm(n))
         flx_lwu(n) = (1._wp-f_lw(n)/sigma)*lwdown(n) + f_lw(n) * (t_skin_old(n)**4 + 4._wp*t_skin_old(n)**3*(t_skin(n)-t_skin_old(n)))
         lwnet(n)   = lwdown(n) - flx_lwu(n)
         flx_lh(n)  = f_lt(n) * (qsat_t(n) + dqsatdT_t(n)*(t_skin(n)-t_skin_old(n)) - qatm(n)) &
           + f_le(n) * (qsat_e(n) + dqsatdT_e(n)*(t_skin(n)-t_skin_old(n)) - qatm(n)) &
-          + lh_ecan(n) 
-        if(flag_pft(n) .eq. 1) then 
+          + lh_ecan(n)
+        if(flag_pft(n) .eq. 1) then
           ! evaporation from surface (soil/snow)
           evap_surface(n)  = f_e(n) * (qsat_e(n) + dqsatdT_e(n)*(t_skin(n)-t_skin_old(n)) - qatm(n))
-          ! transpiration 
+          ! transpiration
           transpiration(n) = f_t(n) * (qsat_t(n) + dqsatdT_t(n)*(t_skin(n)-t_skin_old(n)) - qatm(n))
-        else 
+        else
           ! evaporation from surface (soil/snow)
           evap_surface(n)  = f_e(n) * (qsat_e(n) + dqsatdT_e(n)*(t_skin(n)-t_skin_old(n)) - qatm(n))
-          transpiration(n) = 0._wp 
+          transpiration(n) = 0._wp
         endif
         ! total evapotranspiration
         et(n) = transpiration(n) + evap_surface(n) + evap_canopy(n) + subl_canopy(n)
+
+        ! ---------- water-isotope ET assembly (passive, donor-pool ratio) ----------
+        if (l_wiso) then
+          do iso=1,nwiso
+            ! surface evaporation: at top-soil ratio if outflow, else at VSMOW (dew from atm placeholder)
+            if (evap_surface(n).ge.0._wp .and. w_w(1).gt.0._wp) then
+              evap_surface_iso(n,iso) = evap_surface(n) * w_w_iso(1,iso)/w_w(1)
+            else
+              evap_surface_iso(n,iso) = evap_surface(n) * Rstd(iso)
+            endif
+            ! transpiration: outflow at root-weighted soil ratio, inflow (condensation) at Rstd
+            if (flag_pft(n) .eq. 1) then
+              if (transpiration(n) .ge. 0._wp) then
+                wilt_tot = sum(wilt(:,n) * pft_par%root_frac(:,n))
+                r_xylem(iso) = 0._wp
+                if (wilt_tot.gt.1.e-20_wp) then
+                  do k=1,nl
+                    if (w_w(k).gt.0._wp) then
+                      r_xylem(iso) = r_xylem(iso) &
+                                    + pft_par%root_frac(k,n) * wilt(k,n) * w_w_iso(k,iso)/w_w(k) / wilt_tot
+                    endif
+                  enddo
+                endif
+                transpiration_iso(n,iso) = transpiration(n) * r_xylem(iso)
+              else
+                ! negative transpiration = vapor flux from atm onto canopy/soil at standard ratio
+                transpiration_iso(n,iso) = transpiration(n) * Rstd(iso)
+              endif
+            else
+              transpiration_iso(n,iso) = 0._wp
+            endif
+            et_iso(n,iso) = transpiration_iso(n,iso) + evap_surface_iso(n,iso) &
+                          + evap_canopy_iso(n,iso) + subl_canopy_iso(n,iso)
+          enddo
+        endif
 
         if( check_energy ) then
           ! energy conservation check

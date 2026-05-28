@@ -49,10 +49,16 @@
     f_Ri_stab = 0.              ! Richardson number factor for stable stratification
 
     !------------------------------------------------------------------------------------
+    ! water isotopes (phase 1: passive tracer, land-only, no fractionation)
+    !------------------------------------------------------------------------------------
+    l_wiso       = F            ! enable water isotope tracing in the land hydrological cycle?
+
+    !------------------------------------------------------------------------------------
     ! hydrology params
     !------------------------------------------------------------------------------------
     i_runoff    = 1             ! runoff parameterisation: 1..bottom free drainage, 2..simtop and no bottom drainage
     l_runoff_icemelt = F        ! allow for runoff from ice sheet melt?
+    l_allow_icesub = T          ! allow sublimation deficit to be drawn from glacier ice (closes water balance over ice)?
     i_cond_theta= 2             ! use liquid+frozen water (1) or only liquid water (2) for hydraulic conductivity
     i_evp_soil = 2              ! parameterisation of soil evaporation:
                                 ! 1 .. Lee and Pielke 1992 

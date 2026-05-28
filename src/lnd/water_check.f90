@@ -1,8 +1,8 @@
-!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 !
 !  Module : w a t e r _ c h e c k _ m o d
 !
-!  Purpose : water conservation checks
+!  Purpose : water (and water-isotope) conservation checks
 !
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 !
@@ -26,172 +26,276 @@
 module water_check_mod
 
    use precision, only : wp
-   use lnd_grid, only : nsurf, nveg, nsoil, nl, is_veg, is_ice, is_lake, i_ice, i_lake
-   use lnd_params, only : dt
+   use lnd_grid, only : nveg, is_veg, is_ice, is_lake, i_ice, i_lake
+   use lnd_params, only : dt, hydro_par
+   use wiso_params, only : l_wiso, nwiso
 
    implicit none
+
+   ! per-timestep closure tolerance, kg/m2; same value used for bulk and each iso species
+   real(wp), parameter :: tol_water  = 1.d-10
+   ! residual magnitude (kg/m2) above which the run is aborted — likely a real bug
+   real(wp), parameter :: stop_water = 0.1_wp
+
+   private
+   public :: water_balance_check
 
 contains
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  w a t e r _ b a l a n c e
-  !   Purpose    :  compute soil temperature 
-  !              :  by solving the tridiagonal system
+  !   Subroutine :  w a t e r _ b a l a n c e _ c h e c k
+  !   Purpose    :  per-timestep water and water-isotope conservation
+  !                 check, per surface type. Lake budget is intentionally
+  !                 not enforced (lake water is treated as inexhaustible).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine water_check(i,j,frac_surf,f_veg,rain,snow,et,runoff_sur,calving,drainage,icemelt, &
-                          w_w,w_i,w_snow,w_can,s_can,w_w_old,w_i_old,w_snow_old,w_can_old,s_can_old,lake_water_tendency, &
-                          water_cons)
+  subroutine water_balance_check(i, j, frac_surf, f_veg, &
+                                 rain, snow, et, runoff_sur, calving, drainage, icemelt, icesub, &
+                                 w_w, w_i, w_snow, w_can, s_can, &
+                                 w_w_old, w_i_old, w_snow_old, w_can_old, s_can_old, &
+                                 lake_water_tendency, &
+                                 rain_iso, snow_iso, et_iso, &
+                                 runoff_sur_iso, calving_iso, drainage_iso, icemelt_iso, icesub_iso, &
+                                 w_w_iso, w_i_iso, w_snow_iso, w_can_iso, s_can_iso, &
+                                 w_w_iso_old, w_i_iso_old, w_snow_iso_old, w_can_iso_old, s_can_iso_old, &
+                                 water_cons, water_iso_cons)
 
     implicit none
 
+    integer,  intent(in) :: i, j
     real(wp), intent(in) :: f_veg
-    real(wp), dimension(:), intent(in) :: rain, snow
-    real(wp), dimension(:), intent(in) :: runoff_sur, calving, drainage, icemelt
-    real(wp), dimension(:), intent(in) :: frac_surf, et, w_can, w_can_old, s_can, s_can_old
-    real(wp), dimension(:), intent(in) :: w_w, w_i, w_w_old, w_i_old
-    real(wp), dimension(:), intent(in) :: w_snow, w_snow_old
     real(wp), intent(in) :: lake_water_tendency
-    real(wp), dimension(:), intent(out) :: water_cons
+    real(wp), dimension(:),   intent(in) :: frac_surf
+    real(wp), dimension(:),   intent(in) :: rain, snow, et
+    real(wp), dimension(:),   intent(in) :: runoff_sur, calving, drainage, icemelt, icesub
+    real(wp), dimension(:),   intent(in) :: w_can, s_can, w_can_old, s_can_old
+    real(wp), dimension(:),   intent(in) :: w_w, w_i, w_w_old, w_i_old
+    real(wp), dimension(:),   intent(in) :: w_snow, w_snow_old
+    real(wp), dimension(:,:), intent(in) :: rain_iso, snow_iso, et_iso
+    real(wp), dimension(:,:), intent(in) :: runoff_sur_iso, calving_iso, drainage_iso, icemelt_iso, icesub_iso
+    real(wp), dimension(:,:), intent(in) :: w_can_iso, s_can_iso, w_can_iso_old, s_can_iso_old
+    real(wp), dimension(:,:), intent(in) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old
+    real(wp), dimension(:,:), intent(in) :: w_snow_iso, w_snow_iso_old
+    real(wp), dimension(:),   intent(out) :: water_cons
+    real(wp), dimension(:,:), intent(out) :: water_iso_cons
 
-    integer :: n,i,j
-    real(wp) :: et_sum, dw_can, rain_sum, snow_sum
+    integer  :: n, iso
+    real(wp) :: rain_veg, snow_veg, et_veg, dw_can_veg
+    real(wp) :: in_b, out_b, store_b
+    real(wp) :: rain_veg_iso(nwiso), snow_veg_iso(nwiso), et_veg_iso(nwiso), dw_can_veg_iso(nwiso)
+    real(wp) :: in_i, out_i, store_i
 
+    water_cons     = 0._wp
+    water_iso_cons = 0._wp
 
-    water_cons = 0._wp
+    !----------------------------------------------------------------
+    ! vegetated grid part
+    !----------------------------------------------------------------
+    if (f_veg .gt. 0._wp) then
 
-    if( f_veg .gt. 0._wp ) then
+      ! bulk aggregation over veg PFTs
+      rain_veg = 0._wp; snow_veg = 0._wp; et_veg = 0._wp; dw_can_veg = 0._wp
+      do n = 1, nveg
+        rain_veg   = rain_veg   + rain(n) * frac_surf(n)/f_veg
+        snow_veg   = snow_veg   + snow(n) * frac_surf(n)/f_veg
+        et_veg     = et_veg     + et(n)   * frac_surf(n)/f_veg
+        dw_can_veg = dw_can_veg + (w_can(n) - w_can_old(n) + s_can(n) - s_can_old(n)) * frac_surf(n)/f_veg
+      enddo
 
-     rain_sum = 0._wp
-     snow_sum = 0._wp
-     et_sum = 0._wp
-     dw_can = 0._wp
-     do n=1,nveg
-      rain_sum = rain_sum + rain(n) * frac_surf(n)/f_veg
-      snow_sum = snow_sum + snow(n) * frac_surf(n)/f_veg
-      et_sum = et_sum + et(n) * frac_surf(n)/f_veg
-      dw_can = dw_can + (w_can(n) - w_can_old(n) + s_can(n) - s_can_old(n)) * frac_surf(n)/f_veg
-     enddo
+      in_b    = (rain_veg + snow_veg) * dt
+      out_b   = (runoff_sur(is_veg) + calving(is_veg) + drainage(is_veg) + et_veg) * dt
+      store_b = sum(w_w - w_w_old + w_i - w_i_old) + (w_snow(is_veg) - w_snow_old(is_veg)) + dw_can_veg
+      water_cons(is_veg) = in_b - out_b - store_b
 
-     water_cons(is_veg) = rain_sum*dt + snow_sum*dt &
-                       - runoff_sur(is_veg)*dt - calving(is_veg)*dt - drainage(is_veg)*dt &
-                       - et_sum*dt - dw_can &
-                       - sum(w_w-w_w_old + w_i-w_i_old) &
-                       - (w_snow(is_veg)-w_snow_old(is_veg))
-
-     if( drainage(is_veg)*dt.lt.-0.1_wp ) then
-       print *,''
-       print *,'negative drainage',drainage(is_veg)*dt
-       print *,'i,j',i,j
-       print *,'water balance over SOIL',water_cons(is_veg) !,t_skin_veg
-       print *,'fveg',f_veg
-       print *,'sum(frac_surf)',sum(frac_surf)
-       print *,'frac_surf',frac_surf
-       print *,'dw_soil',sum(w_w-w_w_old + w_i-w_i_old)
-       print *,'dw_snow_if',(w_snow(is_veg)-w_snow_old(is_veg))
-       print *,'dw_can',dw_can
-       print *,'rain+snow,rain,snow',rain_sum*dt + snow_sum*dt,rain_sum*dt,snow_sum*dt
-       print *,'run_w,run_i',runoff_sur(is_veg)*dt,calving(is_veg)*dt
-       print *,'drain',drainage(is_veg)*dt
-       print *,'et',et_sum*dt
-       print *,'et(n)',et*dt
-       print *,'w_w old',w_w_old
-       print *,'w_w final',w_w
-       print *,'w_i old',w_i_old
-       print *,'w_i final',w_i
-       print *,'w_snow, w_snow_old if',w_snow(is_veg),w_snow_old(is_veg)
-       print *,'w_snow, w_snow_old i',w_snow(is_ice),w_snow_old(is_ice)
-       print *,'w_can_old',w_can_old
-       print *,'w_can',w_can
-       print *,'s_can_old',s_can_old
-       print *,'s_can',s_can
-     endif
-
-      !if(abs(water_cons(is_veg)).gt.1.d-10 ) then
-      if(abs(water_cons(is_veg)).gt.1.d-3 ) then
-       !print *,'mask_snow,i,j',mask_snow,i,j
-       print *,''
-       print *,'i,j',i,j
-       print *,'water balance over SOIL',water_cons(is_veg) !,t_skin_veg
-       print *,'fveg',f_veg
-       print *,'sum(frac_surf)',sum(frac_surf)
-       print *,'frac_sur',frac_surf
-       print *,'dw_soil',sum(w_w-w_w_old + w_i-w_i_old)
-       print *,'dw_snow_if',(w_snow(is_veg)-w_snow_old(is_veg))
-       print *,'dw_can',dw_can
-       print *,'rain+snow,rain,snow',rain_sum*dt + snow_sum*dt,rain_sum*dt,snow_sum*dt
-       print *,'run_w,run_i',runoff_sur(is_veg)*dt,calving(is_veg)*dt
-       print *,'drain',drainage(is_veg)*dt
-       print *,'et',et_sum*dt
-       print *,'w_w old',w_w_old
-       print *,'w_w final',w_w
-       print *,'w_i old',w_i_old
-       print *,'w_i final',w_i
-       print *,'w_snow, w_snow_old if',w_snow(is_veg),w_snow_old(is_veg)
-       print *,'w_snow, w_snow_old i',w_snow(is_ice),w_snow_old(is_ice)
-       print *,'w_can_old',w_can_old
-       print *,'w_can',w_can
-       print *,'s_can_old',s_can_old
-       print *,'s_can',s_can
-       if(abs(water_cons(is_veg)).gt.0.1 ) stop
+      if (abs(water_cons(is_veg)) .gt. tol_water) then
+        call print_bulk_failure('is_veg', i, j, water_cons(is_veg), &
+                                rain_veg*dt, snow_veg*dt, 0._wp, 0._wp, &
+                                et_veg*dt, runoff_sur(is_veg)*dt, drainage(is_veg)*dt, calving(is_veg)*dt, &
+                                sum(w_w-w_w_old), sum(w_i-w_i_old), w_snow(is_veg)-w_snow_old(is_veg), dw_can_veg)
+        if (abs(water_cons(is_veg)) .gt. stop_water) stop 'water_balance_check: bulk imbalance over SOIL exceeds stop_water'
       endif
 
-    endif 
+      ! iso, per species
+      if (l_wiso) then
+        rain_veg_iso(:)   = 0._wp
+        snow_veg_iso(:)   = 0._wp
+        et_veg_iso(:)     = 0._wp
+        dw_can_veg_iso(:) = 0._wp
+        do iso = 1, nwiso
+          do n = 1, nveg
+            rain_veg_iso(iso)   = rain_veg_iso(iso)   + rain_iso(n,iso) * frac_surf(n)/f_veg
+            snow_veg_iso(iso)   = snow_veg_iso(iso)   + snow_iso(n,iso) * frac_surf(n)/f_veg
+            et_veg_iso(iso)     = et_veg_iso(iso)     + et_iso(n,iso)   * frac_surf(n)/f_veg
+            dw_can_veg_iso(iso) = dw_can_veg_iso(iso) &
+                                + (w_can_iso(n,iso) - w_can_iso_old(n,iso) &
+                                 + s_can_iso(n,iso) - s_can_iso_old(n,iso)) * frac_surf(n)/f_veg
+          enddo
 
-    if( frac_surf(i_ice) .gt. 0._wp ) then
+          in_i    = (rain_veg_iso(iso) + snow_veg_iso(iso)) * dt
+          out_i   = (runoff_sur_iso(is_veg,iso) + calving_iso(is_veg,iso) &
+                   + drainage_iso(is_veg,iso) + et_veg_iso(iso)) * dt
+          store_i = sum(w_w_iso(:,iso) - w_w_iso_old(:,iso) + w_i_iso(:,iso) - w_i_iso_old(:,iso)) &
+                  + (w_snow_iso(is_veg,iso) - w_snow_iso_old(is_veg,iso)) + dw_can_veg_iso(iso)
+          water_iso_cons(is_veg,iso) = in_i - out_i - store_i
 
-     water_cons(is_ice) = rain(i_ice)*dt + snow(i_ice)*dt + icemelt(is_ice)*dt &
-                       - runoff_sur(is_ice)*dt - calving(is_ice)*dt - drainage(is_ice)*dt &
-                       - et(i_ice)*dt &
-                       - (w_snow(is_ice)-w_snow_old(is_ice))
-
-      if(abs(water_cons(is_ice)).gt.1.d-10) then
-       !print *,'mask_snow,i,j',mask_snow,i,j
-       print *,''
-       print *,'water balance over ICE',water_cons(is_ice) !,t_skin_veg
-       !print *,'sum(frac_surf)',sum(frac_surf)
-       !print *,'frac_sur',frac_surf
-       !print *,'dw_snow_i',(w_snow(is_ice)-w_snow_old(is_ice))
-       !print *,'rain+snow,rain,snow',rain*dt + snow*dt,rain*dt,snow*dt
-       !print *,'run_w,run_i',runoff_sur(is_ice)*dt,calving(is_ice)*dt
-       !print *,'drain',drainage(is_ice)*dt
-       !print *,'et',et(i_ice)*dt
-       !print *,'w_snow, w_snow_old i',w_snow(is_ice),w_snow_old(is_ice)
-       !stop
+          if (abs(water_iso_cons(is_veg,iso)) .gt. tol_water) then
+            call print_iso_failure('is_veg', i, j, iso, water_iso_cons(is_veg,iso), &
+                                   rain_veg_iso(iso)*dt, snow_veg_iso(iso)*dt, 0._wp, 0._wp, &
+                                   et_veg_iso(iso)*dt, runoff_sur_iso(is_veg,iso)*dt, &
+                                   drainage_iso(is_veg,iso)*dt, calving_iso(is_veg,iso)*dt, &
+                                   sum(w_w_iso(:,iso)-w_w_iso_old(:,iso)), &
+                                   sum(w_i_iso(:,iso)-w_i_iso_old(:,iso)), &
+                                   w_snow_iso(is_veg,iso)-w_snow_iso_old(is_veg,iso), dw_can_veg_iso(iso))
+            if (abs(water_iso_cons(is_veg,iso)) .gt. stop_water) stop 'water_balance_check: iso imbalance over SOIL exceeds stop_water'
+          endif
+        enddo
       endif
 
     endif
 
-! lake water is not conserved    
-!    if( frac_surf(i_lake) .gt. 0._wp ) then
-!
-!     water_cons(is_lake) = rain*dt + snow*dt &
-!                         - runoff_sur(is_lake)*dt - calving(is_lake)*dt - drainage(is_lake)*dt &
-!                         - et(i_lake)*dt &
-!                         - (w_snow(is_lake)-w_snow_old(is_lake)) &
-!                         - lake_water_tendency*dt
-!
-!      if (water_cons(is_lake).gt.1.e-10_wp .or. water_cons(is_lake).lt.-1.e-10_wp) then ! avoid warning message because of ice melt!
-!       !print *,'mask_snow,i,j',mask_snow,i,j
-!       print *,''
-!       print *,'water balance over LAKE',water_cons(is_lake) !,t_skin_veg
-!       print *,'lake_water_tendency',lake_water_tendency
-!       print *,'sum(frac_surf)',sum(frac_surf)
-!       print *,'frac_surf',frac_surf
-!       print *,'rain+snow,rain,snow',rain*dt + snow*dt,rain*dt,snow*dt
-!       print *,'run_w,run_i',runoff_sur(is_lake)*dt,calving(is_lake)*dt
-!       print *,'drain',drainage(is_lake)*dt
-!       print *,'et',et(i_lake)*dt
-!       print *,'dw_snow',(w_snow(is_lake)-w_snow_old(is_lake))
-!       print *,'w_snow, w_snow_old i',w_snow(is_lake),w_snow_old(is_lake)
-!       stop
-!      endif
-!
-!    endif
+    !----------------------------------------------------------------
+    ! ice grid part
+    !----------------------------------------------------------------
+    if (frac_surf(i_ice) .gt. 0._wp) then
 
+      ! icemelt only enters the lnd budget when routed into runoff
+      in_b    = (rain(i_ice) + snow(i_ice) + icesub(is_ice)) * dt &
+              + merge(icemelt(is_ice)*dt, 0._wp, hydro_par%l_runoff_icemelt)
+      out_b   = (runoff_sur(is_ice) + calving(is_ice) + drainage(is_ice) + et(i_ice)) * dt
+      store_b = w_snow(is_ice) - w_snow_old(is_ice)
+      water_cons(is_ice) = in_b - out_b - store_b
+
+      if (abs(water_cons(is_ice)) .gt. tol_water) then
+        call print_bulk_failure('is_ice', i, j, water_cons(is_ice), &
+                                rain(i_ice)*dt, snow(i_ice)*dt, &
+                                merge(icemelt(is_ice)*dt, 0._wp, hydro_par%l_runoff_icemelt), icesub(is_ice)*dt, &
+                                et(i_ice)*dt, runoff_sur(is_ice)*dt, drainage(is_ice)*dt, calving(is_ice)*dt, &
+                                0._wp, 0._wp, w_snow(is_ice)-w_snow_old(is_ice), 0._wp)
+        if (abs(water_cons(is_ice)) .gt. stop_water) stop 'water_balance_check: bulk imbalance over ICE exceeds stop_water'
+      endif
+
+      if (l_wiso) then
+        do iso = 1, nwiso
+          in_i    = (rain_iso(i_ice,iso) + snow_iso(i_ice,iso) + icesub_iso(is_ice,iso)) * dt &
+                  + merge(icemelt_iso(is_ice,iso)*dt, 0._wp, hydro_par%l_runoff_icemelt)
+          out_i   = (runoff_sur_iso(is_ice,iso) + calving_iso(is_ice,iso) &
+                   + drainage_iso(is_ice,iso) + et_iso(i_ice,iso)) * dt
+          store_i = w_snow_iso(is_ice,iso) - w_snow_iso_old(is_ice,iso)
+          water_iso_cons(is_ice,iso) = in_i - out_i - store_i
+
+          if (abs(water_iso_cons(is_ice,iso)) .gt. tol_water) then
+            call print_iso_failure('is_ice', i, j, iso, water_iso_cons(is_ice,iso), &
+                                   rain_iso(i_ice,iso)*dt, snow_iso(i_ice,iso)*dt, &
+                                   merge(icemelt_iso(is_ice,iso)*dt, 0._wp, hydro_par%l_runoff_icemelt), &
+                                   icesub_iso(is_ice,iso)*dt, &
+                                   et_iso(i_ice,iso)*dt, runoff_sur_iso(is_ice,iso)*dt, &
+                                   drainage_iso(is_ice,iso)*dt, calving_iso(is_ice,iso)*dt, &
+                                   0._wp, 0._wp, w_snow_iso(is_ice,iso)-w_snow_iso_old(is_ice,iso), 0._wp)
+            if (abs(water_iso_cons(is_ice,iso)) .gt. stop_water) stop 'water_balance_check: iso imbalance over ICE exceeds stop_water'
+          endif
+        enddo
+      endif
+
+    endif
+
+    !----------------------------------------------------------------
+    ! lake grid part
+    !----------------------------------------------------------------
+    ! The lake reservoir itself is treated as inexhaustible (w_w_lake not tracked here),
+    ! but the lake-cell surface budget should close:
+    !   P + S + (M from snow) - et - runoff_sur - calving - dw_snow = 0
+    ! where runoff_sur(is_lake) = rain_ground + snowmelt - evaporation (i.e. P + M - E).
+    if (frac_surf(i_lake) .gt. 0._wp) then
+
+      in_b    = (rain(i_lake) + snow(i_lake)) * dt
+      out_b   = (runoff_sur(is_lake) + calving(is_lake) + et(i_lake)) * dt
+      store_b = w_snow(is_lake) - w_snow_old(is_lake)
+      water_cons(is_lake) = in_b - out_b - store_b
+
+      if (abs(water_cons(is_lake)) .gt. tol_water) then
+        call print_bulk_failure('is_lake', i, j, water_cons(is_lake), &
+                                rain(i_lake)*dt, snow(i_lake)*dt, 0._wp, 0._wp, &
+                                et(i_lake)*dt, runoff_sur(is_lake)*dt, 0._wp, calving(is_lake)*dt, &
+                                0._wp, 0._wp, w_snow(is_lake)-w_snow_old(is_lake), 0._wp)
+        if (abs(water_cons(is_lake)) .gt. stop_water) stop 'water_balance_check: bulk imbalance over LAKE exceeds stop_water'
+      endif
+
+      if (l_wiso) then
+        do iso = 1, nwiso
+          in_i    = (rain_iso(i_lake,iso) + snow_iso(i_lake,iso)) * dt
+          out_i   = (runoff_sur_iso(is_lake,iso) + calving_iso(is_lake,iso) + et_iso(i_lake,iso)) * dt
+          store_i = w_snow_iso(is_lake,iso) - w_snow_iso_old(is_lake,iso)
+          water_iso_cons(is_lake,iso) = in_i - out_i - store_i
+
+          if (abs(water_iso_cons(is_lake,iso)) .gt. tol_water) then
+            call print_iso_failure('is_lake', i, j, iso, water_iso_cons(is_lake,iso), &
+                                   rain_iso(i_lake,iso)*dt, snow_iso(i_lake,iso)*dt, 0._wp, 0._wp, &
+                                   et_iso(i_lake,iso)*dt, runoff_sur_iso(is_lake,iso)*dt, &
+                                   0._wp, calving_iso(is_lake,iso)*dt, &
+                                   0._wp, 0._wp, w_snow_iso(is_lake,iso)-w_snow_iso_old(is_lake,iso), 0._wp)
+            if (abs(water_iso_cons(is_lake,iso)) .gt. stop_water) stop 'water_balance_check: iso imbalance over LAKE exceeds stop_water'
+          endif
+        enddo
+      endif
+
+    endif
 
     return
 
-  end subroutine water_check
+  end subroutine water_balance_check
+
+
+  ! ---- internal pretty-printers ----------------------------------------
+
+  subroutine print_bulk_failure(tag, i, j, residual, &
+                                rain_dt, snow_dt, icemelt_dt, icesub_dt, &
+                                et_dt, runoff_dt, drainage_dt, calving_dt, &
+                                dw_w, dw_i, dw_snow, dw_can)
+    character(len=*), intent(in) :: tag
+    integer,  intent(in) :: i, j
+    real(wp), intent(in) :: residual
+    real(wp), intent(in) :: rain_dt, snow_dt, icemelt_dt, icesub_dt
+    real(wp), intent(in) :: et_dt, runoff_dt, drainage_dt, calving_dt
+    real(wp), intent(in) :: dw_w, dw_i, dw_snow, dw_can
+    real(wp) :: in_tot, out_tot, store_tot
+
+    in_tot    = rain_dt + snow_dt + icemelt_dt + icesub_dt
+    out_tot   = et_dt + runoff_dt + drainage_dt + calving_dt
+    store_tot = dw_w + dw_i + dw_snow + dw_can
+
+    print '(A,A,A,I0,A,I0,A,ES12.4,A,ES10.2,A)', &
+      'WATER IMBALANCE ',tag,' at (i=',i,',j=',j,') = ',residual,' kg/m2  (tol=',tol_water,')'
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  IN:   rain=',rain_dt,'  snow=',snow_dt,'  icemelt=',icemelt_dt,'  icesub=',icesub_dt,'  -> ',in_tot
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  OUT:  et=',et_dt,'  runoff=',runoff_dt,'  drainage=',drainage_dt,'  calving=',calving_dt,'  -> ',out_tot
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  STORE:dw_w=',dw_w,'  dw_i=',dw_i,'  dw_snow=',dw_snow,'  dw_can=',dw_can,'  -> ',store_tot
+  end subroutine print_bulk_failure
+
+  subroutine print_iso_failure(tag, i, j, iso, residual, &
+                               rain_dt, snow_dt, icemelt_dt, icesub_dt, &
+                               et_dt, runoff_dt, drainage_dt, calving_dt, &
+                               dw_w, dw_i, dw_snow, dw_can)
+    character(len=*), intent(in) :: tag
+    integer,  intent(in) :: i, j, iso
+    real(wp), intent(in) :: residual
+    real(wp), intent(in) :: rain_dt, snow_dt, icemelt_dt, icesub_dt
+    real(wp), intent(in) :: et_dt, runoff_dt, drainage_dt, calving_dt
+    real(wp), intent(in) :: dw_w, dw_i, dw_snow, dw_can
+    real(wp) :: in_tot, out_tot, store_tot
+
+    in_tot    = rain_dt + snow_dt + icemelt_dt + icesub_dt
+    out_tot   = et_dt + runoff_dt + drainage_dt + calving_dt
+    store_tot = dw_w + dw_i + dw_snow + dw_can
+
+    print '(A,A,A,I0,A,I0,A,I0,A,ES12.4,A,ES10.2,A)', &
+      'WATER-ISO IMBALANCE ',tag,' at (i=',i,',j=',j,') iso=',iso,' : ',residual,' kg/m2  (tol=',tol_water,')'
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  IN:   rain=',rain_dt,'  snow=',snow_dt,'  icemelt=',icemelt_dt,'  icesub=',icesub_dt,'  -> ',in_tot
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  OUT:  et=',et_dt,'  runoff=',runoff_dt,'  drainage=',drainage_dt,'  calving=',calving_dt,'  -> ',out_tot
+    print '(A,4(A,ES10.3),A,ES10.3)', &
+      '  STORE:dw_w=',dw_w,'  dw_i=',dw_i,'  dw_snow=',dw_snow,'  dw_can=',dw_can,'  -> ',store_tot
+  end subroutine print_iso_failure
 
 end module water_check_mod
-

@@ -102,7 +102,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
      real(wp), allocatable, dimension(:) :: albedo, alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif
      integer,  allocatable, dimension(:) :: mask_snow
-     real(wp), allocatable, dimension(:) :: f_snow, h_snow, w_snow, w_snow_max, w_snow_old, snowmelt, icemelt, snow_grain, dust_con
+     real(wp), allocatable, dimension(:) :: f_snow, h_snow, w_snow, w_snow_max, w_snow_old, snowmelt, icemelt, icesub, snow_grain, dust_con
      real(wp), allocatable, dimension(:) :: runoff, runoff_sur, calving, drainage, water_cons
      real(wp), allocatable, dimension(:) :: rain_ground, evap_can, snow_ground, subl_can
      real(wp), allocatable, dimension(:) :: w_can, w_can_old, s_can, s_can_old, f_wat_can, f_snow_can
@@ -148,6 +148,25 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: t_sublake_cum, theta_w_sublake_cum, theta_i_sublake_cum
      real(wp), allocatable, dimension(:) :: psi
      integer,  allocatable, dimension(:) :: k_exp, psi_exp
+
+     ! --- water isotopes (heavy isotope mass; only allocated if l_wiso=.true.) ---
+     real(wp), allocatable, dimension(:,:) :: rain_iso, snow_iso                    ! (nsurf,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: rain_ground_iso, snow_ground_iso      ! (nsurf,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: evap_can_iso, subl_can_iso            ! (nsurf,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: transpiration_iso, evap_surface_iso   ! (nsurf,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: et_iso                                ! (nsurf,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: w_can_iso, w_can_iso_old              ! (nsurf,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:,:) :: s_can_iso, s_can_iso_old              ! (nsurf,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:,:) :: w_snow_iso, w_snow_iso_old            ! (nsoil,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:,:) :: snowmelt_iso, icemelt_iso             ! (nsoil,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: icesub_iso                            ! (nsoil,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: runoff_iso, runoff_sur_iso            ! (nsoil,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: drainage_iso, calving_iso             ! (nsoil,nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: w_w_iso, w_i_iso                      ! (nl,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:,:) :: w_w_iso_old, w_i_iso_old              ! (nl,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:,:) :: w_w_lake_iso, w_i_lake_iso            ! (nl_l,nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:)   :: infiltration_iso                      ! (nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:,:) :: water_iso_cons                        ! (nsoil,nwiso) conservation residual
      real(wp), allocatable, dimension(:) :: ftemp, fmoist, fdepth
      real(wp), allocatable, dimension(:) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
      real(wp), allocatable, dimension(:) :: k_litter_shelf, k_fast_shelf, k_slow_shelf, diff_shelfc, adv_shelfc

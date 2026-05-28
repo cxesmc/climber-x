@@ -215,7 +215,7 @@ contains
   !   Purpose    :  vertical structure of atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, dam, hdust, &
-      wcon, t3, q3, tp, d3, ttrop)
+      A_trop, W_strat, t3, q3, tp, d3, ttrop)
 
     implicit none
 
@@ -230,7 +230,8 @@ contains
     real(wp), intent(in ) :: dam(:,:)
     real(wp), intent(in ) :: hdust(:,:)
 
-    real(wp), intent(out) :: wcon(:,:)
+    real(wp), intent(out) :: A_trop(:,:)   
+    real(wp), intent(out) :: W_strat(:,:)  
     real(wp), intent(out) :: t3(:,:,:)
     real(wp), intent(out) :: q3(:,:,:)
     real(wp), intent(out) :: tp(:,:,:)
@@ -241,46 +242,63 @@ contains
     logical :: flag_strat
     real(wp) :: z_sur, taml, htropl
     real(wp) :: gamsl, gambl, gamtl, z
-    real(wp) :: t, rsur, hrml, rh, q, qsat, wconl
+    real(wp) :: t, rsur, hrml, rh, rh_unit, q, q_unit, qsat, A_l, W_l
+    real(wp) :: dvol
 
 
-    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rh,q,qsat,wconl,flag_strat)
+    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rh,rh_unit,q,q_unit,qsat,A_l,W_l,dvol,flag_strat)
     do j=1,jm
       do i=1,im
 
-        ! 2D fields       
+        ! 2D fields
 
-        z_sur  = zsa(i,j)       
-        taml   = tam(i,j) 
+        z_sur  = zsa(i,j)
+        taml   = tam(i,j)
         gamsl  = gams(i,j)
         gambl  = gamb(i,j)
         gamtl  = gamt(i,j)
-        htropl = htrop(i,j) 
+        htropl = htrop(i,j)
         rsur   = ram(i,j)
         hrml   = hrm(i,j)
 
         ! 3D fields of temperature and humidity
 
-        wconl = 0._wp
+        A_l   = 0._wp   ! tropospheric coefficient ∫ g(z)·qsat·ρ dz
+        W_l   = 0._wp   ! stratospheric intercept ∫ rh_strat·qsat·ρ dz
         flag_strat = .false.
         do k=1,km
 
-          z = 0.5_wp*(zl(k)+zl(k+1)) 
+          z = 0.5_wp*(zl(k)+zl(k+1))
 
           if (.not.flag_strat) then
-            ! construct vertical temperature profile 
+            ! construct vertical temperature profile
             t = t_prof(z_sur, z, taml, gamsl, gambl, gamtl, htropl, 1)
             ! derive specific humidity profile from temperature and relative humidity profiles
             rh = rh_prof(z_sur, z, rsur, hrml, htropl)
+            ! rh profile with ram=1: returns g(z) in the troposphere, rh_strat in the stratosphere
+            rh_unit = rh_prof(z_sur, z, 1._wp, hrml, htropl)
             qsat = fqsat(t,p0*exp_zc(k))
             q = rh*qsat
+            q_unit = rh_unit*qsat
           endif
 
-          ! vertical integral of water content 
+          ! volume element (mass per unit area for this layer above surface)
           if (zl(k).ge.z_sur) then
-            wconl = wconl + q*ra*exp_zc(k)*(zl(k+1)-zl(k))
+            dvol = ra*exp_zc(k)*(zl(k+1)-zl(k))
           else if (zl(k).lt.z_sur .and. zl(k+1).gt.z_sur) then
-            wconl = wconl + q*ra*exp_zc(k)*(zl(k+1)-z_sur)
+            dvol = ra*exp_zc(k)*(zl(k+1)-z_sur)
+          else
+            dvol = 0._wp
+          endif
+
+          ! vertical integral of water content split into tropospheric slope (A) and stratospheric intercept (W);
+          ! the total column water wcon = ram·A_trop + W_strat is reconstructed in time_step.
+          if (z.le.htropl+1._wp) then
+            ! tropospheric: q = ram·g(z)·qsat ⇒ dA = g(z)·qsat·dvol = q_unit·dvol
+            A_l = A_l + q_unit*dvol
+          else
+            ! stratospheric: q = rh_strat·qsat ⇒ dW = q·dvol (independent of ram)
+            W_l = W_l + q*dvol
           endif
 
           t3(i,j,k) = t
@@ -296,11 +314,12 @@ contains
 
         enddo
 
-        wcon(i,j) = wconl
+        A_trop(i,j)  = A_l
+        W_strat(i,j) = W_l
 
         ! tropopause temperature
 
-        ttrop(i,j) = t 
+        ttrop(i,j) = t
 
       enddo
     enddo

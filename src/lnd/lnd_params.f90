@@ -31,6 +31,7 @@ module lnd_params
   use control, only : out_dir
   use lnd_grid, only : nx, ny, npft, nl, nsurf, z, z_int, lat
   use lnd_grid, only : flag_tree, flag_grass, flag_shrub
+  use wiso_params, only : l_wiso
 
   implicit none
 
@@ -93,6 +94,7 @@ module lnd_params
     logical :: l_prc_intercept
     integer :: i_runoff
     logical :: l_runoff_icemelt
+    logical :: l_allow_icesub
     integer :: i_evp_soil
     real(wp) :: theta_crit_evp
     real(wp) :: dz_evp
@@ -761,6 +763,7 @@ subroutine lnd_par_load
 
     call nml_read(filename,"lnd_par","i_runoff",hydro_par%i_runoff)
     call nml_read(filename,"lnd_par","l_runoff_icemelt",hydro_par%l_runoff_icemelt)
+    call nml_read(filename,"lnd_par","l_allow_icesub",hydro_par%l_allow_icesub)
     call nml_read(filename,"lnd_par","l_dew",hydro_par%l_dew)
     call nml_read(filename,"lnd_par","l_prc_intercept",hydro_par%l_prc_intercept)
     call nml_read(filename,"lnd_par","i_cond_theta",hydro_par%i_cond_theta)
@@ -793,6 +796,9 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","tau_s",hydro_par%tau_s)
     hydro_par%tau_w = hydro_par%tau_w*sec_day
     hydro_par%tau_s = hydro_par%tau_s*sec_day
+
+    ! water isotopes master switch (phase 1: passive tracer, land-only)
+    call nml_read(filename,"lnd_par","l_wiso",l_wiso)
 
     call nml_read(filename,"lnd_par","b0",dust_par%b0)
     call nml_read(filename,"lnd_par","qd",dust_par%qd)
