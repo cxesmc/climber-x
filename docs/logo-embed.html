@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: transparent;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+  }
+  svg {
+    width: min(460px, 95vw);
+    height: auto;
+    overflow: visible;
+  }
+  .ring { cursor: pointer; }
+  .arc-fill {
+    transition: filter 0.25s ease, opacity 0.25s ease;
+  }
+  .ring:hover .arc-fill {
+    filter: brightness(1.15) drop-shadow(0 0 9px rgba(0,0,0,0.3));
+  }
+  svg:has(.ring:hover) .ring:not(:hover) .arc-fill,
+  svg:has(.ring:hover) .ring:not(:hover) .arc-ghost {
+    opacity: 0.3;
+  }
+  .arc-ghost {
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
+  .arc-label {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    fill: rgba(255,255,255,0.95);
+  }
+  .ring:hover .arc-label { opacity: 1; }
+  .title-text {
+    font-family: 'Trebuchet MS', Arial, sans-serif;
+    font-weight: 700;
+    fill: white;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    filter: drop-shadow(0 2px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 4px rgba(0,0,0,0.9));
+    letter-spacing: 2px;
+    pointer-events: none;
+  }
+  #tooltip {
+    position: fixed;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: rgba(20,20,20,0.88);
+    color: white;
+    padding: 7px 16px;
+    border-radius: 4px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-family: Arial, sans-serif;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    white-space: nowrap;
+  }
+  #tooltip.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #tooltip .dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 7px;
+    vertical-align: middle; position: relative; top: -1px;
+  }
+</style>
+</head>
+<body>
+<svg id="logo" viewBox="0 0 500 500">
+<defs>
+  <radialGradient id="g0" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#ffd94d"/><stop offset="100%" stop-color="#cca300"/>
+  </radialGradient>
+  <radialGradient id="g1" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#5c9e30"/><stop offset="100%" stop-color="#2e6417"/>
+  </radialGradient>
+  <radialGradient id="g2" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#2a6fd4"/><stop offset="100%" stop-color="#004aad"/>
+  </radialGradient>
+  <radialGradient id="g3" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#aee4ff"/><stop offset="100%" stop-color="#38b6ff"/>
+  </radialGradient>
+  <radialGradient id="g4" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#ffb880"/><stop offset="100%" stop-color="#ff914d"/>
+  </radialGradient>
+  <radialGradient id="g5" cx="35%" cy="35%" r="65%">
+    <stop offset="0%" stop-color="#50e8aa"/><stop offset="100%" stop-color="#10bb82"/>
+  </radialGradient>
+</defs>
+<g id="rings-group"></g>
+<circle id="center-circle" cx="250" cy="250" r="52" fill="white"/>
+<text id="title-el" x="250" y="253" class="title-text">CLIMBER-X</text>
+</svg>
+
+<div id="tooltip"><span class="dot" id="tdot"></span><span id="ttext"></span></div>
+
+<script>
+(function () {
+  const CX = 250, CY = 250;
+  const NS = 'http://www.w3.org/2000/svg';
+  const THICKNESS = 28;
+  const CENTER_R  = 52;
+
+  function pctToDeg(pct) { return pct * 3.6 - 90; }
+  function f(n) { return n.toFixed(3); }
+  function polar(r, deg) {
+    const rad = deg * Math.PI / 180;
+    return [CX + r * Math.cos(rad), CY + r * Math.sin(rad)];
+  }
+
+  function makeArcPath(R, r, a1, a2) {
+    const span = ((a2 - a1) + 360) % 360 || 360;
+    const lg   = span > 180 ? 1 : 0;
+    const [ox1,oy1] = polar(R, a1); const [ox2,oy2] = polar(R, a2);
+    const [ix2,iy2] = polar(r, a2); const [ix1,iy1] = polar(r, a1);
+    return `M${f(ox1)},${f(oy1)} A${R},${R} 0 ${lg},1 ${f(ox2)},${f(oy2)} L${f(ix2)},${f(iy2)} A${r},${r} 0 ${lg},0 ${f(ix1)},${f(iy1)} Z`;
+  }
+
+  function makeFullAnnulus(R, r) {
+    const [ox1,oy1]=polar(R,0); const [ox2,oy2]=polar(R,180);
+    const [ix1,iy1]=polar(r,0); const [ix2,iy2]=polar(r,180);
+    return `M${f(ox1)},${f(oy1)} A${R},${R} 0 1,1 ${f(ox2)},${f(oy2)} A${R},${R} 0 1,1 ${f(ox1)},${f(oy1)} Z `+
+           `M${f(ix1)},${f(iy1)} A${r},${r} 0 1,0 ${f(ix2)},${f(iy2)} A${r},${r} 0 1,0 ${f(ix1)},${f(iy1)} Z`;
+  }
+
+  function makeTextPath(R, r, a1, a2) {
+    const rm   = (R + r) / 2;
+    const span = ((a2 - a1) + 360) % 360 || 360;
+    const lg   = span > 180 ? 1 : 0;
+    const [x1,y1] = polar(rm, a1); const [x2,y2] = polar(rm, a2);
+    return `M${f(x1)},${f(y1)} A${f(rm)},${f(rm)} 0 ${lg},1 ${f(x2)},${f(y2)}`;
+  }
+
+  const ringDefs = [
+    { label: 'Atmosphere',       s:  0, e: 15, grad: 'g0', flat: '#cca300', fillOpacity: 0.7 },
+    { label: 'Vegetation',       s:  0, e: 37, grad: 'g1', flat: '#2e6417', fillOpacity: 0.7 },
+    { label: 'Ocean & Sea Ice',  s:  0, e: 43, grad: 'g2', flat: '#004aad', fillOpacity: 0.5 },
+    { label: 'Ice Sheets',       s: 17, e: 67, grad: 'g3', flat: '#38b6ff', fillOpacity: 0.7 },
+    { label: 'Solid Earth',      s: 23, e: 58, grad: 'g4', flat: '#ff914d', fillOpacity: 0.7 },
+    { label: 'Carbon Cycle',     s:  0, e: 70, grad: 'g5', flat: '#10bb82', fillOpacity: 0.7 },
+  ];
+
+  const group   = document.getElementById('rings-group');
+  const svg     = document.getElementById('logo');
+  const tooltip = document.getElementById('tooltip');
+  const ttext   = document.getElementById('ttext');
+  const tdot    = document.getElementById('tdot');
+
+  ringDefs.forEach(({ label, s, e, grad, flat, fillOpacity }, i) => {
+    const r  = CENTER_R + i * THICKNESS;
+    const R  = r + THICKNESS;
+    const a1 = pctToDeg(s);
+    const a2 = pctToDeg(e);
+
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'ring');
+
+    const ghost = document.createElementNS(NS, 'path');
+    ghost.setAttribute('class', 'arc-ghost');
+    ghost.setAttribute('d', makeFullAnnulus(R, r));
+    ghost.setAttribute('fill', flat);
+    ghost.setAttribute('fill-rule', 'evenodd');
+    ghost.setAttribute('opacity', '0.15');
+    g.appendChild(ghost);
+
+    const fill = document.createElementNS(NS, 'path');
+    fill.setAttribute('class', 'arc-fill');
+    fill.setAttribute('d', makeArcPath(R, r, a1, a2));
+    fill.setAttribute('fill', `url(#${grad})`);
+    fill.setAttribute('fill-opacity', fillOpacity);
+    g.appendChild(fill);
+
+    const tpId   = `tp_${i}`;
+    const tpPath = document.createElementNS(NS, 'path');
+    tpPath.setAttribute('id', tpId);
+    tpPath.setAttribute('d', makeTextPath(R, r, a1, a2));
+    tpPath.setAttribute('fill', 'none');
+    g.appendChild(tpPath);
+
+    const fontSize = Math.max(7.5, THICKNESS * 0.37);
+    const textEl = document.createElementNS(NS, 'text');
+    textEl.setAttribute('class', 'arc-label');
+    textEl.setAttribute('font-size', fontSize);
+    const tp = document.createElementNS(NS, 'textPath');
+    tp.setAttribute('href', `#${tpId}`);
+    tp.setAttribute('startOffset', '50%');
+    tp.setAttribute('text-anchor', 'middle');
+    tp.textContent = label;
+    textEl.appendChild(tp);
+    g.appendChild(textEl);
+
+    g.addEventListener('mouseenter', () => {
+      ttext.textContent = label;
+      tdot.style.background = flat;
+      tooltip.classList.add('visible');
+    });
+    g.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
+    g.addEventListener('click', () => {
+      fill.style.transition = 'none';
+      fill.style.filter = 'brightness(1.7)';
+      setTimeout(() => {
+        fill.style.transition = 'filter 0.4s ease, opacity 0.25s ease';
+        fill.style.filter = '';
+      }, 150);
+    });
+
+    group.appendChild(g);
+
+    fill.style.opacity = '0';  fill.style.transition = 'none';
+    ghost.style.opacity = '0'; ghost.style.transition = 'none';
+    setTimeout(() => {
+      fill.style.transition  = 'opacity 0.5s ease, filter 0.25s ease';
+      fill.style.opacity  = '1';
+      ghost.style.transition = 'opacity 0.5s ease';
+      ghost.style.opacity = '0.15';
+    }, 60 + i * 80);
+  });
+
+  const titleEl = document.getElementById('title-el');
+  titleEl.setAttribute('font-family', "'Trebuchet MS', Arial, sans-serif");
+  titleEl.setAttribute('font-weight', '900');
+  titleEl.setAttribute('font-size', '87');
+
+  svg.appendChild(document.getElementById('center-circle'));
+  svg.appendChild(titleEl);
+})();
+</script>
+</body>
+</html>
+
