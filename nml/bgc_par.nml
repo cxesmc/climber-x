@@ -73,6 +73,24 @@
     ! corals
     !----------------------------------------------------------------------------
     l_corals = F    ! flag for shallow water carbonate sedimentation, coral reefs
+    l_pa_th = F     ! enable Pa-231 / Th-230 reversible-scavenging tracers?
+    k_des       = 4.0    ! desorption rate [1/yr] (2.4 in Rempfer 2017, 4.0 in Scheen 2025)
+    sigma_pa_poc  = 0.005   ! m2/mol C, Pa cross-section on POC
+    sigma_pa_opal = 0.15    ! m2/mol Si, Pa cross-section on biogenic opal (Pa-preferred over Th)
+    sigma_pa_calc = 0.06    ! m2/mol C, Pa cross-section on CaCO3
+    sigma_pa_dust = 1.0     ! m2/kg, Pa cross-section on lithogenic dust
+    sigma_th_poc  = 0.09    ! m2/mol C, Th cross-section on POC  (~10x Pa)
+    sigma_th_opal = 0.08    ! m2/mol Si, Th cross-section on biogenic opal (Th much weaker than Pa here)
+    sigma_th_calc = 1.8     ! m2/mol C, cross-section on CaCO3 (Th-preferred)
+    sigma_th_dust = 11.0    ! m2/kg, Th cross-section on lithogenic dust
+    f_scav_bottom      = 5.0    ! k_ads multiplier in bottom layer (nepheloid proxy)
+    f_scav_shelf       = 2.0    ! k_ads multiplier on shelf columns (margin scavenging)
+    shelf_depth_thresh = 1000.0 ! shelf threshold depth [m]
+    ! Pa/Th paleo core sites for time-series output (snapped to nearest active grid cell)
+    n_paTh_sites   = 9
+    paTh_site_name = "BermudaRise Feni Iberian CapeBasin SOAtl EqPac"
+    paTh_site_lat  = " 33.0  56.0  37.5 -36.0 -52.0    0.0"
+    paTh_site_lon  = "-57.0 -16.0 -10.0   7.0   5.0 -140.0"
 
     !----------------------------------------------------------------------------
     ! carbon isotopes
