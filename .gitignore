@@ -29,3 +29,5 @@ data
 !run_bench.sh
 *.nc
 TODO
+docs/_site/
+docs/.quarto/

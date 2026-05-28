@@ -1,0 +1,69 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - "*.md"
+    - "use-cases/**/*.md"
+    - "var_lists/**/*.md"
+    - "workshops/**/*.md"
+    - "!README.md"
+    - "!TODO.md"
+  resources:
+    - logo-embed.html
+    - Bern3D_physics_doc.pdf
+    - workshops/2025/Agenda.docx
+
+website:
+  title: "CLIMBER-X"
+  description: "Documentation for the CLIMBER-X Earth system model"
+  repo-url: https://github.com/cxesmc/climber-x
+  repo-actions: [edit, issue]
+  page-navigation: true
+  navbar:
+    background: primary
+    search: true
+    left:
+      - href: installation.md
+        text: Getting started
+      - href: use-cases/01-pi_spinup/index.md
+        text: Use cases
+      - href: var_lists/index.md
+        text: Output
+      - href: workshops/2025/index.md
+        text: Workshops
+  sidebar:
+    style: docked
+    collapse-level: 2
+    contents:
+      - href: index.md
+        text: Home
+      - section: "Getting started"
+        href: installation.md
+        contents:
+          - dependencies.md
+          - runme-notes.md
+          - repositories.md
+      - section: "Use cases"
+        contents:
+          - href: use-cases/01-pi_spinup/index.md
+            text: Pre-industrial spinup
+          - href: use-cases/03-lgm/index.md
+            text: Last glacial maximum
+      - section: "Output description"
+        contents:
+          - href: var_lists/index.md
+            text: Output files
+      - section: "Workshops"
+        contents:
+          - href: workshops/2025/index.md
+            text: Workshop 2025
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap
+    html-math-method: katex
+    link-external-newwindow: true
