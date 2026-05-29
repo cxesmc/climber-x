@@ -112,6 +112,15 @@ contains
 
     ! bottom boundary fluxes
     faz(:,:,0) = 0._wp
+    ! geothermal bottom flux for full-depth columns (k1=1): their bottom face is at index 0,
+    ! which lies outside the k=1..maxk loop above and would otherwise be lost
+    do j=1,maxj
+      do i=1,maxi
+        if (k1(i,j).eq.1) then
+          faz(i,j,0) = flx_bot(i,j) * dx(j)*dy*f_ocn(i,j)*dt ! m/s*K * m2*s = m3 * K, bottom ocean flux
+        endif
+      enddo
+    enddo
 
     ! tracer tendency due to advection, K/s
     do i=1,maxi
@@ -273,6 +282,15 @@ contains
     !!$omp end parallel do
     fzl(:,:,0) = 0._wp
     afz(:,:,0) = 0._wp
+    ! geothermal bottom flux for full-depth columns (k1=1): their bottom face is at index 0,
+    ! which lies outside the k=1..maxk loop above and would otherwise be lost
+    do j=1,maxj
+      do i=1,maxi
+        if (k1(i,j).eq.1) then
+          fzl(i,j,0) = flx_bot(i,j)*dx(j)*dy*f_ocn(i,j)*dt  ! m/s * K * m2*s = m3*K
+        endif
+      enddo
+    enddo
 
     ! STEP I: LOWER ORDER SOLUTION
     !!$omp parallel do collapse(3) private(i,j,k)
