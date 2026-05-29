@@ -44,7 +44,7 @@ module atm_model
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
-    use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
+    use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, lm, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
     use atm_def, only : atm_class
 
@@ -335,7 +335,7 @@ contains
       ! advection-diffusion
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%d3, atm%cam, &
+      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%qam, atm%d3, atm%cam, &
         atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst,  &   ! in
         atm%convdse, atm%convwtr, atm%convdst, atm%convco2, &   ! out
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
@@ -349,12 +349,12 @@ contains
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%hqeff, atm%sam, atm%eke, atm%sam2, &   ! in
+      call time_step(atm%frst, atm%weff, atm%zs, atm%zsa, atm%hcld, atm%htrop, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%hqeff, atm%sam, atm%eke, atm%sam2, &   ! in
         atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
-        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%rskina, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
+        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%rskina, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%d18o_prcw, atm%d18o_prcs, atm%d18o_qam, atm%error)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'time_Step',(time2-time1)*nstep_fast
 
@@ -447,8 +447,10 @@ contains
          atm%gamb(i,j) = 5.e-3_wp
          atm%gamt(i,j) = 8.e-3_wp
          atm%hrm(i,j) = 2000._wp
-         atm%qam(i,j) = 0.8_wp*fqsat(atm%tam(i,j),p0)
-         atm%q2a(i,j) = atm%qam(i,j)
+         atm%qam(i,j,1) = 0.8_wp*fqsat(atm%tam(i,j),p0)
+         atm%qam(i,j,2) = 1000._wp*atm%qam(i,j,1)
+         atm%qam(i,j,3) = 2._wp*atm%qam(i,j,1)
+         atm%q2a(i,j) = atm%qam(i,j,1)
          atm%ram(i,j) = 0.8_wp
          atm%hqeff(i,j) = 2000._wp
          atm%wcon(i,j) = 1._wp
@@ -507,7 +509,7 @@ contains
          do n=1,nm
            atm%tskin(i,j,n) = atm%tam(i,j)
            atm%t2(i,j,n) = atm%tam(i,j)
-           atm%q2(i,j,n) = atm%qam(i,j)
+           atm%q2(i,j,n) = atm%qam(i,j,1)
            atm%r2(i,j,n) = atm%ram(i,j)
          enddo
 
@@ -595,7 +597,7 @@ contains
      allocate(atm%sigoro(im,jm))
 
      allocate(atm%tam(im,jm))  
-     allocate(atm%qam(im,jm))  
+     allocate(atm%qam(im,jm,lm))  
      allocate(atm%ram(im,jm))  
      allocate(atm%gams(im,jm)) 
      allocate(atm%gamb(im,jm)) 
@@ -610,8 +612,8 @@ contains
      allocate(atm%cld_dat(im,jm)) 
      allocate(atm%cld_day_dat(im,jm)) 
      allocate(atm%prc(im,jm)) 
-     allocate(atm%prcw(im,jm,nm))
-     allocate(atm%prcs(im,jm,nm))
+     allocate(atm%prcw(im,jm,nm,lm))
+     allocate(atm%prcs(im,jm,nm,lm))
      allocate(atm%prc_conv(im,jm))
      allocate(atm%prc_wcon(im,jm))
      allocate(atm%prc_over(im,jm))
@@ -722,19 +724,19 @@ contains
      allocate(atm%convdst(im,jm))
      allocate(atm%convco2(im,jm))
      allocate(atm%faxdse(imc,jm))
-     allocate(atm%faxwtr(imc,jm))
+     allocate(atm%faxwtr(imc,jm,3))  ! variable tracer number?
      allocate(atm%faxdst(imc,jm))
      allocate(atm%faxco2(imc,jm))
      allocate(atm%faydse(im,jmc))
-     allocate(atm%faywtr(im,jmc))
+     allocate(atm%faywtr(im,jmc,3))  ! variable tracer number?
      allocate(atm%faydst(im,jmc))
      allocate(atm%fayco2(im,jmc))
      allocate(atm%fdxdse(imc,jm))
-     allocate(atm%fdxwtr(imc,jm))
+     allocate(atm%fdxwtr(imc,jm,3))  ! variable tracer number?
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
-     allocate(atm%fdywtr(im,jmc))
+     allocate(atm%fdywtr(im,jmc,3))  ! variable tracer number?
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
 
@@ -1084,7 +1086,7 @@ contains
     call nc_write(fnm,"t2       ",     atm%t2       ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"tskin    ",     atm%tskin    ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"tsl      ",     atm%tsl      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"tsksl     ",     atm%tsksl     ,     dims=["lon","lat"],long_name="",units="")
+    call nc_write(fnm,"tsksl    ",     atm%tsksl    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gams     ",     atm%gams     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gamb     ",     atm%gamb     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gamt     ",     atm%gamt     ,     dims=["lon","lat"],long_name="",units="")
@@ -1135,18 +1137,18 @@ contains
     call nc_write(fnm,"convwtr  ",     atm%convwtr  ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"ra2a     ",     atm%ra2a     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"frlnd    ",     atm%frlnd    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"f_ice_lake ",   atm%f_ice_lake,    dims=["lon","lat"],long_name="",units="")
+    call nc_write(fnm,"f_ice_lake",    atm%f_ice_lake,    dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"frst     ",     atm%frst     ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"zsa      ",     atm%zsa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"psa      ",     atm%psa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"sigoro   ",     atm%sigoro   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"u3      ",     atm%u3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"v3      ",     atm%v3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"w3      ",     atm%w3      ,     dims=["lon  ","lat  ","plevc"],long_name="",units="")
-    call nc_write(fnm,"t3      ",     atm%t3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"tp      ",     atm%tp      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"q3      ",     atm%q3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"d3      ",     atm%d3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"u3       ",     atm%u3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"v3       ",     atm%v3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"w3       ",     atm%w3      ,     dims=["lon  ","lat  ","plevc"],long_name="",units="")
+    call nc_write(fnm,"t3       ",     atm%t3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"tp       ",     atm%tp      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"q3       ",     atm%q3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"d3       ",     atm%d3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
 
 
    return

@@ -250,6 +250,17 @@
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
 
   !-----------------------------------------------------------
+  ! oxygen isotopes parameters
+  !-----------------------------------------------------------
+  i_oiso_et = 0                 ! fraction of O18-containing water in evpotranspiration flux:
+                                ! 0 = constant value fro18_et_const everywhere
+                                ! 1 = spatially resolved values, prescribed in fro18_et_file
+                                ! 2 = taken from interactive coupled modules
+  fro18_et_const = 0.2          ! constant fraction of O18-containing water in evapotranspiration fluxes
+  !fro18_et_file = ...
+  coef_fro18_sv_kin = 4.0e-3    ! coefficient in kinetic fractionation of O18 between ice and water vapor
+
+  !-----------------------------------------------------------
   ! smoothing options
   !-----------------------------------------------------------
   zsa_scale = 1                 ! topography scaling factor
