@@ -32,3 +32,8 @@ data
 TODO
 docs/_site/
 docs/.quarto/
+.configme/
+coordinates/
+fesm-utils/
+yelmo/
+
