@@ -26,11 +26,12 @@
 module time_step_mod
 
   use atm_params, only : wp
+  use precision, only : dp
   use constants, only : T0, fqsat, q_sat_w, q_sat_i
-  use timer, only : sec_day
+  use timer, only : sec_day, year, doy
   use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
   use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3, c_wrt_4
-  use control, only : check_water
+  use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
   use vesta_mod, only : t_prof
   !$ use omp_lib
@@ -122,10 +123,19 @@ contains
 
     real(wp), parameter :: A_trop_min = 1.e-3_wp   ! safeguard against division by ~0 in extreme cold profile
     real(wp), parameter :: water_check_tol = 1.e-9_wp  ! kg/m2 per fast step; anything above is real, not round-off
+    real(wp), parameter :: atm_heat_tol = 1.e-3_wp     ! W/m2, max allowed atmospheric energy imbalance
+    real(wp) :: tam_old_loc
+    real(dp) :: e_dh, e_conv, e_rad, e_sha, e_lat   ! global atm energy budget: heat-content change [J] and source terms [W*m2]
+    real(dp) :: area_tot
+    real(wp) :: res_trans, res_tot, e_net
 
+
+    ! global atmospheric energy budget accumulators (for check_energy)
+    e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
     !$omp parallel do private(i,j,n,rr,convwtr_slope,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
-    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin)
+    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin,tam_old_loc) &
+    !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
       do i=1,im
 
@@ -276,8 +286,20 @@ contains
         deba = convdse(i,j) + rb_atm(i,j) + sha(i,j) + (cle*prcw_tmp+cls*prcs_tmp)   ! W/m2
         ! temperature tendency
         dtdt=deba/(amas*cv)    ! J/m2/s * m2/kg * kg*K/J = K/s
+        ! atmospheric column temperature before the update (for the energy conservation check)
+        if (check_energy) tam_old_loc = tam(i,j)
         ! new atmospheric temperature
         tam(i,j)=tam(i,j)+dtdt*tstep
+
+        ! accumulate the global atmospheric energy budget [J] and source terms [W*m2]
+        ! convdse is the dry-static-energy transport convergence; rb_atm/sha/latent are the column sources/sinks
+        if (check_energy) then
+          e_dh   = e_dh   + real(amas*cv*(tam(i,j)-tam_old_loc),dp)*real(sqr(i,j),dp)
+          e_conv = e_conv + real(convdse(i,j),dp)*real(sqr(i,j),dp)
+          e_rad  = e_rad  + real(rb_atm(i,j),dp)*real(sqr(i,j),dp)
+          e_sha  = e_sha  + real(sha(i,j),dp)*real(sqr(i,j),dp)
+          e_lat  = e_lat  + real(cle*prcw_tmp+cls*prcs_tmp,dp)*real(sqr(i,j),dp)
+        endif
 
         !-------------------------------------
         ! 2m temperature and humidity 
@@ -362,8 +384,36 @@ contains
         if (q2a(i,j).ne.q2a(i,j)) error=.true.
 
       enddo
-    enddo 
+    enddo
     !$omp end parallel do
+
+    !-------------------------------------
+    ! global atmospheric energy conservation check
+    !-------------------------------------
+    ! The column temperature is updated explicitly by deba = convdse + rb_atm + sha + latent,
+    ! so the per-column budget closes by construction. The meaningful global tests are:
+    !  - the dry-static-energy transport (convdse) must integrate to zero (transport conserves energy)
+    !  - the total heat-content change must equal the net column energy input (update consistency)
+    if (check_energy) then
+      area_tot = sum(real(sqr,dp))
+      ! global-mean heat-transport convergence [W/m2]; should be ~0 if the transport conserves energy
+      res_trans = real(e_conv/area_tot,wp)
+      ! global-mean consistency residual [W/m2]: heat-content change minus net energy input
+      res_tot = real((e_dh/tstep-(e_conv+e_rad+e_sha+e_lat))/area_tot,wp)
+      ! global-mean net energy input to the atmospheric column [W/m2]
+      e_net = real((e_conv+e_rad+e_sha+e_lat)/area_tot,wp)
+      if (abs(res_trans).gt.atm_heat_tol .or. abs(res_tot).gt.atm_heat_tol) then
+        print *
+        print *,'WARNING: atmosphere energy not conserved! year, doy ',year, doy
+        print *,'heat transport convergence [W/m2] ',res_trans
+        print *,'update consistency residual[W/m2] ',res_tot
+        print *,'net energy input to column [W/m2] ',e_net
+        print *,'  radiative                [W/m2] ',real(e_rad/area_tot,wp)
+        print *,'  sensible heat            [W/m2] ',real(e_sha/area_tot,wp)
+        print *,'  latent heat (precip)     [W/m2] ',real(e_lat/area_tot,wp)
+        print *,'  transport (convdse)      [W/m2] ',res_trans
+      endif
+    endif
 
     return
 
