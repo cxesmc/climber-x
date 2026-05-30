@@ -1,0 +1,10 @@
+# configme manifest for climber-x.
+package = "climber-x"
+deps = [
+    "fesm-utils",
+    "fesm-utils/utils",
+    "coordinates",
+    "yelmo:v2.0.3",
+    "bgc",
+    "vilma",
+]
