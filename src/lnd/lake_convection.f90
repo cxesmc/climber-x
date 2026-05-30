@@ -26,7 +26,6 @@
 module lake_convection_mod
 
   use precision, only : wp
-  use constants, only : T0, rho_w, cap_w, cap_i
   use lnd_params, only : z_mix_lake_min
   use lnd_grid, only : nl_l
   use lake_rho_mod, only : lake_rho
@@ -42,7 +41,7 @@ contains
   !   Subroutine :  l a k e _ c o n v e c t i o n
   !   Purpose    :  lake convective adjustment, for freshwater only
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lake_convection(t_lake, f_i_lake, dz, t_freeze, &
+  subroutine lake_convection(t_lake, f_i_lake, dz, cap, t_freeze, &
                              h_conv, h_mix)
 
     implicit none
@@ -50,8 +49,9 @@ contains
     real(wp), dimension(:), intent(inout) :: t_lake
     real(wp), dimension(:), intent(inout) :: f_i_lake
     real(wp), dimension(:), intent(in) :: dz
+    real(wp), dimension(:), intent(in) :: cap   !! layer heat capacity [J/m2/K], as used by the solver/energy check
     real(wp), intent(in) :: t_freeze
-    real(wp), intent(out) :: h_conv 
+    real(wp), intent(out) :: h_conv
     real(wp), intent(out) :: h_mix
 
     real(wp) :: tmx, tsm
@@ -59,7 +59,7 @@ contains
     integer :: k, kk, k_mix
     integer :: kb, kt, la, lb
     real(wp) :: rl, ru, zsm
-    real(wp) :: dz_mix, f_i_lake_avg, Q, t_frz, t_unfrz
+    real(wp) :: dz_mix, f_i_lake_avg, E, C_ice, C_wat, t_frz, t_unfrz
 
 
     h_conv = 0._wp
@@ -85,8 +85,8 @@ contains
       if (ru > rl) then
         chk_la = .true.
         chk_lb = .true.
-        zsm = dz(kt) + dz(kb)
-        tsm = t_lake(kt)*dz(kt) + t_lake(kb)*dz(kb)
+        zsm = cap(kt) + cap(kb)
+        tsm = t_lake(kt)*cap(kt) + t_lake(kb)*cap(kb)
         tmx = tsm/zsm
 
         do while (chk_lb .or. chk_la)
@@ -102,8 +102,8 @@ contains
             if (ru > rl) then
               ! add new level to sums
               kb  = lb
-              zsm = zsm + dz(kb)
-              tsm = tsm + t_lake(kb)*dz(kb) 
+              zsm = zsm + cap(kb)
+              tsm = tsm + t_lake(kb)*cap(kb)
               tmx = tsm/zsm
 
               chk_la = .true.
@@ -122,8 +122,8 @@ contains
             if (ru > rl) then
               ! add new level to sums
               kt  = la
-              zsm = zsm + dz(kt)
-              tsm = tsm + t_lake(kt)*dz(kt)
+              zsm = zsm + cap(kt)
+              tsm = tsm + t_lake(kt)*cap(kt)
               tmx = tsm/zsm
 
               chk_lb = .true.
@@ -176,34 +176,41 @@ contains
       ! average ice fraction over layers to be mixed
       f_i_lake_avg = sum(f_i_lake(1:k_mix)*dz(1:k_mix))/dz_mix
 
-      ! compute total enthalpy
-      Q = 0._wp
-      do k=1,k_mix
-        Q = Q + dz(k)*rho_w*(t_lake(k)-t_freeze)*((1._wp-f_i_lake(k))*cap_w + f_i_lake(k)*cap_i)
-      enddo
+      ! cap-weighted sensible heat above freezing before redistribution [J/m2]
+      ! use the same fixed heat capacity 'cap' as the solver and the energy check, so the mixing conserves sum(cap*t)
+      E = sum(cap(1:k_mix)*(t_lake(1:k_mix)-t_freeze))
 
-      if (Q>0._wp) then
-        t_frz   = t_freeze
-        t_unfrz = Q/(rho_w*dz_mix*(1._wp-f_i_lake_avg)*cap_w) + t_freeze
-      else
-        t_frz   = Q/(rho_w*dz_mix*f_i_lake_avg*cap_i) + t_freeze
-        t_unfrz = t_freeze
-      endif
-
+      ! redistribute ice towards the surface (ice fraction by depth in each layer); conserves total ice volume
       do k=1,k_mix
         if (sum(dz(1:k)) < dz_mix*f_i_lake_avg) then
-          ! layer is completely frozen and temperature at freezing point
+          ! layer completely frozen
           f_i_lake(k) = 1._wp
-          t_lake(k) = t_frz
         else if (sum(dz(1:(k-1))) < dz_mix*f_i_lake_avg) then
-          ! layer contains both ice and water 
+          ! layer contains both ice and water
           f_i_lake(k) = (dz_mix*f_i_lake_avg-sum(dz(1:(k-1))))/dz(k)
-          t_lake(k) = (t_frz*f_i_lake(k)*cap_i + t_unfrz*(1._wp-f_i_lake(k))*cap_w) / (f_i_lake(k)*cap_i + (1._wp-f_i_lake(k))*cap_w) 
         else
           ! no ice in layer
           f_i_lake(k) = 0._wp
-          t_lake(k) = t_unfrz
         endif
+      enddo
+
+      ! cap-weighted heat capacities of the ice and water portions [J/m2/K]
+      C_ice = sum(cap(1:k_mix)*f_i_lake(1:k_mix))
+      C_wat = sum(cap(1:k_mix)*(1._wp-f_i_lake(1:k_mix)))
+
+      ! partition the sensible heat conserving sum(cap*t): warming goes into the water portion,
+      ! cooling into the ice portion (which may drop below freezing); ice/water coexistence stays at t_freeze
+      if (E>=0._wp) then
+        t_frz   = t_freeze
+        t_unfrz = t_freeze + E/max(C_wat,1.e-20_wp)
+      else
+        t_frz   = t_freeze + E/max(C_ice,1.e-20_wp)
+        t_unfrz = t_freeze
+      endif
+
+      ! set layer temperatures (cap is uniform within a layer, so the ice/water blend reduces to this)
+      do k=1,k_mix
+        t_lake(k) = t_frz*f_i_lake(k) + t_unfrz*(1._wp-f_i_lake(k))
       enddo
 
     endif

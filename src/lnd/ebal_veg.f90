@@ -180,7 +180,14 @@ contains
               sh_0 = f_sh(n) * (T0 - tatm(n))
               lh_0 = f_le(n) * (qsat_e(n) + dqsatdT_e(n)*(T0-t_skin_old(n)) - qatm(n))
               lw_0 = (1._wp-emiss)*lwdown(n) + emiss*sigma * (t_skin_old(n)**4 + 4._wp*t_skin_old(n)**3*(T0-t_skin_old(n)))
-              g_0 = lambda_veg(0)/(0.5_wp*max(h_snow,0.04_wp)) * (T0 - tsoil)
+              ! use the same ground-flux formulation as 'g' above so that the melt energy (g-g_0)
+              ! is consistent with the actual ground flux; otherwise flx_melt can be spuriously negative
+              ! for mask_snow=0 (soil vs snow conductivity mismatch)
+              if (mask_snow.eq.1) then
+                g_0 = lambda_veg(0)/(0.5_wp*max(h_snow,0.04_wp)) * (T0 - tsoil)
+              else
+                g_0 = lambda_veg(1)/z(1) * (T0 - tsoil)
+              endif
 
               ! diagnose remaining energy flux which can be used to melt snow
               flx_melt(n) = sh + lh + g + lw &
