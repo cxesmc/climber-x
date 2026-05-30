@@ -7,8 +7,7 @@ restart/pi/geo_restart.nc
 restart/pi_cc_open/geo_restart.nc
 restart/lgm/geo_restart.nc
 Makefile
-runcx_config
-.runme_config
+.runme/config.toml
 climber.x
 input
 output
