@@ -455,9 +455,9 @@ contains
          atm%hqeff(i,j) = 2000._wp
          atm%wcon(i,j) = 1._wp
          atm%prc(i,j) = 0._wp
-         atm%prcs(i,j,:) = 0._wp
-         atm%prcw(i,j,:) = 0._wp
-         atm%evpa(i,j) = 0._wp
+         atm%prcw(i,j,:,:) = 0._wp
+         atm%prcs(i,j,:,:) = 0._wp
+         atm%evpa(i,j,:) = 0._wp
          atm%cld(i,j) = 0.5_wp
          atm%cld_rh(i,j) = 0.5_wp
          atm%cld_low(i,j) = 0._wp
@@ -475,6 +475,9 @@ contains
          atm%aslp(i,j) = 0._wp      
          atm%aslp_topo(i,j) = 0._wp      
          atm%dz500(i,j) = 0._wp      
+         atm%d18o_qam(i,j,:) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
+         atm%d18o_prcw(i,j,:) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
+         atm%d18o_prcs(i,j,:) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
 
          atm%winda(i,j) = 1._wp
          atm%wind(i,j,:) = 1._wp
@@ -493,7 +496,7 @@ contains
          atm%fweff(i,j) = 0._wp
          atm%uz500(j) = 0._wp
 
-         atm%convwtr(i,j) = 0._wp
+         atm%convwtr(i,j,:) = 0._wp
          atm%convdse(i,j) = 0._wp
 
          atm%dam(i,j) = 0._wp
@@ -630,6 +633,10 @@ contains
      allocate(atm%so4(im,jm))
      allocate(atm%o3(im,jm,kmc)) 
 
+     allocate(atm%d18o_qam(im,jm,nm))
+     allocate(atm%d18o_prcw(im,jm,nm))
+     allocate(atm%d18o_prcs(im,jm,nm))
+
      allocate(atm%hdust(im,jm)) 
      allocate(atm%dust_load(im,jm)) 
      allocate(atm%dust_emis(im,jm)) 
@@ -658,7 +665,7 @@ contains
      allocate(atm%cd0a(im,jm))
      allocate(atm%sha(im,jm))
      allocate(atm%lha(im,jm))
-     allocate(atm%evpa(im,jm))
+     allocate(atm%evpa(im,jm,lm))
      allocate(atm%tskina(im,jm))
      allocate(atm%t2a(im,jm))
      allocate(atm%q2a(im,jm))
@@ -720,23 +727,23 @@ contains
      allocate(atm%w3(im,jm,kmc))
 
      allocate(atm%convdse(im,jm))
-     allocate(atm%convwtr(im,jm))
+     allocate(atm%convwtr(im,jm,lm))
      allocate(atm%convdst(im,jm))
      allocate(atm%convco2(im,jm))
      allocate(atm%faxdse(imc,jm))
-     allocate(atm%faxwtr(imc,jm,3))  ! variable tracer number?
+     allocate(atm%faxwtr(imc,jm,lm))
      allocate(atm%faxdst(imc,jm))
      allocate(atm%faxco2(imc,jm))
      allocate(atm%faydse(im,jmc))
-     allocate(atm%faywtr(im,jmc,3))  ! variable tracer number?
+     allocate(atm%faywtr(im,jmc,lm))
      allocate(atm%faydst(im,jmc))
      allocate(atm%fayco2(im,jmc))
      allocate(atm%fdxdse(imc,jm))
-     allocate(atm%fdxwtr(imc,jm,3))  ! variable tracer number?
+     allocate(atm%fdxwtr(imc,jm,lm))
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
-     allocate(atm%fdywtr(im,jmc,3))  ! variable tracer number?
+     allocate(atm%fdywtr(im,jmc,lm))
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
 
@@ -887,6 +894,10 @@ contains
      deallocate(atm%aerosol_im) 
      deallocate(atm%so4) 
      deallocate(atm%o3) 
+
+     deallocate(atm%d18o_qam)
+     deallocate(atm%d18o_prcw)
+     deallocate(atm%d18o_prcs)
 
      deallocate(atm%hdust) 
      deallocate(atm%dust_load) 

@@ -34,7 +34,7 @@ module atm_out
   use timer, only : time_soy_atm, time_eoy_atm, time_eom_atm, time_out_atm
   use control, only : out_dir
   use climber_grid, only : lon, lat, lon0, lat0, dlon, dlat
-  use atm_grid, only : im, jm, km, imc, jmc, kmc, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, pl, &
+  use atm_grid, only : im, jm, km, imc, jmc, kmc, lm, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, pl, &
   dxt, dy, cost, sint, i_ice
   use atm_params, only : l_daily_output
   use atm_params, only : amas, p0, ra, gad, cle, cls, cp, cv, hatm, sigma_so4, c_syn_6, l_co2d
@@ -181,35 +181,35 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: frlnd
     real(wp), allocatable, dimension(:,:) :: frocn
 
-    real(wp), allocatable, dimension(:,:) :: tam        !! extrapolated surface temperature (K)
-    real(wp), allocatable, dimension(:,:) :: dtamdt     !! rate of change of tam (K/day)
-    real(wp), allocatable, dimension(:,:) :: qam        !! extrapolated surface specific humidity (kg/kg)
-    real(wp), allocatable, dimension(:,:) :: ram        !! extrapolated surface relative humidity (/)
-    real(wp), allocatable, dimension(:,:) :: gams       !! lapse rate in the boundary layer
-    real(wp), allocatable, dimension(:,:) :: gamb       !! lapse rate at the lower troposphere
-    real(wp), allocatable, dimension(:,:) :: gamt       !! lapse rate in the upper troposphere
-    real(wp), allocatable, dimension(:,:) :: dam        !! surface dust mass mixing ratio (kg/kg)
-    real(wp), allocatable, dimension(:,:) :: hqeff      !! vertical moisture scale (m)
-    real(wp), allocatable, dimension(:,:) :: hrm        !! vertical scale for relative humidity(m)
-    real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2)
-    real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
-    real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
-    real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
-    real(wp), allocatable, dimension(:,:) :: prc        !! total precipitation (kg m-2 s-1)
-    real(wp), allocatable, dimension(:,:) :: prcw       !! rain(kg m-2 s-1)
-    real(wp), allocatable, dimension(:,:) :: prcs       !! snowfall(kg m-2 s-1)
+    real(wp), allocatable, dimension(:,:) :: tam          !! extrapolated surface temperature (K)
+    real(wp), allocatable, dimension(:,:) :: dtamdt       !! rate of change of tam (K/day)
+    real(wp), allocatable, dimension(:,:,:) :: qam        !! extrapolated surface specific humidity (kg/kg)
+    real(wp), allocatable, dimension(:,:) :: ram          !! extrapolated surface relative humidity (/)
+    real(wp), allocatable, dimension(:,:) :: gams         !! lapse rate in the boundary layer
+    real(wp), allocatable, dimension(:,:) :: gamb         !! lapse rate at the lower troposphere
+    real(wp), allocatable, dimension(:,:) :: gamt         !! lapse rate in the upper troposphere
+    real(wp), allocatable, dimension(:,:) :: dam          !! surface dust mass mixing ratio (kg/kg)
+    real(wp), allocatable, dimension(:,:) :: hqeff        !! vertical moisture scale (m)
+    real(wp), allocatable, dimension(:,:) :: hrm          !! vertical scale for relative humidity(m)
+    real(wp), allocatable, dimension(:,:) :: wcon         !! atmospheric water content (kg m-2)
+    real(wp), allocatable, dimension(:,:) :: cld_rh       !! cloud fraction (.)
+    real(wp), allocatable, dimension(:,:) :: cld_low      !! cloud fraction (.)
+    real(wp), allocatable, dimension(:,:) :: cld          !! cloud fraction (.)
+    real(wp), allocatable, dimension(:,:) :: prc          !! total precipitation (kg m-2 s-1)
+    real(wp), allocatable, dimension(:,:,:) :: prcw       !! rain(kg m-2 s-1)
+    real(wp), allocatable, dimension(:,:,:) :: prcs       !! snowfall(kg m-2 s-1)
     real(wp), allocatable, dimension(:,:) :: prc_conv 
     real(wp), allocatable, dimension(:,:) :: prc_wcon  
     real(wp), allocatable, dimension(:,:) :: prc_over
-    real(wp), allocatable, dimension(:,:) :: hcld       !! cloud height (m)
-    real(wp), allocatable, dimension(:,:) :: ctt        !! top cloud temperature (K)
-    real(wp), allocatable, dimension(:,:) :: clot       !! cloud optical thickness (.)
-    real(wp), allocatable, dimension(:,:) :: alb_cld    !! cloud albedo (.)
-    real(wp), allocatable, dimension(:,:) :: alb_sur_cs    !! surface albedo for clear sky(.)
-    real(wp), allocatable, dimension(:,:) :: alb_sur_cld   !! surface albedo for cloudy sky (.)
-    real(wp), allocatable, dimension(:,:) :: htrop      !! tropopause height (m)
-    real(wp), allocatable, dimension(:,:) :: ttrop      !! tropopause temperature (K)
-    real(wp), allocatable, dimension(:,:) :: wind       !! average surface wind magnitude (m s-1)
+    real(wp), allocatable, dimension(:,:) :: hcld         !! cloud height (m)
+    real(wp), allocatable, dimension(:,:) :: ctt          !! top cloud temperature (K)
+    real(wp), allocatable, dimension(:,:) :: clot         !! cloud optical thickness (.)
+    real(wp), allocatable, dimension(:,:) :: alb_cld      !! cloud albedo (.)
+    real(wp), allocatable, dimension(:,:) :: alb_sur_cs   !! surface albedo for clear sky(.)
+    real(wp), allocatable, dimension(:,:) :: alb_sur_cld  !! surface albedo for cloudy sky (.)
+    real(wp), allocatable, dimension(:,:) :: htrop        !! tropopause height (m)
+    real(wp), allocatable, dimension(:,:) :: ttrop        !! tropopause temperature (K)
+    real(wp), allocatable, dimension(:,:) :: wind         !! average surface wind magnitude (m s-1)
 
     real(wp), allocatable, dimension(:,:,:) :: frst
     real(wp), allocatable, dimension(:,:,:) :: tskin     !! skin temperature (K)
@@ -237,7 +237,7 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: cd0a
     real(wp), allocatable, dimension(:,:) :: sha
     real(wp), allocatable, dimension(:,:) :: lha
-    real(wp), allocatable, dimension(:,:) :: evpa
+    real(wp), allocatable, dimension(:,:,:) :: evpa
     real(wp), allocatable, dimension(:,:) :: Ri
 
     real(wp), allocatable, dimension(:,:) :: hdust      !! dust height scale (m)
@@ -309,21 +309,21 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: convdse
     real(wp), allocatable, dimension(:,:) :: convadse
     real(wp), allocatable, dimension(:,:) :: convddse
-    real(wp), allocatable, dimension(:,:) :: convwtr
+    real(wp), allocatable, dimension(:,:,:) :: convwtr
     real(wp), allocatable, dimension(:,:) :: convawtr
     real(wp), allocatable, dimension(:,:) :: convdwtr
     real(wp), allocatable, dimension(:,:) :: faxmas
     real(wp), allocatable, dimension(:,:) :: faymas
     real(wp), allocatable, dimension(:,:) :: faxdse
     real(wp), allocatable, dimension(:,:) :: faxcpt
-    real(wp), allocatable, dimension(:,:) :: faxwtr
+    real(wp), allocatable, dimension(:,:,:) :: faxwtr
     real(wp), allocatable, dimension(:,:) :: faydse
     real(wp), allocatable, dimension(:,:) :: faycpt
-    real(wp), allocatable, dimension(:,:) :: faywtr
+    real(wp), allocatable, dimension(:,:,:) :: faywtr
     real(wp), allocatable, dimension(:,:) :: fdxdse
-    real(wp), allocatable, dimension(:,:) :: fdxwtr
+    real(wp), allocatable, dimension(:,:,:) :: fdxwtr
     real(wp), allocatable, dimension(:,:) :: fdydse
-    real(wp), allocatable, dimension(:,:) :: fdywtr
+    real(wp), allocatable, dimension(:,:,:) :: fdywtr
     real(wp), allocatable, dimension(:) :: fayg         ! zonal integral of meridional mass flux
     real(wp), allocatable, dimension(:) :: faydseg      ! zonal integral of meridional dry static energy flux by mean circulation (W)
     real(wp), allocatable, dimension(:) :: faycptg      ! zonal integral of meridional thermal energy flux by mean circulation (W)
@@ -394,6 +394,10 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: diffxwtr
     real(wp), allocatable, dimension(:,:) :: diffywtr
 
+    real(wp), allocatable, dimension(:,:) :: d18o_qam
+    real(wp), allocatable, dimension(:,:) :: d18o_prcw
+    real(wp), allocatable, dimension(:,:) :: d18o_prcs
+
     real(wp), allocatable, dimension(:) :: fw_pac_atl 
     real(wp), allocatable, dimension(:) :: fw_atl_indpac
 
@@ -460,7 +464,7 @@ contains
 
      allocate(ann_a%tam(im,jm))  
      allocate(ann_a%dtamdt(im,jm))  
-     allocate(ann_a%qam(im,jm))  
+     allocate(ann_a%qam(im,jm,lm))  
      allocate(ann_a%ram(im,jm))  
      allocate(ann_a%gams(im,jm)) 
      allocate(ann_a%gamb(im,jm)) 
@@ -473,8 +477,8 @@ contains
      allocate(ann_a%cld_low(im,jm)) 
      allocate(ann_a%cld(im,jm)) 
      allocate(ann_a%prc(im,jm)) 
-     allocate(ann_a%prcw(im,jm))
-     allocate(ann_a%prcs(im,jm))
+     allocate(ann_a%prcw(im,jm,lm))
+     allocate(ann_a%prcs(im,jm,lm))
      allocate(ann_a%prc_conv(im,jm))
      allocate(ann_a%prc_wcon(im,jm))
      allocate(ann_a%prc_over(im,jm))
@@ -514,7 +518,7 @@ contains
      allocate(ann_a%cd0a(im,jm))
      allocate(ann_a%sha(im,jm))
      allocate(ann_a%lha(im,jm))
-     allocate(ann_a%evpa(im,jm))
+     allocate(ann_a%evpa(im,jm,lm))
      allocate(ann_a%Ri(im,jm))
  
      allocate(ann_a%hdust(im,jm)) 
@@ -587,21 +591,21 @@ contains
      allocate(ann_a%convdse(im,jm))
      allocate(ann_a%convadse(im,jm))
      allocate(ann_a%convddse(im,jm))
-     allocate(ann_a%convwtr(im,jm))
+     allocate(ann_a%convwtr(im,jm,lm))
      allocate(ann_a%convawtr(im,jm))
      allocate(ann_a%convdwtr(im,jm))
      allocate(ann_a%faxmas(im,jm))
      allocate(ann_a%faymas(im,jm))
      allocate(ann_a%faxdse(im,jm))
      allocate(ann_a%faxcpt(im,jm))
-     allocate(ann_a%faxwtr(im,jm))
+     allocate(ann_a%faxwtr(im,jm,lm))
      allocate(ann_a%faydse(im,jm))
      allocate(ann_a%faycpt(im,jm))
-     allocate(ann_a%faywtr(im,jm))
+     allocate(ann_a%faywtr(im,jm,lm))
      allocate(ann_a%fdxdse(im,jm))
-     allocate(ann_a%fdxwtr(im,jm))
+     allocate(ann_a%fdxwtr(im,jm,lm))
      allocate(ann_a%fdydse(im,jm))
-     allocate(ann_a%fdywtr(im,jm))
+     allocate(ann_a%fdywtr(im,jm,lm))
      allocate(ann_a%fayg(jmc))
      allocate(ann_a%faydseg(jmc))
      allocate(ann_a%faycptg(jmc))
@@ -672,6 +676,10 @@ contains
      allocate(ann_a%diffxwtr(imc,jm))
      allocate(ann_a%diffywtr(im,jmc))
 
+     allocate(ann_a%d18o_qam(im,jm))
+     allocate(ann_a%d18o_prcw(im,jm))
+     allocate(ann_a%d18o_prcs(im,jm))
+
      allocate(ann_a%fw_pac_atl(jm))    
      allocate(ann_a%fw_atl_indpac(jm))    
 
@@ -687,7 +695,7 @@ contains
      allocate(mon_a(k)%uz500(jm))
      allocate(mon_a(k)%tam(im,jm))  
      allocate(mon_a(k)%dtamdt(im,jm))  
-     allocate(mon_a(k)%qam(im,jm))  
+     allocate(mon_a(k)%qam(im,jm,lm))  
      allocate(mon_a(k)%ram(im,jm))  
      allocate(mon_a(k)%gams(im,jm)) 
      allocate(mon_a(k)%gamb(im,jm)) 
@@ -700,7 +708,7 @@ contains
      allocate(mon_a(k)%cld_low(im,jm)) 
      allocate(mon_a(k)%cld(im,jm)) 
      allocate(mon_a(k)%prc(im,jm)) 
-     allocate(mon_a(k)%prcw(im,jm))
+     allocate(mon_a(k)%prcw(im,jm,lm))
      allocate(mon_a(k)%prcs(im,jm))
      allocate(mon_a(k)%prc_conv(im,jm))
      allocate(mon_a(k)%prc_wcon(im,jm))
@@ -814,21 +822,21 @@ contains
      allocate(mon_a(k)%convdse(im,jm))
      allocate(mon_a(k)%convadse(im,jm))
      allocate(mon_a(k)%convddse(im,jm))
-     allocate(mon_a(k)%convwtr(im,jm))
+     allocate(mon_a(k)%convwtr(im,jm,lm))
      allocate(mon_a(k)%convawtr(im,jm))
      allocate(mon_a(k)%convdwtr(im,jm))
      allocate(mon_a(k)%faxmas(im,jm))
      allocate(mon_a(k)%faymas(im,jm))
      allocate(mon_a(k)%faxdse(im,jm))
      allocate(mon_a(k)%faxcpt(im,jm))
-     allocate(mon_a(k)%faxwtr(im,jm))
+     allocate(mon_a(k)%faxwtr(im,jm,lm))
      allocate(mon_a(k)%faydse(im,jm))
      allocate(mon_a(k)%faycpt(im,jm))
-     allocate(mon_a(k)%faywtr(im,jm))
+     allocate(mon_a(k)%faywtr(im,jm,lm))
      allocate(mon_a(k)%fdxdse(im,jm))
-     allocate(mon_a(k)%fdxwtr(im,jm))
+     allocate(mon_a(k)%fdxwtr(im,jm,lm))
      allocate(mon_a(k)%fdydse(im,jm))
-     allocate(mon_a(k)%fdywtr(im,jm))
+     allocate(mon_a(k)%fdywtr(im,jm,lm))
      allocate(mon_a(k)%fayg(jmc))
      allocate(mon_a(k)%faydseg(jmc))
      allocate(mon_a(k)%faycptg(jmc))
@@ -899,6 +907,10 @@ contains
      allocate(mon_a(k)%diffxwtr(imc,jm))
      allocate(mon_a(k)%diffywtr(im,jmc))
 
+     allocate(mon_a(k)%d18o_qam(im,jm))
+     allocate(mon_a(k)%d18o_prcw(im,jm))
+     allocate(mon_a(k)%d18o_prcs(im,jm))
+
      allocate(mon_a(k)%fw_pac_atl(jm))    
      allocate(mon_a(k)%fw_atl_indpac(jm))    
 
@@ -937,7 +949,7 @@ contains
 
     type(atm_class), intent(in) :: atm
 
-    integer :: i, j, m, k, y, ind, imi, jmi, ipl, jpl
+    integer :: i, j, k, l, m, y, ind, imi, jmi, ipl, jpl
     character (len=256) :: fnm
     real(wp) :: mon_avg, ann_avg, jja_avg, favg, favgl, favg6090, fcum, xsum, lsqr, esqr6090
     real(wp) :: t, rh
@@ -1293,12 +1305,12 @@ contains
       if (atm%idivide_pac_atl(j).gt.0) then
         ind = atm%idivide_pac_atl(j)+1
         if (ind.eq.im+1) ind=1
-        ann_fw_pac_atl = ann_fw_pac_atl + (atm%faxwtr(ind,j)+atm%fdxwtr(ind,j))*ann_avg ! kg/s
+        ann_fw_pac_atl = ann_fw_pac_atl + (atm%faxwtr(ind,j,1)+atm%fdxwtr(ind,j,1))*ann_avg ! kg/s
       endif
       if (atm%idivide_atl_indpac(j).gt.0) then
         ind = atm%idivide_atl_indpac(j)+1
         if (ind.eq.im+1) ind=1
-        ann_fw_atl_indpac = ann_fw_atl_indpac + (atm%faxwtr(ind,j)+atm%fdxwtr(ind,j))*ann_avg   ! kg/s
+        ann_fw_atl_indpac = ann_fw_atl_indpac + (atm%faxwtr(ind,j,1)+atm%fdxwtr(ind,j,1))*ann_avg   ! kg/s
       endif
     enddo
     !$omp end parallel do
@@ -1464,7 +1476,7 @@ contains
           mon_a(m)%had_width   = 0. 
           mon_a(m)%ptrop       = 0. 
           mon_a(m)%tslz        = 0. 
-          mon_a(m)%tskslz       = 0. 
+          mon_a(m)%tskslz      = 0. 
           mon_a(m)%ekez        = 0. 
           mon_a(m)%slpz        = 0. 
           mon_a(m)%vabz        = 0. 
@@ -1482,8 +1494,8 @@ contains
           mon_a(m)%hqeff       = 0. 
           mon_a(m)%hrm         = 0. 
           mon_a(m)%wcon        = 0. 
-          mon_a(m)%cld_rh         = 0. 
-          mon_a(m)%cld_low         = 0. 
+          mon_a(m)%cld_rh      = 0. 
+          mon_a(m)%cld_low     = 0. 
           mon_a(m)%cld         = 0. 
           mon_a(m)%prc         = 0. 
           mon_a(m)%prcw        = 0. 
@@ -1534,9 +1546,9 @@ contains
           mon_a(m)%rho         = 0. 
           mon_a(m)%acbar       = 0. 
           mon_a(m)%epsa        = 0. 
-          mon_a(m)%tsksl      = 0. 
+          mon_a(m)%tsksl       = 0. 
           mon_a(m)%atsksl      = 0. 
-          mon_a(m)%atsl      = 0. 
+          mon_a(m)%atsl        = 0. 
           mon_a(m)%atsli       = 0. 
           mon_a(m)%aslp        = 0. 
           mon_a(m)%aslp_temp   = 0. 
@@ -1544,33 +1556,33 @@ contains
           mon_a(m)%dz500       = 0. 
           mon_a(m)%slp         = 0. 
           mon_a(m)%slp1        = 0. 
-          mon_a(m)%us         = 0. 
-          mon_a(m)%vs         = 0. 
-          mon_a(m)%usk        = 0. 
-          mon_a(m)%vsk        = 0. 
-          mon_a(m)%ugb        = 0. 
-          mon_a(m)%vgb        = 0. 
-          mon_a(m)%uab        = 0. 
-          mon_a(m)%vab        = 0. 
+          mon_a(m)%us          = 0. 
+          mon_a(m)%vs          = 0. 
+          mon_a(m)%usk         = 0. 
+          mon_a(m)%vsk         = 0. 
+          mon_a(m)%ugb         = 0. 
+          mon_a(m)%vgb         = 0. 
+          mon_a(m)%uab         = 0. 
+          mon_a(m)%vab         = 0. 
           mon_a(m)%taux        = 0. 
           mon_a(m)%tauy        = 0. 
           mon_a(m)%wcld        = 0. 
           mon_a(m)%woro        = 0. 
           mon_a(m)%weff        = 0. 
           mon_a(m)%fweff       = 0. 
-          mon_a(m)%ua         = 0. 
-          mon_a(m)%va         = 0. 
-          mon_a(m)%u3         = 0. 
-          mon_a(m)%v3         = 0. 
-          mon_a(m)%w3         = 0. 
+          mon_a(m)%ua          = 0. 
+          mon_a(m)%va          = 0. 
+          mon_a(m)%u3          = 0. 
+          mon_a(m)%v3          = 0. 
+          mon_a(m)%w3          = 0. 
           mon_a(m)%uter        = 0. 
           mon_a(m)%vter        = 0. 
           if (l_output_flx3d) then
-            mon_a(m)%fax        = 0. 
-            mon_a(m)%faxo       = 0. 
-            mon_a(m)%fay        = 0. 
-            mon_a(m)%fayo       = 0. 
-            mon_a(m)%fac        = 0. 
+            mon_a(m)%fax       = 0. 
+            mon_a(m)%faxo      = 0. 
+            mon_a(m)%fay       = 0. 
+            mon_a(m)%fayo      = 0. 
+            mon_a(m)%fac       = 0. 
           endif
           mon_a(m)%diffxdse    = 0. 
           mon_a(m)%diffydse    = 0. 
@@ -1583,31 +1595,31 @@ contains
           mon_a(m)%convwtr     = 0. 
           mon_a(m)%convawtr    = 0. 
           mon_a(m)%convdwtr    = 0. 
-          mon_a(m)%faxmas     = 0.   
-          mon_a(m)%faymas     = 0.   
-          mon_a(m)%faxdse     = 0.   
-          mon_a(m)%faxcpt     = 0.   
-          mon_a(m)%faxwtr     = 0.
-          mon_a(m)%faydse     = 0.
-          mon_a(m)%faycpt     = 0.
-          mon_a(m)%faywtr     = 0.
-          mon_a(m)%fdxdse     = 0.
-          mon_a(m)%fdxwtr     = 0.
-          mon_a(m)%fdydse     = 0.
-          mon_a(m)%fdywtr     = 0.
-          mon_a(m)%fayg       = 0. 
-          mon_a(m)%faydseg    = 0. 
-          mon_a(m)%faycptg    = 0. 
-          mon_a(m)%faygzg     = 0. 
-          mon_a(m)%fayleg     = 0. 
-          mon_a(m)%faywtrg    = 0. 
-          mon_a(m)%fdydseg    = 0. 
-          mon_a(m)%fdyleg     = 0. 
-          mon_a(m)%fdywtrg    = 0. 
-          mon_a(m)%fydseg     = 0. 
-          mon_a(m)%fyheatg    = 0. 
-          mon_a(m)%fyleg      = 0. 
-          mon_a(m)%fywtrg     = 0. 
+          mon_a(m)%faxmas      = 0.   
+          mon_a(m)%faymas      = 0.   
+          mon_a(m)%faxdse      = 0.   
+          mon_a(m)%faxcpt      = 0.   
+          mon_a(m)%faxwtr      = 0.
+          mon_a(m)%faydse      = 0.
+          mon_a(m)%faycpt      = 0.
+          mon_a(m)%faywtr      = 0.
+          mon_a(m)%fdxdse      = 0.
+          mon_a(m)%fdxwtr      = 0.
+          mon_a(m)%fdydse      = 0.
+          mon_a(m)%fdywtr      = 0.
+          mon_a(m)%fayg        = 0. 
+          mon_a(m)%faydseg     = 0. 
+          mon_a(m)%faycptg     = 0. 
+          mon_a(m)%faygzg      = 0. 
+          mon_a(m)%fayleg      = 0. 
+          mon_a(m)%faywtrg     = 0. 
+          mon_a(m)%fdydseg     = 0. 
+          mon_a(m)%fdyleg      = 0. 
+          mon_a(m)%fdywtrg     = 0. 
+          mon_a(m)%fydseg      = 0. 
+          mon_a(m)%fyheatg     = 0. 
+          mon_a(m)%fyleg       = 0. 
+          mon_a(m)%fywtrg      = 0. 
           mon_a(m)%fswr_sur    = 0. 
           mon_a(m)%flwr_dw_sur = 0. 
           mon_a(m)%flwr_dw_sur_cs = 0. 
@@ -1622,21 +1634,21 @@ contains
           mon_a(m)%rb_top      = 0. 
           mon_a(m)%rb_sur      = 0. 
           mon_a(m)%rb_atm      = 0. 
-          mon_a(m)%swr_atm    = 0. 
-          mon_a(m)%swr_top    = 0. 
-          mon_a(m)%swr_top_cs    = 0. 
-          mon_a(m)%swr_sur    = 0. 
-          mon_a(m)%swr_sur_cs    = 0. 
-          mon_a(m)%swr_dw_sur = 0. 
-          mon_a(m)%swr_dw_top = 0. 
-          mon_a(m)%lwr_atm    = 0. 
-          mon_a(m)%lwr_atm_cld    = 0. 
-          mon_a(m)%lwr_top    = 0. 
-          mon_a(m)%lwr_top_cs    = 0. 
-          mon_a(m)%lwr_sur    = 0. 
-          mon_a(m)%lwr_sur_cs = 0. 
-          mon_a(m)%lwr_tro = 0. 
-          mon_a(m)%lwr_cld = 0. 
+          mon_a(m)%swr_atm     = 0. 
+          mon_a(m)%swr_top     = 0. 
+          mon_a(m)%swr_top_cs  = 0. 
+          mon_a(m)%swr_sur     = 0. 
+          mon_a(m)%swr_sur_cs  = 0. 
+          mon_a(m)%swr_dw_sur  = 0. 
+          mon_a(m)%swr_dw_top  = 0. 
+          mon_a(m)%lwr_atm     = 0. 
+          mon_a(m)%lwr_atm_cld = 0. 
+          mon_a(m)%lwr_top     = 0. 
+          mon_a(m)%lwr_top_cs  = 0. 
+          mon_a(m)%lwr_sur     = 0. 
+          mon_a(m)%lwr_sur_cs  = 0. 
+          mon_a(m)%lwr_tro     = 0. 
+          mon_a(m)%lwr_cld     = 0. 
           mon_a(m)%rb_str      = 0. 
           mon_a(m)%cre_top     = 0. 
           mon_a(m)%swr_cre_top = 0. 
@@ -1657,7 +1669,7 @@ contains
           mon_a(m)%cdif        = 0. 
           mon_a(m)%xz          = 0. 
           mon_a(m)%fw_pac_atl  = 0. 
-          mon_a(m)%fw_atl_indpac  = 0. 
+          mon_a(m)%fw_atl_indpac= 0. 
           mon_a(m)%hdust       = 0. 
           mon_a(m)%dust_load   = 0. 
           mon_a(m)%dust_emis   = 0. 
@@ -1668,7 +1680,10 @@ contains
           mon_a(m)%cam         = 0. 
           mon_a(m)%co2d        = 0. 
           mon_a(m)%co2flx      = 0. 
-          mon_a(m)%so4_ot      = 0. 
+          mon_a(m)%so4_ot      = 0.
+          mon_a(m)%d18o_qam    = 0.
+          mon_a(m)%d18o_prcw   = 0.
+          mon_a(m)%d18o_prcs   = 0.
         enddo
       endif
 
@@ -1676,7 +1691,7 @@ contains
       mon_a(mon)%had_width   = mon_a(mon)%had_width   + mon_avg * atm%had_width*180./pi ! deg
       mon_a(mon)%ptrop       = mon_a(mon)%ptrop       + mon_avg * atm%ptrop
       mon_a(mon)%tslz        = mon_a(mon)%tslz        + mon_avg * sum(atm%tsl,1)/im
-      mon_a(mon)%tskslz       = mon_a(mon)%tskslz       + mon_avg * sum(atm%tsksl,1)/im
+      mon_a(mon)%tskslz      = mon_a(mon)%tskslz      + mon_avg * sum(atm%tsksl,1)/im
       mon_a(mon)%ekez        = mon_a(mon)%ekez        + mon_avg * sum(atm%sam,1)/im
       mon_a(mon)%slpz        = mon_a(mon)%slpz        + mon_avg * sum(atm%slp,1)/im
       mon_a(mon)%vabz        = mon_a(mon)%vabz        + mon_avg * sum(atm%vab,1)/im
@@ -1693,8 +1708,8 @@ contains
       mon_a(mon)%hqeff       = mon_a(mon)%hqeff       + mon_avg * atm%hqeff
       mon_a(mon)%hrm         = mon_a(mon)%hrm         + mon_avg * atm%hrm
       mon_a(mon)%wcon        = mon_a(mon)%wcon        + mon_avg * atm%wcon
-      mon_a(mon)%cld_rh         = mon_a(mon)%cld_rh         + mon_avg * atm%cld_rh
-      mon_a(mon)%cld_low        = mon_a(mon)%cld_low        + mon_avg * atm%cld_low
+      mon_a(mon)%cld_rh      = mon_a(mon)%cld_rh      + mon_avg * atm%cld_rh
+      mon_a(mon)%cld_low     = mon_a(mon)%cld_low     + mon_avg * atm%cld_low
       mon_a(mon)%cld         = mon_a(mon)%cld         + mon_avg * atm%cld
       mon_a(mon)%prc         = mon_a(mon)%prc         + mon_avg * atm%prc*sec_day
       mon_a(mon)%prcw        = mon_a(mon)%prcw        + mon_avg * sum(atm%prcw*atm%frst,3)*sec_day
@@ -1742,12 +1757,12 @@ contains
       mon_a(mon)%epsa        = mon_a(mon)%epsa        + mon_avg * sum(atm%epsa*atm%frst,3)
       mon_a(mon)%tsksl       = mon_a(mon)%tsksl       + mon_avg * atm%tsksl
       do j=1,jm
-        mon_a(mon)%atsksl(:,j)        = mon_a(mon)%atsksl(:,j)        + mon_avg * (atm%tsksl(:,j)-sum(atm%tsksl(:,j))*aim)
-        mon_a(mon)%atsl(:,j)        = mon_a(mon)%atsl(:,j)        + mon_avg * (atm%tsl(:,j)-sum(atm%tsl(:,j))*aim)
+        mon_a(mon)%atsksl(:,j) = mon_a(mon)%atsksl(:,j) + mon_avg * (atm%tsksl(:,j)-sum(atm%tsksl(:,j))*aim)
+        mon_a(mon)%atsl(:,j) = mon_a(mon)%atsl(:,j)   + mon_avg * (atm%tsl(:,j)-sum(atm%tsl(:,j))*aim)
       enddo
       do i=1,im
       do j=1,jm
-        mon_a(mon)%atsli(i,j)        = mon_a(mon)%atsli(i,j)        + mon_avg * (sum(atm%t3(i,j,1:8))-sum(sum(atm%t3(:,j,1:8),2),1)*aim)
+        mon_a(mon)%atsli(i,j) = mon_a(mon)%atsli(i,j) + mon_avg * (sum(atm%t3(i,j,1:8))-sum(sum(atm%t3(:,j,1:8),2),1)*aim)
       enddo
       enddo
       mon_a(mon)%aslp        = mon_a(mon)%aslp        + mon_avg * atm%aslp
@@ -1755,52 +1770,55 @@ contains
       mon_a(mon)%aslp_topo   = mon_a(mon)%aslp_topo   + mon_avg * atm%aslp_topo
       mon_a(mon)%dz500       = mon_a(mon)%dz500       + mon_avg * atm%dz500 
       mon_a(mon)%slp         = mon_a(mon)%slp         + mon_avg * atm%slp
-      mon_a(mon)%us         = mon_a(mon)%us         + mon_avg * sum(atm%us*atm%frst,3)
-      mon_a(mon)%vs         = mon_a(mon)%vs         + mon_avg * sum(atm%vs*atm%frst,3)
-      mon_a(mon)%usk        = mon_a(mon)%usk        + mon_avg * atm%usk
-      mon_a(mon)%vsk        = mon_a(mon)%vsk        + mon_avg * atm%vsk
-      mon_a(mon)%ugb        = mon_a(mon)%ugb        + mon_avg * atm%ugb
-      mon_a(mon)%vgb        = mon_a(mon)%vgb        + mon_avg * atm%vgb
-      mon_a(mon)%uab        = mon_a(mon)%uab        + mon_avg * atm%uab
-      mon_a(mon)%vab        = mon_a(mon)%vab        + mon_avg * atm%vab
+      mon_a(mon)%us          = mon_a(mon)%us          + mon_avg * sum(atm%us*atm%frst,3)
+      mon_a(mon)%vs          = mon_a(mon)%vs          + mon_avg * sum(atm%vs*atm%frst,3)
+      mon_a(mon)%usk         = mon_a(mon)%usk         + mon_avg * atm%usk
+      mon_a(mon)%vsk         = mon_a(mon)%vsk         + mon_avg * atm%vsk
+      mon_a(mon)%ugb         = mon_a(mon)%ugb         + mon_avg * atm%ugb
+      mon_a(mon)%vgb         = mon_a(mon)%vgb         + mon_avg * atm%vgb
+      mon_a(mon)%uab         = mon_a(mon)%uab         + mon_avg * atm%uab
+      mon_a(mon)%vab         = mon_a(mon)%vab         + mon_avg * atm%vab
       mon_a(mon)%taux        = mon_a(mon)%taux        + mon_avg * atm%taux
       mon_a(mon)%tauy        = mon_a(mon)%tauy        + mon_avg * atm%tauy
       mon_a(mon)%wcld        = mon_a(mon)%wcld        + mon_avg * atm%wcld
       mon_a(mon)%woro        = mon_a(mon)%woro        + mon_avg * atm%woro
       mon_a(mon)%weff        = mon_a(mon)%weff        + mon_avg * atm%weff
       mon_a(mon)%fweff       = mon_a(mon)%fweff       + mon_avg * atm%fweff
-      mon_a(mon)%ua         = mon_a(mon)%ua         + mon_avg * atm%ua
-      mon_a(mon)%va         = mon_a(mon)%va         + mon_avg * atm%va
-      mon_a(mon)%u3         = mon_a(mon)%u3         + mon_avg * atm%u3
-      mon_a(mon)%v3         = mon_a(mon)%v3         + mon_avg * atm%v3
-      mon_a(mon)%w3         = mon_a(mon)%w3         + mon_avg * atm%w3
+      mon_a(mon)%ua          = mon_a(mon)%ua          + mon_avg * atm%ua
+      mon_a(mon)%va          = mon_a(mon)%va          + mon_avg * atm%va
+      mon_a(mon)%u3          = mon_a(mon)%u3          + mon_avg * atm%u3
+      mon_a(mon)%v3          = mon_a(mon)%v3          + mon_avg * atm%v3
+      mon_a(mon)%w3          = mon_a(mon)%w3          + mon_avg * atm%w3
       mon_a(mon)%uter        = mon_a(mon)%uter        + mon_avg * atm%uter
       mon_a(mon)%vter        = mon_a(mon)%vter        + mon_avg * atm%vter
       if (l_output_flx3d) then
-        mon_a(mon)%fax        = mon_a(mon)%fax        + mon_avg * atm%fax
-        mon_a(mon)%faxo       = mon_a(mon)%faxo       + mon_avg * atm%faxo
-        mon_a(mon)%fay        = mon_a(mon)%fay        + mon_avg * atm%fay
-        mon_a(mon)%fayo       = mon_a(mon)%fayo       + mon_avg * atm%fayo
-        mon_a(mon)%fac        = mon_a(mon)%fac        + mon_avg * atm%fac
+        mon_a(mon)%fax       = mon_a(mon)%fax         + mon_avg * atm%fax
+        mon_a(mon)%faxo      = mon_a(mon)%faxo        + mon_avg * atm%faxo
+        mon_a(mon)%fay       = mon_a(mon)%fay         + mon_avg * atm%fay
+        mon_a(mon)%fayo      = mon_a(mon)%fayo        + mon_avg * atm%fayo
+        mon_a(mon)%fac       = mon_a(mon)%fac         + mon_avg * atm%fac
       endif
-      mon_a(mon)%diffxdse    = mon_a(mon)%diffxdse        + mon_avg * atm%diffxdse
-      mon_a(mon)%diffydse    = mon_a(mon)%diffydse        + mon_avg * atm%diffydse
-      mon_a(mon)%diffxwtr    = mon_a(mon)%diffxwtr        + mon_avg * atm%diffxwtr
-      mon_a(mon)%diffywtr    = mon_a(mon)%diffywtr        + mon_avg * atm%diffywtr
+      mon_a(mon)%diffxdse    = mon_a(mon)%diffxdse    + mon_avg * atm%diffxdse
+      mon_a(mon)%diffydse    = mon_a(mon)%diffydse    + mon_avg * atm%diffydse
+      mon_a(mon)%diffxwtr    = mon_a(mon)%diffxwtr    + mon_avg * atm%diffxwtr
+      mon_a(mon)%diffywtr    = mon_a(mon)%diffywtr    + mon_avg * atm%diffywtr
       mon_a(mon)%wsyn        = mon_a(mon)%wsyn        + mon_avg * atm%wsyn
       mon_a(mon)%convdse     = mon_a(mon)%convdse     + mon_avg * atm%convdse
       mon_a(mon)%convwtr     = mon_a(mon)%convwtr     + mon_avg * atm%convwtr*sec_day
-      mon_a(mon)%hdust        = mon_a(mon)%hdust        + mon_avg * atm%hdust
-      mon_a(mon)%dust_load    = mon_a(mon)%dust_load    + mon_avg * atm%dust_load   
-      mon_a(mon)%dust_emis    = mon_a(mon)%dust_emis    + mon_avg * atm%dust_emis   
-      mon_a(mon)%dust_dep     = mon_a(mon)%dust_dep     + mon_avg * atm%dust_dep    
+      mon_a(mon)%hdust       = mon_a(mon)%hdust       + mon_avg * atm%hdust
+      mon_a(mon)%dust_load   = mon_a(mon)%dust_load   + mon_avg * atm%dust_load   
+      mon_a(mon)%dust_emis   = mon_a(mon)%dust_emis   + mon_avg * atm%dust_emis   
+      mon_a(mon)%dust_dep    = mon_a(mon)%dust_dep    + mon_avg * atm%dust_dep    
       mon_a(mon)%dust_dep_dry = mon_a(mon)%dust_dep_dry + mon_avg * atm%dust_dep_dry
       mon_a(mon)%dust_dep_wet = mon_a(mon)%dust_dep_wet + mon_avg * atm%dust_dep_wet
-      mon_a(mon)%dust_ot      = mon_a(mon)%dust_ot      + mon_avg * atm%dust_ot     
-      mon_a(mon)%cam          = mon_a(mon)%cam  + mon_avg * atm%cam    ! kgCO2/kg 
-      mon_a(mon)%co2d         = mon_a(mon)%co2d + mon_avg * atm%cam*1.e6*28.97/44.0095    ! kgCO2/kg -> ppm
-      mon_a(mon)%co2flx       = mon_a(mon)%co2flx + mon_avg * atm%co2flx*1.e3*sec_day   ! gCO2/m2/day
-      mon_a(mon)%so4_ot       = mon_a(mon)%so4_ot       + mon_avg * sigma_so4*atm%so4    
+      mon_a(mon)%dust_ot     = mon_a(mon)%dust_ot     + mon_avg * atm%dust_ot     
+      mon_a(mon)%cam         = mon_a(mon)%cam         + mon_avg * atm%cam    ! kgCO2/kg 
+      mon_a(mon)%co2d        = mon_a(mon)%co2d        + mon_avg * atm%cam*1.e6*28.97/44.0095    ! kgCO2/kg -> ppm
+      mon_a(mon)%co2flx      = mon_a(mon)%co2flx      + mon_avg * atm%co2flx*1.e3*sec_day   ! gCO2/m2/day
+      mon_a(mon)%so4_ot      = mon_a(mon)%so4_ot      + mon_avg * sigma_so4*atm%so4
+      mon_a(mon)%d18o_qam    = mon_a(mon)%d18o_qam    + mon_avg * atm%d18o_qam
+      mon_a(mon)%d18o_prcw   = mon_a(mon)%d18o_prcw   + mon_avg * atm%d18o_prcw
+      mon_a(mon)%d18o_prcs   = mon_a(mon)%d18o_prcs   + mon_avg * atm%d18o_prcs
 
       do j=1,jm
         do i=1,im
@@ -1836,10 +1854,10 @@ contains
             + (atm%fdxdse(i,j)-atm%fdxdse(i+1,j) + atm%fdydse(i,j+1)-atm%fdydse(i,j))/sqr(i,j)*cp*mon_avg
           ! moisture convergence from advection only
           mon_a(mon)%convawtr(i,j) = mon_a(mon)%convawtr(i,j) &
-            + (atm%faxwtr(i,j)-atm%faxwtr(i+1,j) + atm%faywtr(i,j+1)-atm%faywtr(i,j))/sqr(i,j)*sec_day*mon_avg  ! kg/s / m2 *s/day = kg/m2/day
+            + (atm%faxwtr(i,j,1)-atm%faxwtr(i+1,j,1) + atm%faywtr(i,j+1,1)-atm%faywtr(i,j,1))/sqr(i,j)*sec_day*mon_avg  ! kg/s / m2 *s/day = kg/m2/day
           ! moisture convergence from diffusion only
           mon_a(mon)%convdwtr(i,j) = mon_a(mon)%convdwtr(i,j) &
-            + (atm%fdxwtr(i,j)-atm%fdxwtr(i+1,j) + atm%fdywtr(i,j+1)-atm%fdywtr(i,j))/sqr(i,j)*sec_day*mon_avg
+            + (atm%fdxwtr(i,j,1)-atm%fdxwtr(i+1,j,1) + atm%fdywtr(i,j+1,1)-atm%fdywtr(i,j,1))/sqr(i,j)*sec_day*mon_avg
         enddo
       enddo
 
@@ -1890,14 +1908,15 @@ contains
           ! vertically integrated potential temperature and water vapor flux
           mon_a(mon)%faxdse(i,j)     = mon_a(mon)%faxdse(i,j)     + mon_avg * 0.5*(atm%faxdse(i,j) + atm%faxdse(i+1,j))*cp/dy      ! kg/s*K *J/K/kg /m  = W/m
           mon_a(mon)%faxcpt(i,j)     = mon_a(mon)%faxcpt(i,j)     + mon_avg * 0.5*(faxcpt(i,j) + faxcpt(i+1,j))*cp/dy      ! kg/s*K *J/K/kg /m  = W/m
-          mon_a(mon)%faxwtr(i,j)     = mon_a(mon)%faxwtr(i,j)     + mon_avg * 0.5*(atm%faxwtr(i,j) + atm%faxwtr(i+1,j))/dy 
           mon_a(mon)%faydse(i,j)     = mon_a(mon)%faydse(i,j)     + mon_avg * 0.5*(atm%faydse(i,j) + atm%faydse(i,j+1))*cp/dxt(j) 
           mon_a(mon)%faycpt(i,j)     = mon_a(mon)%faycpt(i,j)     + mon_avg * 0.5*(faycpt(i,j) + faycpt(i,j+1))*cp/dxt(j) 
-          mon_a(mon)%faywtr(i,j)     = mon_a(mon)%faywtr(i,j)     + mon_avg * 0.5*(atm%faywtr(i,j) + atm%faywtr(i,j+1))/dxt(j) 
           mon_a(mon)%fdxdse(i,j)     = mon_a(mon)%fdxdse(i,j)     + mon_avg * 0.5*(atm%fdxdse(i,j) + atm%fdxdse(i+1,j))*cp/dy 
-          mon_a(mon)%fdxwtr(i,j)     = mon_a(mon)%fdxwtr(i,j)     + mon_avg * 0.5*(atm%fdxwtr(i,j) + atm%fdxwtr(i+1,j))/dy 
           mon_a(mon)%fdydse(i,j)     = mon_a(mon)%fdydse(i,j)     + mon_avg * 0.5*(atm%fdydse(i,j) + atm%fdydse(i,j+1))*cp/dxt(j) 
-          mon_a(mon)%fdywtr(i,j)     = mon_a(mon)%fdywtr(i,j)     + mon_avg * 0.5*(atm%fdywtr(i,j) + atm%fdywtr(i,j+1))/dxt(j) 
+          do l=1,lm
+            mon_a(mon)%faxwtr(i,j,l) = mon_a(mon)%faxwtr(i,j,l)   + mon_avg * 0.5*(atm%faxwtr(i,j,l) + atm%faxwtr(i+1,j,l))/dy
+            mon_a(mon)%faywtr(i,j,l) = mon_a(mon)%faywtr(i,j,l)   + mon_avg * 0.5*(atm%faywtr(i,j,l) + atm%faywtr(i,j+1,l))/dxt(j) 
+            mon_a(mon)%fdxwtr(i,j,l) = mon_a(mon)%fdxwtr(i,j,l)   + mon_avg * 0.5*(atm%fdxwtr(i,j,l) + atm%fdxwtr(i+1,j,l))/dy 
+            mon_a(mon)%fdywtr(i,j,l) = mon_a(mon)%fdywtr(i,j,l)   + mon_avg * 0.5*(atm%fdywtr(i,j,l) + atm%fdywtr(i,j+1,l))/dxt(j) 
         enddo
       enddo
 
@@ -1964,63 +1983,63 @@ contains
         if (atm%idivide_pac_atl(j).gt.0) then
           ind = atm%idivide_pac_atl(j)+1
           if (ind.eq.im+1) ind=1
-          fw_pac_atl(j) = (atm%faxwtr(ind,j)+atm%fdxwtr(ind,j))*1.e-9 ! kg/s -> Sv
+          fw_pac_atl(j) = (atm%faxwtr(ind,j,1)+atm%fdxwtr(ind,j,1))*1.e-9 ! kg/s -> Sv
         endif
         if (atm%idivide_atl_indpac(j).gt.0) then
           ind = atm%idivide_atl_indpac(j)+1
           if (ind.eq.im+1) ind=1
-          fw_atl_indpac(j) = (atm%faxwtr(ind,j)+atm%fdxwtr(ind,j))*1.e-9 ! kg/s -> Sv
+          fw_atl_indpac(j) = (atm%faxwtr(ind,j,1)+atm%fdxwtr(ind,j,1))*1.e-9 ! kg/s -> Sv
         endif
       enddo
 
-      mon_a(mon)%fw_pac_atl    = mon_a(mon)%fw_pac_atl    + mon_avg * fw_pac_atl
-      mon_a(mon)%fw_atl_indpac = mon_a(mon)%fw_atl_indpac + mon_avg * fw_atl_indpac
+      mon_a(mon)%fw_pac_atl       = mon_a(mon)%fw_pac_atl  + mon_avg * fw_pac_atl
+      mon_a(mon)%fw_atl_indpac    = mon_a(mon)%fw_atl_indpac + mon_avg * fw_atl_indpac
 
-      mon_a(mon)%fswr_sur    = mon_a(mon)%fswr_sur    + mon_avg * atm%fswr_sur
-      mon_a(mon)%flwr_dw_sur = mon_a(mon)%flwr_dw_sur + mon_avg * atm%flwr_dw_sur
-      mon_a(mon)%flwr_dw_sur_cs  = mon_a(mon)%flwr_dw_sur_cs  + mon_avg * atm%flwr_dw_sur_cs
-      mon_a(mon)%flwr_dw_sur_cld = mon_a(mon)%flwr_dw_sur_cld + mon_avg * atm%flwr_dw_sur_cld
-      mon_a(mon)%flwr_up_sur = mon_a(mon)%flwr_up_sur + mon_avg * atm%flwr_up_sur
-      mon_a(mon)%dswd_dalb_vu_cs  = mon_a(mon)%dswd_dalb_vu_cs  + mon_avg * atm%dswd_dalb_vu_cs   
-      mon_a(mon)%dswd_dalb_ir_cs  = mon_a(mon)%dswd_dalb_ir_cs  + mon_avg * atm%dswd_dalb_ir_cs  
+      mon_a(mon)%fswr_sur         = mon_a(mon)%fswr_sur    + mon_avg * atm%fswr_sur
+      mon_a(mon)%flwr_dw_sur      = mon_a(mon)%flwr_dw_sur + mon_avg * atm%flwr_dw_sur
+      mon_a(mon)%flwr_dw_sur_cs   = mon_a(mon)%flwr_dw_sur_cs + mon_avg * atm%flwr_dw_sur_cs
+      mon_a(mon)%flwr_dw_sur_cld  = mon_a(mon)%flwr_dw_sur_cld + mon_avg * atm%flwr_dw_sur_cld
+      mon_a(mon)%flwr_up_sur      = mon_a(mon)%flwr_up_sur + mon_avg * atm%flwr_up_sur
+      mon_a(mon)%dswd_dalb_vu_cs  = mon_a(mon)%dswd_dalb_vu_cs + mon_avg * atm%dswd_dalb_vu_cs   
+      mon_a(mon)%dswd_dalb_ir_cs  = mon_a(mon)%dswd_dalb_ir_cs + mon_avg * atm%dswd_dalb_ir_cs  
       mon_a(mon)%dswd_dalb_vu_cld = mon_a(mon)%dswd_dalb_vu_cld + mon_avg * atm%dswd_dalb_vu_cld 
       mon_a(mon)%dswd_dalb_ir_cld = mon_a(mon)%dswd_dalb_ir_cld + mon_avg * atm%dswd_dalb_ir_cld 
-      mon_a(mon)%dswd_dz_ir_cs  = mon_a(mon)%dswd_dz_ir_cs  + mon_avg * atm%dswd_dz_ir_cs 
-      mon_a(mon)%dswd_dz_ir_cld = mon_a(mon)%dswd_dz_ir_cld + mon_avg * atm%dswd_dz_ir_cld 
-      mon_a(mon)%swr_atm    = mon_a(mon)%swr_atm    + mon_avg * (atm%swr_top-atm%swr_sur)
-      mon_a(mon)%swr_top    = mon_a(mon)%swr_top    + mon_avg * atm%swr_top
-      mon_a(mon)%swr_top_cs    = mon_a(mon)%swr_top_cs    + mon_avg * atm%swr_top_cs
-      mon_a(mon)%swr_sur    = mon_a(mon)%swr_sur    + mon_avg * sum(atm%fswr_sur*atm%frst,3)
-      mon_a(mon)%swr_sur_cs    = mon_a(mon)%swr_sur_cs    + mon_avg * sum(atm%fswr_sur_cs*atm%frst,3)
-      mon_a(mon)%lwr_atm    = mon_a(mon)%lwr_atm    + mon_avg * (atm%lwr_top-atm%lwr_sur)
-      mon_a(mon)%lwr_atm_cld    = mon_a(mon)%lwr_atm_cld    + mon_avg * (atm%lwr_cld-atm%lwr_sur)
-      mon_a(mon)%lwr_top    = mon_a(mon)%lwr_top    + mon_avg * atm%lwr_top
-      mon_a(mon)%lwr_top_cs    = mon_a(mon)%lwr_top_cs    + mon_avg * atm%lwr_top_cs
-      mon_a(mon)%lwr_sur    = mon_a(mon)%lwr_sur    + mon_avg * atm%lwr_sur
-      mon_a(mon)%lwr_sur_cs = mon_a(mon)%lwr_sur_cs + mon_avg * sum((atm%flwr_dw_sur_cs-atm%flwr_up_sur)*atm%frst,3)
-      mon_a(mon)%lwr_tro = mon_a(mon)%lwr_tro + mon_avg * atm%lwr_tro
-      mon_a(mon)%lwr_cld = mon_a(mon)%lwr_cld + mon_avg * atm%lwr_cld
-      mon_a(mon)%rb_top      = mon_a(mon)%rb_top      + mon_avg * atm%rb_top
-      mon_a(mon)%rb_sur      = mon_a(mon)%rb_sur      + mon_avg * atm%rb_sur
-      mon_a(mon)%rb_atm      = mon_a(mon)%rb_atm      + mon_avg * atm%rb_atm
-      mon_a(mon)%rb_str      = mon_a(mon)%rb_str      + mon_avg * atm%rb_str
-      mon_a(mon)%cre_top     = mon_a(mon)%cre_top     + mon_avg * (atm%swr_top_cld+atm%lwr_top_cld-atm%swr_top_cs-atm%lwr_top_cs)
-      mon_a(mon)%swr_cre_top = mon_a(mon)%swr_cre_top + mon_avg * (atm%swr_top_cld-atm%swr_top_cs)
-      mon_a(mon)%lwr_cre_top = mon_a(mon)%lwr_cre_top + mon_avg * (atm%lwr_top_cld-atm%lwr_top_cs)
-      mon_a(mon)%cre_sur     = mon_a(mon)%cre_sur     + mon_avg * (sum((atm%fswr_sur_cld-atm%fswr_sur_cs)*atm%frst,3)   &
+      mon_a(mon)%dswd_dz_ir_cs    = mon_a(mon)%dswd_dz_ir_cs + mon_avg * atm%dswd_dz_ir_cs 
+      mon_a(mon)%dswd_dz_ir_cld   = mon_a(mon)%dswd_dz_ir_cld + mon_avg * atm%dswd_dz_ir_cld 
+      mon_a(mon)%swr_atm          = mon_a(mon)%swr_atm     + mon_avg * (atm%swr_top-atm%swr_sur)
+      mon_a(mon)%swr_top          = mon_a(mon)%swr_top     + mon_avg * atm%swr_top
+      mon_a(mon)%swr_top_cs       = mon_a(mon)%swr_top_cs  + mon_avg * atm%swr_top_cs
+      mon_a(mon)%swr_sur          = mon_a(mon)%swr_sur     + mon_avg * sum(atm%fswr_sur*atm%frst,3)
+      mon_a(mon)%swr_sur_cs       = mon_a(mon)%swr_sur_cs  + mon_avg * sum(atm%fswr_sur_cs*atm%frst,3)
+      mon_a(mon)%lwr_atm          = mon_a(mon)%lwr_atm     + mon_avg * (atm%lwr_top-atm%lwr_sur)
+      mon_a(mon)%lwr_atm_cld      = mon_a(mon)%lwr_atm_cld + mon_avg * (atm%lwr_cld-atm%lwr_sur)
+      mon_a(mon)%lwr_top          = mon_a(mon)%lwr_top     + mon_avg * atm%lwr_top
+      mon_a(mon)%lwr_top_cs       = mon_a(mon)%lwr_top_cs  + mon_avg * atm%lwr_top_cs
+      mon_a(mon)%lwr_sur          = mon_a(mon)%lwr_sur     + mon_avg * atm%lwr_sur
+      mon_a(mon)%lwr_sur_cs       = mon_a(mon)%lwr_sur_cs  + mon_avg * sum((atm%flwr_dw_sur_cs-atm%flwr_up_sur)*atm%frst,3)
+      mon_a(mon)%lwr_tro          = mon_a(mon)%lwr_tro     + mon_avg * atm%lwr_tro
+      mon_a(mon)%lwr_cld          = mon_a(mon)%lwr_cld     + mon_avg * atm%lwr_cld
+      mon_a(mon)%rb_top           = mon_a(mon)%rb_top      + mon_avg * atm%rb_top
+      mon_a(mon)%rb_sur           = mon_a(mon)%rb_sur      + mon_avg * atm%rb_sur
+      mon_a(mon)%rb_atm           = mon_a(mon)%rb_atm      + mon_avg * atm%rb_atm
+      mon_a(mon)%rb_str           = mon_a(mon)%rb_str      + mon_avg * atm%rb_str
+      mon_a(mon)%cre_top          = mon_a(mon)%cre_top     + mon_avg * (atm%swr_top_cld+atm%lwr_top_cld-atm%swr_top_cs-atm%lwr_top_cs)
+      mon_a(mon)%swr_cre_top      = mon_a(mon)%swr_cre_top + mon_avg * (atm%swr_top_cld-atm%swr_top_cs)
+      mon_a(mon)%lwr_cre_top      = mon_a(mon)%lwr_cre_top + mon_avg * (atm%lwr_top_cld-atm%lwr_top_cs)
+      mon_a(mon)%cre_sur          = mon_a(mon)%cre_sur     + mon_avg * (sum((atm%fswr_sur_cld-atm%fswr_sur_cs)*atm%frst,3)   &
         +sum(((atm%flwr_dw_sur_cld-atm%flwr_up_sur)-(atm%flwr_dw_sur_cs-atm%flwr_up_sur))*atm%frst,3))
-      mon_a(mon)%swr_cre_sur = mon_a(mon)%swr_cre_sur + mon_avg * sum((atm%fswr_sur_cld-atm%fswr_sur_cs)*atm%frst,3)
-      mon_a(mon)%lwr_cre_sur = mon_a(mon)%lwr_cre_sur + mon_avg * sum(((atm%flwr_dw_sur_cld-atm%flwr_up_sur)-(atm%flwr_dw_sur_cs-atm%flwr_up_sur))*atm%frst,3) 
-      mon_a(mon)%tsl         = mon_a(mon)%tsl         + mon_avg * atm%tsl
-      mon_a(mon)%eke         = mon_a(mon)%eke         + mon_avg * atm%eke
-      mon_a(mon)%sam         = mon_a(mon)%sam         + mon_avg * atm%sam
-      mon_a(mon)%sam2        = mon_a(mon)%sam2        + mon_avg * atm%sam2
-      mon_a(mon)%synprod     = mon_a(mon)%synprod     + mon_avg * atm%synprod
-      mon_a(mon)%syndiss     = mon_a(mon)%syndiss     + mon_avg * atm%syndiss
-      mon_a(mon)%synadv      = mon_a(mon)%synadv      + mon_avg * atm%synadv            
-      mon_a(mon)%syndif      = mon_a(mon)%syndif      + mon_avg * atm%syndif
-      mon_a(mon)%synsur      = mon_a(mon)%synsur      + mon_avg * sum(atm%synsur*atm%frst,3)
-      mon_a(mon)%cdif        = mon_a(mon)%cdif        + mon_avg * atm%cdif           
+      mon_a(mon)%swr_cre_sur      = mon_a(mon)%swr_cre_sur + mon_avg * sum((atm%fswr_sur_cld-atm%fswr_sur_cs)*atm%frst,3)
+      mon_a(mon)%lwr_cre_sur      = mon_a(mon)%lwr_cre_sur + mon_avg * sum(((atm%flwr_dw_sur_cld-atm%flwr_up_sur)-(atm%flwr_dw_sur_cs-atm%flwr_up_sur))*atm%frst,3) 
+      mon_a(mon)%tsl              = mon_a(mon)%tsl         + mon_avg * atm%tsl
+      mon_a(mon)%eke              = mon_a(mon)%eke         + mon_avg * atm%eke
+      mon_a(mon)%sam              = mon_a(mon)%sam         + mon_avg * atm%sam
+      mon_a(mon)%sam2             = mon_a(mon)%sam2        + mon_avg * atm%sam2
+      mon_a(mon)%synprod          = mon_a(mon)%synprod     + mon_avg * atm%synprod
+      mon_a(mon)%syndiss          = mon_a(mon)%syndiss     + mon_avg * atm%syndiss
+      mon_a(mon)%synadv           = mon_a(mon)%synadv      + mon_avg * atm%synadv            
+      mon_a(mon)%syndif           = mon_a(mon)%syndif      + mon_avg * atm%syndif
+      mon_a(mon)%synsur           = mon_a(mon)%synsur      + mon_avg * sum(atm%synsur*atm%frst,3)
+      mon_a(mon)%cdif             = mon_a(mon)%cdif        + mon_avg * atm%cdif           
 
       do j=1,jm
         do i=1,im
@@ -2167,17 +2186,17 @@ contains
         day_a(doy)%prc     = atm%prc*sec_day
         day_a(doy)%wind    = atm%winda
         day_a(doy)%slp     = atm%slp
-        day_a(doy)%us     = sum(atm%us*atm%frst,3)
-        day_a(doy)%vs     = sum(atm%vs*atm%frst,3)
-        day_a(doy)%ugb    = atm%ugb
-        day_a(doy)%vgb    = atm%vgb
-        day_a(doy)%uab    = atm%uab
-        day_a(doy)%vab    = atm%vab
-        day_a(doy)%ua     = atm%ua
-        day_a(doy)%va     = atm%va
-        day_a(doy)%u3     = atm%u3
-        day_a(doy)%v3     = atm%v3
-        day_a(doy)%w3     = atm%w3
+        day_a(doy)%us      = sum(atm%us*atm%frst,3)
+        day_a(doy)%vs      = sum(atm%vs*atm%frst,3)
+        day_a(doy)%ugb     = atm%ugb
+        day_a(doy)%vgb     = atm%vgb
+        day_a(doy)%uab     = atm%uab
+        day_a(doy)%vab     = atm%vab
+        day_a(doy)%ua      = atm%ua
+        day_a(doy)%va      = atm%va
+        day_a(doy)%u3      = atm%u3
+        day_a(doy)%v3      = atm%v3
+        day_a(doy)%w3      = atm%w3
         day_a(doy)%convdse = atm%convdse
         day_a(doy)%convwtr = atm%convwtr*sec_day
         day_a(doy)%sam     = atm%sam
@@ -2185,9 +2204,9 @@ contains
         day_a(doy)%gamb    = atm%gamb
         day_a(doy)%gamt    = atm%gamt
         day_a(doy)%hrm     = atm%hrm
-        day_a(doy)%flwr_dw_sur         = atm%flwr_dw_sur
-        day_a(doy)%flwr_dw_sur_cs      = atm%flwr_dw_sur_cs
-        day_a(doy)%flwr_dw_sur_cld     = atm%flwr_dw_sur_cld
+        day_a(doy)%flwr_dw_sur = atm%flwr_dw_sur
+        day_a(doy)%flwr_dw_sur_cs = atm%flwr_dw_sur_cs
+        day_a(doy)%flwr_dw_sur_cld = atm%flwr_dw_sur_cld
 
       endif
 
@@ -2236,14 +2255,14 @@ contains
     character (len=256) :: fnm
 
 
-    nout = nout +1 
+    nout = nout + 1
 
     ! write to file
     fnm = trim(out_dir)//"/atm.nc"
     call nc_open(fnm,ncid)
     call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
     do k = 1, nmon_year
-       call atm_nc_write(fnm,ncid,mon_a(k),k,nout)
+      call atm_nc_write(fnm,ncid,mon_a(k),k,nout)
     end do
     call atm_nc_write(fnm,ncid,ann_a,nmon_year+1,nout)
     call nc_close(ncid)
@@ -2510,7 +2529,7 @@ contains
       start=[1,ndat,nout],count=[jm,1,1],long_name="relative pressure at tropopause",units="/",ncid=ncid)
     call nc_write(fnm,"tslz       ", sngl(vars%tslz       (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean sea level temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"tskslz      ", sngl(vars%tskslz      (jm:1:-1)), dims=["lat ","mon ","time"], &
+    call nc_write(fnm,"tskslz     ", sngl(vars%tskslz     (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean skin temperature reduced to sea level",units="K",ncid=ncid)
     call nc_write(fnm,"ekez       ", sngl(vars%ekez       (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean eddy kinetic energy",units="m2/s2",ncid=ncid)
@@ -2527,8 +2546,10 @@ contains
 
     call nc_write(fnm,"tam        ", sngl(vars%tam       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric specific humidity",units="kg/kg",ncid=ncid)
+    call nc_write(fnm,"qam_o18    ", sngl(vars%qam       (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="atmospheric specific humidity containing O18",units="g/kg",ncid=ncid)
     call nc_write(fnm,"ram        ", sngl(vars%ram       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric relative humidity",units="1",ncid=ncid)
     call nc_write(fnm,"gams       ", sngl(vars%gams      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2545,18 +2566,22 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="relative humidity height scale",units="m",ncid=ncid)
     call nc_write(fnm,"wcon       ", sngl(vars%wcon      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated water content",units="kg/m2",ncid=ncid)
-    call nc_write(fnm,"cld_rh        ", sngl(vars%cld_rh       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"cld_rh     ", sngl(vars%cld_rh    (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="large-scale cloud fraction in grid cell",units="1",ncid=ncid)
-    call nc_write(fnm,"cld_low       ", sngl(vars%cld_low      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"cld_low    ", sngl(vars%cld_low   (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="low cloud fraction in grid cell",units="1",ncid=ncid)
     call nc_write(fnm,"cld        ", sngl(vars%cld       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="total cloud fraction in grid cell",units="1",ncid=ncid)
     call nc_write(fnm,"prc        ", sngl(vars%prc       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="total precipitation",units="kg/m2/day",ncid=ncid)
-    call nc_write(fnm,"prcw       ", sngl(vars%prcw      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"prcw       ", sngl(vars%prcw      (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="rainfall",units="kg/m2/day",ncid=ncid)
-    call nc_write(fnm,"prcs       ", sngl(vars%prcs      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"prcw_o18   ", sngl(vars%prcw      (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="rainfall containing O18",units="g/m2/day",ncid=ncid)
+    call nc_write(fnm,"prcs       ", sngl(vars%prcs      (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="snowfall",units="kg/m2/day (water equivalent)",ncid=ncid)
+    call nc_write(fnm,"prcw_o18   ", sngl(vars%prcs      (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="snowfall containing O18",units="g/m2/day",ncid=ncid)
     call nc_write(fnm,"hcld       ", sngl(vars%hcld      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="cloud top height",units="m",ncid=ncid)
     call nc_write(fnm,"ctt        ", sngl(vars%ctt       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2649,8 +2674,10 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated dry static energy convergence by mean circulation",units="W/m2",ncid=ncid)
     call nc_write(fnm,"convddse   ", sngl(vars%convddse   (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated dry static energy convergence by synoptic eddies",units="",ncid=ncid)
-    call nc_write(fnm,"convwtr    ", sngl(vars%convwtr    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"convwtr    ", sngl(vars%convwtr    (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated moisture convergence",units="kg/m2/day",ncid=ncid)
+    call nc_write(fnm,"convwtr_o18", sngl(vars%convwtr    (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated moisture convergence containing O18",units="g/m2/day",ncid=ncid)
     call nc_write(fnm,"convawtr   ", sngl(vars%convawtr   (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated moisture convergence by mean circulation",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"convdwtr   ", sngl(vars%convdwtr   (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2666,8 +2693,10 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell average surface sensible heat flux",units="W/m2",ncid=ncid)
     call nc_write(fnm,"lha        ", sngl(vars%lha        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell average surface latent heat flux",units="W/m2",ncid=ncid)
-    call nc_write(fnm,"evpa       ", sngl(vars%evpa       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"evpa       ", sngl(vars%evpa       (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell average evaporation",units="kg/m2/day",ncid=ncid)
+    call nc_write(fnm,"evpa_o18   ", sngl(vars%evpa       (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell average evaporation containing O18",units="g/m2/day",ncid=ncid)
     call nc_write(fnm,"Ri         ", sngl(vars%Ri         (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="bulk Richardson number",units="1",ncid=ncid)
     call nc_write(fnm,"acbar      ", sngl(vars%acbar      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2929,22 +2958,30 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal dry static energy flux by mean circulation",units="kg/s*K",ncid=ncid)
     call nc_write(fnm,"faxcpt    ", sngl(vars%faxcpt    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal cp*T flux by mean circulation",units="kg/s*K",ncid=ncid)
-    call nc_write(fnm,"faxwtr    ", sngl(vars%faxwtr    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"faxwtr    ", sngl(vars%faxwtr    (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal moisture flux by mean circulation",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"faxwtr_o18", sngl(vars%faxwtr    (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal moisture flux by mean circulation, containing O18",units="g/s",ncid=ncid)
     call nc_write(fnm,"faydse    ", sngl(vars%faydse    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional dry static energy flux by mean circulation",units="kg/s*K",ncid=ncid)
     call nc_write(fnm,"faycpt    ", sngl(vars%faycpt    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional cp*T flux by mean circulation",units="kg/s*K",ncid=ncid)
-    call nc_write(fnm,"faywtr    ", sngl(vars%faywtr    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"faywtr    ", sngl(vars%faywtr    (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional moisture flux by mean circulation",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"faywtr_o18", sngl(vars%faywtr    (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional moisture flux by mean circulation, containing O18",units="g/s",ncid=ncid)
     call nc_write(fnm,"fdxdse    ", sngl(vars%fdxdse    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal dry static energy flux by synoptic eddies",units="kg/s*K",ncid=ncid)
-    call nc_write(fnm,"fdxwtr    ", sngl(vars%fdxwtr    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"fdxwtr    ", sngl(vars%fdxwtr    (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal moisture flux by synoptic eddies",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"fdxwtr_o18", sngl(vars%fdxwtr    (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal moisture flux by synoptic eddies, containing O18",units="g/s",ncid=ncid)
     call nc_write(fnm,"fdydse    ", sngl(vars%fdydse    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional dry static energy flux by synoptic eddies",units="kg/s*K",ncid=ncid)
-    call nc_write(fnm,"fdywtr    ", sngl(vars%fdywtr    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+    call nc_write(fnm,"fdywtr    ", sngl(vars%fdywtr    (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional moisture flux by synoptic eddies",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"fdywtr_o18", sngl(vars%fdywtr    (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated meridional moisture flux by synoptic eddies, containing O18",units="g/s",ncid=ncid)
     endif
 
    return
@@ -3003,7 +3040,7 @@ contains
 
     call nc_write(fnm,"tam        ", sngl(vars%tam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"tskina     ", sngl(vars%tskina    (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1,1)), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"cam        ", sngl(vars%cam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"lha        ", sngl(vars%lha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"sha        ", sngl(vars%sha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
@@ -3019,7 +3056,7 @@ contains
     call nc_write(fnm,"prc        ", sngl(vars%prc       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"wind       ", sngl(vars%wind      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"convdse    ", sngl(vars%convdse   (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"convwtr    ", sngl(vars%convwtr   (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"convwtr    ", sngl(vars%convwtr   (:,jm:1:-1,1)), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"slp        ", sngl(vars%slp       (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"us         ", sngl(vars%us        (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"vs         ", sngl(vars%vs        (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
@@ -3082,8 +3119,8 @@ contains
     ave%hqeff       = 0._wp
     ave%hrm         = 0._wp
     ave%wcon        = 0._wp
-    ave%cld_rh        = 0._wp
-    ave%cld_low        = 0._wp
+    ave%cld_rh      = 0._wp
+    ave%cld_low     = 0._wp
     ave%cld         = 0._wp
     ave%prc         = 0._wp
     ave%prcw        = 0._wp
@@ -3134,43 +3171,43 @@ contains
     ave%rho         = 0._wp
     ave%acbar       = 0._wp
     ave%epsa        = 0._wp
-    ave%tsksl        = 0._wp
-    ave%atsksl        = 0._wp
+    ave%tsksl       = 0._wp
+    ave%atsksl      = 0._wp
     ave%atsl        = 0._wp
-    ave%atsli         = 0._wp
+    ave%atsli       = 0._wp
     ave%aslp        = 0._wp
     ave%aslp_temp   = 0._wp
     ave%aslp_topo   = 0._wp
     ave%dz500       = 0._wp
     ave%slp         = 0._wp
     ave%slp1        = 0._wp
-    ave%us         = 0._wp
-    ave%vs         = 0._wp
-    ave%usk        = 0._wp
-    ave%vsk        = 0._wp
-    ave%ugb        = 0._wp
-    ave%vgb        = 0._wp
-    ave%uab        = 0._wp
-    ave%vab        = 0._wp
+    ave%us          = 0._wp
+    ave%vs          = 0._wp
+    ave%usk         = 0._wp
+    ave%vsk         = 0._wp
+    ave%ugb         = 0._wp
+    ave%vgb         = 0._wp
+    ave%uab         = 0._wp
+    ave%vab         = 0._wp
     ave%taux        = 0._wp
     ave%tauy        = 0._wp
     ave%wcld        = 0._wp
     ave%woro        = 0._wp
     ave%weff        = 0._wp
     ave%fweff       = 0._wp
-    ave%ua         = 0._wp
-    ave%va         = 0._wp
-    ave%u3         = 0._wp
-    ave%v3         = 0._wp
-    ave%w3         = 0._wp
+    ave%ua          = 0._wp
+    ave%va          = 0._wp
+    ave%u3          = 0._wp
+    ave%v3          = 0._wp
+    ave%w3          = 0._wp
     ave%uter        = 0._wp
     ave%vter        = 0._wp
     if (l_output_flx3d) then
-      ave%fax        = 0._wp
-      ave%faxo       = 0._wp
-      ave%fay        = 0._wp
-      ave%fayo       = 0._wp
-      ave%fac        = 0._wp
+      ave%fax       = 0._wp
+      ave%faxo      = 0._wp
+      ave%fay       = 0._wp
+      ave%fayo      = 0._wp
+      ave%fac       = 0._wp
     endif
     ave%xz          = 0._wp
     ave%diffxdse    = 0._wp
@@ -3184,38 +3221,38 @@ contains
     ave%convwtr     = 0._wp
     ave%convawtr    = 0._wp
     ave%convdwtr    = 0._wp
-    ave%faxmas     = 0._wp
-    ave%faymas     = 0._wp
-    ave%faxdse     = 0._wp
-    ave%faxcpt     = 0._wp
-    ave%faxwtr     = 0._wp
-    ave%faydse     = 0._wp
-    ave%faycpt     = 0._wp
-    ave%faywtr     = 0._wp
-    ave%fdxdse     = 0._wp
-    ave%fdxwtr     = 0._wp
-    ave%fdydse     = 0._wp
-    ave%fdywtr     = 0._wp
-    ave%fayg       = 0._wp
-    ave%faydseg    = 0._wp
-    ave%faycptg    = 0._wp
-    ave%faygzg     = 0._wp
-    ave%fayleg     = 0._wp
-    ave%faywtrg    = 0._wp
-    ave%fdydseg    = 0._wp
-    ave%fdyleg     = 0._wp
-    ave%fdywtrg    = 0._wp
-    ave%fydseg     = 0._wp
-    ave%fyheatg    = 0._wp
-    ave%fyleg      = 0._wp
-    ave%fywtrg     = 0._wp
+    ave%faxmas      = 0._wp
+    ave%faymas      = 0._wp
+    ave%faxdse      = 0._wp
+    ave%faxcpt      = 0._wp
+    ave%faxwtr      = 0._wp
+    ave%faydse      = 0._wp
+    ave%faycpt      = 0._wp
+    ave%faywtr      = 0._wp
+    ave%fdxdse      = 0._wp
+    ave%fdxwtr      = 0._wp
+    ave%fdydse      = 0._wp
+    ave%fdywtr      = 0._wp
+    ave%fayg        = 0._wp
+    ave%faydseg     = 0._wp
+    ave%faycptg     = 0._wp
+    ave%faygzg      = 0._wp
+    ave%fayleg      = 0._wp
+    ave%faywtrg     = 0._wp
+    ave%fdydseg     = 0._wp
+    ave%fdyleg      = 0._wp
+    ave%fdywtrg     = 0._wp
+    ave%fydseg      = 0._wp
+    ave%fyheatg     = 0._wp
+    ave%fyleg       = 0._wp
+    ave%fywtrg      = 0._wp
     ave%fswr_sur    = 0._wp
     ave%flwr_dw_sur = 0._wp
     ave%flwr_dw_sur_cs = 0._wp
     ave%flwr_dw_sur_cld = 0._wp
     ave%flwr_up_sur = 0._wp
-    ave%dswd_dalb_vu_cs  = 0._wp
-    ave%dswd_dalb_ir_cs  = 0._wp
+    ave%dswd_dalb_vu_cs = 0._wp
+    ave%dswd_dalb_ir_cs = 0._wp
     ave%dswd_dalb_vu_cld = 0._wp
     ave%dswd_dalb_ir_cld = 0._wp
     ave%dswd_dz_ir_cs  = 0._wp
@@ -3223,21 +3260,21 @@ contains
     ave%rb_top      = 0._wp
     ave%rb_sur      = 0._wp
     ave%rb_atm      = 0._wp
-    ave%swr_top    = 0._wp
-    ave%swr_atm    = 0._wp
-    ave%swr_top_cs    = 0._wp
-    ave%swr_sur    = 0._wp
-    ave%swr_sur_cs    = 0._wp
-    ave%swr_dw_sur = 0._wp
-    ave%swr_dw_top = 0._wp
-    ave%lwr_atm    = 0._wp
-    ave%lwr_atm_cld    = 0._wp
-    ave%lwr_top    = 0._wp
-    ave%lwr_top_cs    = 0._wp
-    ave%lwr_sur    = 0._wp
-    ave%lwr_sur_cs = 0._wp
-    ave%lwr_tro = 0._wp
-    ave%lwr_cld = 0._wp
+    ave%swr_top     = 0._wp
+    ave%swr_atm     = 0._wp
+    ave%swr_top_cs  = 0._wp
+    ave%swr_sur     = 0._wp
+    ave%swr_sur_cs  = 0._wp
+    ave%swr_dw_sur  = 0._wp
+    ave%swr_dw_top  = 0._wp
+    ave%lwr_atm     = 0._wp
+    ave%lwr_atm_cld = 0._wp
+    ave%lwr_top     = 0._wp
+    ave%lwr_top_cs  = 0._wp
+    ave%lwr_sur     = 0._wp
+    ave%lwr_sur_cs  = 0._wp
+    ave%lwr_tro     = 0._wp
+    ave%lwr_cld     = 0._wp
     ave%rb_str      = 0._wp
     ave%cre_top     = 0._wp
     ave%swr_cre_top = 0._wp
@@ -3258,17 +3295,17 @@ contains
     ave%cdif        = 0._wp
     ave%fw_pac_atl  = 0.
     ave%fw_atl_indpac = 0.
-    ave%hdust         = 0.
-    ave%dust_load     = 0.
-    ave%dust_emis     = 0.
-    ave%dust_dep      = 0.
-    ave%dust_dep_dry  = 0.
-    ave%dust_dep_wet  = 0.
-    ave%dust_ot       = 0.
-    ave%cam           = 0.
-    ave%co2d          = 0.
-    ave%co2flx        = 0.
-    ave%so4_ot        = 0.
+    ave%hdust       = 0.
+    ave%dust_load   = 0.
+    ave%dust_emis   = 0.
+    ave%dust_dep    = 0.
+    ave%dust_dep_dry = 0.
+    ave%dust_dep_wet = 0.
+    ave%dust_ot     = 0.
+    ave%cam         = 0.
+    ave%co2d        = 0.
+    ave%co2flx      = 0.
+    ave%so4_ot      = 0.
 
     ! Loop over the time indices to sum up and average (if necessary)
     do k = 1, n
@@ -3276,7 +3313,7 @@ contains
        ave%had_width   = ave%had_width   + d(k)%had_width   / div
        ave%ptrop       = ave%ptrop       + d(k)%ptrop       / div
        ave%tslz        = ave%tslz        + d(k)%tslz        / div
-       ave%tskslz       = ave%tskslz       + d(k)%tskslz       / div
+       ave%tskslz      = ave%tskslz      + d(k)%tskslz      / div
        ave%ekez        = ave%ekez        + d(k)%ekez        / div
        ave%slpz        = ave%slpz        + d(k)%slpz        / div
        ave%vabz        = ave%vabz        + d(k)%vabz        / div
@@ -3294,8 +3331,8 @@ contains
        ave%hqeff       = ave%hqeff       + d(k)%hqeff       / div
        ave%hrm         = ave%hrm         + d(k)%hrm         / div
        ave%wcon        = ave%wcon        + d(k)%wcon        / div
-       ave%cld_rh         = ave%cld_rh         + d(k)%cld_rh         / div
-       ave%cld_low         = ave%cld_low         + d(k)%cld_low         / div
+       ave%cld_rh      = ave%cld_rh      + d(k)%cld_rh      / div
+       ave%cld_low     = ave%cld_low     + d(k)%cld_low     / div
        ave%cld         = ave%cld         + d(k)%cld         / div
        ave%prc         = ave%prc         + d(k)%prc         / div
        ave%prcw        = ave%prcw        + d(k)%prcw        / div
@@ -3348,47 +3385,47 @@ contains
        ave%epsa        = ave%epsa        + d(k)%epsa        / div
        ave%slp         = ave%slp         + d(k)%slp         / div
        ave%slp1        = ave%slp1        + d(k)%slp1        / div
-       ave%tsksl        = ave%tsksl        + d(k)%tsksl        / div
-       ave%atsksl        = ave%atsksl        + d(k)%atsksl        / div
+       ave%tsksl       = ave%tsksl       + d(k)%tsksl       / div
+       ave%atsksl      = ave%atsksl      + d(k)%atsksl      / div
        ave%atsl        = ave%atsl        + d(k)%atsl        / div
-       ave%atsli        = ave%atsli        + d(k)%atsli        / div
+       ave%atsli       = ave%atsli       + d(k)%atsli       / div
        ave%aslp        = ave%aslp        + d(k)%aslp        / div
        ave%aslp_temp   = ave%aslp_temp   + d(k)%aslp_temp   / div
        ave%aslp_topo   = ave%aslp_topo   + d(k)%aslp_topo   / div
        ave%dz500       = ave%dz500       + d(k)%dz500       / div
-       ave%us         = ave%us         + d(k)%us         / div
-       ave%vs         = ave%vs         + d(k)%vs         / div
-       ave%usk        = ave%usk        + d(k)%usk        / div
-       ave%vsk        = ave%vsk        + d(k)%vsk        / div
-       ave%ugb        = ave%ugb        + d(k)%ugb        / div
-       ave%vgb        = ave%vgb        + d(k)%vgb        / div
-       ave%uab        = ave%uab        + d(k)%uab        / div
-       ave%vab        = ave%vab        + d(k)%vab        / div
+       ave%us          = ave%us          + d(k)%us          / div
+       ave%vs          = ave%vs          + d(k)%vs          / div
+       ave%usk         = ave%usk         + d(k)%usk         / div
+       ave%vsk         = ave%vsk         + d(k)%vsk         / div
+       ave%ugb         = ave%ugb         + d(k)%ugb         / div
+       ave%vgb         = ave%vgb         + d(k)%vgb         / div
+       ave%uab         = ave%uab         + d(k)%uab         / div
+       ave%vab         = ave%vab         + d(k)%vab         / div
        ave%taux        = ave%taux        + d(k)%taux        / div
        ave%tauy        = ave%tauy        + d(k)%tauy        / div
        ave%wcld        = ave%wcld        + d(k)%wcld        / div
        ave%woro        = ave%woro        + d(k)%woro        / div
        ave%weff        = ave%weff        + d(k)%weff        / div
        ave%fweff       = ave%fweff       + d(k)%fweff       / div
-       ave%ua         = ave%ua         + d(k)%ua         / div
-       ave%va         = ave%va         + d(k)%va         / div
-       ave%u3         = ave%u3         + d(k)%u3         / div
-       ave%v3         = ave%v3         + d(k)%v3         / div
-       ave%w3         = ave%w3         + d(k)%w3         / div
+       ave%ua          = ave%ua          + d(k)%ua          / div
+       ave%va          = ave%va          + d(k)%va          / div
+       ave%u3          = ave%u3          + d(k)%u3          / div
+       ave%v3          = ave%v3          + d(k)%v3          / div
+       ave%w3          = ave%w3          + d(k)%w3          / div
        ave%uter        = ave%uter        + d(k)%uter        / div
        ave%vter        = ave%vter        + d(k)%vter        / div
        if (l_output_flx3d) then
-         ave%fax        = ave%fax        + d(k)%fax        / div
-         ave%faxo       = ave%faxo       + d(k)%faxo       / div
-         ave%fay        = ave%fay        + d(k)%fay        / div
-         ave%fayo       = ave%fayo       + d(k)%fayo       / div
-         ave%fac        = ave%fac        + d(k)%fac        / div
+         ave%fax       = ave%fax         + d(k)%fax         / div
+         ave%faxo      = ave%faxo        + d(k)%faxo        / div
+         ave%fay       = ave%fay         + d(k)%fay         / div
+         ave%fayo      = ave%fayo        + d(k)%fayo        / div
+         ave%fac       = ave%fac         + d(k)%fac         / div
        endif
        ave%xz          = ave%xz          + d(k)%xz          / div
-       ave%diffxdse        = ave%diffxdse        + d(k)%diffxdse        / div
-       ave%diffydse        = ave%diffydse        + d(k)%diffydse        / div
-       ave%diffxwtr        = ave%diffxwtr        + d(k)%diffxwtr        / div
-       ave%diffywtr        = ave%diffywtr        + d(k)%diffywtr        / div
+       ave%diffxdse    = ave%diffxdse    + d(k)%diffxdse    / div
+       ave%diffydse    = ave%diffydse    + d(k)%diffydse    / div
+       ave%diffxwtr    = ave%diffxwtr    + d(k)%diffxwtr    / div
+       ave%diffywtr    = ave%diffywtr    + d(k)%diffywtr    / div
        ave%wsyn        = ave%wsyn        + d(k)%wsyn        / div
        ave%convdse     = ave%convdse     + d(k)%convdse     / div
        ave%convadse    = ave%convadse    + d(k)%convadse    / div
@@ -3396,60 +3433,60 @@ contains
        ave%convwtr     = ave%convwtr     + d(k)%convwtr     / div
        ave%convawtr    = ave%convawtr    + d(k)%convawtr    / div
        ave%convdwtr    = ave%convdwtr    + d(k)%convdwtr    / div
-       ave%faxmas     = ave%faxmas     + d(k)%faxmas     / div 
-       ave%faymas     = ave%faymas     + d(k)%faymas     / div 
-       ave%faxdse     = ave%faxdse     + d(k)%faxdse     / div 
-       ave%faxcpt     = ave%faxcpt     + d(k)%faxcpt     / div 
-       ave%faxwtr     = ave%faxwtr     + d(k)%faxwtr     / div
-       ave%faydse     = ave%faydse     + d(k)%faydse     / div
-       ave%faycpt     = ave%faycpt     + d(k)%faycpt     / div
-       ave%faywtr     = ave%faywtr     + d(k)%faywtr     / div
-       ave%fdxdse     = ave%fdxdse     + d(k)%fdxdse     / div
-       ave%fdxwtr     = ave%fdxwtr     + d(k)%fdxwtr     / div
-       ave%fdydse     = ave%fdydse     + d(k)%fdydse     / div
-       ave%fdywtr     = ave%fdywtr     + d(k)%fdywtr     / div
-       ave%fayg       = ave%fayg       + d(k)%fayg       / div
-       ave%faydseg    = ave%faydseg    + d(k)%faydseg    / div
-       ave%faycptg    = ave%faycptg    + d(k)%faycptg    / div
-       ave%faygzg     = ave%faygzg     + d(k)%faygzg     / div
-       ave%fayleg     = ave%fayleg     + d(k)%fayleg     / div
-       ave%faywtrg    = ave%faywtrg    + d(k)%faywtrg    / div
-       ave%fdydseg    = ave%fdydseg    + d(k)%fdydseg    / div
-       ave%fdyleg     = ave%fdyleg     + d(k)%fdyleg     / div
-       ave%fdywtrg    = ave%fdywtrg    + d(k)%fdywtrg    / div
-       ave%fydseg     = ave%fydseg     + d(k)%fydseg     / div
-       ave%fyheatg    = ave%fyheatg    + d(k)%fyheatg    / div
-       ave%fyleg      = ave%fyleg      + d(k)%fyleg      / div
-       ave%fywtrg     = ave%fywtrg     + d(k)%fywtrg     / div
+       ave%faxmas      = ave%faxmas      + d(k)%faxmas      / div 
+       ave%faymas      = ave%faymas      + d(k)%faymas      / div 
+       ave%faxdse      = ave%faxdse      + d(k)%faxdse      / div 
+       ave%faxcpt      = ave%faxcpt      + d(k)%faxcpt      / div 
+       ave%faxwtr      = ave%faxwtr      + d(k)%faxwtr      / div
+       ave%faydse      = ave%faydse      + d(k)%faydse      / div
+       ave%faycpt      = ave%faycpt      + d(k)%faycpt      / div
+       ave%faywtr      = ave%faywtr      + d(k)%faywtr      / div
+       ave%fdxdse      = ave%fdxdse      + d(k)%fdxdse      / div
+       ave%fdxwtr      = ave%fdxwtr      + d(k)%fdxwtr      / div
+       ave%fdydse      = ave%fdydse      + d(k)%fdydse      / div
+       ave%fdywtr      = ave%fdywtr      + d(k)%fdywtr      / div
+       ave%fayg        = ave%fayg        + d(k)%fayg        / div
+       ave%faydseg     = ave%faydseg     + d(k)%faydseg     / div
+       ave%faycptg     = ave%faycptg     + d(k)%faycptg     / div
+       ave%faygzg      = ave%faygzg      + d(k)%faygzg      / div
+       ave%fayleg      = ave%fayleg      + d(k)%fayleg      / div
+       ave%faywtrg     = ave%faywtrg     + d(k)%faywtrg     / div
+       ave%fdydseg     = ave%fdydseg     + d(k)%fdydseg     / div
+       ave%fdyleg      = ave%fdyleg      + d(k)%fdyleg      / div
+       ave%fdywtrg     = ave%fdywtrg     + d(k)%fdywtrg     / div
+       ave%fydseg      = ave%fydseg      + d(k)%fydseg      / div
+       ave%fyheatg     = ave%fyheatg     + d(k)%fyheatg     / div
+       ave%fyleg       = ave%fyleg       + d(k)%fyleg       / div
+       ave%fywtrg      = ave%fywtrg      + d(k)%fywtrg      / div
        ave%fswr_sur    = ave%fswr_sur    + d(k)%fswr_sur    / div
        ave%flwr_dw_sur = ave%flwr_dw_sur + d(k)%flwr_dw_sur / div
        ave%flwr_dw_sur_cs = ave%flwr_dw_sur_cs + d(k)%flwr_dw_sur_cs / div
        ave%flwr_dw_sur_cld = ave%flwr_dw_sur_cld + d(k)%flwr_dw_sur_cld / div
        ave%flwr_up_sur = ave%flwr_up_sur + d(k)%flwr_up_sur / div
-       ave%dswd_dalb_vu_cs  = ave%dswd_dalb_vu_cs  + d(k)%dswd_dalb_vu_cs    / div 
-       ave%dswd_dalb_ir_cs  = ave%dswd_dalb_ir_cs  + d(k)%dswd_dalb_ir_cs    / div 
-       ave%dswd_dalb_vu_cld = ave%dswd_dalb_vu_cld + d(k)%dswd_dalb_vu_cld   / div 
-       ave%dswd_dalb_ir_cld = ave%dswd_dalb_ir_cld + d(k)%dswd_dalb_ir_cld   / div 
-       ave%dswd_dz_ir_cs  = ave%dswd_dz_ir_cs  + d(k)%dswd_dz_ir_cs    / div 
-       ave%dswd_dz_ir_cld = ave%dswd_dz_ir_cld + d(k)%dswd_dz_ir_cld   / div 
+       ave%dswd_dalb_vu_cs = ave%dswd_dalb_vu_cs + d(k)%dswd_dalb_vu_cs / div 
+       ave%dswd_dalb_ir_cs = ave%dswd_dalb_ir_cs + d(k)%dswd_dalb_ir_cs / div 
+       ave%dswd_dalb_vu_cld = ave%dswd_dalb_vu_cld + d(k)%dswd_dalb_vu_cld / div 
+       ave%dswd_dalb_ir_cld = ave%dswd_dalb_ir_cld + d(k)%dswd_dalb_ir_cld / div 
+       ave%dswd_dz_ir_cs  = ave%dswd_dz_ir_cs + d(k)%dswd_dz_ir_cs / div 
+       ave%dswd_dz_ir_cld = ave%dswd_dz_ir_cld + d(k)%dswd_dz_ir_cld / div 
        ave%rb_top      = ave%rb_top      + d(k)%rb_top      / div
        ave%rb_sur      = ave%rb_sur      + d(k)%rb_sur      / div
        ave%rb_atm      = ave%rb_atm      + d(k)%rb_atm      / div
-       ave%swr_atm    = ave%swr_atm    + d(k)%swr_atm    / div
-       ave%swr_top    = ave%swr_top    + d(k)%swr_top    / div
-       ave%swr_top_cs    = ave%swr_top_cs    + d(k)%swr_top_cs    / div
-       ave%swr_sur    = ave%swr_sur    + d(k)%swr_sur    / div
-       ave%swr_sur_cs    = ave%swr_sur_cs    + d(k)%swr_sur_cs    / div
-       ave%swr_dw_sur = ave%swr_dw_sur + d(k)%swr_dw_sur / div
-       ave%swr_dw_top = ave%swr_dw_top + d(k)%swr_dw_top / div
-       ave%lwr_atm    = ave%lwr_atm    + d(k)%lwr_atm    / div
-       ave%lwr_atm_cld    = ave%lwr_atm_cld    + d(k)%lwr_atm_cld    / div
-       ave%lwr_top    = ave%lwr_top    + d(k)%lwr_top    / div
-       ave%lwr_top_cs    = ave%lwr_top_cs    + d(k)%lwr_top_cs    / div
-       ave%lwr_sur    = ave%lwr_sur    + d(k)%lwr_sur    / div
-       ave%lwr_sur_cs = ave%lwr_sur_cs + d(k)%lwr_sur_cs / div
-       ave%lwr_tro = ave%lwr_tro + d(k)%lwr_tro / div
-       ave%lwr_cld = ave%lwr_cld + d(k)%lwr_cld / div
+       ave%swr_atm     = ave%swr_atm     + d(k)%swr_atm     / div
+       ave%swr_top     = ave%swr_top     + d(k)%swr_top     / div
+       ave%swr_top_cs  = ave%swr_top_cs  + d(k)%swr_top_cs  / div
+       ave%swr_sur     = ave%swr_sur     + d(k)%swr_sur     / div
+       ave%swr_sur_cs  = ave%swr_sur_cs  + d(k)%swr_sur_cs  / div
+       ave%swr_dw_sur  = ave%swr_dw_sur  + d(k)%swr_dw_sur  / div
+       ave%swr_dw_top  = ave%swr_dw_top  + d(k)%swr_dw_top  / div
+       ave%lwr_atm     = ave%lwr_atm     + d(k)%lwr_atm     / div
+       ave%lwr_atm_cld = ave%lwr_atm_cld + d(k)%lwr_atm_cld / div
+       ave%lwr_top     = ave%lwr_top     + d(k)%lwr_top     / div
+       ave%lwr_top_cs  = ave%lwr_top_cs  + d(k)%lwr_top_cs  / div
+       ave%lwr_sur     = ave%lwr_sur     + d(k)%lwr_sur     / div
+       ave%lwr_sur_cs  = ave%lwr_sur_cs  + d(k)%lwr_sur_cs  / div
+       ave%lwr_tro     = ave%lwr_tro     + d(k)%lwr_tro     / div
+       ave%lwr_cld     = ave%lwr_cld     + d(k)%lwr_cld     / div
        ave%rb_str      = ave%rb_str      + d(k)%rb_str      / div
        ave%cre_top     = ave%cre_top     + d(k)%cre_top     / div
        ave%swr_cre_top = ave%swr_cre_top + d(k)%swr_cre_top / div
@@ -3470,17 +3507,17 @@ contains
        ave%cdif        = ave%cdif        + d(k)%cdif        / div
        ave%fw_pac_atl  = ave%fw_pac_atl  + d(k)%fw_pac_atl  / div
        ave%fw_atl_indpac = ave%fw_atl_indpac + d(k)%fw_atl_indpac / div
-       ave%hdust        = ave%hdust        + d(k)%hdust        / div
-       ave%dust_load    = ave%dust_load    + d(k)%dust_load    / div
-       ave%dust_emis    = ave%dust_emis    + d(k)%dust_emis    / div
-       ave%dust_dep     = ave%dust_dep     + d(k)%dust_dep     / div
+       ave%hdust       = ave%hdust       + d(k)%hdust       / div
+       ave%dust_load   = ave%dust_load   + d(k)%dust_load   / div
+       ave%dust_emis   = ave%dust_emis   + d(k)%dust_emis   / div
+       ave%dust_dep    = ave%dust_dep    + d(k)%dust_dep    / div
        ave%dust_dep_dry = ave%dust_dep_dry + d(k)%dust_dep_dry / div
        ave%dust_dep_wet = ave%dust_dep_wet + d(k)%dust_dep_wet / div
-       ave%dust_ot      = ave%dust_ot      + d(k)%dust_ot      / div
-       ave%cam          = ave%cam     + d(k)%cam    / div
-       ave%co2d         = ave%co2d    + d(k)%co2d   / div
-       ave%co2flx       = ave%co2flx  + d(k)%co2flx / div
-       ave%so4_ot       = ave%so4_ot       + d(k)%so4_ot       / div
+       ave%dust_ot     = ave%dust_ot     + d(k)%dust_ot     / div
+       ave%cam         = ave%cam         + d(k)%cam         / div
+       ave%co2d        = ave%co2d        + d(k)%co2d        / div
+       ave%co2flx      = ave%co2flx      + d(k)%co2flx      / div
+       ave%so4_ot      = ave%so4_ot      + d(k)%so4_ot      / div
     enddo
 
    return
