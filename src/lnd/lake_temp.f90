@@ -453,7 +453,7 @@ contains
 
     !----------------------------------------
     ! convective adjustment
-    call lake_convection(t_lake(1:nl_l), f_i_lake, dz_loc(1:nl_l), t_freeze_lake, &
+    call lake_convection(t_lake(1:nl_l), f_i_lake, dz_loc(1:nl_l), cap(1:nl_l), t_freeze_lake, &
                          h_lake_conv, h_lake_mix)
 
 

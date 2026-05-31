@@ -2834,12 +2834,12 @@ contains
 
        ! write to standard output
        if (mod(year,10).eq.1) then
-         print '(a7,a9,14a7)','ocn','year','SST','SSS','TVOL','SVOL','AMOC','PMOC','AABW','hAMOC','FWFnet','FLXnet','Drake','Indo','Bering','Ashelf'
+         print '(a7,a9,15a7)','ocn','year','SST','SSS','TVOL','SVOL','AMOC','PMOC','AABW','hAMOC','FWFnet','Qnets','Qnetb','Drake','Indo','Bering','Ashelf'
        endif
 
-       print '(a7,i9,8F7.1,2F7.2,4F7.1)', &
+       print '(a7,i9,8F7.1,3F7.2,4F7.1)', &
          'ocn',year_now,ann_ts(y)%sst,ann_ts(y)%sss,ann_ts(y)%t,ann_ts(y)%s,ann_ts(y)%omaxa,ann_ts(y)%omaxp,-ann_ts(y)%omins, &
-         ann_ts(y)%hmaxa,ann_ts(y)%fw(1),ann_ts(y)%flx(1)*1.e15_wp/ocn%grid%ocn_area_tot,ann_ts(y)%drake,ann_ts(y)%indo,ann_ts(y)%bering,ann_ts(y)%shelf
+         ann_ts(y)%hmaxa,ann_ts(y)%fw(1),ann_ts(y)%flx(1)*1.e15_wp/ocn%grid%ocn_area_tot,sum(ocn%q_geo*ocn_area)/ocn%grid%ocn_area_tot,ann_ts(y)%drake,ann_ts(y)%indo,ann_ts(y)%bering,ann_ts(y)%shelf
 
        ! write to netcdf file 
        if (time_out_ts_clim) then

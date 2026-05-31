@@ -34,6 +34,7 @@ module ocn_model
 
     use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, year_now, year, nyears, nday_year, nstep_year_ocn, doy
     use control, only : ocn_restart, restart_in_dir, out_dir
+    use control, only : check_energy
     use constants, only : pi, cap_w, Lf, omega
     use climber_grid, only : lon, lat
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
@@ -69,6 +70,9 @@ module ocn_model
     real(wp), allocatable :: sst_min_act(:,:)  !! minimum annual surface layer temperature for corals [degC]
     real(wp), allocatable :: sst_max_act(:,:)  !! maximum annual surface layer temperature for corals [degC]
 
+    ! maximum allowed ocean heat imbalance for the energy conservation check (check_energy) [W/m2]
+    real(wp), parameter :: ocn_heat_tol = 1.e-3_wp
+
     private
     public :: ocn_init, ocn_update, ocn_end
     public :: ocn_read_restart, ocn_write_restart
@@ -92,6 +96,11 @@ contains
     real(wp) :: sal_before, sal_after
     real(wp) :: vsf_saln0, vsf_saloc
     real(wp) :: avg, tv1
+    ! variables for the per-time-step ocean energy conservation check (check_energy)
+    real(dp) :: ocn_heat_bef, ocn_heat_aft   ! ocean heat content before/after transport [J]
+    real(dp) :: ocn_heat_input               ! net surface+geothermal heat input over the time step [J]
+    real(dp) :: dheat_tot, dheat_adv, dheat_diff, dheat_conv  ! heat content change by process [J]
+    real(wp) :: res_tot, res_adv, res_diff, res_conv          ! heat imbalance by process [W/m2]
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -451,6 +460,22 @@ contains
     !do i=1,n_tracers_tot
     !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
     !enddo
+
+    !------------------------------------------------------------------------
+    ! energy conservation check: heat content and net heat input before transport
+    !------------------------------------------------------------------------
+    ! Transport (advection+diffusion+convection) is the only process changing the
+    ! ocean temperature, and the only heat sources are the surface and geothermal
+    ! fluxes entering through flx_sur(:,:,1) and flx_bot(:,:,1).
+    if (check_energy) then
+      ! total ocean heat content before transport [J] (ocn_vol=0 outside the ocean)
+      ocn_heat_bef = cap_w*rho0*sum(real(ocn%ts(:,:,:,1),dp)*real(ocn_vol,dp))
+      ! net surface + geothermal heat input over this time step [J]
+      ! flx_sur(:,:,1) [m/s*K] is positive upward (-> -flx_sur is the downward surface heat flux)
+      ! flx_bot(:,:,1) [m/s*K] is positive into the bottom ocean layer (= q_geo/cap_w/rho0)
+      ocn_heat_input = cap_w*rho0*sum(real(-ocn%flx_sur(:,:,1)+ocn%flx_bot(:,:,1),dp)*real(ocn_area,dp))*dt
+    endif
+
     !$ time1 = omp_get_wtime()
     call transport(ocn%l_tracers_trans,ocn%l_tracer_dic,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
                   ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
@@ -462,7 +487,40 @@ contains
     !do i=1,n_tracers_tot
     !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
     !enddo
-    
+
+    !------------------------------------------------------------------------
+    ! energy conservation check: evaluate heat budget after transport
+    !------------------------------------------------------------------------
+    if (check_energy) then
+      ! total ocean heat content after transport [J]
+      ocn_heat_aft = cap_w*rho0*sum(real(ocn%ts(:,:,:,1),dp)*real(ocn_vol,dp))
+      ! total heat content change [J]
+      dheat_tot  = ocn_heat_aft - ocn_heat_bef
+      ! heat content change by advection [J] (carries the surface and geothermal boundary fluxes)
+      dheat_adv  = cap_w*rho0*sum(real(ocn%dts_dt_adv(:,:,:,1),dp)*real(ocn_vol,dp))*dt
+      ! heat content change by diffusion [J] (internal redistribution, should be ~0)
+      dheat_diff = cap_w*rho0*sum(real(ocn%dts_dt_diff(:,:,:,1),dp)*real(ocn_vol,dp))*dt
+      ! heat content change by convection + mixed layer [J] (in-place, should be ~0)
+      dheat_conv = dheat_tot - dheat_adv - dheat_diff
+      ! express the imbalances as mean heat fluxes over the ocean surface [W/m2]
+      ! advection should balance the imposed boundary heat input; diffusion and convection should conserve heat
+      res_adv  = real((dheat_adv-ocn_heat_input)/dt/ocn_area_tot,wp)
+      res_diff = real(dheat_diff/dt/ocn_area_tot,wp)
+      res_conv = real(dheat_conv/dt/ocn_area_tot,wp)
+      res_tot  = real((dheat_tot-ocn_heat_input)/dt/ocn_area_tot,wp)
+      if (abs(res_tot).gt.ocn_heat_tol) then
+        print *
+        print *,'WARNING: ocean energy not conserved! year, doy ',year, doy
+        print *,'net heat imbalance        [W/m2] ',res_tot
+        print *,'  from advection          [W/m2] ',res_adv
+        print *,'  from diffusion          [W/m2] ',res_diff
+        print *,'  from convection + mld   [W/m2] ',res_conv
+        print *,'heat content change       [J]    ',dheat_tot
+        print *,'net surface+geo heat input[J]    ',ocn_heat_input
+      endif
+    endif
+
+
     !------------------------------------------------------------------------
     ! restore global salinity to reference value
     !------------------------------------------------------------------------
@@ -500,7 +558,7 @@ contains
     if (time_eoy_ocn) ocn%sst_max = sst_max_act
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'sst',time2-time1
- 
+
 
    return
 
@@ -918,8 +976,8 @@ contains
     allocate(ocn%fax(0:maxi,0:maxj,0:maxk,n_tracers_tot))
     allocate(ocn%fay(0:maxi,0:maxj,0:maxk,n_tracers_tot))
     allocate(ocn%faz(0:maxi,0:maxj,0:maxk,n_tracers_tot))
-    allocate(ocn%dts_dt_adv(maxi,maxj,maxk,n_tracers_tot))
-    allocate(ocn%dts_dt_diff(maxi,maxj,maxk,n_tracers_tot))
+    allocate(ocn%dts_dt_adv(maxi,maxj,maxk,n_tracers_tot), source=0._wp)   ! initialised: non-ocean cells are never updated but enter the energy check sums
+    allocate(ocn%dts_dt_diff(maxi,maxj,maxk,n_tracers_tot), source=0._wp)
     allocate(ocn%sst_min(maxi,maxj))
     allocate(ocn%sst_max(maxi,maxj))
     allocate(ocn%flx_sur(maxi,maxj,n_tracers_tot))
