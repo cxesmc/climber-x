@@ -26,7 +26,7 @@
 module soil_carbon_par_mod
 
   use precision, only : wp
-  use timer, only : doy, mon, year, nday_mon, nmon_year, nstep_mon_lnd, time_eoy_lnd
+  use timer, only : doy, mon, year, nday_mon, nmon_year, nstep_mon_lnd, time_eoy_lnd, sec_year
   use constants, only : T0, k_boltz
   use control, only : lnd_restart
   use lnd_grid, only : z_int, z, dz, nl
@@ -46,6 +46,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine soil_carbon_par(f_veg,theta_field,theta_sat,litter_c_peat,acro_c,cato_c,dust_dep, &
                             t_soil_cum,theta_w_cum,theta_i_cum,psi,f_wet_cum,w_table_cum,f_wet_mon,f_wet_long,w_table_mon,t_soil_max, &
+                            frozen_lastyear,thaw_timer,k_slow_to_fast, &
                             ftemp,fmoist,fdepth, &
                             k_litter,k_fast,k_slow,diff_soilc,adv_soilc,k_litter_wet,k_fast_wet,k_slow_wet, &
                             k_litter_peat,k_acro,k_cato,k_litter_peat_anox,k_acro_anox,ch4_frac_wet,ch4_frac_peat, &
@@ -62,6 +63,7 @@ contains
     real(wp), dimension(:), intent(inout) :: f_wet_mon, w_table_mon
     real(wp), dimension(:), intent(inout) :: f_wet_long
     real(wp), dimension(:), intent(inout) :: t_soil_cum, theta_w_cum, theta_i_cum, t_soil_max, ch4_frac_wet, ch4_frac_peat
+    real(wp), dimension(:), intent(inout) :: frozen_lastyear, thaw_timer, k_slow_to_fast
     real(wp), dimension(:), intent(inout) :: ftemp, fmoist, fdepth
     real(wp), dimension(:), intent(inout) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, k_cato, diff_soilc, adv_soilc
     real(wp), intent(inout) :: k_litter_peat, k_acro, k_litter_peat_anox, k_acro_anox
@@ -76,6 +78,8 @@ contains
     real(wp), dimension(nl) :: kcato
     real(wp) :: temp, f_peat_pot_old
     real(wp), dimension(nmonwet) :: f_wet_ordered
+    real(wp) :: k_thaw_rate
+    real(wp), dimension(nl) :: kslow_to_fast
 
 
     ! average cumulated monthly variables
@@ -149,6 +153,37 @@ contains
         enddo
       endif
     endif
+
+    ! permafrost-thaw mobilisation of slow soil carbon to the fast pool
+    ! detect layers transitioning from perennially frozen to seasonally thawed at end of year,
+    ! using the same temperature criterion (t_soil_max<=T0) that defines the active layer thickness alt above
+    if( soilc_par%l_c_thaw .and. time_eoy_lnd ) then
+      do k=1,nl
+        ! one year of any running priming window has elapsed
+        thaw_timer(k) = max(0._wp, thaw_timer(k)-1._wp)
+        ! frozen->thawed edge: perennially frozen last year, seasonally thawed this year -> (re)start priming window
+        if( frozen_lastyear(k).gt.0.5_wp .and. t_soil_max(k).gt.T0 ) then
+          thaw_timer(k) = soilc_par%n_thaw
+        endif
+        ! update previous-year perennially-frozen mask for next year's edge detection
+        frozen_lastyear(k) = merge(1._wp, 0._wp, t_soil_max(k).le.T0)
+      enddo
+    endif
+
+    ! per-step slow->fast conversion rate, calibrated so that a fraction f_slow_to_fast_thaw of the
+    ! slow pool is mobilised over the n_thaw-year priming window (irreversible)
+    if( soilc_par%l_c_thaw .and. soilc_par%f_slow_to_fast_thaw.gt.0._wp ) then
+      k_thaw_rate = -log(1._wp - min(soilc_par%f_slow_to_fast_thaw,0.999_wp)) / (soilc_par%n_thaw*sec_year)  ! 1/s
+    else
+      k_thaw_rate = 0._wp
+    endif
+    do k=1,nl
+      if( thaw_timer(k).gt.0._wp ) then
+        kslow_to_fast(k) = k_thaw_rate
+      else
+        kslow_to_fast(k) = 0._wp
+      endif
+    enddo
 
     ! temperature dependence of decomposition rate
     do k=1,nl
@@ -296,9 +331,10 @@ contains
     if (mon.eq.1) then
       diff_soilc = 0._wp
       adv_soilc = 0._wp
-      k_litter = 0._wp 
-      k_fast = 0._wp 
+      k_litter = 0._wp
+      k_fast = 0._wp
       k_slow = 0._wp
+      k_slow_to_fast = 0._wp
       k_litter_wet = 0._wp
       k_fast_wet = 0._wp
       k_slow_wet = 0._wp
@@ -317,6 +353,9 @@ contains
     k_litter(1:nl)   = k_litter(1:nl) + klitter
     k_fast(1:nl)     = k_fast(1:nl) + kfast
     k_slow(1:nl)     = k_slow(1:nl) + kslow
+
+    ! permafrost-thaw slow->fast conversion rate (cumulated like k_slow)
+    k_slow_to_fast(1:nl) = k_slow_to_fast(1:nl) + kslow_to_fast
 
     ! wetland (exluding peatland)
     k_litter_wet(1:nl) = k_litter_wet(1:nl) + klitter_wet
@@ -339,6 +378,7 @@ contains
     k_litter(nlc) = 0._wp
     k_fast(nlc)   = 0._wp
     k_slow(nlc)   = 0._wp
+    k_slow_to_fast(nlc) = 0._wp
     k_litter_wet(nlc) = 0._wp
     k_fast_wet(nlc)   = 0._wp
     k_slow_wet(nlc)   = 0._wp

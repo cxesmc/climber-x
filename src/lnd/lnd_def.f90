@@ -135,6 +135,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: kappa_int
      real(wp), allocatable, dimension(:) :: theta_sat, k_sat, psi_sat, theta_field, theta_wilt
      real(wp), allocatable, dimension(:) :: t_soil, t_soil_old, t_soil_max
+     real(wp), allocatable, dimension(:) :: frozen_lastyear, thaw_timer   ! permafrost-thaw priming state
      real(wp), allocatable, dimension(:) :: t_ice, t_ice_old
      real(wp), allocatable, dimension(:) :: t_shelf, t_shelf_old, t_shelf_max
      real(wp), allocatable, dimension(:) :: t_lake, t_lake_old
@@ -169,6 +170,7 @@ module lnd_def
      real(wp), allocatable, dimension(:,:) :: water_iso_cons                        ! (nsoil,nwiso) conservation residual
      real(wp), allocatable, dimension(:) :: ftemp, fmoist, fdepth
      real(wp), allocatable, dimension(:) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
+     real(wp), allocatable, dimension(:) :: k_slow_to_fast   ! permafrost-thaw slow->fast conversion rate
      real(wp), allocatable, dimension(:) :: k_litter_shelf, k_fast_shelf, k_slow_shelf, diff_shelfc, adv_shelfc
      real(wp), allocatable, dimension(:) :: k_litter_lake, k_fast_lake, k_slow_lake, diff_lakec, adv_lakec
      real(wp), allocatable, dimension(:) :: k_litter_ice, k_fast_ice, k_slow_ice, diff_icec, adv_icec

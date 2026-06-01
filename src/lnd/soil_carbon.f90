@@ -48,7 +48,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine soil_carbon(f_veg,f_wetland,f_peat,f_crop,f_pasture,litterfall,litterfall13,litterfall14, &
                         litter_c,fast_c,slow_c,litter_c13,fast_c13,slow_c13,litter_c14,fast_c14,slow_c14, &
-                        k_litter,k_fast,k_slow,k_litter_wet,k_fast_wet,k_slow_wet,diff_soilc,adv_soilc,ch4_frac_wet, &
+                        k_litter,k_fast,k_slow,k_slow_to_fast,k_litter_wet,k_fast_wet,k_slow_wet,diff_soilc,adv_soilc,ch4_frac_wet, &
                         soil_resp,soil_resp13,soil_resp14,soil_resp_l,soil_c_tot,soil_c13_tot,soil_c14_tot, &
                         ch4_emis_wetland,c13h4_emis_wetland,carbon_bal_soil,carbon13_bal_soil,carbon14_bal_soil)
 
@@ -57,7 +57,7 @@ contains
     real(wp), intent(in) :: f_veg, f_wetland, f_peat, f_crop, f_pasture
     real(wp), dimension(:), intent(in) :: litterfall, litterfall13, litterfall14
     real(wp), dimension(:), intent(inout) :: litter_c, fast_c, slow_c, litter_c13, fast_c13, slow_c13, litter_c14, fast_c14, slow_c14
-    real(wp), dimension(:), intent(inout) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
+    real(wp), dimension(:), intent(inout) :: k_litter, k_fast, k_slow, k_slow_to_fast, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
     real(wp), dimension(:), intent(inout) :: ch4_frac_wet
     real(wp), intent(inout) :: soil_resp, soil_resp13, soil_resp14
     real(wp), dimension(:), intent(inout) :: soil_resp_l
@@ -74,6 +74,8 @@ contains
     real(wp), dimension(1:nlc) :: litter_c14_old, fast_c14_old, slow_c14_old
     real(wp), dimension(1:nl) :: litter_resp14, fast_resp14, slow_resp14
     real(wp), dimension(1:nlc) :: klitter, kfast, kslow, diff, adv
+    real(wp), dimension(1:nl) :: ks2f, frac_thaw
+    real(wp), dimension(1:nl) :: slow_to_fast
     real(wp) :: f_inund
 
 
@@ -116,10 +118,16 @@ contains
     ! vertical carbon advection
     adv = adv_soilc / real(dt_day_c,wp)*day_mon
 
+    ! permafrost-thaw slow->fast conversion rate (averaged like the decomposition rates above),
+    ! and the resulting per-step fraction of the slow pool moved to the fast pool in newly-thawed layers
+    ks2f = k_slow_to_fast(1:nl) / real(dt_day_c,wp)*day_mon  ! 1/s
+    frac_thaw = 1._wp - exp(-ks2f*dt_c)
+
     ! reset cumulated values
     k_litter = 0._wp
     k_fast = 0._wp
     k_slow = 0._wp
+    k_slow_to_fast = 0._wp
     k_litter_wet = 0._wp
     k_fast_wet = 0._wp
     k_slow_wet = 0._wp
@@ -199,6 +207,12 @@ contains
     slow_c = x
 
     slow_resp = kslow(1:nl)*slow_c(1:nl)*dz_c(1:nl)   ! kgC/m2/s
+
+    ! permafrost-thaw: irreversibly move a fraction of the slow pool to the fast pool in newly-thawed layers
+    ! (internal redistribution, total carbon conserved)
+    slow_to_fast = frac_thaw*slow_c(1:nl)
+    fast_c(1:nl) = fast_c(1:nl) + slow_to_fast
+    slow_c(1:nl) = slow_c(1:nl) - slow_to_fast
 
     ! total soil respiration
     soil_resp = sum(litter_resp) + sum(fast_resp) + sum(slow_resp) ! kgC/m2/s
@@ -300,6 +314,11 @@ contains
 
     slow_resp13 = kslow(1:nl)*slow_c13(1:nl)*dz_c(1:nl)   ! kgC/m2/s
 
+    ! permafrost-thaw slow->fast transfer (same fraction as bulk carbon, preserves isotopic ratio)
+    slow_to_fast = frac_thaw*slow_c13(1:nl)
+    fast_c13(1:nl) = fast_c13(1:nl) + slow_to_fast
+    slow_c13(1:nl) = slow_c13(1:nl) - slow_to_fast
+
     ! total soil respiration
     soil_resp13 = sum(litter_resp13) + sum(fast_resp13) + sum(slow_resp13) ! kgC/m2/s
 
@@ -400,6 +419,10 @@ contains
 
     slow_resp14 = kslow(1:nl)*slow_c14(1:nl)*dz_c(1:nl)   ! kgC/m2/s
 
+    ! permafrost-thaw slow->fast transfer (same fraction as bulk carbon, preserves isotopic ratio)
+    slow_to_fast = frac_thaw*slow_c14(1:nl)
+    fast_c14(1:nl) = fast_c14(1:nl) + slow_to_fast
+    slow_c14(1:nl) = slow_c14(1:nl) - slow_to_fast
 
     ! total soil respiration
     soil_resp14 = sum(litter_resp14) + sum(fast_resp14) + sum(slow_resp14) ! kgC/m2/s

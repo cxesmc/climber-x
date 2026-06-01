@@ -162,6 +162,8 @@ module lnd_out
     real(wp), dimension(nx,ny) :: fuel, f_fire_fuel, f_fire_cwd
     real(wp), dimension(nx,ny) :: bare
     real(wp), dimension(nx,ny,ncarb) :: sresp, sresp13, sresp14, soilc, litter
+    real(wp), dimension(nx,ny,nl) :: frozen_lastyear, thaw_timer   ! permafrost-thaw priming state
+    real(wp), dimension(nx,ny,nlc) :: k_slow_to_fast               ! permafrost-thaw slow->fast conversion rate
     real(wp), allocatable, dimension(:,:,:,:) :: litter_prof, litter13_prof, litter14_prof
     real(wp), allocatable, dimension(:,:,:,:) :: litterc_prof, fastc_prof, slowc_prof, soilc_prof
     real(wp), allocatable, dimension(:,:,:,:) :: litterc13_prof, fastc13_prof, slowc13_prof, soilc13_prof
@@ -1740,6 +1742,9 @@ contains
                 ann_c%litterc_prof(i,j,:,ic_min)   = lnd(i,j)%litter_c
                 ann_c%fastc_prof(i,j,:,ic_min)  = lnd(i,j)%fast_c
                 ann_c%slowc_prof(i,j,:,ic_min)  = lnd(i,j)%slow_c
+                ann_c%frozen_lastyear(i,j,:) = lnd(i,j)%frozen_lastyear
+                ann_c%thaw_timer(i,j,:)      = lnd(i,j)%thaw_timer
+                ann_c%k_slow_to_fast(i,j,:)  = lnd(i,j)%k_slow_to_fast
                 ann_c%slowc_prof(i,j,:,ic_peat)   = lnd(i,j)%cato_c
                 ann_c%litterc_prof(i,j,:,ic_shelf)   = lnd(i,j)%litter_c_shelf
                 ann_c%fastc_prof(i,j,:,ic_shelf)  = lnd(i,j)%fast_c_shelf
@@ -3076,7 +3081,10 @@ end do
     call nc_write(fnm,"fastc_prof",       sngl(vars%fastc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="fast soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"slowc_prof",       sngl(vars%slowc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="slow soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"soilc_prof",       sngl(vars%soilc_prof),  dims=[dim_lon,dim_lat,dim_depth,dim_ncarb,dim_time],start=[1,1,1,1,nout],count=[nx,ny,nlc,ncarb,1],long_name="total soil carbon",units="kgC/m3",missing_value=missing_value,ncid=ncid)
-   
+    call nc_write(fnm,"frozen_lastyear", sngl(vars%frozen_lastyear), dims=[dim_lon,dim_lat,dim_depth,dim_time],start=[1,1,1,nout],count=[nx,ny,nl,1],long_name="permafrost-thaw: previous-year perennially-frozen mask",units="/",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"thaw_timer",      sngl(vars%thaw_timer),      dims=[dim_lon,dim_lat,dim_depth,dim_time],start=[1,1,1,nout],count=[nx,ny,nl,1],long_name="permafrost-thaw: priming years remaining",units="yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"k_slow_to_fast",  sngl(vars%k_slow_to_fast),  dims=[dim_lon,dim_lat,dim_depth,dim_time],start=[1,1,1,nout],count=[nx,ny,nlc,1],long_name="permafrost-thaw: cumulated slow->fast conversion rate",units="1/s",missing_value=missing_value,ncid=ncid)
+
     if (veg_par%i_fire.eq.2) then
     call nc_write(fnm,"fuel",       sngl(vars%fuel),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="fuel for fire",units="kgC/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"f_fire_fuel", sngl(vars%f_fire_fuel),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="fuel factor for fire disturbance",units="1",missing_value=missing_value,ncid=ncid)
