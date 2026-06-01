@@ -218,7 +218,7 @@
     peat_area    = T            ! include peatland dynamic area changes
     nmonwet_peat  = 3           ! number of month fraction has to be inundated to become potential peatland
     acroc_crit = 5.0            ! kgC/m2, critical acrotelm carbon content for catotelm formation rate, 7.5d0 Wania 2009
-    k10_acro = 15               ! yr, acrotelm decomposition time scale at 10 degC, 10 Spahni 2013, 15 Kleinen 2012
+    k10_acro = 25               ! yr, acrotelm decomposition time scale at 10 degC, 10 Spahni 2013, 15 Kleinen 2012
     k10_cato = 1000             ! yr, catotelm decomposition time scale at 10 degC, 1000 Spahni 2013
     k_acro_to_cato = 10.e-3     ! 1/yr, catotlem formation rate, 12.d-3 Wania 2009, 19.d-3 Kleinen 2012
     peat_ch_rate = 0.01         ! 1/yr, rate of peat areal expansion or contraction, 0.01d0 Stocker 2014
