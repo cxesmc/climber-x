@@ -242,25 +242,33 @@ contains
 
       ! no-flux condition at the poles
       if (j.eq.jm) then
-        faydse(:,jmc) = 0._wp              
-        faywtr(:,jmc) = 0._wp          
-        faydst(:,jmc) = 0._wp          
-        fayco2(:,jmc) = 0._wp          
-        fdydse(:,jmc) = 0._wp              
-        fdywtr(:,jmc) = 0._wp        
-        fdydst(:,jmc) = 0._wp 
-        fdyco2(:,jmc) = 0._wp 
+        faydse(:,jmc) = 0._wp
+        faywtr(:,jmc,1) = 0._wp
+        faywtr(:,jmc,2) = 0._wp
+        faywtr(:,jmc,3) = 0._wp
+        faydst(:,jmc) = 0._wp
+        fayco2(:,jmc) = 0._wp
+        fdydse(:,jmc) = 0._wp
+        fdywtr(:,jmc,1) = 0._wp
+        fdywtr(:,jmc,2) = 0._wp
+        fdywtr(:,jmc,3) = 0._wp
+        fdydst(:,jmc) = 0._wp
+        fdyco2(:,jmc) = 0._wp
       endif
 
       ! Cycling
-      faxdse(imc,j) = faxdse(1,j)              
-      faxwtr(imc,j) = faxwtr(1,j)          
-      faxdst(imc,j) = faxdst(1,j)          
-      faxco2(imc,j) = faxco2(1,j)          
-      fdxdse(imc,j) = fdxdse(1,j)              
-      fdxwtr(imc,j) = fdxwtr(1,j)        
-      fdxdst(imc,j) = fdxdst(1,j)        
-      fdxco2(imc,j) = fdxco2(1,j)        
+      faxdse(imc,j) = faxdse(1,j)
+      faxwtr(imc,j,1) = faxwtr(1,j,1)
+      faxwtr(imc,j,2) = faxwtr(1,j,2)
+      faxwtr(imc,j,3) = faxwtr(1,j,3)
+      faxdst(imc,j) = faxdst(1,j)
+      faxco2(imc,j) = faxco2(1,j)
+      fdxdse(imc,j) = fdxdse(1,j)
+      fdxwtr(imc,j,1) = fdxwtr(1,j,1)
+      fdxwtr(imc,j,2) = fdxwtr(1,j,2)
+      fdxwtr(imc,j,3) = fdxwtr(1,j,3)
+      fdxdst(imc,j) = fdxdst(1,j)
+      fdxco2(imc,j) = fdxco2(1,j)
 
     enddo
     !$omp end parallel do

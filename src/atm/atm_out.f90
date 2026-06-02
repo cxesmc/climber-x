@@ -709,7 +709,7 @@ contains
      allocate(mon_a(k)%cld(im,jm)) 
      allocate(mon_a(k)%prc(im,jm)) 
      allocate(mon_a(k)%prcw(im,jm,lm))
-     allocate(mon_a(k)%prcs(im,jm))
+     allocate(mon_a(k)%prcs(im,jm,lm))
      allocate(mon_a(k)%prc_conv(im,jm))
      allocate(mon_a(k)%prc_wcon(im,jm))
      allocate(mon_a(k)%prc_over(im,jm))
@@ -749,7 +749,7 @@ contains
      allocate(mon_a(k)%cda(im,jm))
      allocate(mon_a(k)%sha(im,jm))
      allocate(mon_a(k)%lha(im,jm))
-     allocate(mon_a(k)%evpa(im,jm))
+     allocate(mon_a(k)%evpa(im,jm,lm))
      allocate(mon_a(k)%Ri(im,jm))
  
      allocate(mon_a(k)%hdust(im,jm)) 
@@ -1233,22 +1233,22 @@ contains
         ann_co2flx     = ann_co2flx     + atm%co2flx(i,j)*12._wp/44.0095*sqr(i,j)*sec_day   ! kgCO2/m2/s * kgC/kgCO2 * m2 * s = kgC
         ann_t2m        = ann_t2m        + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg
         if (-lat(j).ge.0._wp) then
-          ann_t2mnh      = ann_t2mnh      + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg*2._wp
+          ann_t2mnh    = ann_t2mnh      + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg*2._wp
         else
-          ann_t2msh      = ann_t2msh      + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg*2._wp
+          ann_t2msh    = ann_t2msh      + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg*2._wp
         endif
         if (-lat(j).ge.60._wp) then
-          ann_t2mn6090 = ann_t2mn6090 + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg6090
+          ann_t2mn6090 = ann_t2mn6090   + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg6090
         endif
         if (lat(j).ge.60._wp) then
-          ann_t2ms6090 = ann_t2ms6090 + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg6090
+          ann_t2ms6090 = ann_t2ms6090   + sum(atm%t2(i,j,:)*atm%frst(i,j,:))*favg6090
         endif
         ann_q2m        = ann_q2m        + sum(atm%q2(i,j,:)*atm%frst(i,j,:))*favg
         ann_r2m        = ann_r2m        + sum(atm%r2(i,j,:)*atm%frst(i,j,:))*favg
         ann_tskin      = ann_tskin      + sum(atm%tskin(i,j,:)*atm%frst(i,j,:))*favg
         ann_tam        = ann_tam        + atm%tam(i,j)*favg
         ann_prc        = ann_prc        + atm%prc(i,j)*sec_day*fcum
-        ann_evp        = ann_evp        + atm%evpa(i,j)*sec_day*fcum
+        ann_evp        = ann_evp        + atm%evpa(i,j,1)*sec_day*fcum
         ann_wcon       = ann_wcon       + atm%wcon(i,j)*favg
         ann_cld        = ann_cld        + atm%cld(i,j)*favg
         ann_sha        = ann_sha        + atm%sha(i,j)*favg
@@ -1289,7 +1289,7 @@ contains
         ann_tam_l      = ann_tam_l     + atm%tam(i,j)*favgl
         ann_tskin_l    = ann_tskin_l   + sum(atm%tskin(i,j,:)*atm%frst(i,j,:))*favgl
         ann_prc_l      = ann_prc_l     + atm%prc(i,j)*sec_day*sqr(i,j)*atm%frlnd(i,j)
-        ann_evp_l      = ann_evp_l     + atm%evpa(i,j)*sec_day*sqr(i,j)*atm%frlnd(i,j)
+        ann_evp_l      = ann_evp_l     + atm%evpa(i,j,1)*sec_day*sqr(i,j)*atm%frlnd(i,j)
         ann_wcon_l     = ann_wcon_l    + atm%wcon(i,j)*favgl
         ann_cld_l      = ann_cld_l     + atm%cld(i,j)*favgl
         ann_sha_l      = ann_sha_l     + atm%sha(i,j)*favgl
@@ -1712,8 +1712,14 @@ contains
       mon_a(mon)%cld_low     = mon_a(mon)%cld_low     + mon_avg * atm%cld_low
       mon_a(mon)%cld         = mon_a(mon)%cld         + mon_avg * atm%cld
       mon_a(mon)%prc         = mon_a(mon)%prc         + mon_avg * atm%prc*sec_day
-      mon_a(mon)%prcw        = mon_a(mon)%prcw        + mon_avg * sum(atm%prcw*atm%frst,3)*sec_day
-      mon_a(mon)%prcs        = mon_a(mon)%prcs        + mon_avg * sum(atm%prcs*atm%frst,3)*sec_day
+      mon_a(mon)%prcw(:,:,1) = mon_a(mon)%prcw(:,:,1) + mon_avg * sum(atm%prcw(:,:,:,1)*atm%frst,3)*sec_day
+      mon_a(mon)%prcw(:,:,2) = mon_a(mon)%prcw(:,:,2) + mon_avg * sum(atm%prcw(:,:,:,2)*atm%frst,3)*sec_day
+      mon_a(mon)%prcw(:,:,3) = mon_a(mon)%prcw(:,:,3) + mon_avg * sum(atm%prcw(:,:,:,3)*atm%frst,3)*sec_day
+      mon_a(mon)%prcs(:,:,1) = mon_a(mon)%prcs(:,:,1) + mon_avg * sum(atm%prcs(:,:,:,1)*atm%frst,3)*sec_day
+      mon_a(mon)%prcs(:,:,2) = mon_a(mon)%prcs(:,:,2) + mon_avg * sum(atm%prcs(:,:,:,2)*atm%frst,3)*sec_day
+      mon_a(mon)%prcs(:,:,3) = mon_a(mon)%prcs(:,:,3) + mon_avg * sum(atm%prcs(:,:,:,3)*atm%frst,3)*sec_day
+      !mon_a(mon)%prcw        = mon_a(mon)%prcw        + mon_avg * sum(atm%prcw*atm%frst,3)*sec_day
+      !mon_a(mon)%prcs        = mon_a(mon)%prcs        + mon_avg * sum(atm%prcs*atm%frst,3)*sec_day
       mon_a(mon)%prc_conv    = mon_a(mon)%prc_conv    + mon_avg * atm%prc_conv*sec_day
       mon_a(mon)%prc_wcon    = mon_a(mon)%prc_wcon    + mon_avg * atm%prc_wcon*sec_day
       mon_a(mon)%prc_over    = mon_a(mon)%prc_over    + mon_avg * atm%prc_over*sec_day
@@ -1817,8 +1823,8 @@ contains
       mon_a(mon)%co2flx      = mon_a(mon)%co2flx      + mon_avg * atm%co2flx*1.e3*sec_day   ! gCO2/m2/day
       mon_a(mon)%so4_ot      = mon_a(mon)%so4_ot      + mon_avg * sigma_so4*atm%so4
       mon_a(mon)%d18o_qam    = mon_a(mon)%d18o_qam    + mon_avg * atm%d18o_qam
-      mon_a(mon)%d18o_prcw   = mon_a(mon)%d18o_prcw   + mon_avg * atm%d18o_prcw
-      mon_a(mon)%d18o_prcs   = mon_a(mon)%d18o_prcs   + mon_avg * atm%d18o_prcs
+      mon_a(mon)%d18o_prcw   = mon_a(mon)%d18o_prcw   + mon_avg * sum(atm%d18o_prcw*atm%frst,3)
+      mon_a(mon)%d18o_prcs   = mon_a(mon)%d18o_prcs   + mon_avg * sum(atm%d18o_prcs*atm%frst,3)
 
       do j=1,jm
         do i=1,im
@@ -1903,78 +1909,79 @@ contains
             faxmasi = faxmasi + 0.5*(atm%fax(i,j,k) + atm%fax(i+1,j,k))  ! kg/m2/s
             faymasi = faymasi + 0.5*(atm%fay(i,j,k) + atm%fay(i,j+1,k))  ! kg/m2/s
           enddo
-          mon_a(mon)%faxmas(i,j)     = mon_a(mon)%faxmas(i,j)     + mon_avg * faxmasi/dy      ! kg/m2/s /m  = kg/s/m
-          mon_a(mon)%faymas(i,j)     = mon_a(mon)%faymas(i,j)     + mon_avg * faymasi/dy      ! kg/m2/s /m  = kg/s/m
+          mon_a(mon)%faxmas(i,j)     = mon_a(mon)%faxmas(i,j)   + mon_avg * faxmasi/dy  ! kg/m2/s /m  = kg/s/m
+          mon_a(mon)%faymas(i,j)     = mon_a(mon)%faymas(i,j)   + mon_avg * faymasi/dy  ! kg/m2/s /m  = kg/s/m
           ! vertically integrated potential temperature and water vapor flux
-          mon_a(mon)%faxdse(i,j)     = mon_a(mon)%faxdse(i,j)     + mon_avg * 0.5*(atm%faxdse(i,j) + atm%faxdse(i+1,j))*cp/dy      ! kg/s*K *J/K/kg /m  = W/m
-          mon_a(mon)%faxcpt(i,j)     = mon_a(mon)%faxcpt(i,j)     + mon_avg * 0.5*(faxcpt(i,j) + faxcpt(i+1,j))*cp/dy      ! kg/s*K *J/K/kg /m  = W/m
-          mon_a(mon)%faydse(i,j)     = mon_a(mon)%faydse(i,j)     + mon_avg * 0.5*(atm%faydse(i,j) + atm%faydse(i,j+1))*cp/dxt(j) 
-          mon_a(mon)%faycpt(i,j)     = mon_a(mon)%faycpt(i,j)     + mon_avg * 0.5*(faycpt(i,j) + faycpt(i,j+1))*cp/dxt(j) 
-          mon_a(mon)%fdxdse(i,j)     = mon_a(mon)%fdxdse(i,j)     + mon_avg * 0.5*(atm%fdxdse(i,j) + atm%fdxdse(i+1,j))*cp/dy 
-          mon_a(mon)%fdydse(i,j)     = mon_a(mon)%fdydse(i,j)     + mon_avg * 0.5*(atm%fdydse(i,j) + atm%fdydse(i,j+1))*cp/dxt(j) 
+          mon_a(mon)%faxdse(i,j)     = mon_a(mon)%faxdse(i,j)   + mon_avg * 0.5*(atm%faxdse(i,j) + atm%faxdse(i+1,j))*cp/dy  ! kg/s*K *J/K/kg /m  = W/m
+          mon_a(mon)%faxcpt(i,j)     = mon_a(mon)%faxcpt(i,j)   + mon_avg * 0.5*(faxcpt(i,j)     + faxcpt(i+1,j))*cp/dy      ! kg/s*K *J/K/kg /m  = W/m
+          mon_a(mon)%faydse(i,j)     = mon_a(mon)%faydse(i,j)   + mon_avg * 0.5*(atm%faydse(i,j) + atm%faydse(i,j+1))*cp/dxt(j) 
+          mon_a(mon)%faycpt(i,j)     = mon_a(mon)%faycpt(i,j)   + mon_avg * 0.5*(faycpt(i,j)     + faycpt(i,j+1))*cp/dxt(j) 
+          mon_a(mon)%fdxdse(i,j)     = mon_a(mon)%fdxdse(i,j)   + mon_avg * 0.5*(atm%fdxdse(i,j) + atm%fdxdse(i+1,j))*cp/dy 
+          mon_a(mon)%fdydse(i,j)     = mon_a(mon)%fdydse(i,j)   + mon_avg * 0.5*(atm%fdydse(i,j) + atm%fdydse(i,j+1))*cp/dxt(j) 
           do l=1,lm
-            mon_a(mon)%faxwtr(i,j,l) = mon_a(mon)%faxwtr(i,j,l)   + mon_avg * 0.5*(atm%faxwtr(i,j,l) + atm%faxwtr(i+1,j,l))/dy
-            mon_a(mon)%faywtr(i,j,l) = mon_a(mon)%faywtr(i,j,l)   + mon_avg * 0.5*(atm%faywtr(i,j,l) + atm%faywtr(i,j+1,l))/dxt(j) 
-            mon_a(mon)%fdxwtr(i,j,l) = mon_a(mon)%fdxwtr(i,j,l)   + mon_avg * 0.5*(atm%fdxwtr(i,j,l) + atm%fdxwtr(i+1,j,l))/dy 
-            mon_a(mon)%fdywtr(i,j,l) = mon_a(mon)%fdywtr(i,j,l)   + mon_avg * 0.5*(atm%fdywtr(i,j,l) + atm%fdywtr(i,j+1,l))/dxt(j) 
+            mon_a(mon)%faxwtr(i,j,l) = mon_a(mon)%faxwtr(i,j,l) + mon_avg * 0.5*(atm%faxwtr(i,j,l) + atm%faxwtr(i+1,j,l))/dy
+            mon_a(mon)%faywtr(i,j,l) = mon_a(mon)%faywtr(i,j,l) + mon_avg * 0.5*(atm%faywtr(i,j,l) + atm%faywtr(i,j+1,l))/dxt(j) 
+            mon_a(mon)%fdxwtr(i,j,l) = mon_a(mon)%fdxwtr(i,j,l) + mon_avg * 0.5*(atm%fdxwtr(i,j,l) + atm%fdxwtr(i+1,j,l))/dy 
+            mon_a(mon)%fdywtr(i,j,l) = mon_a(mon)%fdywtr(i,j,l) + mon_avg * 0.5*(atm%fdywtr(i,j,l) + atm%fdywtr(i,j+1,l))/dxt(j) 
+          enddo
         enddo
       enddo
 
-      fayg(:)=0
-      faydseg(:)=0
-      faycptg(:)=0
-      faygzg(:) =0
-      fayleg(:)=0
-      faywtrg(:)=0
-      fdydseg(:)=0
-      fdyleg(:)=0
-      fdywtrg(:)=0
-      fydseg(:)=0
-      fyheatg(:)=0
-      fyleg(:)=0
-      fywtrg(:)=0
+      fayg(:)    = 0
+      faydseg(:) = 0
+      faycptg(:) = 0
+      faygzg(:)  = 0
+      fayleg(:)  = 0
+      faywtrg(:) = 0
+      fdydseg(:) = 0
+      fdyleg(:)  = 0
+      fdywtrg(:) = 0
+      fydseg(:)  = 0
+      fyheatg(:) = 0
+      fyleg(:)   = 0
+      fywtrg(:)  = 0
 
       do j=2,jm
         do i=1,im
 
           do k=1,km
-            fayg(j) =fayg(j)+atm%fay(i,j,k)
-          enddo 
+            fayg(j) = fayg(j)+atm%fay(i,j,k)
+          enddo
 
-          faydseg(j)=faydseg(j)+atm%faydse(i,j)*cp  ! kg/s*K *J/K/kg = W
-          faycptg(j)=faycptg(j)+faycpt(i,j)*cp      ! kg/s*K *J/K/kg = W
-          fayleg(j) =fayleg(j) +atm%faywtr(i,j)*cle ! kg/s * J/kg = W
-          faywtrg(j)=faywtrg(j)+atm%faywtr(i,j)     ! kg/s
-          fdydseg(j)=fdydseg(j)+atm%fdydse(i,j)*cp
-          fdyleg(j) =fdyleg(j) +atm%fdywtr(i,j)*cle ! kg/s * J/kg = W
-          fdywtrg(j)=fdywtrg(j)+atm%fdywtr(i,j)
+          faydseg(j) = faydseg(j) + atm%faydse(i,j)*cp  ! kg/s*K *J/K/kg = W
+          faycptg(j) = faycptg(j) + faycpt(i,j)*cp      ! kg/s*K *J/K/kg = W
+          fayleg(j)  = fayleg(j)  + atm%faywtr(i,j,1)*cle ! kg/s * J/kg = W
+          faywtrg(j) = faywtrg(j) + atm%faywtr(i,j,1)     ! kg/s
+          fdydseg(j) = fdydseg(j) + atm%fdydse(i,j)*cp
+          fdyleg(j)  = fdyleg(j)  + atm%fdywtr(i,j,1)*cle ! kg/s * J/kg = W
+          fdywtrg(j) = fdywtrg(j) + atm%fdywtr(i,j,1)
 
         enddo
 
-        faygzg(j)=faydseg(j)-faycptg(j)
-        fydseg(j)=faydseg(j)+fdydseg(j)
-        fyleg(j) =fayleg(j)+fdyleg(j)
-        fyheatg(j)=fydseg(j)+fyleg(j) 
-        fywtrg(j)=faywtrg(j)+fdywtrg(j)
+        faygzg(j)  = faydseg(j) - faycptg(j)
+        fydseg(j)  = faydseg(j) + fdydseg(j)
+        fyleg(j)   = fayleg(j)  + fdyleg(j)
+        fyheatg(j) = fydseg(j)  + fyleg(j) 
+        fywtrg(j)  = faywtrg(j) + fdywtrg(j)
 
       enddo
 
       deallocate(faxcpt)
       deallocate(faycpt)
 
-      mon_a(mon)%fayg       = mon_a(mon)%fayg       + mon_avg * fayg
-      mon_a(mon)%faydseg    = mon_a(mon)%faydseg    + mon_avg * faydseg*1.e-15    ! PW
-      mon_a(mon)%faycptg    = mon_a(mon)%faycptg    + mon_avg * faycptg*1.e-15    ! PW
-      mon_a(mon)%faygzg     = mon_a(mon)%faygzg     + mon_avg * faygzg *1.e-15    ! PW
-      mon_a(mon)%fayleg     = mon_a(mon)%fayleg     + mon_avg * fayleg *1.e-15    ! PW
-      mon_a(mon)%faywtrg    = mon_a(mon)%faywtrg    + mon_avg * faywtrg
-      mon_a(mon)%fdydseg    = mon_a(mon)%fdydseg    + mon_avg * fdydseg*1.e-15    ! PW
-      mon_a(mon)%fdyleg     = mon_a(mon)%fdyleg     + mon_avg * fdyleg*1.e-15     ! PW
-      mon_a(mon)%fdywtrg    = mon_a(mon)%fdywtrg    + mon_avg * fdywtrg
-      mon_a(mon)%fydseg     = mon_a(mon)%fydseg     + mon_avg * fydseg*1.e-15    ! PW
-      mon_a(mon)%fyheatg    = mon_a(mon)%fyheatg    + mon_avg * fyheatg*1.e-15   ! PW
-      mon_a(mon)%fyleg      = mon_a(mon)%fyleg      + mon_avg * fyleg*1.e-15      ! PW
-      mon_a(mon)%fywtrg     = mon_a(mon)%fywtrg     + mon_avg * fywtrg
+      mon_a(mon)%fayg    = mon_a(mon)%fayg    + mon_avg * fayg
+      mon_a(mon)%faydseg = mon_a(mon)%faydseg + mon_avg * faydseg*1.e-15  ! PW
+      mon_a(mon)%faycptg = mon_a(mon)%faycptg + mon_avg * faycptg*1.e-15  ! PW
+      mon_a(mon)%faygzg  = mon_a(mon)%faygzg  + mon_avg * faygzg *1.e-15  ! PW
+      mon_a(mon)%fayleg  = mon_a(mon)%fayleg  + mon_avg * fayleg *1.e-15  ! PW
+      mon_a(mon)%faywtrg = mon_a(mon)%faywtrg + mon_avg * faywtrg
+      mon_a(mon)%fdydseg = mon_a(mon)%fdydseg + mon_avg * fdydseg*1.e-15  ! PW
+      mon_a(mon)%fdyleg  = mon_a(mon)%fdyleg  + mon_avg * fdyleg*1.e-15   ! PW
+      mon_a(mon)%fdywtrg = mon_a(mon)%fdywtrg + mon_avg * fdywtrg
+      mon_a(mon)%fydseg  = mon_a(mon)%fydseg  + mon_avg * fydseg*1.e-15   ! PW
+      mon_a(mon)%fyheatg = mon_a(mon)%fyheatg + mon_avg * fyheatg*1.e-15  ! PW
+      mon_a(mon)%fyleg   = mon_a(mon)%fyleg   + mon_avg * fyleg*1.e-15    ! PW
+      mon_a(mon)%fywtrg  = mon_a(mon)%fywtrg  + mon_avg * fywtrg
 
       ! water vapor transport in and out of the Atlantic catchment 
       fw_pac_atl = 0.
@@ -2130,7 +2137,7 @@ contains
 
       ! rate of change of atmospheric temperature
       mon_a(mon)%dtamdt = mon_a(mon)%dtamdt &   ! K/day
-        + (atm%convdse + atm%rb_atm + atm%sha + cle*sum(atm%prcw*atm%frst,3)+cls*sum(atm%prcs*atm%frst,3))/(amas*cv) * sec_day * mon_avg   
+        + (atm%convdse + atm%rb_atm + atm%sha + cle*sum(atm%prcw(:,:,:,1)*atm%frst,3)+cls*sum(atm%prcs(:,:,:,1)*atm%frst,3))/(amas*cv) * sec_day * mon_avg   
 
 !      ! todo meridional heat transport from heat fluxes
 !      do i=1,im
@@ -2549,7 +2556,7 @@ contains
     call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1,1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric specific humidity",units="kg/kg",ncid=ncid)
     call nc_write(fnm,"qam_o18    ", sngl(vars%qam       (:,jm:1:-1,3)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="atmospheric specific humidity containing O18",units="g/kg",ncid=ncid)
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric specific humidity containing O18",units="g/kg",ncid=ncid)
     call nc_write(fnm,"ram        ", sngl(vars%ram       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric relative humidity",units="1",ncid=ncid)
     call nc_write(fnm,"gams       ", sngl(vars%gams      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2833,6 +2840,12 @@ contains
       start=[1,1,ndat,nout],count=[imc,jm,1,1],long_name="zonal effective macrodiffusivity for dry water vapor",units="m2/s",ncid=ncid)
     call nc_write(fnm,"diffywtr   ", sngl(vars%diffywtr   (:,jmc:1:-1)), dims=["lon ","latv","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jmc,1,1],long_name="meridional effective macrodiffusivity for water vapor",units="m2/s",ncid=ncid)
+    call nc_write(fnm,"d18o_qam   ", sngl(vars%d18o_qam   (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="deviation of O18/O16 ratio in prognostic atmospheric specific humidity",units="permil",ncid=ncid)
+    call nc_write(fnm,"d18o_prcw  ", sngl(vars%d18o_prcw  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="deviation of O18/O16 ratio in rainfall",units="permil",ncid=ncid)
+    call nc_write(fnm,"d18o_prcs  ", sngl(vars%d18o_prcs  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="deviation of O18/O16 ratio in snowfall",units="permil",ncid=ncid)
 
     call nc_write(fnm,"u3         ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","zlev","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D zonal wind",units="m/s",ncid=ncid)
@@ -3005,17 +3018,17 @@ contains
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
     call nc_open(fnm,ncid)
-    call nc_write_dim(fnm,"time", x=empty_time, axis="t", units="years BP", &
+    call nc_write_dim(fnm,"time",x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
-    call nc_write_dim(fnm,"doy", x=1._wp, dx=1._wp, nx=nday_year, axis="e", &
+    call nc_write_dim(fnm,"doy",x=1._wp, dx=1._wp, nx=nday_year, axis="e", &
     units="days", ncid=ncid)
-    call nc_write_dim(fnm, "lon", x=lon, axis="x", ncid=ncid)
-    call nc_write_dim(fnm, "lat", x=lat, axis="y", ncid=ncid)
-    call nc_write_dim(fnm, "lev", x=zl(1:km), units="m", ncid=ncid)
-    call nc_write_dim(fnm, "lonu",x=-180._wp,dx=5._wp,nx=imc,ncid=ncid)
-    call nc_write_dim(fnm, "latv",x=-90._wp,dx=5._wp,nx=jmc,ncid=ncid)
-    call nc_write_dim(fnm, "levw",x=zl,units="m",ncid=ncid)
-    call nc_write_dim(fnm, "st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
+    call nc_write_dim(fnm,"lon",x=lon, axis="x", ncid=ncid)
+    call nc_write_dim(fnm,"lat",x=lat, axis="y", ncid=ncid)
+    call nc_write_dim(fnm,"lev",x=zl(1:km), units="m", ncid=ncid)
+    call nc_write_dim(fnm,"lonu",x=-180._wp,dx=5._wp,nx=imc,ncid=ncid)
+    call nc_write_dim(fnm,"latv",x=-90._wp,dx=5._wp,nx=jmc,ncid=ncid)
+    call nc_write_dim(fnm,"levw",x=zl,units="m",ncid=ncid)
+    call nc_write_dim(fnm,"st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
     call nc_close(ncid)
 
    return
@@ -3038,33 +3051,33 @@ contains
     integer :: ndat, nout, ncid
 
 
-    call nc_write(fnm,"tam        ", sngl(vars%tam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"tskina     ", sngl(vars%tskina    (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1,1)), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"cam        ", sngl(vars%cam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"lha        ", sngl(vars%lha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"sha        ", sngl(vars%sha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"weff       ", sngl(vars%weff      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"wcld       ", sngl(vars%wcld      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"cld        ", sngl(vars%cld       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"hcld       ", sngl(vars%hcld      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"clot       ", sngl(vars%clot      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"gams       ", sngl(vars%gams      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"gamb       ", sngl(vars%gamb      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"gamt       ", sngl(vars%gamt      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"hrm        ", sngl(vars%hrm       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"prc        ", sngl(vars%prc       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"wind       ", sngl(vars%wind      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"convdse    ", sngl(vars%convdse   (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"convwtr    ", sngl(vars%convwtr   (:,jm:1:-1,1)), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"slp        ", sngl(vars%slp       (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"us         ", sngl(vars%us        (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"vs         ", sngl(vars%vs        (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"ugb        ", sngl(vars%ugb       (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"vgb        ", sngl(vars%vgb       (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"uab        ", sngl(vars%uab       (:,jm:1:-1)),  dims=["lonu","lat ","doy ","time"],start=[1,1,ndat,nout],count=[imc,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"vab        ", sngl(vars%vab       (:,jmc:1:-1)), dims=["lon ","latv","doy ","time"],start=[1,1,ndat,nout],count=[im,jmc,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"sam        ", sngl(vars%sam        (:,jm:1:-1)), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"tam    ",sngl(vars%tam    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"tskina ",sngl(vars%tskina (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"qam    ",sngl(vars%qam    (:,jm:1:-1,1)),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"cam    ",sngl(vars%cam    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"lha    ",sngl(vars%lha    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"sha    ",sngl(vars%sha    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"weff   ",sngl(vars%weff   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"wcld   ",sngl(vars%wcld   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"cld    ",sngl(vars%cld    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"hcld   ",sngl(vars%hcld   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"clot   ",sngl(vars%clot   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"gams   ",sngl(vars%gams   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"gamb   ",sngl(vars%gamb   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"gamt   ",sngl(vars%gamt   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"hrm    ",sngl(vars%hrm    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"prc    ",sngl(vars%prc    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"wind   ",sngl(vars%wind   (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"convdse",sngl(vars%convdse(:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"convwtr",sngl(vars%convwtr(:,jm:1:-1,1)),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"slp    ",sngl(vars%slp    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"us     ",sngl(vars%us     (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"vs     ",sngl(vars%vs     (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"ugb    ",sngl(vars%ugb    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"vgb    ",sngl(vars%vgb    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"uab    ",sngl(vars%uab    (:,jm:1:-1  )),dims=["lonu","lat ","doy ","time"],start=[1,1,ndat,nout],count=[imc,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"vab    ",sngl(vars%vab    (:,jmc:1:-1 )),dims=["lon ","latv","doy ","time"],start=[1,1,ndat,nout],count=[im,jmc,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"sam    ",sngl(vars%sam    (:,jm:1:-1  )),dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1], long_name="",units="",ncid=ncid)
     call nc_write(fnm,"flwr_dw_sur            ", sngl(vars%flwr_dw_sur            (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"flwr_dw_sur_cs         ", sngl(vars%flwr_dw_sur_cs         (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"flwr_dw_sur_cld        ", sngl(vars%flwr_dw_sur_cld        (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)

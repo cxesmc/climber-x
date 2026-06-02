@@ -500,7 +500,7 @@ contains
         ! grid average latent heat flux
         atm%lha(i,j)  = sum(cmn%lh(i,ja,:)*cmn%f_stp(i,ja,:))
         ! grid average evaporation
-        atm%evpa(i,j) = sum(cmn%evp(i,ja,:)*cmn%f_stp(i,ja,:))
+        atm%evpa(i,j,1) = sum(cmn%evp(i,ja,:)*cmn%f_stp(i,ja,:))
 
         ! orographic roughness
         if (i_zoro.eq.0) then
@@ -610,25 +610,25 @@ contains
         cmn%ps(i,j,i_surf_ice) = atm%ps(i,ja,i_surf_macro_ice)
         cmn%ps(i,j,i_surf_lake) = atm%ps(i,ja,i_surf_macro_lake)
 
-        cmn%rain(i,j,i_surf_macro_ocn) = atm%prcw(i,ja,i_surf_macro_ocn)
-        cmn%rain(i,j,i_surf_macro_sic) = atm%prcw(i,ja,i_surf_macro_sic)
+        cmn%rain(i,j,i_surf_macro_ocn) = atm%prcw(i,ja,i_surf_macro_ocn,1)
+        cmn%rain(i,j,i_surf_macro_sic) = atm%prcw(i,ja,i_surf_macro_sic,1)
         do n=1,nsurf_lnd
           if (n.ne.i_surf_lnd_ice .and. n.ne.i_surf_lnd_lake) then
-            cmn%rain(i,j,i_surf_lnd(n)) = atm%prcw(i,ja,i_surf_macro_lnd)
+            cmn%rain(i,j,i_surf_lnd(n)) = atm%prcw(i,ja,i_surf_macro_lnd,1)
           endif
         enddo
-        cmn%rain(i,j,i_surf_ice) = atm%prcw(i,ja,i_surf_macro_ice)
-        cmn%rain(i,j,i_surf_lake) = atm%prcw(i,ja,i_surf_macro_lake)
+        cmn%rain(i,j,i_surf_ice) = atm%prcw(i,ja,i_surf_macro_ice,1)
+        cmn%rain(i,j,i_surf_lake) = atm%prcw(i,ja,i_surf_macro_lake,1)
 
-        cmn%snow(i,j,i_surf_macro_ocn) = atm%prcs(i,ja,i_surf_macro_ocn)
-        cmn%snow(i,j,i_surf_macro_sic) = atm%prcs(i,ja,i_surf_macro_sic)
+        cmn%snow(i,j,i_surf_macro_ocn) = atm%prcs(i,ja,i_surf_macro_ocn,1)
+        cmn%snow(i,j,i_surf_macro_sic) = atm%prcs(i,ja,i_surf_macro_sic,1)
         do n=1,nsurf_lnd
           if (n.ne.i_surf_lnd_ice .and. n.ne.i_surf_lnd_lake) then
-            cmn%snow(i,j,i_surf_lnd(n)) = atm%prcs(i,ja,i_surf_macro_lnd)
+            cmn%snow(i,j,i_surf_lnd(n)) = atm%prcs(i,ja,i_surf_macro_lnd,1)
           endif
         enddo
-        cmn%snow(i,j,i_surf_ice) = atm%prcs(i,ja,i_surf_macro_ice)
-        cmn%snow(i,j,i_surf_lake) = atm%prcs(i,ja,i_surf_macro_lake)
+        cmn%snow(i,j,i_surf_ice) = atm%prcs(i,ja,i_surf_macro_ice,1)
+        cmn%snow(i,j,i_surf_lake) = atm%prcs(i,ja,i_surf_macro_lake,1)
 
         cmn%lwd(i,j,i_surf_macro_ocn)   = atm%flwr_dw_sur(i,ja,i_surf_macro_ocn)
         cmn%lwd(i,j,i_surf_macro_sic)   = atm%flwr_dw_sur(i,ja,i_surf_macro_sic)

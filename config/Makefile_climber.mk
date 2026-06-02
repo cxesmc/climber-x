@@ -12,9 +12,9 @@ obj_version = $(patsubst %, $(objdir)/%, $(tmp_version) )
 # atmospheric model related source files
 dir_atm = $(srcdir)/atm/
 files_atm = atm_params.f90 atm_def.f90 atm_grid.f90 smooth_atm.f90 \
-						adifa.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
-						time_step.f90 lwr.f90 swr.f90 feedbacks.f90 rad_kernels.f90 dust.f90 \
-						atm_model.f90 atm_out.f90
+            oiso_atm.f90 adifa.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
+            time_step.f90 lwr.f90 swr.f90 feedbacks.f90 rad_kernels.f90 dust.f90 \
+            atm_model.f90 atm_out.f90
 tmp_atm = $(patsubst %.f90, %.o, $(files_atm) )
 obj_atm = $(patsubst %, $(objdir)/%, $(tmp_atm) )
 ########################################################################
@@ -320,12 +320,12 @@ $(objdir)/%.o : $(dir_utils)%.f90
 
 #######################
 # atmosphere rules ####
-$(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/adifa.o \
+$(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/oiso_atm.o $(objdir)/adifa.o \
 	$(objdir)/synop.o $(objdir)/smooth_atm.o $(objdir)/wvel.o $(objdir)/clouds.o $(objdir)/vesta.o \
 	$(objdir)/crisa.o $(objdir)/slp.o $(objdir)/u2d.o $(objdir)/u3d.o $(objdir)/time_step.o \
 	$(objdir)/lwr.o $(objdir)/swr.o $(objdir)/feedbacks.o $(objdir)/rad_kernels.o $(objdir)/dust.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
-						
+
 $(objdir)/smooth_atm.o : $(dir_atm)smooth_atm.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
@@ -337,6 +337,9 @@ $(objdir)/atm_params.o : $(dir_atm)atm_params.f90 $(objdir)/constants.o $(objdir
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/atm_def.o : $(dir_atm)atm_def.f90 $(objdir)/atm_params.o $(objdir)/atm_grid.o 
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/oiso_atm.o : $(dir_atm)oiso_atm.f90 $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
@@ -537,7 +540,7 @@ $(objdir)/lnd_def.o : $(dir_lnd)lnd_def.f90 $(objdir)/precision.o $(objdir)/lnd_
 
 $(objdir)/lnd_out.o : $(dir_lnd)lnd_out.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lnd_def.o $(objdir)/veg_par.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
-	
+
 $(objdir)/veg_par.o : $(dir_lnd)veg_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 

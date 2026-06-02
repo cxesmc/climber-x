@@ -33,6 +33,7 @@ module time_step_mod
   use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3, c_wrt_4
   use atm_grid, only : im, jm, lm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
   use vesta_mod, only : t_prof
+  use oiso_atm_mod, only : oiso_fract_prcw, oiso_fract_prcs, d18o_atm
   !$ use omp_lib
 
   implicit none
@@ -66,7 +67,6 @@ contains
     real(wp), intent(in   ) :: psa(:,:)
     real(wp), intent(in   ) :: ra2a(:,:)
     real(wp), intent(in   ) :: slope(:,:)
-    real(wp), intent(in   ) :: evpa(:,:,:)
     real(wp), intent(in   ) :: convwtr(:,:,:)
     real(wp), intent(in   ) :: wcon(:,:)
     real(wp), intent(in   ) :: hqeff(:,:)
@@ -98,6 +98,7 @@ contains
     real(wp), intent(inout) :: prc_conv(:,:)
     real(wp), intent(inout) :: prc_wcon(:,:)
     real(wp), intent(inout) :: prc_over(:,:)
+    real(wp), intent(inout) :: evpa(:,:,:)
 
     real(wp), intent(out  ) :: q2(:,:,:)
     real(wp), intent(out  ) :: q2a(:,:)
@@ -112,7 +113,7 @@ contains
     real(wp), intent(out  ) :: tskina(:,:)
     real(wp), intent(out  ) :: d18o_prcw(:,:,:)  ! TODO(2026-05-28,eberhard): wp or better?
     real(wp), intent(out  ) :: d18o_prcs(:,:,:)  ! TODO(2026-05-28,eberhard): wp or better?
-    real(wp), intent(out  ) :: d18o_qam(:,:,:)   ! TODO(2026-05-28,eberhard): wp or better?
+    real(wp), intent(out  ) :: d18o_qam(:,:)     ! TODO(2026-05-28,eberhard): wp or better?
 
     logical, intent(inout) :: error
 
@@ -142,11 +143,11 @@ contains
         rr = (ram(i,j)/rh_max)
 
         ! moisture convergence due to synoptic activity on slope
-        convwtr_slope = c_wrt_3*sqrt(sam(i,j))*slope(i,j)*ra*qam(i,j) + c_wrt_4*max(0._wp,sam2(i,j)-20._wp)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
-          !+ c_wrt_4*max(0._wp,eke(i,j)-20._wp)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
+        convwtr_slope = c_wrt_3*sqrt(sam(i,j))*slope(i,j)*ra*qam(i,j,1) + c_wrt_4*max(0._wp,sam2(i,j)-20._wp)*ra*qam(i,j,1)  ! m/s * kg/m3 * kg/kg = kg/m2/s
+          !+ c_wrt_4*max(0._wp,eke(i,j)-20._wp)*ra*qam(i,j,1)  ! m/s * kg/m3 * kg/kg = kg/m2/s
 
         ! precipitation from moisture convergence and evaporation
-        prc_ocn_conv = max(0._wp,convwtr(i,j)+convwtr_slope+evpa(i,j))*rr
+        prc_ocn_conv = max(0._wp,convwtr(i,j,1)+convwtr_slope+evpa(i,j,1))*rr
         prc_lnd_conv = prc_ocn_conv
 
         ! additional precipitation from water content and residence time of water in the atmosphere
@@ -181,16 +182,16 @@ contains
 
         ! overflow: precipitation correction 
         prc_over(i,j) = 0._wp
-        if (qam(i,j).gt.rh_max*qsat) then
-          qold = qam(i,j)
+        if (qam(i,j,1).gt.rh_max*qsat) then
+          qold = qam(i,j,1)
           qam(i,j,1) = rh_max*qsat
-          prc_over(i,j) = (qold-qam(i,j))*(heff*ra)/tstep
+          prc_over(i,j) = (qold-qam(i,j,1))*(heff*ra)/tstep
           prc_tmp = prc_tmp+prc_over(i,j)
         endif
 
         ! underflow: precipitation correction
-        if (qam(i,j).lt.1.e-6_wp) then
-          qold = qam(i,j)
+        if (qam(i,j,1).lt.1.e-6_wp) then
+          qold = qam(i,j,1)
           qam(i,j,1) = 1.e-6_wp
           prc_tmp = prc_tmp+qold*(heff*ra)/tstep 
         endif
@@ -203,7 +204,7 @@ contains
         endif
 
         ! new atmospheric relative humidity
-        ram(i,j)=qam(i,j)/qsat
+        ram(i,j)=qam(i,j,1)/qsat
 
         ! separate precipitation into rain and snow using 2m temperature,
         ! separately for each macro surface type
@@ -335,7 +336,7 @@ contains
         !-------------------------------------
 
         ! net energy balance of atmospheric column
-        deba = convdse(i,j) + rb_atm(i,j) + sha(i,j) + (cle*prcw_tmp+cls*prcs_tmp)   ! W/m2
+        deba = convdse(i,j) + rb_atm(i,j) + sha(i,j) + (cle*prcw_tmp(1)+cls*prcs_tmp(1))   ! W/m2
         ! temperature tendency
         dtdt=deba/(amas*cv)    ! J/m2/s * m2/kg * kg*K/J = K/s
         ! new atmospheric temperature
@@ -366,7 +367,7 @@ contains
             endif
 
             ! skin relative humidity keeping constant specific humidity (qam)
-            rskin(n) = min(qsat,qam(i,j))/qsat
+            rskin(n) = min(qsat,qam(i,j,1))/qsat
             if (n.eq.i_ocn) then
               rskin(n) = max(rskin(n),rskin_ocn_min)
             endif
