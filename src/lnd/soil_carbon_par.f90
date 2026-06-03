@@ -46,7 +46,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine soil_carbon_par(f_veg,theta_field,theta_sat,litter_c_peat,acro_c,cato_c,dust_dep, &
                             t_soil_cum,theta_w_cum,theta_i_cum,psi,f_wet_cum,w_table_cum,f_wet_mon,f_wet_long,w_table_mon,t_soil_max, &
-                            frozen_lastyear,thaw_timer,k_slow_to_fast, &
+                            frozen_years,thaw_timer,k_slow_to_fast, &
                             ftemp,fmoist,fdepth, &
                             k_litter,k_fast,k_slow,diff_soilc,adv_soilc,k_litter_wet,k_fast_wet,k_slow_wet, &
                             k_litter_peat,k_acro,k_cato,k_litter_peat_anox,k_acro_anox,ch4_frac_wet,ch4_frac_peat, &
@@ -63,7 +63,7 @@ contains
     real(wp), dimension(:), intent(inout) :: f_wet_mon, w_table_mon
     real(wp), dimension(:), intent(inout) :: f_wet_long
     real(wp), dimension(:), intent(inout) :: t_soil_cum, theta_w_cum, theta_i_cum, t_soil_max, ch4_frac_wet, ch4_frac_peat
-    real(wp), dimension(:), intent(inout) :: frozen_lastyear, thaw_timer, k_slow_to_fast
+    real(wp), dimension(:), intent(inout) :: frozen_years, thaw_timer, k_slow_to_fast
     real(wp), dimension(:), intent(inout) :: ftemp, fmoist, fdepth
     real(wp), dimension(:), intent(inout) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, k_cato, diff_soilc, adv_soilc
     real(wp), intent(inout) :: k_litter_peat, k_acro, k_litter_peat_anox, k_acro_anox
@@ -157,16 +157,25 @@ contains
     ! permafrost-thaw mobilisation of slow soil carbon to the fast pool
     ! detect layers transitioning from perennially frozen to seasonally thawed at end of year,
     ! using the same temperature criterion (t_soil_max<=T0) that defines the active layer thickness alt above
-    if( soilc_par%l_c_thaw .and. time_eoy_lnd ) then
+    if( time_eoy_lnd ) then
       do k=1,nl
-        ! one year of any running priming window has elapsed
-        thaw_timer(k) = max(0._wp, thaw_timer(k)-1._wp)
-        ! frozen->thawed edge: perennially frozen last year, seasonally thawed this year -> (re)start priming window
-        if( frozen_lastyear(k).gt.0.5_wp .and. t_soil_max(k).gt.T0 ) then
-          thaw_timer(k) = soilc_par%n_thaw
+        if( soilc_par%l_c_thaw ) then
+          ! one year of any running priming window has elapsed
+          thaw_timer(k) = max(0._wp, thaw_timer(k)-1._wp)
+          ! frozen->thawed edge: thawed this year (t_soil_max>T0) after having been perennially frozen for at
+          ! least n_frozen_min consecutive years -> (re)start priming window. 
+          if( frozen_years(k).ge.soilc_par%n_frozen_min .and. t_soil_max(k).gt.T0 ) then
+            thaw_timer(k) = soilc_par%n_thaw
+          endif
         endif
-        ! update previous-year perennially-frozen mask for next year's edge detection
-        frozen_lastyear(k) = merge(1._wp, 0._wp, t_soil_max(k).le.T0)
+        ! update the consecutive perennially-frozen years counter: accumulate while frozen, reset to 0 on any thaw
+        if( frozen_years(k).lt.0._wp ) then
+          frozen_years(k) = merge(1._wp, 0._wp, t_soil_max(k).le.T0)
+        else if( t_soil_max(k).le.T0 ) then
+          frozen_years(k) = frozen_years(k) + 1._wp
+        else
+          frozen_years(k) = 0._wp
+        endif
       enddo
     endif
 

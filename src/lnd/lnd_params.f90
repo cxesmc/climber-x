@@ -407,6 +407,7 @@ module lnd_params
     logical :: l_c_thaw   !! shift slow soil carbon to fast pool upon permafrost thaw?
     real(wp) :: f_slow_to_fast_thaw  !! fraction of slow soil carbon mobilised to fast pool over the thaw window when a layer thaws []
     real(wp) :: n_thaw   !! length of priming window for slow->fast transfer after thaw [yr]
+    real(wp) :: n_frozen_min   !! minimum consecutive perennially-frozen years required before a thaw triggers priming [yr]
     real(wp) :: diff_bio, diff_cryo, diff_shelf, diff_ice, diff_lake
     real(wp) :: diff_min = 0._wp/sec_year   !! minimum soil carbon vertical diffusivity (for stability) [m2/s]
     real(wp) :: z_diff   !! e-folding depth for diffusivity reduction with depth
@@ -949,6 +950,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","l_c_thaw",soilc_par%l_c_thaw)
     call nml_read(filename,"lnd_par","f_slow_to_fast_thaw",soilc_par%f_slow_to_fast_thaw)
     call nml_read(filename,"lnd_par","n_thaw",soilc_par%n_thaw)
+    call nml_read(filename,"lnd_par","n_frozen_min",soilc_par%n_frozen_min)
 
     call nml_read(filename,"lnd_par","diff_bio",soilc_par%diff_bio)
     call nml_read(filename,"lnd_par","diff_cryo",soilc_par%diff_cryo)

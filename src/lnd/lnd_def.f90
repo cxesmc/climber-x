@@ -135,7 +135,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: kappa_int
      real(wp), allocatable, dimension(:) :: theta_sat, k_sat, psi_sat, theta_field, theta_wilt
      real(wp), allocatable, dimension(:) :: t_soil, t_soil_old, t_soil_max
-     real(wp), allocatable, dimension(:) :: frozen_lastyear, thaw_timer   ! permafrost-thaw priming state
+     real(wp), allocatable, dimension(:) :: frozen_years, thaw_timer   ! permafrost-thaw priming state (consecutive perennially-frozen years per layer)
      real(wp), allocatable, dimension(:) :: t_ice, t_ice_old
      real(wp), allocatable, dimension(:) :: t_shelf, t_shelf_old, t_shelf_max
      real(wp), allocatable, dimension(:) :: t_lake, t_lake_old

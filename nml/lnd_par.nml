@@ -182,6 +182,7 @@
     l_c_thaw = F                ! shift part of the slow soil carbon to the fast pool when a layer transitions from perennially frozen to seasonally thawed?
     f_slow_to_fast_thaw = 0.0   ! fraction of slow soil carbon mobilised to the fast pool over the thaw window when a layer thaws (only used if l_c_thaw=T)
     n_thaw = 10.                ! yr, length of the priming window over which the slow->fast carbon transfer is spread after a layer thaws (only used if l_c_thaw=T)
+    n_frozen_min = 100.         ! yr, minimum number of consecutive years a layer must be perennially frozen before a subsequent thaw triggers priming (only used if l_c_thaw=T)
 
     !------------------------------------------------------------------------------------
     ! burial of soil carbon

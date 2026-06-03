@@ -888,7 +888,7 @@ contains
                             lnd%f_wet_cum,lnd%w_table_cum, &
                             lnd%f_wet_mon,lnd%f_wet_long,lnd%w_table_mon, &
                             lnd%t_soil_max, &
-                            lnd%frozen_lastyear,lnd%thaw_timer,lnd%k_slow_to_fast, &
+                            lnd%frozen_years,lnd%thaw_timer,lnd%k_slow_to_fast, &
                             lnd%ftemp,lnd%fmoist,lnd%fdepth, &
                             lnd%k_litter,lnd%k_fast,lnd%k_slow,lnd%diff_soilc,lnd%adv_soilc, &
                             lnd%k_litter_wet,lnd%k_fast_wet,lnd%k_slow_wet, &
@@ -1612,7 +1612,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%cap_sublake        = 0._wp 
         lnd%l2d(i,j)%t_soil_old      = T0
         lnd%l2d(i,j)%t_soil_max      = T0
-        lnd%l2d(i,j)%frozen_lastyear = 1._wp   ! assume frozen until proven thawed, avoids spurious first-year priming
+        lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
         lnd%l2d(i,j)%thaw_timer      = 0._wp
         lnd%l2d(i,j)%t_ice_old       = T0
         lnd%l2d(i,j)%t_shelf_old     = T0 
@@ -1912,7 +1912,7 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%t_soil          (0:nl)) 
         allocate(lnd%l2d(i,j)%t_soil_old      (0:nl)) 
         allocate(lnd%l2d(i,j)%t_soil_max      (0:nl))
-        allocate(lnd%l2d(i,j)%frozen_lastyear (nl))
+        allocate(lnd%l2d(i,j)%frozen_years    (nl))
         allocate(lnd%l2d(i,j)%thaw_timer      (nl))
         allocate(lnd%l2d(i,j)%t_ice           (0:nl))
         allocate(lnd%l2d(i,j)%t_ice_old       (0:nl)) 
@@ -2584,10 +2584,10 @@ end subroutine lnd_update
    call nc_write(fnm,"w_i_sublake",        var_n,       dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="sublake frozen water equivalent",units="kg/m2",ncid=ncid)
    do i=1,nx
      do j=1,ny
-       var_n(:,i,j) = lnd(i,j)%frozen_lastyear(:)
+       var_n(:,i,j) = lnd(i,j)%frozen_years(:)
      enddo
    enddo
-   call nc_write(fnm,"frozen_lastyear",    var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: previous-year perennially-frozen mask",units="/",ncid=ncid)
+   call nc_write(fnm,"frozen_years",       var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: consecutive perennially-frozen years",units="yr",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%thaw_timer(:)
@@ -3059,10 +3059,10 @@ end subroutine lnd_update
         call nc_read(fnm,"theta_w_sublake",lnd(i,j)%theta_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         call nc_read(fnm,"w_w_sublake",lnd(i,j)%w_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         call nc_read(fnm,"w_i_sublake",lnd(i,j)%w_i_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        if (nc_exists_var(fnm,"frozen_lastyear")) then
-          call nc_read(fnm,"frozen_lastyear",lnd(i,j)%frozen_lastyear,start=[1,i,j],count=[nl,1,1],ncid=ncid)
+        if (nc_exists_var(fnm,"frozen_years")) then
+          call nc_read(fnm,"frozen_years",lnd(i,j)%frozen_years,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         else
-          lnd(i,j)%frozen_lastyear = 1._wp  ! assume frozen (no spurious priming) for restarts predating this field
+          lnd(i,j)%frozen_years = -1._wp ! sentinel: frozen history unknown for restarts predating this field -> no spurious priming on the first end-of-year
         endif
         if (nc_exists_var(fnm,"thaw_timer")) then
           call nc_read(fnm,"thaw_timer",lnd(i,j)%thaw_timer,start=[1,i,j],count=[nl,1,1],ncid=ncid)
