@@ -55,7 +55,7 @@ contains
     real(wp), intent(in   ) :: zsa(:,:)
     real(wp), intent(in   ) :: t2a(:,:)
     real(wp), intent(in   ) :: ram(:,:)
-    real(wp), intent(in   ) :: qam(:,:)
+    real(wp), intent(in   ) :: qam(:,:,:)
     real(wp), intent(in   ) :: rskina(:,:)
     real(wp), intent(in   ) :: wcon(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
@@ -102,7 +102,7 @@ contains
 
         ! low clouds related to surface inversion
         ! 'freezedry' reduction of cloud cover, Vavrus & Walliser (2008)
-        f_freezedry = 0.1_wp+0.9_wp*qam(i,j)/(c_cld_7+1.e-20_wp)
+        f_freezedry = 0.1_wp+0.9_wp*qam(i,j,1)/(c_cld_7+1.e-20_wp)
         f_freezedry = min(1._wp,f_freezedry)
         ! relative weight of low clouds 
         fr = f_freezedry*(dr+c_cld_6)/(2._wp*c_cld_6+1.e-20_wp) 

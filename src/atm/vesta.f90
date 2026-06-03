@@ -60,7 +60,7 @@ contains
     real(wp), intent(in) :: rb_sur(:,:)
     real(wp), intent(in) :: tam(:,:)
     real(wp), intent(in) :: tskin(:,:,:)
-    real(wp), intent(in) :: qam(:,:)
+    real(wp), intent(in) :: qam(:,:,:)
     real(wp), intent(in) :: wcon(:,:)
     real(wp), intent(in) :: wcld(:,:)
     real(wp), intent(in) :: had_fi
@@ -147,10 +147,10 @@ contains
         gam_s(i,j) = sum(gs*frst(i,j,:))
 
         ! bottom
-        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
+        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j,1) 
 
         ! top
-        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
+        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j,1) + c_gam_3
 
         !----------------------------------------------
         ! height scale for relative humidity       
@@ -167,7 +167,7 @@ contains
         !----------------------------------------------
         ! effective moisture height scale
 
-        hqeff(i,j) = wcon(i,j)/(ra2a(i,j)*qam(i,j))
+        hqeff(i,j) = wcon(i,j)/(ra2a(i,j)*qam(i,j,1))
 
         !----------------------------------------------
         ! dust height scale 

@@ -42,9 +42,10 @@ module atm_model
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
     use atm_params, only : tam_init
+    use oiso_atm_mod, only : Rstd_o16, Rstd_o18
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
-    use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
+    use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, lm, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
     use atm_def, only : atm_class
 
@@ -278,7 +279,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%rskina, atm%wcon, atm%htrop, atm%so4, atm%sam2, &    ! in
+        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%rskina, atm%wcon(:,:,1), atm%htrop, atm%so4, atm%sam2, &    ! in
           atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%clot) ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'cld',time2-time1
@@ -291,7 +292,7 @@ contains
 
       ! lapse rate and height scales of moisture and dust
       !$ time1 = omp_get_wtime()
-      call hscales(atm%frst, atm%f_ice_lake, atm%ra2a, atm%rb_sur, atm%tam, atm%tskin, atm%qam, atm%wcon, atm%wcld, &  ! in
+      call hscales(atm%frst, atm%f_ice_lake, atm%ra2a, atm%rb_sur, atm%tam, atm%tskin, atm%qam, atm%wcon(:,:,1), atm%wcld, &  ! in
         atm%had_fi, atm%had_width, &   ! in
         atm%gams, atm%gamb, atm%gamt, atm%hrm, &    ! inout
         atm%hqeff, atm%hdust)    ! out
@@ -335,7 +336,7 @@ contains
       ! advection-diffusion
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%d3, atm%cam, &
+      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%qam, atm%d3, atm%cam, &
         atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst,  &   ! in
         atm%convdse, atm%convwtr, atm%convdst, atm%convco2, &   ! out
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
@@ -349,12 +350,12 @@ contains
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
+      call time_step(atm%frst, atm%weff, atm%zs, atm%zsa, atm%hcld, atm%htrop, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
         atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
-        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%rskina, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
+        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%rskina, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%d18o_prcw, atm%d18o_prcs, atm%d18o_qam, atm%error)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'time_Step',(time2-time1)*nstep_fast
 
@@ -447,17 +448,19 @@ contains
          atm%gamb(i,j) = 5.e-3_wp
          atm%gamt(i,j) = 8.e-3_wp
          atm%hrm(i,j) = 2000._wp
-         atm%qam(i,j) = 0.8_wp*fqsat(atm%tam(i,j),p0)
-         atm%q2a(i,j) = atm%qam(i,j)
+         atm%qam(i,j,1) = 0.8_wp*fqsat(atm%tam(i,j),p0)
+         atm%qam(i,j,2) = Rstd_o16*atm%qam(i,j,1)
+         atm%qam(i,j,3) = Rstd_o18*atm%qam(i,j,1)
+         atm%q2a(i,j) = atm%qam(i,j,1)
          atm%ram(i,j) = 0.8_wp
          atm%hqeff(i,j) = 2000._wp
-         atm%wcon(i,j) = 1._wp
+         atm%wcon(i,j,:) = 1._wp
          atm%A_trop(i,j) = 1._wp
          atm%W_strat(i,j) = 0._wp
          atm%prc(i,j) = 0._wp
-         atm%prcs(i,j,:) = 0._wp
-         atm%prcw(i,j,:) = 0._wp
-         atm%evpa(i,j) = 0._wp
+         atm%prcw(i,j,:,:) = 0._wp
+         atm%prcs(i,j,:,:) = 0._wp
+         atm%evpa(i,j,:) = 0._wp
          atm%cld(i,j) = 0.5_wp
          atm%cld_rh(i,j) = 0.5_wp
          atm%cld_low(i,j) = 0._wp
@@ -475,6 +478,9 @@ contains
          atm%aslp(i,j) = 0._wp      
          atm%aslp_topo(i,j) = 0._wp      
          atm%dz500(i,j) = 0._wp      
+         atm%d18o_qam(i,j) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
+         atm%d18o_prcw(i,j,:) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
+         atm%d18o_prcs(i,j,:) = 0._wp  ! TODO(2026-05-29,eberhard): wp or better?
 
          atm%winda(i,j) = 1._wp
          atm%wind(i,j,:) = 1._wp
@@ -493,7 +499,7 @@ contains
          atm%fweff(i,j) = 0._wp
          atm%uz500(j) = 0._wp
 
-         atm%convwtr(i,j) = 0._wp
+         atm%convwtr(i,j,:) = 0._wp
          atm%convdse(i,j) = 0._wp
 
          atm%dam(i,j) = 0._wp
@@ -509,7 +515,7 @@ contains
          do n=1,nm
            atm%tskin(i,j,n) = atm%tam(i,j)
            atm%t2(i,j,n) = atm%tam(i,j)
-           atm%q2(i,j,n) = atm%qam(i,j)
+           atm%q2(i,j,n) = atm%qam(i,j,1)
            atm%r2(i,j,n) = atm%ram(i,j)
          enddo
 
@@ -528,7 +534,10 @@ contains
          call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
            atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
          ! initialize column water from vesta's reconstruction: wcon = ram·A_trop + W_strat
-         atm%wcon = atm%ram*atm%A_trop + atm%W_strat
+         atm%wcon(:,:,1) = atm%ram*atm%A_trop + atm%W_strat
+         ! initialize column isotope-water masses at VSMOW (O16 = total water, O18 = heavy fraction)
+         atm%wcon(:,:,2) = atm%wcon(:,:,1)*Rstd_o16
+         atm%wcon(:,:,3) = atm%wcon(:,:,1)*Rstd_o18
 
     endif
 
@@ -599,7 +608,7 @@ contains
      allocate(atm%sigoro(im,jm))
 
      allocate(atm%tam(im,jm))  
-     allocate(atm%qam(im,jm))  
+     allocate(atm%qam(im,jm,lm))  
      allocate(atm%ram(im,jm))  
      allocate(atm%gams(im,jm)) 
      allocate(atm%gamb(im,jm)) 
@@ -607,7 +616,7 @@ contains
      allocate(atm%dam(im,jm))  
      allocate(atm%hrm(im,jm))  
      allocate(atm%hqeff(im,jm)) 
-     allocate(atm%wcon(im,jm))
+     allocate(atm%wcon(im,jm,lm))
      allocate(atm%A_trop(im,jm))
      allocate(atm%W_strat(im,jm))
      allocate(atm%cld_rh(im,jm)) 
@@ -616,8 +625,8 @@ contains
      allocate(atm%cld_dat(im,jm)) 
      allocate(atm%cld_day_dat(im,jm)) 
      allocate(atm%prc(im,jm)) 
-     allocate(atm%prcw(im,jm,nm))
-     allocate(atm%prcs(im,jm,nm))
+     allocate(atm%prcw(im,jm,nm,lm))
+     allocate(atm%prcs(im,jm,nm,lm))
      allocate(atm%prc_conv(im,jm))
      allocate(atm%prc_wcon(im,jm))
      allocate(atm%prc_over(im,jm))
@@ -633,6 +642,10 @@ contains
      allocate(atm%aerosol_im(im,jm)) 
      allocate(atm%so4(im,jm))
      allocate(atm%o3(im,jm,kmc)) 
+
+     allocate(atm%d18o_qam(im,jm))
+     allocate(atm%d18o_prcw(im,jm,nm))
+     allocate(atm%d18o_prcs(im,jm,nm))
 
      allocate(atm%hdust(im,jm)) 
      allocate(atm%dust_load(im,jm)) 
@@ -662,7 +675,7 @@ contains
      allocate(atm%cd0a(im,jm))
      allocate(atm%sha(im,jm))
      allocate(atm%lha(im,jm))
-     allocate(atm%evpa(im,jm))
+     allocate(atm%evpa(im,jm,lm))
      allocate(atm%tskina(im,jm))
      allocate(atm%t2a(im,jm))
      allocate(atm%q2a(im,jm))
@@ -724,23 +737,23 @@ contains
      allocate(atm%w3(im,jm,kmc))
 
      allocate(atm%convdse(im,jm))
-     allocate(atm%convwtr(im,jm))
+     allocate(atm%convwtr(im,jm,lm))
      allocate(atm%convdst(im,jm))
      allocate(atm%convco2(im,jm))
      allocate(atm%faxdse(imc,jm))
-     allocate(atm%faxwtr(imc,jm))
+     allocate(atm%faxwtr(imc,jm,lm))
      allocate(atm%faxdst(imc,jm))
      allocate(atm%faxco2(imc,jm))
      allocate(atm%faydse(im,jmc))
-     allocate(atm%faywtr(im,jmc))
+     allocate(atm%faywtr(im,jmc,lm))
      allocate(atm%faydst(im,jmc))
      allocate(atm%fayco2(im,jmc))
      allocate(atm%fdxdse(imc,jm))
-     allocate(atm%fdxwtr(imc,jm))
+     allocate(atm%fdxwtr(imc,jm,lm))
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
-     allocate(atm%fdywtr(im,jmc))
+     allocate(atm%fdywtr(im,jmc,lm))
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
 
@@ -893,6 +906,10 @@ contains
      deallocate(atm%aerosol_im) 
      deallocate(atm%so4) 
      deallocate(atm%o3) 
+
+     deallocate(atm%d18o_qam)
+     deallocate(atm%d18o_prcw)
+     deallocate(atm%d18o_prcs)
 
      deallocate(atm%hdust) 
      deallocate(atm%dust_load) 
@@ -1079,83 +1096,83 @@ contains
     call nc_write_dim(fnm,"lon",x=lon,axis="x")
     call nc_write_dim(fnm,"lat",x=lat,axis="y")
     call nc_write_dim(fnm,"nm",x=1,dx=1,nx=nm)
+    call nc_write_dim(fnm,"lwtr",x=1,dx=1,nx=lm)   ! water tracers: 1=bulk H2O, 2=O16, 3=O18
     call nc_write_dim(fnm,"plev",x=pl(1:km),axis="z")
     call nc_write_dim(fnm,"plevc",x=pl(1:kmc),axis="z")
     call nc_write_dim(fnm,"x",x=[1])
 
-    call nc_write(fnm,"had_fi   ",     atm%had_fi   ,     dim1="x",  long_name="",units="")
-    call nc_write(fnm,"had_width",     atm%had_width,     dim1="x",  long_name="",units="")
+    call nc_write(fnm,"had_fi    ",atm%had_fi    ,dim1="x"                  ,long_name="",units="")
+    call nc_write(fnm,"had_width ",atm%had_width ,dim1="x"                  ,long_name="",units="")
 
-    call nc_write(fnm,"tam      ",     atm%tam      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"t2a      ",     atm%t2a      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"tskina   ",     atm%tskina   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"t2       ",     atm%t2       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"tskin    ",     atm%tskin    ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"tsl      ",     atm%tsl      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"tsksl     ",     atm%tsksl     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"gams     ",     atm%gams     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"gamb     ",     atm%gamb     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"gamt     ",     atm%gamt     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"hrm      ",     atm%hrm      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"qam      ",     atm%qam      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"q2a      ",     atm%q2a      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"q2       ",     atm%q2       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"ram      ",     atm%ram      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"rskina   ",     atm%rskina   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"r2       ",     atm%r2       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"r2a      ",     atm%r2a      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"hqeff    ",     atm%hqeff    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"wcon     ",     atm%wcon     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"prc      ",     atm%prc      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"cld      ",     atm%cld      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"cld_rh   ",     atm%cld_rh   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"cld_low  ",     atm%cld_low  ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"hcld     ",     atm%hcld     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"clot     ",     atm%clot     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"dam      ",     atm%dam      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"hdust    ",     atm%hdust    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"dust_ot  ",     atm%dust_ot  ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"so4      ",     atm%so4      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"htrop    ",     atm%htrop    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"ttrop    ",     atm%ttrop    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"rb_sur   ",     atm%rb_sur   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"sam      ",     atm%sam      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"sam2     ",     atm%sam2     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"cdif     ",     atm%cdif     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"slp      ",     atm%slp      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"ps       ",     atm%ps       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"aslp     ",     atm%aslp     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"aslp_topo",     atm%aslp_topo,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"dz500    ",     atm%dz500    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"winda    ",     atm%winda    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"wind     ",     atm%wind     ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"us       ",     atm%us       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"vs       ",     atm%vs       ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"usk      ",     atm%usk      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"vsk      ",     atm%vsk      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"uz500    ",     atm%uz500    ,     dims=["lat"],long_name="",units="")
-    call nc_write(fnm,"wsyn     ",     atm%wsyn     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"woro     ",     atm%woro     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"wcld     ",     atm%wcld     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"weff     ",     atm%weff     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"fweff    ",     atm%fweff    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"convdse  ",     atm%convdse  ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"convwtr  ",     atm%convwtr  ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"ra2a     ",     atm%ra2a     ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"frlnd    ",     atm%frlnd    ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"f_ice_lake ",   atm%f_ice_lake,    dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"frst     ",     atm%frst     ,     dims=["lon","lat","nm "],long_name="",units="")
-    call nc_write(fnm,"zsa      ",     atm%zsa      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"psa      ",     atm%psa      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"sigoro   ",     atm%sigoro   ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"u3      ",     atm%u3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"v3      ",     atm%v3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"w3      ",     atm%w3      ,     dims=["lon  ","lat  ","plevc"],long_name="",units="")
-    call nc_write(fnm,"t3      ",     atm%t3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"tp      ",     atm%tp      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"q3      ",     atm%q3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-    call nc_write(fnm,"d3      ",     atm%d3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
-
+    call nc_write(fnm,"tam       ",atm%tam       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"t2a       ",atm%t2a       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"tskina    ",atm%tskina    ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"t2        ",atm%t2        ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"tskin     ",atm%tskin     ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"tsl       ",atm%tsl       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"tsksl     ",atm%tsksl     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"gams      ",atm%gams      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"gamb      ",atm%gamb      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"gamt      ",atm%gamt      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"hrm       ",atm%hrm       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"qam       ",atm%qam       ,dims=["lon ","lat ","lwtr"],long_name="",units="")
+    call nc_write(fnm,"q2a       ",atm%q2a       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"q2        ",atm%q2        ,dims=["lon","lat","nm "  ],long_name="",units="")
+    call nc_write(fnm,"ram       ",atm%ram       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"rskina    ",atm%rskina    ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"r2        ",atm%r2        ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"r2a       ",atm%r2a       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"hqeff     ",atm%hqeff     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"wcon      ",atm%wcon      ,dims=["lon ","lat ","lwtr"],long_name="",units="")
+    call nc_write(fnm,"prc       ",atm%prc       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"cld       ",atm%cld       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"cld_rh    ",atm%cld_rh    ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"cld_low   ",atm%cld_low   ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"hcld      ",atm%hcld      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"clot      ",atm%clot      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"dam       ",atm%dam       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"hdust     ",atm%hdust     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"dust_ot   ",atm%dust_ot   ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"so4       ",atm%so4       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"htrop     ",atm%htrop     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"ttrop     ",atm%ttrop     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"rb_sur    ",atm%rb_sur    ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"sam       ",atm%sam       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"sam2      ",atm%sam2      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"cdif      ",atm%cdif      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"slp       ",atm%slp       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"ps        ",atm%ps        ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"aslp      ",atm%aslp      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"aslp_topo ",atm%aslp_topo ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"dz500     ",atm%dz500     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"winda     ",atm%winda     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"wind      ",atm%wind      ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"us        ",atm%us        ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"vs        ",atm%vs        ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"usk       ",atm%usk       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"vsk       ",atm%vsk       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"uz500     ",atm%uz500     ,dims=[      "lat"        ],long_name="",units="")
+    call nc_write(fnm,"wsyn      ",atm%wsyn      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"woro      ",atm%woro      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"wcld      ",atm%wcld      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"weff      ",atm%weff      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"fweff     ",atm%fweff     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"convdse   ",atm%convdse   ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"convwtr   ",atm%convwtr   ,dims=["lon ","lat ","lwtr"],long_name="",units="")
+    call nc_write(fnm,"ra2a      ",atm%ra2a      ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"frlnd     ",atm%frlnd     ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"f_ice_lake",atm%f_ice_lake,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"frst      ",atm%frst      ,dims=["lon","lat","nm   "],long_name="",units="")
+    call nc_write(fnm,"zsa       ",atm%zsa       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"psa       ",atm%psa       ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"sigoro    ",atm%sigoro    ,dims=["lon","lat"        ],long_name="",units="")
+    call nc_write(fnm,"u3        ",atm%u3        ,dims=["lon","lat","plev "],long_name="",units="")
+    call nc_write(fnm,"v3        ",atm%v3        ,dims=["lon","lat","plev "],long_name="",units="")
+    call nc_write(fnm,"w3        ",atm%w3        ,dims=["lon","lat","plevc"],long_name="",units="")
+    call nc_write(fnm,"t3        ",atm%t3        ,dims=["lon","lat","plev "],long_name="",units="")
+    call nc_write(fnm,"tp        ",atm%tp        ,dims=["lon","lat","plev "],long_name="",units="")
+    call nc_write(fnm,"q3        ",atm%q3        ,dims=["lon","lat","plev "],long_name="",units="")
+    call nc_write(fnm,"d3        ",atm%d3        ,dims=["lon","lat","plev "],long_name="",units="")
 
    return
 
@@ -1174,78 +1191,79 @@ contains
     type(atm_class) :: atm
 
 
-    call nc_read(fnm,"had_fi   ",     atm%had_fi   )
-    call nc_read(fnm,"had_width",     atm%had_width)
+    call nc_read(fnm,"had_fi    ",atm%had_fi    )
+    call nc_read(fnm,"had_width ",atm%had_width )
 
-    call nc_read(fnm,"tam      ",     atm%tam     ) 
-    call nc_read(fnm,"t2a      ",     atm%t2a     ) 
-    call nc_read(fnm,"t2       ",     atm%t2      ) 
-    call nc_read(fnm,"tskina   ",     atm%tskina  ) 
-    call nc_read(fnm,"tskin    ",     atm%tskin   ) 
-    call nc_read(fnm,"tsl      ",     atm%tsl     ) 
-    call nc_read(fnm,"tsksl     ",     atm%tsksl    ) 
-    call nc_read(fnm,"gams     ",     atm%gams    ) 
-    call nc_read(fnm,"gamb     ",     atm%gamb    ) 
-    call nc_read(fnm,"gamt     ",     atm%gamt    ) 
-    call nc_read(fnm,"hrm      ",     atm%hrm     ) 
-    call nc_read(fnm,"qam      ",     atm%qam     ) 
-    call nc_read(fnm,"q2a      ",     atm%q2a     ) 
-    call nc_read(fnm,"q2       ",     atm%q2      ) 
-    call nc_read(fnm,"ram      ",     atm%ram     ) 
-    call nc_read(fnm,"rskina   ",     atm%rskina  ) 
-    call nc_read(fnm,"r2       ",     atm%r2      ) 
-    call nc_read(fnm,"r2a      ",     atm%r2a     ) 
-    call nc_read(fnm,"hqeff    ",     atm%hqeff   ) 
-    call nc_read(fnm,"wcon     ",     atm%wcon    )
-    call nc_read(fnm,"prc      ",     atm%prc     )
-    call nc_read(fnm,"cld      ",     atm%cld     ) 
-    call nc_read(fnm,"cld_rh   ",     atm%cld_rh  ) 
-    call nc_read(fnm,"cld_low  ",     atm%cld_low ) 
-    call nc_read(fnm,"hcld     ",     atm%hcld    ) 
-    call nc_read(fnm,"clot     ",     atm%clot    ) 
-    call nc_read(fnm,"dam      ",     atm%dam     ) 
-    call nc_read(fnm,"hdust    ",     atm%hdust   ) 
-    call nc_read(fnm,"dust_ot  ",     atm%dust_ot ) 
-    call nc_read(fnm,"so4      ",     atm%so4     ) 
-    call nc_read(fnm,"htrop    ",     atm%htrop   ) 
-    call nc_read(fnm,"ttrop    ",     atm%ttrop   ) 
-    call nc_read(fnm,"rb_sur   ",     atm%rb_sur  ) 
-    call nc_read(fnm,"sam      ",     atm%sam     ) 
-    call nc_read(fnm,"sam2     ",     atm%sam2    ) 
-    call nc_read(fnm,"cdif     ",     atm%cdif    ) 
-    call nc_read(fnm,"slp      ",     atm%slp     ) 
-    call nc_read(fnm,"ps       ",     atm%ps      ) 
-    call nc_read(fnm,"aslp     ",     atm%aslp    ) 
-    call nc_read(fnm,"aslp_topo",     atm%aslp_topo) 
-    call nc_read(fnm,"dz500    ",     atm%dz500   ) 
-    call nc_read(fnm,"winda    ",     atm%winda   ) 
-    call nc_read(fnm,"wind     ",     atm%wind    ) 
-    call nc_read(fnm,"us       ",     atm%us      ) 
-    call nc_read(fnm,"vs       ",     atm%vs      ) 
-    call nc_read(fnm,"usk      ",     atm%usk     ) 
-    call nc_read(fnm,"vsk      ",     atm%vsk     ) 
-    call nc_read(fnm,"uz500    ",     atm%uz500   ) 
-    call nc_read(fnm,"wsyn     ",     atm%wsyn    ) 
-    call nc_read(fnm,"woro     ",     atm%woro    ) 
-    call nc_read(fnm,"wcld     ",     atm%wcld    ) 
-    call nc_read(fnm,"weff     ",     atm%weff    ) 
-    call nc_read(fnm,"fweff    ",     atm%fweff   ) 
-    call nc_read(fnm,"convdse  ",     atm%convdse ) 
-    call nc_read(fnm,"convwtr  ",     atm%convwtr ) 
-    call nc_read(fnm,"ra2a     ",     atm%ra2a    ) 
-    call nc_read(fnm,"frlnd    ",     atm%frlnd   ) 
-    call nc_read(fnm,"f_ice_lake   ",     atm%f_ice_lake  ) 
-    call nc_read(fnm,"frst     ",     atm%frst    ) 
-    call nc_read(fnm,"zsa      ",     atm%zsa     ) 
-    call nc_read(fnm,"psa      ",     atm%psa     ) 
-    call nc_read(fnm,"sigoro   ",     atm%sigoro  ) 
-    call nc_read(fnm,"u3       ",     atm%u3      ) 
-    call nc_read(fnm,"v3       ",     atm%v3      ) 
-    call nc_read(fnm,"w3       ",     atm%w3      ) 
-    call nc_read(fnm,"t3       ",     atm%t3      ) 
-    call nc_read(fnm,"tp       ",     atm%tp      ) 
-    call nc_read(fnm,"q3       ",     atm%q3      ) 
-    call nc_read(fnm,"d3       ",     atm%d3      ) 
+    call nc_read(fnm,"tam       ",atm%tam       )
+    call nc_read(fnm,"t2a       ",atm%t2a       )
+    call nc_read(fnm,"t2        ",atm%t2        )
+    call nc_read(fnm,"tskina    ",atm%tskina    )
+    call nc_read(fnm,"tskin     ",atm%tskin     )
+    call nc_read(fnm,"tsl       ",atm%tsl       )
+    call nc_read(fnm,"tsksl     ",atm%tsksl     )
+    call nc_read(fnm,"gams      ",atm%gams      )
+    call nc_read(fnm,"gamb      ",atm%gamb      )
+    call nc_read(fnm,"gamt      ",atm%gamt      )
+    call nc_read(fnm,"hrm       ",atm%hrm       )
+    call read_restart_wtr(fnm,"qam       ",atm%qam       )
+    call nc_read(fnm,"q2a       ",atm%q2a       )
+    call nc_read(fnm,"q2        ",atm%q2        )
+    call nc_read(fnm,"ram       ",atm%ram       )
+    call nc_read(fnm,"rskina    ",atm%rskina    )
+    call nc_read(fnm,"r2        ",atm%r2        )
+    call nc_read(fnm,"r2a       ",atm%r2a       )
+    call nc_read(fnm,"hqeff     ",atm%hqeff     )
+    call read_restart_wtr(fnm,"wcon      ",atm%wcon      )
+    call nc_read(fnm,"prc       ",atm%prc       )
+    call nc_read(fnm,"cld       ",atm%cld       )
+    call nc_read(fnm,"cld_rh    ",atm%cld_rh    )
+    call nc_read(fnm,"cld_low   ",atm%cld_low   )
+    call nc_read(fnm,"hcld      ",atm%hcld      )
+    call nc_read(fnm,"clot      ",atm%clot      )
+    call nc_read(fnm,"dam       ",atm%dam       )
+    call nc_read(fnm,"hdust     ",atm%hdust     )
+    call nc_read(fnm,"dust_ot   ",atm%dust_ot   )
+    call nc_read(fnm,"so4       ",atm%so4       )
+    call nc_read(fnm,"htrop     ",atm%htrop     )
+    call nc_read(fnm,"ttrop     ",atm%ttrop     )
+    call nc_read(fnm,"rb_sur    ",atm%rb_sur    )
+    call nc_read(fnm,"sam       ",atm%sam       )
+    call nc_read(fnm,"sam2      ",atm%sam2      )
+    call nc_read(fnm,"cdif      ",atm%cdif      )
+    call nc_read(fnm,"slp       ",atm%slp       )
+    call nc_read(fnm,"ps        ",atm%ps        )
+    call nc_read(fnm,"aslp      ",atm%aslp      )
+    call nc_read(fnm,"aslp_topo ",atm%aslp_topo )
+    call nc_read(fnm,"dz500     ",atm%dz500     )
+    call nc_read(fnm,"winda     ",atm%winda     )
+    call nc_read(fnm,"wind      ",atm%wind      )
+    call nc_read(fnm,"us        ",atm%us        )
+    call nc_read(fnm,"vs        ",atm%vs        )
+    call nc_read(fnm,"usk       ",atm%usk       )
+    call nc_read(fnm,"vsk       ",atm%vsk       )
+    call nc_read(fnm,"uz500     ",atm%uz500     )
+    call nc_read(fnm,"wsyn      ",atm%wsyn      )
+    call nc_read(fnm,"woro      ",atm%woro      )
+    call nc_read(fnm,"wcld      ",atm%wcld      )
+    call nc_read(fnm,"weff      ",atm%weff      )
+    call nc_read(fnm,"fweff     ",atm%fweff     )
+    call nc_read(fnm,"convdse   ",atm%convdse   )
+    call read_restart_wtr(fnm,"convwtr   ",atm%convwtr   )
+    call nc_read(fnm,"ra2a      ",atm%ra2a      )
+    call nc_read(fnm,"frlnd     ",atm%frlnd     )
+    call nc_read(fnm,"f_ice_lake",atm%f_ice_lake)
+    call nc_read(fnm,"frst      ",atm%frst      )
+    call nc_read(fnm,"zsa       ",atm%zsa       )
+    call nc_read(fnm,"psa       ",atm%psa       )
+    call nc_read(fnm,"sigoro    ",atm%sigoro    )
+    call nc_read(fnm,"u3        ",atm%u3        )
+    call nc_read(fnm,"v3        ",atm%v3        )
+    call nc_read(fnm,"w3        ",atm%w3        )
+    call nc_read(fnm,"t3        ",atm%t3        )
+    call nc_read(fnm,"tp        ",atm%tp        )
+    call nc_read(fnm,"q3        ",atm%q3        )
+    call nc_read(fnm,"d3        ",atm%d3        )
+
 
     print *,'read restart file ',fnm
 
@@ -1253,6 +1271,43 @@ contains
 
   end subroutine atm_read_restart
 
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  r e a d _ r e s t a r t _ w t r
+  !   Purpose    :  read a water-tracer restart field (im,jm,lm) with
+  !                 backward compatibility for legacy 2D restart files.
+  !                 Older restarts stored qam/wcon/convwtr without the
+  !                 water-tracer (isotope) dimension. In that case the 2D
+  !                 field is read into the bulk tracer (:,:,1) and the
+  !                 oxygen-isotope tracers are seeded from the bulk at the
+  !                 VSMOW ratios (O16 = total water, O18 = heavy fraction).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine read_restart_wtr(fnm,name,field)
+
+    implicit none
+
+    character (len=*), intent(in   ) :: fnm, name
+    real(wp),          intent(inout) :: field(:,:,:)
+
+    real(wp), allocatable :: tmp2d(:,:)
+
+    if (nc_ndims(fnm,name).ge.3) then
+      ! new restart: full tracer-resolved field
+      call nc_read(fnm,name,field)
+    else
+      ! legacy restart: bulk water only, no isotope tracer dimension
+      print *,'atm restart: '//trim(adjustl(name))//' is 2D (legacy); seeding isotope tracers from bulk at VSMOW'
+      allocate(tmp2d(size(field,1),size(field,2)))
+      call nc_read(fnm,name,tmp2d)
+      field(:,:,1) = tmp2d
+      field(:,:,2) = tmp2d*Rstd_o16
+      field(:,:,3) = tmp2d*Rstd_o18
+      deallocate(tmp2d)
+    endif
+
+    return
+
+  end subroutine read_restart_wtr
 
 end module atm_model
 

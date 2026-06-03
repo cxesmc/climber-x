@@ -47,6 +47,7 @@ module atm_grid
   integer, parameter :: jps=jm*5/6
   integer :: km
   integer :: kmc
+  integer, parameter :: lm = 3  !! number of water tracers incl. oxygen isotopes
   integer, parameter :: nm = 5  !! number of macro surface types
   !! index of surface types
   integer, parameter :: i_ocn = 1

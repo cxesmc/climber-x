@@ -8,7 +8,7 @@ restart/pi_cc_open/geo_restart.nc
 restart/lgm/geo_restart.nc
 Makefile
 .runme/config.toml
-climber.x
+climber.x*
 input
 output
 out

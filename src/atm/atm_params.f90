@@ -218,6 +218,10 @@ module atm_params
   real(wp) :: ars_ot
   real(wp) :: ars_im
 
+  integer :: i_oiso_et
+  real(wp) :: fro18_et_const
+  real(wp) :: coef_fro18_sv_kin
+
   integer :: nsmooth_cda
   integer :: nsmooth_weff
   integer :: nsmooth_aslp
@@ -449,6 +453,9 @@ contains
     call nml_read(filename,"atm_par","N_so4_nat",N_so4_nat)
     call nml_read(filename,"atm_par","ars_ot",ars_ot)
     call nml_read(filename,"atm_par","ars_im",ars_im)
+    call nml_read(filename,"atm_par","i_oiso_et",i_oiso_et)
+    call nml_read(filename,"atm_par","fro18_et_const",fro18_et_const)
+    call nml_read(filename,"atm_par","coef_fro18_sv_kin",coef_fro18_sv_kin)
     call nml_read(filename,"atm_par","nsmooth_cda",nsmooth_cda)
     call nml_read(filename,"atm_par","nsmooth_weff",nsmooth_weff)
     call nml_read(filename,"atm_par","nsmooth_aslp",nsmooth_aslp)
