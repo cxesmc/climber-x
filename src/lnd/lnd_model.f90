@@ -888,6 +888,7 @@ contains
                             lnd%f_wet_cum,lnd%w_table_cum, &
                             lnd%f_wet_mon,lnd%f_wet_long,lnd%w_table_mon, &
                             lnd%t_soil_max, &
+                            lnd%frozen_years,lnd%thaw_timer,lnd%k_slow_to_fast, &
                             lnd%ftemp,lnd%fmoist,lnd%fdepth, &
                             lnd%k_litter,lnd%k_fast,lnd%k_slow,lnd%diff_soilc,lnd%adv_soilc, &
                             lnd%k_litter_wet,lnd%k_fast_wet,lnd%k_slow_wet, &
@@ -956,7 +957,7 @@ contains
                         lnd%litter_c,lnd%fast_c,lnd%slow_c, &
                         lnd%litter_c13,lnd%fast_c13,lnd%slow_c13, &
                         lnd%litter_c14,lnd%fast_c14,lnd%slow_c14, &
-                        lnd%k_litter,lnd%k_fast,lnd%k_slow, &
+                        lnd%k_litter,lnd%k_fast,lnd%k_slow,lnd%k_slow_to_fast, &
                         lnd%k_litter_wet,lnd%k_fast_wet,lnd%k_slow_wet,lnd%diff_soilc,lnd%adv_soilc,lnd%ch4_frac_wet, &
                         lnd%soil_resp(ic_min),lnd%soil_resp13(ic_min),lnd%soil_resp14(ic_min),lnd%soil_resp_l(:,ic_min), &
                         lnd%soil_c_tot(ic_min),lnd%soil_c13_tot(ic_min),lnd%soil_c14_tot(ic_min), &
@@ -1610,8 +1611,10 @@ end subroutine lnd_update
         lnd%l2d(i,j)%lambda_int_sublake = 0._wp 
         lnd%l2d(i,j)%cap_sublake        = 0._wp 
         lnd%l2d(i,j)%t_soil_old      = T0
-        lnd%l2d(i,j)%t_soil_max      = T0 
-        lnd%l2d(i,j)%t_ice_old       = T0 
+        lnd%l2d(i,j)%t_soil_max      = T0
+        lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
+        lnd%l2d(i,j)%thaw_timer      = 0._wp
+        lnd%l2d(i,j)%t_ice_old       = T0
         lnd%l2d(i,j)%t_shelf_old     = T0 
         lnd%l2d(i,j)%t_shelf_max     = T0 
         lnd%l2d(i,j)%t_lake_old      = T0 
@@ -1641,8 +1644,9 @@ end subroutine lnd_update
         lnd%l2d(i,j)%fdepth          = 0._wp 
         lnd%l2d(i,j)%k_litter        = 0._wp 
         lnd%l2d(i,j)%k_fast          = 0._wp 
-        lnd%l2d(i,j)%k_slow          = 0._wp 
-        lnd%l2d(i,j)%k_litter_wet    = 0._wp 
+        lnd%l2d(i,j)%k_slow          = 0._wp
+        lnd%l2d(i,j)%k_slow_to_fast  = 0._wp
+        lnd%l2d(i,j)%k_litter_wet    = 0._wp
         lnd%l2d(i,j)%k_fast_wet      = 0._wp 
         lnd%l2d(i,j)%k_slow_wet      = 0._wp 
         lnd%l2d(i,j)%diff_soilc      = 0._wp 
@@ -1907,8 +1911,10 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%cap_sublake        (nl)) 
         allocate(lnd%l2d(i,j)%t_soil          (0:nl)) 
         allocate(lnd%l2d(i,j)%t_soil_old      (0:nl)) 
-        allocate(lnd%l2d(i,j)%t_soil_max      (0:nl)) 
-        allocate(lnd%l2d(i,j)%t_ice           (0:nl)) 
+        allocate(lnd%l2d(i,j)%t_soil_max      (0:nl))
+        allocate(lnd%l2d(i,j)%frozen_years    (nl))
+        allocate(lnd%l2d(i,j)%thaw_timer      (nl))
+        allocate(lnd%l2d(i,j)%t_ice           (0:nl))
         allocate(lnd%l2d(i,j)%t_ice_old       (0:nl)) 
         allocate(lnd%l2d(i,j)%t_lake          (0:nl_l)) 
         allocate(lnd%l2d(i,j)%t_lake_old      (0:nl_l)) 
@@ -2026,8 +2032,9 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%fdepth           (nl)) 
         allocate(lnd%l2d(i,j)%k_litter         (nlc)) 
         allocate(lnd%l2d(i,j)%k_fast           (nlc)) 
-        allocate(lnd%l2d(i,j)%k_slow           (nlc)) 
-        allocate(lnd%l2d(i,j)%k_litter_wet     (nlc)) 
+        allocate(lnd%l2d(i,j)%k_slow           (nlc))
+        allocate(lnd%l2d(i,j)%k_slow_to_fast   (nlc))
+        allocate(lnd%l2d(i,j)%k_litter_wet     (nlc))
         allocate(lnd%l2d(i,j)%k_fast_wet       (nlc)) 
         allocate(lnd%l2d(i,j)%k_slow_wet       (nlc)) 
         allocate(lnd%l2d(i,j)%diff_soilc       (nlc)) 
@@ -2575,6 +2582,18 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"w_i_sublake",        var_n,       dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="sublake frozen water equivalent",units="kg/m2",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%frozen_years(:)
+     enddo
+   enddo
+   call nc_write(fnm,"frozen_years",       var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: consecutive perennially-frozen years",units="yr",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%thaw_timer(:)
+     enddo
+   enddo
+   call nc_write(fnm,"thaw_timer",         var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: priming years remaining",units="yr",ncid=ncid)
    deallocate(var_n)
 
    allocate(var_n(nl_l,nx,ny))
@@ -3040,6 +3059,16 @@ end subroutine lnd_update
         call nc_read(fnm,"theta_w_sublake",lnd(i,j)%theta_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         call nc_read(fnm,"w_w_sublake",lnd(i,j)%w_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         call nc_read(fnm,"w_i_sublake",lnd(i,j)%w_i_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
+        if (nc_exists_var(fnm,"frozen_years")) then
+          call nc_read(fnm,"frozen_years",lnd(i,j)%frozen_years,start=[1,i,j],count=[nl,1,1],ncid=ncid)
+        else
+          lnd(i,j)%frozen_years = -1._wp ! sentinel: frozen history unknown for restarts predating this field -> no spurious priming on the first end-of-year
+        endif
+        if (nc_exists_var(fnm,"thaw_timer")) then
+          call nc_read(fnm,"thaw_timer",lnd(i,j)%thaw_timer,start=[1,i,j],count=[nl,1,1],ncid=ncid)
+        else
+          lnd(i,j)%thaw_timer = 0._wp
+        endif
         call nc_read(fnm,"f_i_lake",lnd(i,j)%f_i_lake,start=[1,i,j],count=[nl_l,1,1],ncid=ncid)
 
         call nc_read(fnm,"litter_c",lnd(i,j)%litter_c,start=[1,i,j],count=[nlc,1,1],ncid=ncid)

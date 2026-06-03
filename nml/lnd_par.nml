@@ -147,7 +147,7 @@
     ! soil respiration params
     !------------------------------------------------------------------------------------
     f_resp_litter = 0.7         ! fraction of decomposed litter respired directly as CO2 to the atmosphere (0.7 in LPJ)
-    f_litter_to_fast = 0.985    ! fraction of (1-f_resp_litter) transferred to the fast carbon pool, the rest goes to the slow pool (0.985 in LPJ)
+    f_litter_to_fast = 0.95     ! fraction of (1-f_resp_litter) transferred to the fast carbon pool, the rest goes to the slow pool (0.985 in LPJ)
     k_min      = 5000.          ! years, slowest soil carbon turnover time scale
     k10_litter = 2.86           ! years, litter turnover time scale (2.86 in LPJ)
     k10_fast   = 33.3           ! years, fast soil carbon turnover time scale (33.3 in LPJ)
@@ -162,7 +162,7 @@
                                 ! 0.32 corresponds roughly to q10=1.5
     q10_c      = 1.5            ! Q10 for temperature dependence of soil respiration, only if iresp_temp=3
     temp_max_crit_resp = 45.    ! degC, critical soil temperature above which soil respiration is gradually suppressed, reflecting enzyme denaturation 
-    iresp_moist = 3             ! param of moisture dependence of soil respiration:
+    iresp_moist = 1             ! param of moisture dependence of soil respiration:
                                 ! 0..no soil respiration dependence on soil moisture
                                 ! 1..Porporato 2003
                                 ! 2..Koven 2013
@@ -174,7 +174,15 @@
     k_ice        = 1.e4         ! yr, turnover time of carbon below ice sheets
     gamma_luc_Clitter_crop = 1.    ! 1/yr, litter carbon turnover rate for land use change (cropland)
     gamma_luc_Clitter_pasture = 1. ! 1/yr, litter carbon turnover rate for land use change (pasture)
-    gamma_luc_Csoil_crop = 0.2     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
+    gamma_luc_Csoil_crop = 0.1     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
+
+    !------------------------------------------------------------------------------------
+    ! permafrost-thaw mobilisation of slow soil carbon
+    !------------------------------------------------------------------------------------
+    l_c_thaw = F                ! shift part of the slow soil carbon to the fast pool when a layer transitions from perennially frozen to seasonally thawed?
+    f_slow_to_fast_thaw = 0.0   ! fraction of slow soil carbon mobilised to the fast pool over the thaw window when a layer thaws (only used if l_c_thaw=T)
+    n_thaw = 10.                ! yr, length of the priming window over which the slow->fast carbon transfer is spread after a layer thaws (only used if l_c_thaw=T)
+    n_frozen_min = 100.         ! yr, minimum number of consecutive years a layer must be perennially frozen before a subsequent thaw triggers priming (only used if l_c_thaw=T)
 
     !------------------------------------------------------------------------------------
     ! burial of soil carbon
@@ -211,7 +219,7 @@
     peat_area    = T            ! include peatland dynamic area changes
     nmonwet_peat  = 3           ! number of month fraction has to be inundated to become potential peatland
     acroc_crit = 5.0            ! kgC/m2, critical acrotelm carbon content for catotelm formation rate, 7.5d0 Wania 2009
-    k10_acro = 15               ! yr, acrotelm decomposition time scale at 10 degC, 10 Spahni 2013, 15 Kleinen 2012
+    k10_acro = 25               ! yr, acrotelm decomposition time scale at 10 degC, 10 Spahni 2013, 15 Kleinen 2012
     k10_cato = 1000             ! yr, catotelm decomposition time scale at 10 degC, 1000 Spahni 2013
     k_acro_to_cato = 10.e-3     ! 1/yr, catotlem formation rate, 12.d-3 Wania 2009, 19.d-3 Kleinen 2012
     peat_ch_rate = 0.01         ! 1/yr, rate of peat areal expansion or contraction, 0.01d0 Stocker 2014
