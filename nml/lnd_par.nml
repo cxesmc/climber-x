@@ -174,7 +174,7 @@
     k_ice        = 1.e4         ! yr, turnover time of carbon below ice sheets
     gamma_luc_Clitter_crop = 1.    ! 1/yr, litter carbon turnover rate for land use change (cropland)
     gamma_luc_Clitter_pasture = 1. ! 1/yr, litter carbon turnover rate for land use change (pasture)
-    gamma_luc_Csoil_crop = 0.2     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
+    gamma_luc_Csoil_crop = 0.1     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
 
     !------------------------------------------------------------------------------------
     ! permafrost-thaw mobilisation of slow soil carbon
