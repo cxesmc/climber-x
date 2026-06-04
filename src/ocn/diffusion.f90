@@ -31,7 +31,7 @@ module diffusion_mod
   use precision, only : wp
   use constants, only : r_earth
   use tridiag, only : tridiag_solve
-  use ocn_params, only : dt, l_diff33_impl, diff_gm, diffx_max, diffy_max
+  use ocn_params, only : dt, diff_gm, diffx_max, diffy_max
   use ocn_grid, only : k1, maxi, maxj, maxk, mask_ocn, mask_c, mask_u, mask_v, mask_w, dx, dxv, dy, dz, dza, rdx, rdy, rdza, zw, ocn_area
 
   implicit none
@@ -39,7 +39,7 @@ module diffusion_mod
   real(wp), parameter :: eps = 1.e-15_wp
 
   private
-  public :: diffusion, diffusion_33
+  public :: diffusion
 
 contains
 
@@ -48,7 +48,7 @@ contains
   !   Purpose    :  
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine diffusion(i_diff, f_ocn,tracer,diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-                      fdx, fdy, fdz, slope2_w, tracer_tendency)
+                      fdx, fdy, fdz, tracer_tendency)
 
     implicit none
 
@@ -63,14 +63,15 @@ contains
     real(wp), dimension(0:,0:,0:), intent(out) :: fdx
     real(wp), dimension(0:,0:,0:), intent(out) :: fdy
     real(wp), dimension(0:,0:,0:), intent(out) :: fdz
-    real(wp), dimension(:,:,:), intent(out) :: slope2_w
     real(wp), dimension(:,:,:), intent(out) :: tracer_tendency
 
     integer :: i, j, k, i0, j0, i1, i2, ip1, nnp, knp, k1, k2
+    integer :: jp, jm, j0c
     real(wp) :: dts_dx, dts_dy, dts_dz, tv
     real(wp) :: slope2, slope_x, slope_y, slope_x_avg, slope_y_avg, drhodx, drhody, drhodz, tracer_ijk
-    real(wp) :: taper
+    real(wp) :: taper, mc_x, yfac
     real(wp) :: dx_dz, dy_dz
+    real(wp), parameter :: f_min = 1.e-30_wp   ! floor for f_ocn in branchless denominator (land f_ocn=0)
 
 
     do k=1,maxk
@@ -89,25 +90,14 @@ contains
               tv = 0._wp
               do knp=0,1
                 do nnp=0,1
-                  i0 = i+nnp
-                  if (i0.eq.0) i0=maxi
-                  if (i0.eq.maxi+1) i0=1
-                  k1 = k+knp-1
+                  i0 = modulo(i+nnp-1, maxi) + 1   ! wraps i+nnp = maxi+1 back to 1
+                  k1 = max(1, k+knp-1)             ! when k+knp-1=0, k1==k2 below => dts_dz=0 (corner vanishes)
                   k2 = k+knp
-                  if (k1.gt.0) then
-                    if (mask_w(i0,j,k1).eq.1) then
-                      dts_dz = (tracer(i0,j,k2)-tracer(i0,j,k1)) * rdza(k1)  ! K/m or psu/m            
-                      slope_x = drhodx/min(-eps,drho_dz(i0,j,k1))
-                      ! slope tapering following Gerdes 1991
-                      taper = min(1._wp,(slope_crit(j,k)/slope_x)**2)
-                    else
-                      dts_dz = 0._wp
-                      slope_x = 0._wp
-                      taper = 1._wp
-                    endif
-                    ! sum up over 4 corners
-                    tv = tv + taper * min(diffx_max(j),(diff_iso-diff_gm))*slope_x*dts_dz 
-                  endif
+                  dts_dz = (tracer(i0,j,k2)-tracer(i0,j,k1)) * rdza(k1)  ! K/m or psu/m
+                  slope_x = drhodx/min(-eps,drho_dz(i0,j,k1))
+                  taper = min(1._wp,(slope_crit(j,k)/slope_x)**2)
+                  ! mask_w as a multiply (0 on closed face)
+                  tv = tv + real(mask_w(i0,j,k1),wp) * taper * min(diffx_max(j),(diff_iso-diff_gm))*slope_x*dts_dz
                 enddo
               enddo
               tv = 0.25_wp*tv *dy_dz*dt  ! m/s*K *m2*s = m3 * K
@@ -128,22 +118,13 @@ contains
               do knp=0,1
                 do nnp=0,1
                   j0 = j+nnp
-                  k1 = k+knp-1
+                  k1 = max(1, k+knp-1)             ! when k+knp-1=0, k1==k2 below => dts_dz=0 (corner vanishes)
                   k2 = k+knp
-                  if (k1.gt.0) then
-                    if (mask_w(i,j0,k1).eq.1) then
-                      dts_dz = (tracer(i,j0,k2)-tracer(i,j0,k1)) * rdza(k1)  ! K/m or psu/m            
-                      slope_y = drhody/min(-eps,drho_dz(i,j0,k1))
-                      ! slope tapering following Gerdes 1991
-                      taper = min(1._wp,(slope_crit(j0,k)/slope_y)**2)
-                    else
-                      dts_dz = 0._wp
-                      slope_y = 0._wp
-                      taper = 1._wp
-                    endif
-                    ! sum up over 4 corners
-                    tv = tv + taper * min(diffy_max(j),(diff_iso-diff_gm))*slope_y*dts_dz 
-                  endif
+                  dts_dz = (tracer(i,j0,k2)-tracer(i,j0,k1)) * rdza(k1)  ! K/m or psu/m
+                  slope_y = drhody/min(-eps,drho_dz(i,j0,k1))
+                  taper = min(1._wp,(slope_crit(j0,k)/slope_y)**2)
+                  ! mask_w as a multiply (0 on closed face)
+                  tv = tv + real(mask_w(i,j0,k1),wp) * taper * min(diffy_max(j),(diff_iso-diff_gm))*slope_y*dts_dz
                 enddo
               enddo
               tv = 0.25_wp*tv *dx_dz*dt  ! m/s*K *m2*s = m3 * K
@@ -157,11 +138,7 @@ contains
           if (mask_w(i,j,K).eq.1) then
             ! z-derivative of tracer field
             dts_dz = (tracer(i,j,k+1) - tracer_ijk)*rdza(k)  ! K/m or psu/m            
-            if (.not.l_diff33_impl) then
-              fdz(i,j,K) = - diff_dia(i,j,K) * dts_dz *ocn_area(i,j)*dt
-            else
-              fdz(i,j,K) = 0._wp
-            endif
+            fdz(i,j,K) = - diff_dia(i,j,K) * dts_dz *ocn_area(i,j)*dt
             if (i_diff.eq.1) then
               ! add isoneutral diffusion
               drhodz = min(-eps,drho_dz(i,j,K)) ! negative
@@ -171,54 +148,35 @@ contains
               slope_y_avg = 0._wp
               do knp=0,1
                 do nnp=0,1
-                  ! phi derivative of tracer field
-                  i0 = i-1+2*nnp
-                  if (i0.eq.0) i0=maxi
-                  if (i0.eq.maxi+1) i0=1
-                  if (mask_c(i0,j,k+knp).eq.1) then
-                    i1 = i+nnp-1
-                    if (i1.eq.0) i1=maxi
-                    i2 = i+nnp
-                    if (i2.eq.maxi+1) i2=1
-                    dts_dx = (tracer(i2,j,k+knp)-tracer(i1,j,k+knp)) * rdx(j)
-                    slope_x = drho_dx(I1,j,k+knp)/drhodz
-                  else
-                    dts_dx = 0._wp
-                    slope_x = 0._wp
-                  endif
-                  ! theta-derivative of tracer field
+                  ! phi derivative of tracer field (branchless: mask_c as a multiply, i1/i2 wrapped via modulo)
+                  i0 = modulo(i-2+2*nnp, maxi) + 1   ! phi mask point, wraps 0 -> maxi and maxi+1 -> 1
+                  i1 = modulo(i+nnp-2, maxi) + 1     ! = i+nnp-1, wrapped 0 -> maxi
+                  i2 = modulo(i+nnp-1, maxi) + 1     ! = i+nnp,   wrapped maxi+1 -> 1
+                  mc_x = real(mask_c(i0,j,k+knp),wp)
+                  dts_dx = mc_x * (tracer(i2,j,k+knp)-tracer(i1,j,k+knp)) * rdx(j)
+                  slope_x = mc_x * drho_dx(i1,j,k+knp)/drhodz
+                  ! theta-derivative (branchless: clamp j indices, zero the contribution outside [1,maxj])
                   j0 = j-1+2*nnp
-                  if (j0.eq.0 .or. j0.eq.maxj+1) then
-                    dts_dy = 0._wp
-                    slope_y = 0._wp
-                  else if (mask_c(i,j0,k+knp).eq.0) then
-                    dts_dy = 0._wp
-                    slope_y = 0._wp
-                  else
-                    dts_dy = (tracer(i,j+nnp,k+knp)-tracer(i,j+nnp-1,k+knp)) * rdy
-                    slope_y = drho_dy(i,J+nnp-1,k+knp)/drhodz
-                  endif
+                  j0c = min(max(j0,1),maxj)          ! clamped theta mask index (only used when in-bounds)
+                  jp  = min(j+nnp, maxj)
+                  jm  = max(j+nnp-1, 1)
+                  yfac = merge(real(mask_c(i,j0c,k+knp),wp), 0._wp, j0.ge.1 .and. j0.le.maxj)
+                  dts_dy = yfac * (tracer(i,jp,k+knp)-tracer(i,jm,k+knp)) * rdy
+                  slope_y = yfac * drho_dy(i,jm,k+knp)/drhodz
                   ! sum up over 4 corners
                   slope2 = slope_x**2+slope_y**2+eps
                   taper = min(1._wp,slope_crit(j,K)**2/slope2)
                   tv = tv + (diff_iso+diff_gm) *taper* (slope_x*dts_dx + slope_y*dts_dy)
-                  if (.not.l_diff33_impl) then
-                    ! explicitely include A33 term 
-                    tv = tv - diff_iso*taper*slope2*dts_dz
-                  endif
+                  ! A33 term (explicit)
+                  tv = tv - diff_iso*taper*slope2*dts_dz
                   ! average slopes
                   slope_x_avg = slope_x_avg + slope_x
                   slope_y_avg = slope_y_avg + slope_y
                 enddo
               enddo
-              slope2 = (slope_x_avg/4._wp)**2+(slope_y_avg/4._wp)**2+eps
-              slope2_w(i,j,K) = slope2      ! save for diffusion_33
-              ! tapering for large slopes, e.g. http://mitgcm.org/public/r2_manual/latest/online_documents/node240.html
-              ! slope tapering following Gerdes 1991
               fdz(i,j,K) = fdz(i,j,K) + 0.25_wp*tv *ocn_area(i,j)*dt  ! m/s*K *m2*s = m3 * K
             endif
           else
-            slope2_w(i,j,K) = eps
             fdz(i,j,K) = 0._wp
           endif
 
@@ -240,10 +198,10 @@ contains
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          if (mask_c(i,j,k).eq.1) then
-            tracer_tendency(i,j,k) = - (fdx(I,j,k)-fdx(I-1,j,k) + fdy(i,J,k)-fdy(i,J-1,k) + fdz(i,j,K)-fdz(i,j,K-1)) &   ! m3 * K
-                                   / (dx(j)*dy*dz(k)*f_ocn(i,j) * dt) 
-          endif
+          ! branchless mask_c; guard f_ocn (=0 on land) in the denominator
+          tracer_tendency(i,j,k) = - real(mask_c(i,j,k),wp) &
+                                 * (fdx(I,j,k)-fdx(I-1,j,k) + fdy(i,J,k)-fdy(i,J-1,k) + fdz(i,j,K)-fdz(i,j,K-1)) &   ! m3 * K
+                                 / (dx(j)*dy*dz(k)*max(f_ocn(i,j),f_min) * dt)
         enddo
       enddo
     enddo
@@ -251,83 +209,5 @@ contains
    return
 
   end subroutine diffusion
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  d i f f u s i o n _ 3 3
-  !   Purpose    :  
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine diffusion_33(i_diff,tracer,diff_iso,diff_dia,slope2_w,slope_max)
-
-    implicit none
-
-    integer, intent(in) :: i_diff
-    real(wp), dimension(:,:,:), intent(inout) :: tracer
-    real(wp), intent(in) :: diff_iso
-    real(wp), dimension(:,:,:), intent(in) :: diff_dia
-    real(wp), dimension(:,:,:), intent(in) :: slope2_w 
-    real(wp), intent(in) :: slope_max
-
-    integer :: i, j, k, kk, k1_ij
-    real(wp) :: slope2, taper
-    real(wp), dimension(maxk) :: a, b, c, r
-    real(wp), dimension(maxk) :: diff_int
-
-
-    do j=1,maxj
-      do i=1,maxi
-        if (mask_ocn(i,j).eq.1) then
-
-          ! index of bottom layer
-          k1_ij = k1(i,j)
-
-          ! diffusivity profile on w-grid
-          do k=k1_ij,maxk
-            slope2 = slope2_w(i,j,K)
-            ! tapering for large slopes, e.g. http://mitgcm.org/public/r2_manual/latest/online_documents/node240.html
-            ! slope tapering following Gerdes 1991
-            taper = min(1._wp,slope_max**2/slope2)
-            if (i_diff.eq.1) then
-              diff_int(K) = diff_dia(i,j,K) + diff_iso*taper*slope2
-            else
-              diff_int(K) = diff_dia(i,j,K) 
-            endif
-          enddo
-
-          ! bottom layer
-          kk = 1
-          k = k1_ij
-          a(kk) = 0._wp
-          b(kk) = 1._wp + dt/dz(k) * diff_int(K)/dza(K)
-          c(kk) = - dt/dz(k) * diff_int(K)/dza(K)
-          r(kk) = tracer(i,j,k) 
-
-          ! intermediate layers
-          do k=k1_ij+1,maxk-1
-            kk = kk+1
-            a(kk) = - dt/dz(k) * diff_int(K-1)/dza(K-1)
-            b(kk) = 1._wp + dt/dz(k) * ( diff_int(K-1)/dza(K-1) + diff_int(K)/dza(K) )
-            c(kk) = - dt/dz(k) * diff_int(K)/dza(K)
-            r(kk) = tracer(i,j,k)
-          enddo
-
-          ! top layer
-          kk = kk+1
-          k = maxk
-          a(kk) = - dt/dz(k) * diff_int(K-1)/dza(K-1)
-          b(kk) = 1._wp + dt/dz(k) * diff_int(K-1)/dza(K-1)
-          c(kk) = 0._wp
-          r(kk) = tracer(i,j,k) 
-
-          ! solve tridiagonal system
-          call tridiag_solve(a(1:kk),b(1:kk),c(1:kk),r(1:kk),tracer(i,j,k1_ij:maxk),kk)
-
-        endif
-      enddo
-    enddo
-
-    return
-
-  end subroutine diffusion_33
 
 end module diffusion_mod

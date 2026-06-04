@@ -81,7 +81,6 @@
  i_diff = 1                   ! diffusion schemes:
                               ! 0 = horizontal/vertical diffusion
                               ! 1 = isopycnal/diapycnal diffusion
- l_diff33_impl = F            ! treat A33 term of diffusion matrix implicitely?
  diff_iso = 1500              ! m2/s, isopycnal/horizontal diffusivity
  diff_gm = 1500               ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
