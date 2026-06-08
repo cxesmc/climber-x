@@ -242,8 +242,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   enddo
   !$omp end do
 
-  !$omp barrier
-
   !$omp do collapse(2) private(i,j,dxharm)
   do j=1,maxj
     do i=1,maxi
@@ -266,8 +264,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     enddo 
   enddo
   !$omp end do
-
-  !$omp barrier
 
   ! Ensure that the input stresses are not larger than could be justified by
   ! the ice pressure now, as the ice might have melted or been advected away
@@ -340,8 +336,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   enddo
   !$omp end do
 
-  !$omp barrier
-
   !$omp do collapse(2) private(i,j,ip1,sum_area)
   do j=0,maxj
     do i=1,maxi
@@ -381,8 +375,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     enddo 
   enddo
   !$omp end do
-
-  !$omp barrier
 
   !$omp do collapse(2) private(i,j,im1,ip1)
   do j=1,maxj
@@ -429,9 +421,14 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   dt_cumulative = 0._wp
 
   ! Do the iterative time steps.
+  ! A single parallel region spans the whole EVP subcycle
+  !$omp parallel private(n)
   do n=1,dyn_par%evp_sub_steps
 
+    ! single thread accumulates the elapsed time (kept exact for reproducibility)
+    !$omp single
     dt_cumulative = dt_cumulative + dt_evp
+    !$omp end single
 
     !    Calculate the strain tensor for viscosities and forcing elastic eqn.
     !  The following are the forms of the horizontal tension and hori-
@@ -439,8 +436,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     !  Griffies and Hallberg (MWR, 2000).  Similar forms are used in the sea
     !  ice model of Bouillon et al. (Ocean Modelling, 2009).
 
-    !$omp parallel 
-    
     !$omp do collapse(2) private(i,j,ip1,im1)
     do j=1,maxj
       do i=1,maxi
@@ -490,8 +485,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     enddo
     !$omp end do
 
-    !$omp barrier
-
     ! calculate viscosities - how often should we do this ?
     !$omp do collapse(2) private(i,j,im1,jm1)
     do j=1,maxj
@@ -523,8 +516,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
       enddo 
     enddo
     !$omp end do
-
-    !$omp barrier
 
     ! Step the stress component equations semi-implicitly.
     !$omp do collapse(2) private(i,j,ip1)
@@ -559,8 +550,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
       enddo 
     enddo
     !$omp end do
-
-    !$omp barrier
 
     !$omp do collapse(2) private(i,j,ip1,Cor,fxic_now,v2_at_u,uio_init,drag_u,m_uio_explicit,b_vel0,uio_pred,uio_C)
     do j=1,maxj
@@ -659,8 +648,6 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     enddo
     !$omp end do
 
-    !$omp barrier
-
     !$omp do collapse(2) private(i,j,im1,Cor,fyic_now,u2_at_v,vio_init,drag_v,m_vio_explicit,b_vel0,vio_pred,vio_C)
     do j=1,maxj-1
       do i=1,maxi
@@ -742,9 +729,8 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     enddo
     !$omp end do
 
-    !$omp end parallel
-
   enddo ! l=1,evp_sub_steps
+  !$omp end parallel
 
   ! make averages
   I_sub_steps = 1._wp/dyn_par%evp_sub_steps
