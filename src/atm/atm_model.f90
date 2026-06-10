@@ -41,11 +41,16 @@ module atm_model
     use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
+    use atm_params, only : l_diff_impl
+    use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
+    use atm_grid, only : dxt, dy, fit, sqr
+    use atm_params, only : tstep
+    use constants, only : pi
     use atm_def, only : atm_class
 
     use lw_radiation_mod, only : lw_radiation
@@ -59,11 +64,12 @@ module atm_model
     use u3d_mod, only : u3d
     use synop_mod, only : synop
     use adifa_mod, only : adifa
+    use diffuse_impl_mod, only : diffuse_impl
     use dust_mod, only : dust
     use time_step_mod, only : time_step    
     use feedbacks_mod, only : feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write
     use rad_kernels_mod, only : rad_kernels_type, rad_kernels_init, rad_kernels, rad_kernels_write
-    use smooth_atm_mod, only : smooth2
+    use smooth_atm_mod, only : smooth2, shapiro2dx
     !$  use omp_lib
 
     implicit none
@@ -337,7 +343,7 @@ contains
       !$ time1 = omp_get_wtime()
       call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%d3, atm%cam, &
         atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst,  &   ! in
-        atm%convdse, atm%convwtr, atm%convdst, atm%convco2, &   ! out
+        atm%convdse, atm%convwtr_adv, atm%convwtr_dif, atm%convdst, atm%convco2, &   ! out 
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
@@ -346,10 +352,42 @@ contains
       !$ if(l_write_timer .and. niter.eq.1) print *,'adifa',(time2-time1)*nstep_fast
 
       !-------------------------------------------------
+      ! implicit (unconditionally stable) horizontal
+      ! diffusion of the prognostic columns - zonal and meridional
+      !-------------------------------------------------
+      !$ time1 = omp_get_wtime()
+      if (l_diff_impl) then
+        call diffuse_impl(atm%diffxdse, atm%diffxwtr, atm%diffxdst, atm%diffydse, atm%diffywtr, atm%diffydst, &   ! in
+          atm%ra2a, atm%hdust, atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &                                  ! in
+          atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &                                                       ! in
+          atm%tam, atm%wcon, atm%dam, atm%cam, &                                                                  ! inout
+          atm%convwtr_dif)                                                                                        ! out
+      endif
+      !$ time2 = omp_get_wtime()
+      !$ if(l_write_timer .and. niter.eq.1) print *,'diffuse_impl',(time2-time1)*nstep_fast
+
+      !-------------------------------------------------
+      ! grid-scale (2dx) checkerboard control on the convergences
+      !-------------------------------------------------
+      if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdse, sqr, c_filt_conv, nord_filt_conv)
+      if (l_diff_impl) then
+        ! implicit: filter the advective convergence AND the implicit diffusive convergence. 
+        if (c_filt_conv.gt.0._wp) then
+          call shapiro2dx(atm%convwtr_adv, sqr, c_filt_conv, nord_filt_conv)
+          call shapiro2dx(atm%convwtr_dif, sqr, c_filt_conv, nord_filt_conv)
+        endif
+        atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
+      else
+        ! explicit: advection and diffusion both enter the budget tendency, so form the total convergence and filter that 
+        atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
+        if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convwtr, sqr, c_filt_conv, nord_filt_conv)
+      endif
+
+      !-------------------------------------------------
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
+      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
         atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
@@ -359,6 +397,10 @@ contains
       !$ if(l_write_timer .and. niter.eq.1) print *,'time_Step',(time2-time1)*nstep_fast
 
       if (atm%error) exit
+
+      ! CFL / diffusion stability diagnostic (per latitude; prints running max on the last sub-step)
+      if (l_write_timer) call cfl_diag(niter.eq.nstep_fast, atm%u3, atm%v3, &
+        atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst)
 
     enddo
 
@@ -381,6 +423,62 @@ contains
    return
 
   end subroutine atm_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  c f l _ d i a g
+  !   Purpose    :  per-latitude running-max advective Courant and diffusion
+  !              :  stability numbers, to find which rows limit the fast time step
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine cfl_diag(do_print, u3, v3, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst)
+
+    implicit none
+
+    logical,  intent(in) :: do_print
+    real(wp), intent(in) :: u3(:,:,:), v3(:,:,:)
+    real(wp), intent(in) :: diffxdse(:,:), diffydse(:,:)
+    real(wp), intent(in) :: diffxwtr(:,:), diffywtr(:,:)
+    real(wp), intent(in) :: diffxdst(:,:), diffydst(:,:)
+
+    integer :: i, j, k
+    real(wp) :: umax, vmax, dxmax, dymax
+    real(wp), save :: cx_max(jm) = 0._wp   ! running-max zonal advective Courant per latitude
+    real(wp), save :: cy_max(jm) = 0._wp   ! running-max meridional advective Courant
+    real(wp), save :: dx_max(jm) = 0._wp   ! running-max zonal diffusion number
+    real(wp), save :: dy_max(jm) = 0._wp   ! running-max meridional diffusion number
+
+    ! update the per-latitude running maxima from the current sub-step
+    do j=1,jm
+      umax = 0._wp; vmax = 0._wp; dxmax = 0._wp; dymax = 0._wp
+      do i=1,im
+        do k=1,km
+          umax = max(umax, abs(u3(i,j,k)))
+          vmax = max(vmax, abs(v3(i,j,k)))
+        enddo
+        dxmax = max(dxmax, diffxdse(i,j), diffxwtr(i,j), diffxdst(i,j))   ! worst diffusivity over tracers
+        dymax = max(dymax, diffydse(i,j), diffywtr(i,j), diffydst(i,j))
+      enddo
+      cx_max(j) = max(cx_max(j), umax*tstep/dxt(j))
+      cy_max(j) = max(cy_max(j), vmax*tstep/dy)
+      dx_max(j) = max(dx_max(j), dxmax*tstep/dxt(j)**2)
+      dy_max(j) = max(dy_max(j), dymax*tstep/dy**2)
+    enddo
+
+    if (.not.do_print) return
+
+    print *
+    print '(a,es10.3,a)', ' ===== atm CFL / diffusion stability (running max over run), tstep =',tstep,' s ====='
+    print '(a)',          '   donor-cell advection stable if Courant < 1 ; explicit diffusion stable if (Dx+Dy) < 0.5'
+    print '(a,f7.2,a,i3)','   global max Courant_x =',maxval(cx_max),'   at j =',maxloc(cx_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_y =',maxval(cy_max),'   at j =',maxloc(cy_max,1)
+    print '(a,f7.3,a,i3)','   global max (Dx+Dy)   =',maxval(dx_max+dy_max),'   at j =',maxloc(dx_max+dy_max,1)
+    print '(a)',          '       j   lat[deg]    Cadv_x    Cadv_y     Ddif_x    Ddif_y     Dx+Dy'
+    do j=1,jm
+      print '(i8,f9.1,5f11.3)', j, fit(j)*180._wp/pi, cx_max(j), cy_max(j), dx_max(j), dy_max(j), dx_max(j)+dy_max(j)
+    enddo
+    print *
+
+  end subroutine cfl_diag
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -494,6 +592,7 @@ contains
          atm%uz500(j) = 0._wp
 
          atm%convwtr(i,j) = 0._wp
+         atm%convwtr_adv(i,j) = 0._wp
          atm%convdse(i,j) = 0._wp
 
          atm%dam(i,j) = 0._wp
@@ -725,6 +824,8 @@ contains
 
      allocate(atm%convdse(im,jm))
      allocate(atm%convwtr(im,jm))
+     allocate(atm%convwtr_adv(im,jm))
+     allocate(atm%convwtr_dif(im,jm))
      allocate(atm%convdst(im,jm))
      allocate(atm%convco2(im,jm))
      allocate(atm%faxdse(imc,jm))
@@ -991,6 +1092,8 @@ contains
 
      deallocate(atm%convdse)
      deallocate(atm%convwtr)
+     deallocate(atm%convwtr_adv)
+     deallocate(atm%convwtr_dif)
      deallocate(atm%convdst)
      deallocate(atm%convco2)
      deallocate(atm%faxdse)

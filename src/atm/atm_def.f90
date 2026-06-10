@@ -216,7 +216,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: w3
 
       real(wp), allocatable, dimension(:,:) :: convdse
-      real(wp), allocatable, dimension(:,:) :: convwtr
+      real(wp), allocatable, dimension(:,:) :: convwtr       ! total moisture convergence = convwtr_adv + convwtr_dif (drives precip)
+      real(wp), allocatable, dimension(:,:) :: convwtr_adv   ! advective moisture convergence (drives the column-water budget)
+      real(wp), allocatable, dimension(:,:) :: convwtr_dif   ! implicit diffusive moisture convergence
       real(wp), allocatable, dimension(:,:) :: convdst
       real(wp), allocatable, dimension(:,:) :: convco2
       real(wp), allocatable, dimension(:,:) :: faxdse

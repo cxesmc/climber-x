@@ -12,7 +12,7 @@ obj_version = $(patsubst %, $(objdir)/%, $(tmp_version) )
 # atmospheric model related source files
 dir_atm = $(srcdir)/atm/
 files_atm = atm_params.f90 atm_def.f90 atm_grid.f90 smooth_atm.f90 \
-						adifa.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
+						adifa.f90 diffuse_impl.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
 						time_step.f90 lwr.f90 swr.f90 feedbacks.f90 rad_kernels.f90 dust.f90 \
 						atm_model.f90 atm_out.f90
 tmp_atm = $(patsubst %.f90, %.o, $(files_atm) )
@@ -321,6 +321,7 @@ $(objdir)/%.o : $(dir_utils)%.f90
 #######################
 # atmosphere rules ####
 $(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/adifa.o \
+	$(objdir)/diffuse_impl.o \
 	$(objdir)/synop.o $(objdir)/smooth_atm.o $(objdir)/wvel.o $(objdir)/clouds.o $(objdir)/vesta.o \
 	$(objdir)/crisa.o $(objdir)/slp.o $(objdir)/u2d.o $(objdir)/u3d.o $(objdir)/time_step.o \
 	$(objdir)/lwr.o $(objdir)/swr.o $(objdir)/feedbacks.o $(objdir)/rad_kernels.o $(objdir)/dust.o
@@ -342,7 +343,10 @@ $(objdir)/atm_def.o : $(dir_atm)atm_def.f90 $(objdir)/atm_params.o $(objdir)/atm
 $(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/diffuse_impl.o : $(dir_atm)diffuse_impl.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/wvel.o : $(dir_atm)wvel.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o

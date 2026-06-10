@@ -86,8 +86,14 @@ contains
     real(wp) :: c_damp_eq, c_damp_pol
 
     real(wp), dimension(kmc) :: uteri
-    real(wp), dimension(kmc) :: vteri 
+    real(wp), dimension(kmc) :: vteri
+    real(wp), dimension(km) :: rdpl   ! 1/(pl(k)-pl(k+1)), column-invariant
 
+
+    ! precompute reciprocal layer-pressure thickness (depends on k only, not on i,j)
+    do k=1,km
+      rdpl(k) = 1._wp/(pl(k)-pl(k+1))
+    enddo
 
     !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,ctv,c_damp_eq,c_damp_pol)
     do j=1,jm
@@ -110,7 +116,7 @@ contains
         endif
         pbl_t = pzx+pblt(j)-1._wp
         do k=1,km
-          dp = (pl(k)-pbl_t)/(pl(k)-pl(k+1))
+          dp = (pl(k)-pbl_t)*rdpl(k)
           dp = min(1._wp,dp)
           dp = max(0._wp,dp)
           ua(i,j,k) = uab(i,j) * dp
@@ -129,7 +135,7 @@ contains
           pl1 = max(min(pl(k),pc1),pl(k+1))
           pl2 = min(max(pl(k+1),pc2),pl(k))
           dp_l = pl1-pl2
-          ua(i,j,k) = ua(i,j,k)+uabc*dp_l/(pl(k)-pl(k+1))
+          ua(i,j,k) = ua(i,j,k)+uabc*dp_l*rdpl(k)
         enddo     
 
         ! y-component on v-points 
@@ -142,7 +148,7 @@ contains
         endif
         pbl_u = pzy+pblu(j)-1._wp
         do k=1,km
-          dp = (pl(k)-pbl_u)/(pl(k)-pl(k+1))
+          dp = (pl(k)-pbl_u)*rdpl(k)
           dp = min(1._wp,dp)
           dp = max(0._wp,dp)
           va(i,j,k) = vab(i,j) * dp
@@ -161,7 +167,7 @@ contains
           pl1 = max(min(pl(k),pc1),pl(k+1))
           pl2 = min(max(pl(k+1),pc2),pl(k))
           dp_l = pl1-pl2
-          va(i,j,k) = va(i,j,k)+vabc*dp_l/(pl(k)-pl(k+1))
+          va(i,j,k) = va(i,j,k)+vabc*dp_l*rdpl(k)
         enddo  
 
         !-------------------------------------------------------
@@ -201,12 +207,12 @@ contains
         endif
 
       enddo
-    enddo      
+    enddo
     !$omp end parallel do
 
 
     !-------------------------------------------------------
-    ! advective mass transport 
+    ! advective mass transport
     !-------------------------------------------------------
 
     !$omp parallel do collapse(2) private(i,j,k,imi,u_g,v_g,dplxdy,dplydxu)
@@ -221,7 +227,7 @@ contains
           if (pl(k+1).ge.ptopdyn) then
             u_g  = 0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))
           elseif (pl(k+1).lt.ptopdyn.and.pl(k).ge.ptopdyn) then
-            u_g  = (0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))) *(pl(k)-ptopdyn)/(pl(k)-pl(k+1))
+            u_g  = (0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))) *(pl(k)-ptopdyn)*rdpl(k)
           else
             u_g  = 0._wp
           endif 
@@ -249,7 +255,7 @@ contains
             if (pl(k+1).ge.ptopdyn) then
               v_g  = 0.5_wp*(vgb(i,j-1)+vgb(i,j)) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))
             elseif (pl(k+1).lt.ptopdyn.and.pl(k).ge.ptopdyn) then
-              v_g  = (0.5_wp*(vgb(i,j-1)+vgb(i,j)) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))) *(pl(k)-ptopdyn)/(pl(k)-pl(k+1))
+              v_g  = (0.5_wp*(vgb(i,j-1)+vgb(i,j)) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))) *(pl(k)-ptopdyn)*rdpl(k)
             else
               v_g  = 0._wp
             endif 
@@ -413,5 +419,6 @@ contains
     return
 
   end subroutine u3d
+
 
 end module u3d_mod
