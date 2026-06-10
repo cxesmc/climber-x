@@ -13,9 +13,21 @@ openmp_yelmo ?= $(openmp)
 defaulttarget: usage
 
 ## COMPILER CONFIGURATION ##
-# (should be loaded from config directory)
+# Loaded from a config/<host> fragment by `python config.py config/<host>`,
+# or assembled by `configme` in the modern path. The fragment defines the
+# compiler (FC, FFLAGS_BASE, FFLAGS_OPENMP, CPPFLAGS_PP, DFLAGS_*), netCDF
+# wiring (INC_NC, LIB_NC), and any host-specific overrides (e.g. LFLAGS_EXTRA).
 
 <COMPILER_CONFIGURATION>
+
+## SHARED DEPENDENCY WIRING ##
+# Pulled in after the compiler/machine fragment so it can reference FFLAGS_BASE,
+# FFLAGS_OPENMP, CPPFLAGS_PP, INC_NC, LIB_NC, and LFLAGS_EXTRA set there.
+# Defines the COORD, FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
+# the openmp= build switch, and the final FFLAGS_CLIM/FFLAGS_FULL and
+# LFLAGS_CLIM/LFLAGS_FULL flag sets.
+
+include config/common.mk
 
 ## gitversion
 # generate a Git version string
