@@ -19,9 +19,7 @@
   !-----------------------------------------------------------
   ! Coriolis
   !-----------------------------------------------------------
-  fcormin  = 3e-5               ! 1/s, minimum Coriolis parameter for geostrophic wind
-  fcoramin = 1e-5               ! 1/s, minimum Coriolis parameter for ageostrophic wind
-  fcorumin = 1e-5               ! 1/s, minimum Coriolis parameter for nea-surface wind
+  fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter
 
   !-----------------------------------------------------------
   ! drag and cross-isobar angle parameters 
@@ -59,7 +57,7 @@
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
-  c_slp_4 = 7.                  ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
@@ -263,7 +261,7 @@
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
   nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  nsmooth_aslp_eq = 10 !20          ! spatial smoothing of azonal sea level pressure around the equator
+  nsmooth_aslp_eq = 5           ! spatial smoothing of azonal sea level pressure around the equator
   nj_eq = 5                     ! latitudinal extent of spatial smoothing of azonal sea level pressure around the equator
   nsmooth_aslp_topo = 4         ! spatial smoothing of azonal sea level pressure from topographic waves
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle

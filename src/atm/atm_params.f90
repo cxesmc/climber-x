@@ -37,8 +37,6 @@ module atm_params
   integer :: nstep_fast
 
   real(wp) :: fcormin
-  real(wp) :: fcoramin
-  real(wp) :: fcorumin
 
   logical :: l_sct_0
   logical :: l_alb_0
@@ -285,8 +283,6 @@ contains
     write(*,*) "atmosphere parameters ==========="
     call nml_read(filename,"atm_par","nstep_fast",nstep_fast)
     call nml_read(filename,"atm_par","fcormin",fcormin)
-    call nml_read(filename,"atm_par","fcoramin",fcoramin)
-    call nml_read(filename,"atm_par","fcorumin",fcorumin)
     call nml_read(filename,"atm_par","f_ice_pow",f_ice_pow)
     call nml_read(filename,"atm_par","r_scat",r_scat)
     call nml_read(filename,"atm_par","l_sct_0",l_sct_0)

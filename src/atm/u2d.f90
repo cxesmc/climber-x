@@ -29,7 +29,7 @@ module u2d_mod
   use constants, only : g
   use atm_params, only : ra, i_kata_wind, h_kata
   use atm_grid, only : im, imc, jm, jmc, nm, dxt, dy
-  use atm_grid, only : fcort, fcortf, fcorta, fcorua, signf
+  use atm_grid, only : fcort, fcorta, fcorua, signf
   !$use omp_lib
 
   implicit none
@@ -45,7 +45,7 @@ contains
   !                 planetary boundary layer
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine u2d(slp, sin_cos_acbar, &
-      ugb, vgb, ugbf, vgbf, uab, vab)
+      ugb, vgb, uab, vab)
 
     implicit none
 
@@ -54,8 +54,6 @@ contains
 
     real(wp), intent(out) :: ugb(:,:)
     real(wp), intent(out) :: vgb(:,:)
-    real(wp), intent(out) :: ugbf(:,:)
-    real(wp), intent(out) :: vgbf(:,:)
     real(wp), intent(out) :: uab(:,:)
     real(wp), intent(out) :: vab(:,:)
 
@@ -79,12 +77,8 @@ contains
         dpdx = 0.5_wp*(slp(ipl,j)-slp(imi,j))/dxt(j) 
         dpdy = 0.5_wp*(slp(i,jmi)-slp(i,jpl))/dy  
 
-        ugb(i,j) = -dpdy/(fcort(j)*ra) 
-        vgb(i,j) =  dpdx/(fcort(j)*ra) 
-
-        ! without Coriolis limitation at the equator
-        ugbf(i,j) = -dpdy/(fcortf(j)*ra) 
-        vgbf(i,j) =  dpdx/(fcortf(j)*ra) 
+        ugb(i,j) = -dpdy/(fcort(j)*ra)
+        vgb(i,j) =  dpdx/(fcort(j)*ra)
 
         !------------------------------------------------------
         ! Ageostrophic wind components in PBL (on U-points)
@@ -122,14 +116,14 @@ contains
   !   Subroutine :  u s u r
   !   Purpose    :  computation of near-surface wind components
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine usur(ugbf, vgbf, epsa, cos_acbar, sin_acbar, t2a, tskina, cd0a, slope_x, slope_y, &
+  subroutine usur(ugb, vgb, epsa, cos_acbar, sin_acbar, t2a, tskina, cd0a, slope_x, slope_y, &
       usk, vsk, &
       us, vs)
 
     implicit none
 
-    real(wp), intent(in   ) :: ugbf(:,:)
-    real(wp), intent(in   ) :: vgbf(:,:)
+    real(wp), intent(in   ) :: ugb(:,:)
+    real(wp), intent(in   ) :: vgb(:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
     real(wp), intent(in   ) :: cos_acbar(:,:,:)
     real(wp), intent(in   ) :: sin_acbar(:,:,:)
@@ -162,10 +156,10 @@ contains
         if (j.gt.1 .and. j.lt.jm) then
 
           !------------------------------------------------------
-          ! Near surface wind components in T-points (without Coriolis parameter limitation at the equator)
+          ! Near surface wind components in T-points
           do n=1,nm
-            us(i,j,n) = epsa(i,j,n) * (ugbf(i,j)*cos_acbar(i,j,n) - signf(j)*vgbf(i,j)*sin_acbar(i,j,n))        
-            vs(i,j,n) = epsa(i,j,n) * (vgbf(i,j)*cos_acbar(i,j,n) + signf(j)*ugbf(i,j)*sin_acbar(i,j,n))
+            us(i,j,n) = epsa(i,j,n) * (ugb(i,j)*cos_acbar(i,j,n) - signf(j)*vgb(i,j)*sin_acbar(i,j,n))
+            vs(i,j,n) = epsa(i,j,n) * (vgb(i,j)*cos_acbar(i,j,n) + signf(j)*ugb(i,j)*sin_acbar(i,j,n))
           enddo
 
         endif

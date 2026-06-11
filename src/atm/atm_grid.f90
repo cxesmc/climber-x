@@ -30,7 +30,7 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, fcoramin, fcorumin
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin
   use atm_params, only : l_p0_var, p0, ps0, pble, pblp
   use smooth_atm_mod, only : smooth2
 
@@ -85,9 +85,7 @@ module atm_grid
   real(wp) :: aim
  
   real(wp) :: fcort(jm)
-  real(wp) :: fcortf(jm)
   real(wp) :: fcorta_sqrt(jm)
-  real(wp) :: fcoru(jmc)
   real(wp) :: fcorta(jm)
   real(wp) :: fcorua(jmc)
        
@@ -223,15 +221,13 @@ contains
     do j=1,jm
       fcortp = 2._wp*omega*sint(j) 
       fcort(j) = signf(j)*max(ABS(fcortp),fcormin)
-      fcortf(j) = signf(j)*max(ABS(fcortp),fcorumin)
-      fcorta(j) = max(ABS(fcortp),fcoramin)        
+      fcorta(j) = max(ABS(fcortp),fcormin)
       fcorta_sqrt(j) = sqrt(abs(fcorta(j)))
     enddo
 
     do j=1,jm
-      fcorup = 2._wp*omega*sinu(j) 
-      fcoru(j) = signf(j)*max(ABS(fcorup),fcormin)
-      fcorua(j) = max(ABS(fcorup),fcoramin)
+      fcorup = 2._wp*omega*sinu(j)
+      fcorua(j) = max(ABS(fcorup),fcormin)
     enddo
 
     ! PBL thickness

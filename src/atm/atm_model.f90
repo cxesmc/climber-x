@@ -230,7 +230,7 @@ contains
     ! 2d geostrophic and ageostrophic wind components in the PBL
     !$ time1 = omp_get_wtime()
     call u2d(atm%slp, atm%sin_cos_acbar, &  ! in
-      atm%ugb, atm%vgb, atm%ugbf, atm%vgbf, atm%uab, atm%vab) ! out
+      atm%ugb, atm%vgb, atm%uab, atm%vab) ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'u2d',(time2-time1)
 
@@ -261,7 +261,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call usur(atm%ugbf, atm%vgbf, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%t2a, atm%tskina, atm%cd0a, atm%slope_x, atm%slope_y, &
+        call usur(atm%ugb, atm%vgb, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%t2a, atm%tskina, atm%cd0a, atm%slope_x, atm%slope_y, &
           atm%usk, atm%vsk, & 
           atm%us, atm%vs)
         !$ time2 = omp_get_wtime()
@@ -794,8 +794,6 @@ contains
      allocate(atm%vsk(im,jm))
      allocate(atm%ugb(im,jm))
      allocate(atm%vgb(im,jm))
-     allocate(atm%ugbf(im,jm))
-     allocate(atm%vgbf(im,jm))
      allocate(atm%uab(imc,jm))
      allocate(atm%vab(im,jmc))
      allocate(atm%taux(im,jm,nm))
@@ -1056,8 +1054,6 @@ contains
      deallocate(atm%vsk)
      deallocate(atm%ugb)
      deallocate(atm%vgb)
-     deallocate(atm%ugbf)
-     deallocate(atm%vgbf)
      deallocate(atm%uab)
      deallocate(atm%vab)
      deallocate(atm%taux)

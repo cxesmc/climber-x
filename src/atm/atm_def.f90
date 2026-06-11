@@ -187,8 +187,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: vsk
       real(wp), allocatable, dimension(:,:) :: ugb
       real(wp), allocatable, dimension(:,:) :: vgb
-      real(wp), allocatable, dimension(:,:) :: ugbf
-      real(wp), allocatable, dimension(:,:) :: vgbf
       real(wp), allocatable, dimension(:,:) :: uab
       real(wp), allocatable, dimension(:,:) :: vab
       real(wp), allocatable, dimension(:,:,:) :: taux
