@@ -42,7 +42,7 @@ module transport_ocn_mod
   use ocn_params, only : dt, rho0
   use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
   use ocn_params, only : i_advection
-  use ocn_params, only : i_diff, i_diff_dia, l_diff33_impl
+  use ocn_params, only : i_diff, i_diff_dia
   use ocn_params, only : diff_iso
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_bgc, diff_dia_zref, diff_dia_min, diff_dia_bgc_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
@@ -51,14 +51,14 @@ module transport_ocn_mod
   use ocn_params, only : l_mld, mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
 
   use advection_mod, only : advection_upstream, advection_fct
-  use diffusion_mod, only : diffusion, diffusion_33
+  use diffusion_mod, only : diffusion
   use eos_mod
   use convection_mod, only : convection
   use krausturner_mod
 
   implicit none
 
-  real(wp), dimension(:,:,:), allocatable :: drho_dx, drho_dy, drho_dz, Ri, slope2_w
+  real(wp), dimension(:,:,:), allocatable :: drho_dx, drho_dy, drho_dz, Ri
 
   private
   public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri
@@ -117,7 +117,7 @@ contains
     real(wp) :: mldtstmp(2), mldrhotmp
     real(wp) :: brunt_vaisala
     real(wp) :: diff_dia_tmp
-    real(wp) :: rho1, rho2, drhodz, dudz2, tv1
+    real(wp) :: rho1, rho2, rho_c, drhodz, dudz2, tv1
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -180,7 +180,7 @@ contains
 
        ! compute x,y,z-density gradient needed for isoneutral diffusion
        !$omp parallel do collapse(2) &
-       !$omp private ( i,j,k ,brunt_vaisala,diff_dia_tmp,ip1,rho1,rho2)
+       !$omp private ( i,j,k ,brunt_vaisala,diff_dia_tmp,ip1,rho1,rho2,rho_c)
        do k=1,maxk
          do j=1,maxj
            do i=1,maxi
@@ -214,18 +214,20 @@ contains
                  endif
                endif
              endif
+             if (mask_c(i,j,k).eq.1) then
+               ! central-cell density at zro(k), shared by the zonal and meridional gradients below
+               rho_c = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+             endif
              if (mask_u(i,j,k).eq.1) then
                ! zonal density gradient on u-grid
                ip1 = modulo(i,maxi) + 1
-               rho1 = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
                rho2 = eos(ts(ip1,j,k,1),ts(ip1,j,k,2),zro(k))
-               drho_dx(i,j,k) = (rho2-rho1)*rdx(j)
+               drho_dx(i,j,k) = (rho2-rho_c)*rdx(j)
              endif
              if (mask_v(i,j,k).eq.1) then
                ! meridional density gradient on v-grid
-               rho1 = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
                rho2 = eos(ts(i,j+1,k,1),ts(i,j+1,k,2),zro(k))
-               drho_dy(i,j,k) = (rho2-rho1)*rdy
+               drho_dy(i,j,k) = (rho2-rho_c)*rdy
              endif
            enddo
          enddo
@@ -273,21 +275,16 @@ contains
        if (l_tracer_dic(l)) then
          ! DIC tracers 
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l))
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
        else
          call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l))
+           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
        endif
 
        ! apply advection and diffusion to tracer field
        where (mask_c.eq.1)
          ts(:,:,:,l) = ts(:,:,:,l) + dt*(dts_dt_adv(:,:,:,l)+dts_dt_diff(:,:,:,l))
        endwhere
-
-       if (l_diff33_impl) then
-         ! treat A33 term of diffusion matrix implicitely
-         call diffusion_33(idiff,ts(:,:,:,l),diff_iso,diff_dia,slope2_w,slope_max)
-       endif
 
        !if (l.gt.1 .and. count(ts(:,:,:,l).lt.0._wp).gt.0) then
        !  print *,'WARNING: negative tracer concentration for tracer #', l-2,' in # points: ',count(ts(:,:,:,l).lt.0._wp)
@@ -457,13 +454,11 @@ contains
     allocate(drho_dy(maxi,maxj,maxk))
     allocate(drho_dz(maxi,maxj,maxk))
     allocate(Ri(maxi,maxj,maxk))
-    allocate(slope2_w(maxi,maxj,maxk))
 
     drho_dz = 0._wp
     drho_dx = 0._wp
     drho_dy = 0._wp
     Ri = 0._wp
-    slope2_w= 0._wp
   
     ! mld scheme - calculate wind decay efficiency
     do k=maxk,1,-1
@@ -557,11 +552,7 @@ contains
     ! stability criterion for isoneutral diffusion, eq. A.2 in Gerdes 1991 (eq. C2 in Griffies 1998?)
     do j=1,maxj
       do k=1,maxk
-        if (l_diff33_impl) then
-          slope_crit(j,k) = min( dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
-        else
-          slope_crit(j,k) = min( dz(k)/sqrt(4._wp*diff_iso*dt), dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
-        endif
+        slope_crit(j,k) = min( dz(k)/sqrt(4._wp*diff_iso*dt), dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
         slope_crit(j,k) = min(slope_max,slope_crit(j,k))
       enddo
     enddo

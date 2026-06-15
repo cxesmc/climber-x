@@ -47,7 +47,7 @@
  l_neutral_sic = F         ! assume neutral stratification over sea ice?
  z0m_ocn  = 0.0005         ! ocean water roughness length for momentum (m)
  z0m_sic  = 0.005          ! sea ice roughness length for momentum (m)
- Cde0 = 1.2e-3             ! exchange coefficient for moisture over ocean, realistic values : 1.1e-3 - 1.4e-3
+ Cde0 = 1.1e-3             ! exchange coefficient for moisture over ocean, realistic values : 1.1e-3 - 1.4e-3
  Cdh0 = 1.e-3              ! exchange coefficient for heat over ocean, realistic values around 1.e-3
  f_Ri_unstab = 1.          ! Richardson number factor for unstable stratification, used only if i_cd_ocn==2
  f_Ri_stab = 0.            ! Richardson number factor for stable stratification, used only if i_cd_ocn==2

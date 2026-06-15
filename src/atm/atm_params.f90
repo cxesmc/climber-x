@@ -37,8 +37,6 @@ module atm_params
   integer :: nstep_fast
 
   real(wp) :: fcormin
-  real(wp) :: fcoramin
-  real(wp) :: fcorumin
 
   logical :: l_sct_0
   logical :: l_alb_0
@@ -129,7 +127,6 @@ module atm_params
   real(wp) :: c_wrt_1
   real(wp) :: c_wrt_2
   real(wp) :: c_wrt_3   
-  real(wp) :: c_wrt_4
 
   real(wp) :: c_hrs_1   
   real(wp) :: c_hrs_2
@@ -154,12 +151,13 @@ module atm_params
   real(wp) :: windmin 
   real(wp) :: synsurmin
   real(wp) :: c_wind_ele 
-  real(wp) :: c_diffx_dse
-  real(wp) :: c_diffx_wtr
   real(wp) :: c_diff_dse
   integer :: i_diff_wtr
   real(wp) :: c_diff_wtr
-  integer :: i_diff_dst
+  logical :: l_diff_impl   !! use implicit (unconditionally stable ADI) horizontal diffusion? otherwise original explicit
+  real(wp) :: c_diffx_pol  !! implicit scheme: max zonal diffusion number (diffx*tstep/dxt^2) for the polar limiter on the zonal diffusivities; bounds the ~1/dxt polar conductance
+  real(wp) :: c_filt_conv  !! strength [0..1] of the conservative high-order 2dx (Shapiro) filter applied to the convergences (convdse/convwtr) to suppress the grid-scale checkerboard; 0 = off
+  integer :: nord_filt_conv !! order (selectivity) of the convergence 2dx filter; higher = more selective (spares resolved scales)
 
   integer :: i_kata_wind
   real(wp) :: h_kata
@@ -179,7 +177,6 @@ module atm_params
   real(wp) :: c_cld_55
   real(wp) :: c_cld_6
   real(wp) :: c_cld_7
-  real(wp) :: c_cld_8
   logical :: l_cld_low_ice
   real(wp) :: cld_max
   integer :: nsmooth_cld
@@ -284,8 +281,6 @@ contains
     write(*,*) "atmosphere parameters ==========="
     call nml_read(filename,"atm_par","nstep_fast",nstep_fast)
     call nml_read(filename,"atm_par","fcormin",fcormin)
-    call nml_read(filename,"atm_par","fcoramin",fcoramin)
-    call nml_read(filename,"atm_par","fcorumin",fcorumin)
     call nml_read(filename,"atm_par","f_ice_pow",f_ice_pow)
     call nml_read(filename,"atm_par","r_scat",r_scat)
     call nml_read(filename,"atm_par","l_sct_0",l_sct_0)
@@ -350,7 +345,6 @@ contains
     call nml_read(filename,"atm_par","c_wrt_1",c_wrt_1)
     call nml_read(filename,"atm_par","c_wrt_2",c_wrt_2)
     call nml_read(filename,"atm_par","c_wrt_3",c_wrt_3)
-    call nml_read(filename,"atm_par","c_wrt_4",c_wrt_4)
     call nml_read(filename,"atm_par","hcld_base",hcld_base)
     call nml_read(filename,"atm_par","i_lw_cld",i_lw_cld)
     call nml_read(filename,"atm_par","c_lw_clot",c_lw_clot)
@@ -386,12 +380,13 @@ contains
     call nml_read(filename,"atm_par","windmin",windmin)
     call nml_read(filename,"atm_par","synsurmin",synsurmin)
     call nml_read(filename,"atm_par","c_wind_ele",c_wind_ele)
-    call nml_read(filename,"atm_par","c_diffx_dse",c_diffx_dse)
-    call nml_read(filename,"atm_par","c_diffx_wtr",c_diffx_wtr)
     call nml_read(filename,"atm_par","c_diff_dse",c_diff_dse)
     call nml_read(filename,"atm_par","i_diff_wtr",i_diff_wtr)
     call nml_read(filename,"atm_par","c_diff_wtr",c_diff_wtr)
-    call nml_read(filename,"atm_par","i_diff_dst",i_diff_dst)
+    call nml_read(filename,"atm_par","l_diff_impl",l_diff_impl)
+    call nml_read(filename,"atm_par","c_diffx_pol",c_diffx_pol)
+    call nml_read(filename,"atm_par","c_filt_conv",c_filt_conv)
+    call nml_read(filename,"atm_par","nord_filt_conv",nord_filt_conv)
     call nml_read(filename,"atm_par","i_kata_wind",i_kata_wind)
     call nml_read(filename,"atm_par","h_kata",h_kata)
     call nml_read(filename,"atm_par","cd0_ocn",cd0_ocn)
@@ -408,7 +403,6 @@ contains
     call nml_read(filename,"atm_par","c_cld_55",c_cld_55)
     call nml_read(filename,"atm_par","c_cld_6",c_cld_6)
     call nml_read(filename,"atm_par","c_cld_7",c_cld_7)
-    call nml_read(filename,"atm_par","c_cld_8",c_cld_8)
     call nml_read(filename,"atm_par","l_cld_low_ice",l_cld_low_ice)
     call nml_read(filename,"atm_par","c_hcld_1",c_hcld_1)
     call nml_read(filename,"atm_par","c_hcld_2",c_hcld_2)

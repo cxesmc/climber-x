@@ -30,8 +30,10 @@ module synop_mod
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, c_syn_8, windmin, synsurmin, c_wind_ele
-  use atm_params, only : c_diffx_dse, c_diffx_wtr, c_diff_dse, i_diff_wtr, c_diff_wtr, i_diff_dst!, i_synprod
+  use atm_params, only : c_diff_dse, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
   use smooth_atm_mod, only : zofil
+  use tridiag, only : tridiag_solve, cyclic_tridiag_solve
+  use timer, only : dt_atm
   !$ use omp_lib
 
   implicit none
@@ -48,15 +50,13 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3, vt3, ut3f, vt3f, u700, v700, us, vs, tp, zsa, sigoro, cda, cd, epsa, cos_acbar, sam, sam2, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, cos_acbar, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, wsyn)
 
     implicit none
 
     real(wp), intent(in   ) :: frst(:,:,:)
     real(wp), intent(in   ) :: zs(:,:,:)
-    real(wp), intent(in   ) :: ut3(:,:,:)
-    real(wp), intent(in   ) :: vt3(:,:,:)
     real(wp), intent(in   ) :: ut3f(:,:,:)
     real(wp), intent(in   ) :: vt3f(:,:,:)
     real(wp), intent(in   ) :: u700(:,:)
@@ -65,14 +65,12 @@ contains
     real(wp), intent(in   ) :: vs(:,:,:)
     real(wp), intent(in   ) :: tp(:,:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: sigoro(:,:)
     real(wp), intent(in   ) :: cda(:,:)
     real(wp), intent(in   ) :: cd(:,:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
     real(wp), intent(in   ) :: cos_acbar(:,:,:)
 
     real(wp), intent(inout) :: sam(:,:)
-    real(wp), intent(inout) :: sam2(:,:)
     real(wp), intent(inout) :: cdif(:,:)
 
     real(wp), intent(out  ) :: synprod(:,:)
@@ -93,13 +91,18 @@ contains
     real(wp), intent(out  ) :: wsyn(:,:)
 
     integer :: i, j, k, n, imi, ipl, jmi, jpl
-    real(wp) :: dsdt, sqsam, synprod2, sigoro_sm
+    real(wp) :: dsdt, sqsam
     real(wp) :: sxadv, syadv, sxdif, sydif
     real(wp) :: uef, vef
     real(wp) :: dudz, dvdz
     real(wp) :: ugrad, Nfreq
     real(wp) :: diffxmx(jm)
     real(wp) :: sam_sqrt(im,jm)
+    ! implicit (ADI) solve of the synoptic-energy (sam) equation
+    real(wp) :: kdiss(im,jm), samx(im,jm)
+    real(wp) :: gx, gy
+    real(wp) :: a(im), b(im), c(im), r(im), sol(im)
+    real(wp) :: aj(jm), bj(jm), cj(jm), rj(jm), solj(jm)
 
 
     do j=1,jm
@@ -111,7 +114,7 @@ contains
     ! synoptic kinetic energy
     !-----------------------------------------------
 
-    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, sxadv, syadv, sxdif, sydif, synprod2, sigoro_sm)
+    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, sxadv, syadv, sxdif, sydif)
     do i=1,im
       do j=2,jm-1
 
@@ -135,15 +138,6 @@ contains
         ugrad = sqrt(dudz**2+dvdz**2)
         synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad * (1._wp-c_syn_8*zsa(i,j)/3000._wp)
         synprod(i,j) = max(0._wp,synprod(i,j))
-
-        dudz = (ut3(i,j,k500)-ut3(i,j,k850))/(zl(k500)-zl(k850))
-        dvdz = (vt3(i,j,k500)-vt3(i,j,k850))/(zl(k500)-zl(k850)) * cost(j)
-        ugrad = sqrt(dudz**2+dvdz**2)
-        synprod2 = c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad
-        sigoro_sm = 0.2_wp*(sigoro(i,j)+sigoro(imi,j)+sigoro(ipl,j)+sigoro(i,jpl)+sigoro(i,jmi))
-        synprod2 = synprod2 * (1._wp-min(1._wp,sigoro_sm/500._wp))
-        synprod2 = max(0._wp,synprod2)
-        sam2(i,j) = synprod2*12000._wp  ! m2/s2
 
         !-----------------------------------------------
         ! synoptic energy dissipation  
@@ -181,23 +175,65 @@ contains
     !$omp end parallel do
 
     !-----------------------------------------------
-    ! synoptic energy evolution
+    ! synoptic energy evolution - FULLY IMPLICIT (advection + diffusion + semi-implicit dissipation).
+    ! Solve (I + dt_atm*(kdiss + Adv_upwind - cdif*Lap)) sam_new = sam + dt_atm*synprod
+    ! by ADI: cyclic zonal sweep, then meridional sweep (Dirichlet poles). 
 
-    do i=1,im
-      do j=2,jm-1
-        dsdt = synprod(i,j)-syndiss(i,j)+synadv(i,j)+syndif(i,j)
-        sam(i,j) = sam(i,j)+dsdt*tstep  
-        sam(i,j) = max(sam(i,j),1._wp)
+    do j=2,jm-1
+      do i=1,im
+        kdiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sqrt(sam(i,j))
       enddo
     enddo
+
+    ! zonal implicit sweep (advection + diffusion; periodic -> cyclic tridiagonal)
+    !$omp parallel do private(i,j,uef,gx,a,b,c,r,sol)
+    do j=2,jm-1
+      do i=1,im
+        uef = u700(i,j)
+        gx  = dt_atm*cdif(i,j)/dxt(j)**2
+        ! diffusion + upwind advection (sxadv: imi donor for uef>0, ipl for uef<0)
+        a(i) = -gx - dt_atm*max(uef,0._wp)/dxt(j)
+        c(i) = -gx + dt_atm*min(uef,0._wp)/dxt(j)
+        ! full linearized dissipation applied once here
+        b(i) = 1._wp + dt_atm*kdiss(i,j) - a(i) - c(i)
+        r(i) = sam(i,j) + dt_atm*synprod(i,j)
+      enddo
+      call cyclic_tridiag_solve(a, b, c, r, sol, im)
+      do i=1,im
+        samx(i,j) = sol(i)
+      enddo
+    enddo
+    !$omp end parallel do
+
+    ! meridional implicit sweep (advection + diffusion; Dirichlet poles), per longitude
+    !$omp parallel do private(i,j,vef,gy,aj,bj,cj,rj,solj)
+    do i=1,im
+      do j=2,jm-1
+        vef = v700(i,j)
+        gy  = dt_atm*cdif(i,j)/dy**2
+        ! diffusion + upwind advection (syadv: jpl donor for vef>0, jmi for vef<0)
+        aj(j) = -gy + dt_atm*min(vef,0._wp)/dy
+        cj(j) = -gy - dt_atm*max(vef,0._wp)/dy
+        bj(j) = 1._wp - aj(j) - cj(j)
+        rj(j) = samx(i,j)
+      enddo
+      ! Dirichlet poles: move the j=1 / j=jm couplings (diffusion+advection) to the RHS
+      rj(2)    = rj(2)    - aj(2)*sam(i,1)
+      rj(jm-1) = rj(jm-1) - cj(jm-1)*sam(i,jm)
+      aj(2)    = 0._wp
+      cj(jm-1) = 0._wp
+      call tridiag_solve(aj(2:jm-1), bj(2:jm-1), cj(2:jm-1), rj(2:jm-1), solj(2:jm-1), jm-2)
+      do j=2,jm-1
+        sam(i,j) = max(solj(j),1._wp)
+      enddo
+    enddo
+    !$omp end parallel do
 
     ! polar fill and zonal smoothing
 
     do i=1,im
       sam(i,1)  = sam(i,2)
       sam(i,jm) = sam(i,jm-1)
-      sam2(i,1)  = sam2(i,2)
-      sam2(i,jm) = sam2(i,jm-1)
     enddo 
     call zofil(sam,1,12)
     call zofil(sam,2,8)
@@ -267,19 +303,22 @@ contains
           diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 
         else if (i_diff_wtr.eq.2) then
           diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
-        else if (i_diff_wtr.eq.3) then
-          diffxwtr(i,j) = c_diff_wtr * (0.5_wp*(sam(imi,j)+sam(i,j)) + 10._wp*max(0._wp,0.5_wp*(sam2(imi,j)+sam2(i,j))-20._wp))
         endif
         ! diffusivity for dust
-        if (i_diff_dst.eq.1) then
-          diffxdst(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 
-        else if (i_diff_dst.eq.2) then
-          diffxdst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        diffxdst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        ! limit the zonal diffusivities. Explicit scheme: CFL stability requires the
+        ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
+        ! Implicit scheme: unconditionally stable, but near the pole (dxt->0) the
+        ! zonal conductance ~1/dxt becomes very large => limit
+        if (.not.l_diff_impl) then
+          diffxdse(i,j) = min(diffxdse(i,j),diffxmx(j))
+          diffxwtr(i,j) = min(diffxwtr(i,j),diffxmx(j))
+          diffxdst(i,j) = min(diffxdst(i,j),diffxmx(j))
+        else
+          diffxdse(i,j) = min(diffxdse(i,j),2._wp*c_diffx_pol*diffxmx(j))
+          diffxwtr(i,j) = min(diffxwtr(i,j),2._wp*c_diffx_pol*diffxmx(j))
+          diffxdst(i,j) = min(diffxdst(i,j),2._wp*c_diffx_pol*diffxmx(j))
         endif
-        ! limit zonal diffusivities for numerical stability
-        diffxdse(i,j) = min(diffxdse(i,j),c_diffx_dse*diffxmx(j))
-        diffxwtr(i,j) = min(diffxwtr(i,j),c_diffx_wtr*diffxmx(j))
-        diffxdst(i,j) = min(diffxdst(i,j),c_diffx_dse*diffxmx(j))
       enddo
     enddo 
     do j=1,jm
@@ -299,15 +338,9 @@ contains
           diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam(i,jmi)+sam(i,j)) 
         else if (i_diff_wtr.eq.2) then
           diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
-        else if (i_diff_wtr.eq.3) then
-          diffywtr(i,j) = c_diff_wtr * (0.5_wp*(sam(i,jmi)+sam(i,j)) + 10._wp*max(0._wp,0.5_wp*(sam2(i,jmi)+sam2(i,j))-20._wp))
         endif
         ! diffusivity for dust 
-        if (i_diff_dst.eq.1) then
-          diffydst(i,j) = c_diff_wtr * 0.5_wp*(sam(i,jmi)+sam(i,j)) 
-        else if (i_diff_dst.eq.2) then
-          diffydst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
-        endif
+        diffydst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
       enddo
     enddo
     diffydse(:,1)   = 0._wp

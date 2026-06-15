@@ -30,7 +30,7 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, fcoramin, fcorumin
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin
   use atm_params, only : l_p0_var, p0, ps0, pble, pblp
   use smooth_atm_mod, only : smooth2
 
@@ -85,14 +85,14 @@ module atm_grid
   real(wp) :: aim
  
   real(wp) :: fcort(jm)
-  real(wp) :: fcortf(jm)
   real(wp) :: fcorta_sqrt(jm)
-  real(wp) :: fcoru(jmc)
   real(wp) :: fcorta(jm)
   real(wp) :: fcorua(jmc)
        
   real(wp) :: plx(imc,jm)
+  real(wp) :: plx_trop(imc,jm)   !! tropospheric (k<=km-2) zonal column mass, for implicit zonal diffusion
   real(wp) :: ply(im,jmc)
+  real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass, for implicit meridional diffusion
   real(wp) :: pblt(jm)      !! planetary boundary height in t-points
   real(wp) :: pblu(jmc)     !! planetary boundary height in u-points
   integer :: k1(im,jm)  
@@ -221,15 +221,13 @@ contains
     do j=1,jm
       fcortp = 2._wp*omega*sint(j) 
       fcort(j) = signf(j)*max(ABS(fcortp),fcormin)
-      fcortf(j) = signf(j)*max(ABS(fcortp),fcorumin)
-      fcorta(j) = max(ABS(fcortp),fcoramin)        
+      fcorta(j) = max(ABS(fcortp),fcormin)
       fcorta_sqrt(j) = sqrt(abs(fcorta(j)))
     enddo
 
     do j=1,jm
-      fcorup = 2._wp*omega*sinu(j) 
-      fcoru(j) = signf(j)*max(ABS(fcorup),fcormin)
-      fcorua(j) = max(ABS(fcorup),fcoramin)
+      fcorup = 2._wp*omega*sinu(j)
+      fcorua(j) = max(ABS(fcorup),fcormin)
     enddo
 
     ! PBL thickness
@@ -417,8 +415,9 @@ contains
         px = (pzsa(i,j)+pzsa(imi,j))*0.5_wp
 
         plx(i,j) = 0._wp
+        plx_trop(i,j) = 0._wp
 
-        do k=1,km         
+        do k=1,km
           if (px.le.pl(k+1))then
             dplx(i,j,k) = 0._wp
           elseif (px.lt.pl(k)) then
@@ -426,7 +425,9 @@ contains
           else
             dplx(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
-          plx(i,j) = plx(i,j)+dplx(i,j,k)         
+          plx(i,j) = plx(i,j)+dplx(i,j,k)
+          ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
+          if (k.le.km-2) plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
           ! orographic component
           dplxo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(imi,j),pzsa(i,j)))-pl(k+1))*amas
         enddo
@@ -441,8 +442,9 @@ contains
         py = (pzsa(i,j)+pzsa(i,j-1))*0.5_wp
 
         ply(i,j) = 0._wp
+        ply_trop(i,j) = 0._wp
 
-        do k=1,km         
+        do k=1,km
           if (py.le.pl(k+1))then
             dply(i,j,k) = 0._wp
           elseif (py.lt.pl(k)) then
@@ -450,7 +452,9 @@ contains
           else
             dply(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
-          ply(i,j) = ply(i,j)+dply(i,j,k)         
+          ply(i,j) = ply(i,j)+dply(i,j,k)
+          ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
+          if (k.le.km-2) ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
           ! orographic component
           dplyo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(i,j-1),pzsa(i,j)))-pl(k+1))*amas
         enddo
@@ -459,6 +463,8 @@ contains
     enddo
     dply(:,1,:) = 0._wp
     dplyo(:,1,:) = 0._wp
+    ply_trop(:,1)   = 0._wp
+    ply_trop(:,jmc) = 0._wp
 
     ! k-index of first layer above topography
     do i=1,im

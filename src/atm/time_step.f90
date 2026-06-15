@@ -29,8 +29,8 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
-  use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3, c_wrt_4
+  use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, l_diff_impl, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
+  use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
   use vesta_mod, only : t_prof
@@ -47,7 +47,7 @@ contains
   !   Subroutine :  t i m e _ s t e p
   !   Purpose    :  time integration of equations for temperature, humidity and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, wcon, A_trop, W_strat, sam, eke, sam2, &
+  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, convwtr_adv, wcon, A_trop, W_strat, sam, eke, &
       tskin, convdse, rb_atm, rb_sur, sha, gams, gamb, gamt, &
       convdst, dust_emis, dust_dep, hdust, &
       convco2, co2flx, &
@@ -64,13 +64,13 @@ contains
     real(wp), intent(in   ) :: ra2a(:,:)
     real(wp), intent(in   ) :: slope(:,:)
     real(wp), intent(in   ) :: evpa(:,:)
-    real(wp), intent(in   ) :: convwtr(:,:)
+    real(wp), intent(in   ) :: convwtr(:,:)       ! total moisture convergence (advective + diffusive)
+    real(wp), intent(in   ) :: convwtr_adv(:,:)   ! advective moisture convergence
     real(wp), intent(inout) :: wcon(:,:)
     real(wp), intent(in   ) :: A_trop(:,:)
     real(wp), intent(in   ) :: W_strat(:,:)
     real(wp), intent(in   ) :: sam(:,:)
     real(wp), intent(in   ) :: eke(:,:)
-    real(wp), intent(in   ) :: sam2(:,:)
     real(wp), intent(in   ) :: tskin(:,:,:)
     real(wp), intent(in   ) :: convdse(:,:)
     real(wp), intent(in   ) :: rb_atm(:,:)
@@ -113,7 +113,7 @@ contains
 
     integer :: i, j, n
     real(wp) :: dwdt, q2sat, qsat, rr, deba, dtdt, dddt, dcdt, frsnw, heff, rh, tam_zs
-    real(wp) :: convwtr_slope
+    real(wp) :: convwtr_slope, convwtr_bdg
     real(wp) :: prc_tmp, prcw_tmp, prcs_tmp
     real(wp) :: prc_ocn, prc_ocn_conv, prc_ocn_wcon
     real(wp) :: prc_lnd, prc_lnd_conv, prc_lnd_wcon
@@ -133,7 +133,7 @@ contains
     ! global atmospheric energy budget accumulators (for check_energy)
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
-    !$omp parallel do private(i,j,n,rr,convwtr_slope,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
+    !$omp parallel do private(i,j,n,rr,convwtr_slope,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
     !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin,tam_old_loc) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
@@ -146,10 +146,9 @@ contains
         rr = (ram(i,j)/rh_max)
 
         ! moisture convergence due to synoptic activity on slope
-        convwtr_slope = c_wrt_3*sqrt(sam(i,j))*slope(i,j)*ra*qam(i,j) + c_wrt_4*max(0._wp,sam2(i,j)-20._wp)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
-          !+ c_wrt_4*max(0._wp,eke(i,j)-20._wp)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
+        convwtr_slope = c_wrt_3*sqrt(sam(i,j))*slope(i,j)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
 
-        ! precipitation from moisture convergence and evaporation
+        ! precipitation from moisture convergence and evaporation.
         prc_ocn_conv = max(0._wp,convwtr(i,j)+convwtr_slope+evpa(i,j))*rr
         prc_lnd_conv = prc_ocn_conv
 
@@ -173,8 +172,18 @@ contains
         ! update prognostic atmospheric humidity
         !-------------------------------------
 
+        ! moisture convergence applied to the column-water budget: in implicit-
+        ! diffusion mode the diffusive convergence is already in wcon (from
+        ! diffuse_impl), so only the advective part is added here; in explicit mode
+        ! the diffusion is part of the tendency, so the total convergence is used.
+        if (l_diff_impl) then
+          convwtr_bdg = convwtr_adv(i,j)
+        else
+          convwtr_bdg = convwtr(i,j)
+        endif
+
         ! column water content tendency
-        dwdt = evpa(i,j)-prc_tmp+convwtr(i,j)  ! kg/m2/s
+        dwdt = evpa(i,j)-prc_tmp+convwtr_bdg  ! kg/m2/s
 
         ! snapshot column water before the budget update (for optional per-column check)
         if (check_water) wcon_in = wcon(i,j)
@@ -221,7 +230,7 @@ contains
         ! per-column water-budget consistency check:
         ! (wcon_new - wcon_old) should equal (E - P + CW)·dt 
         if (check_water) then
-          water_res = (wcon(i,j) - wcon_in) - (evpa(i,j) - prc_tmp + convwtr(i,j))*tstep
+          water_res = (wcon(i,j) - wcon_in) - (evpa(i,j) - prc_tmp + convwtr_bdg)*tstep
           if (abs(water_res) .gt. water_check_tol) then
             print *,'WARNING: atm water budget residual ',water_res,' kg/m2 in (i,j) ',i,j
           endif

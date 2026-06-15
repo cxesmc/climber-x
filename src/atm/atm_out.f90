@@ -382,7 +382,6 @@ module atm_out
 
     real(wp), allocatable, dimension(:,:) :: eke
     real(wp), allocatable, dimension(:,:) :: sam
-    real(wp), allocatable, dimension(:,:) :: sam2
     real(wp), allocatable, dimension(:,:) :: synprod
     real(wp), allocatable, dimension(:,:) :: syndiss
     real(wp), allocatable, dimension(:,:) :: synadv
@@ -660,7 +659,6 @@ contains
 
      allocate(ann_a%eke(im,jm))
      allocate(ann_a%sam(im,jm))
-     allocate(ann_a%sam2(im,jm))
      allocate(ann_a%synprod(im,jm))
      allocate(ann_a%syndiss(im,jm))
      allocate(ann_a%synadv(im,jm))
@@ -887,7 +885,6 @@ contains
 
      allocate(mon_a(k)%eke(im,jm))
      allocate(mon_a(k)%sam(im,jm))
-     allocate(mon_a(k)%sam2(im,jm))
      allocate(mon_a(k)%synprod(im,jm))
      allocate(mon_a(k)%syndiss(im,jm))
      allocate(mon_a(k)%synadv(im,jm))
@@ -1648,7 +1645,6 @@ contains
           mon_a(m)%tsl         = 0. 
           mon_a(m)%eke         = 0. 
           mon_a(m)%sam         = 0. 
-          mon_a(m)%sam2        = 0. 
           mon_a(m)%synprod     = 0. 
           mon_a(m)%syndiss     = 0. 
           mon_a(m)%synadv      = 0. 
@@ -2014,7 +2010,6 @@ contains
       mon_a(mon)%tsl         = mon_a(mon)%tsl         + mon_avg * atm%tsl
       mon_a(mon)%eke         = mon_a(mon)%eke         + mon_avg * atm%eke
       mon_a(mon)%sam         = mon_a(mon)%sam         + mon_avg * atm%sam
-      mon_a(mon)%sam2        = mon_a(mon)%sam2        + mon_avg * atm%sam2
       mon_a(mon)%synprod     = mon_a(mon)%synprod     + mon_avg * atm%synprod
       mon_a(mon)%syndiss     = mon_a(mon)%syndiss     + mon_avg * atm%syndiss
       mon_a(mon)%synadv      = mon_a(mon)%synadv      + mon_avg * atm%synadv            
@@ -2782,8 +2777,6 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="eddy kinetic energy",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"eke        ", sngl(vars%sam        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="eddy kinetic energy",units="m2/s2",ncid=ncid)
-    call nc_write(fnm,"eke2       ", sngl(vars%sam2       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="eddy kinetic energy in 2-6 day band",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"ekeprod    ", sngl(vars%synprod    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="production of eddy kinetic energy",units="",ncid=ncid)
     call nc_write(fnm,"ekediss    ", sngl(vars%syndiss    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -3248,7 +3241,6 @@ contains
     ave%aplan       = 0._wp
     ave%tsl         = 0._wp
     ave%sam         = 0._wp
-    ave%sam2        = 0._wp
     ave%eke         = 0._wp
     ave%synprod     = 0._wp
     ave%syndiss     = 0._wp
@@ -3461,7 +3453,6 @@ contains
        ave%tsl         = ave%tsl         + d(k)%tsl         / div
        ave%eke         = ave%eke         + d(k)%eke         / div
        ave%sam         = ave%sam         + d(k)%sam         / div
-       ave%sam2        = ave%sam2        + d(k)%sam2        / div
        ave%synprod     = ave%synprod     + d(k)%synprod     / div
        ave%syndiss     = ave%syndiss     + d(k)%syndiss     / div
        ave%synadv      = ave%synadv      + d(k)%synadv      / div

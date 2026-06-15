@@ -27,7 +27,7 @@ module clouds_mod
 
   use atm_params, only : wp
   use constants, only : T0, pi
-  use atm_params, only : c_cld_1, c_cld_2, c_cld_3, c_cld_4, c_cld_5, c_cld_55, c_cld_6, c_cld_7, c_cld_8, l_cld_low_ice, cld_max, nsmooth_cld
+  use atm_params, only : c_cld_1, c_cld_2, c_cld_3, c_cld_4, c_cld_5, c_cld_55, c_cld_6, c_cld_7, l_cld_low_ice, cld_max, nsmooth_cld
   use atm_params, only : c_hcld_1, c_hcld_2, c_hcld_3, c_hcld_4
   use atm_params, only : c_clot_1, c_clot_2, c_clot_3, c_clot_4
   use atm_params, only : l_so4_ie, r_so4, N_so4_nat
@@ -46,7 +46,7 @@ contains
   !   Subroutine :  c l o u d s 
   !   Purpose    :  compute cloud fraction, top height and optical depth
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine clouds(frst, weff, wcld, zsa, t2a, ram, qam, rskina, wcon, htrop, so4, sam2, &
+  subroutine clouds(frst, weff, wcld, zsa, t2a, ram, qam, rskina, wcon, htrop, so4, &
       fweff, cld_rh, cld_low, cld, hcld, clot)
 
     implicit none
@@ -62,7 +62,6 @@ contains
     real(wp), intent(in   ) :: weff(:,:)
     real(wp), intent(in   ) :: wcld(:,:)
     real(wp), intent(in   ) :: so4(:,:)
-    real(wp), intent(in   ) :: sam2(:,:)
 
     real(wp), intent(out  ) :: fweff(:,:)
     real(wp), intent(out  ) :: cld_rh(:,:)
@@ -113,7 +112,7 @@ contains
         endif
 
         ! clouds related to large scale atmospheric relative humidity
-        cld_rh(i,j) = (c_cld_1+c_cld_2*fweff(i,j))*ram(i,j)**c_cld_4 + c_cld_8*max(0._wp,sam2(i,j)-20._wp)
+        cld_rh(i,j) = (c_cld_1+c_cld_2*fweff(i,j))*ram(i,j)**c_cld_4 
 
         !--------------------------------------------
         ! cloud height

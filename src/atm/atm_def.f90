@@ -187,8 +187,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: vsk
       real(wp), allocatable, dimension(:,:) :: ugb
       real(wp), allocatable, dimension(:,:) :: vgb
-      real(wp), allocatable, dimension(:,:) :: ugbf
-      real(wp), allocatable, dimension(:,:) :: vgbf
       real(wp), allocatable, dimension(:,:) :: uab
       real(wp), allocatable, dimension(:,:) :: vab
       real(wp), allocatable, dimension(:,:,:) :: taux
@@ -216,7 +214,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: w3
 
       real(wp), allocatable, dimension(:,:) :: convdse
-      real(wp), allocatable, dimension(:,:) :: convwtr
+      real(wp), allocatable, dimension(:,:) :: convwtr       ! total moisture convergence = convwtr_adv + convwtr_dif (drives precip)
+      real(wp), allocatable, dimension(:,:) :: convwtr_adv   ! advective moisture convergence (drives the column-water budget)
+      real(wp), allocatable, dimension(:,:) :: convwtr_dif   ! implicit diffusive moisture convergence
       real(wp), allocatable, dimension(:,:) :: convdst
       real(wp), allocatable, dimension(:,:) :: convco2
       real(wp), allocatable, dimension(:,:) :: faxdse
@@ -276,7 +276,6 @@ module atm_def
 
       real(wp), allocatable, dimension(:,:) :: eke
       real(wp), allocatable, dimension(:,:) :: sam
-      real(wp), allocatable, dimension(:,:) :: sam2
       real(wp), allocatable, dimension(:,:) :: synprod
       real(wp), allocatable, dimension(:,:) :: syndiss
       real(wp), allocatable, dimension(:,:) :: synadv

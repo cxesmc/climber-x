@@ -179,6 +179,8 @@ contains
     !$omp end parallel do
 
     ! calculate vertical velocity w from continuity equation
+    ! (columns are independent; the k-integration recurrence on tv stays within a column)
+    !$omp parallel do private(i,j,k,tv,tv1,tv2,dy_dz_i,dy_dz_im1,dx_dz_j,dx_dz_jm1)
     do j=1,maxj
       do i=1,maxi
         tv = 0._wp
@@ -194,6 +196,7 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     deallocate(du_dz)
     deallocate(u1)

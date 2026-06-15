@@ -93,7 +93,6 @@ module ocn_params
      real(wp) :: drhcor_max
      integer :: i_diff
      integer :: i_diff_dia
-     logical :: l_diff33_impl
      real(wp) :: diff_iso, diff_dia_zref
      real(wp) :: diff_dia_min, diff_dia_bgc_min, diff_dia_max, diff_dia_ref
      logical :: l_diff_dia_strat
@@ -265,7 +264,6 @@ subroutine ocn_par_load(filename)
 
     call nml_read(filename,"ocn_par","i_diff",i_diff)
     call nml_read(filename,"ocn_par","i_diff_dia",i_diff_dia)
-    call nml_read(filename,"ocn_par","l_diff33_impl",l_diff33_impl)
     call nml_read(filename,"ocn_par","diff_iso",diff_iso)
     call nml_read(filename,"ocn_par","diff_dia_zref",diff_dia_zref)
     call nml_read(filename,"ocn_par","diff_dia_min",diff_dia_min)

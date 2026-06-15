@@ -160,14 +160,19 @@ contains
 
     real(wp), allocatable, dimension(:,:,:) :: tracer_tmp
     real(wp) :: tracer_ijk
-    real(wp), dimension(2) :: tracer_i, tracer_j, tracer_k
+    real(wp) :: ti, tip1, tj, tjp1, tk, tkp1   ! scalar tracer values (replace array temporaries)
     real(wp), dimension(:,:,:), allocatable :: fxl, fyl, fzl, afx, afy, afz
     real(wp), dimension(:,:,:), allocatable :: xa, xb, rp, rn
     real(wp) :: fxh, fyh, fzh
     integer :: i, j, k
     integer :: im1, ip1, ip2, jm1, jp1, jp2, km1, kp1, kp2
+    integer :: ipw(maxi), imw(maxi), ip2w(maxi)   ! precomputed zonally-wrapped i indices
     real(wp) :: uvel, vvel, wvel
     real(wp) :: dy_dz, dx_dz
+    real(wp) :: maskr, flux_low
+    real(wp) :: fzl_int, fzl_surf, fzl_bot     ! Z-flux candidates for the 4-way branchless select
+    logical :: is_int, is_surf, is_bot
+    real(wp), parameter :: f_min = 1.e-30_wp   ! floor for f_ocn in branchless denominators (land f_ocn=0)
     real(wp) :: pp, pm, qp, qm, qdp
     real(wp) :: xmax, xmin
     real(wp) :: tracer_tmp1
@@ -186,64 +191,57 @@ contains
     allocate(rp(maxi,maxj,maxk))
     allocate(rn(maxi,maxj,maxk))
 
+    ! precompute zonally-wrapped i indices once (hoist modulo out of the grid loops below)
+    do i=1,maxi
+      ipw(i)  = modulo(i,maxi) + 1     ! i+1, wrapping maxi -> 1
+      imw(i)  = modulo(i-2,maxi) + 1   ! i-1, wrapping 1 -> maxi
+      ip2w(i) = modulo(i+1,maxi) + 1   ! i+2, wrapped
+    enddo
+
 
     ! volume flux calculation 
     ! for low and high oder solutions
 
     ! X-direction
-    !!$omp parallel do collapse(3) private(i,j,k,uvel,ip1,tracer_i,fxh)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          if (mask_u(i,j,k).eq.1) then
-            ip1 = modulo(i,maxi) + 1
-            uvel = u(1,i,j,k)
-            tracer_i = tracer((/i,ip1/),j,k)
-            dy_dz = dy*dz(k)
-            ! low order, ustream
-            fxl(i,j,k) = uvel * merge(tracer_i(1), tracer_i(2), uvel > 0._wp) * dy_dz * dt  ! m/s*K * m2*s = m3 * K
-            ! high order, centered differences
-            fxh=0.5_wp*(tracer_i(1)+tracer_i(2))*uvel*dy_dz*dt
-            afx(i,j,k)=fxh-fxl(i,j,k)
-            !if (i.eq.maxi) then
-            !  fxl(0,j,k) = fxl(maxi,j,k)
-            !  afx(0,j,k) = afx(maxi,j,k)
-            !endif
-          else
-            fxl(i,j,k)=0._wp
-            afx(i,j,k)=0._wp
-          endif
+          ! branchless: mask (0 on land) multiplies the flux; u and tracer are finite everywhere
+          ip1 = ipw(i)
+          uvel = u(1,i,j,k)
+          ti   = tracer(i,j,k)
+          tip1 = tracer(ip1,j,k)
+          dy_dz = dy*dz(k)
+          flux_low = uvel * merge(ti, tip1, uvel > 0._wp) * dy_dz * dt  ! low order, upstream
+          fxh      = 0.5_wp*(ti+tip1)*uvel*dy_dz*dt                     ! high order, centered
+          maskr = real(mask_u(i,j,k),wp)
+          fxl(i,j,k) = maskr * flux_low
+          afx(i,j,k) = maskr * (fxh - flux_low)
         enddo
       enddo
     enddo
-    !!$omp end parallel do
 
     ! periodic boundary conditions
     fxl(0,:,:) = fxl(maxi,:,:)
     afx(0,:,:) = afx(maxi,:,:)
 
     ! Y-direction
-    !!$omp parallel do collapse(3) private(i,j,k,vvel,tracer_j,fyh)
     do k=1,maxk
       do j=1,maxj-1
         do i=1,maxi
-          if (mask_v(i,j,k).eq.1) then
-            vvel = u(2,i,j,k)
-            tracer_j = tracer(i,j:j+1,k)
-            dx_dz = dxv(j)*dz(k)
-            ! low order
-            fyl(i,j,k) = vvel * merge(tracer_j(1), tracer_j(2), vvel > 0._wp) * dx_dz * dt  ! m/s*K * m2*s = m3 * K
-            ! high order
-            fyh=0.5_wp*(tracer_j(1)+tracer_j(2))*vvel*dx_dz*dt
-            afy(i,j,k)=fyh-fyl(i,j,k)
-          else
-            fyl(i,j,k)=0._wp
-            afy(i,j,k)=0._wp
-          endif
+          ! branchless: mask (0 on land) multiplies the flux; u and tracer are finite everywhere
+          vvel = u(2,i,j,k)
+          tj   = tracer(i,j,k)
+          tjp1 = tracer(i,j+1,k)
+          dx_dz = dxv(j)*dz(k)
+          flux_low = vvel * merge(tj, tjp1, vvel > 0._wp) * dx_dz * dt  ! low order, upstream
+          fyh      = 0.5_wp*(tj+tjp1)*vvel*dx_dz*dt                     ! high order, centered
+          maskr = real(mask_v(i,j,k),wp)
+          fyl(i,j,k) = maskr * flux_low
+          afy(i,j,k) = maskr * (fyh - flux_low)
         enddo
       enddo
     enddo
-    !!$omp end parallel do
 
     ! no meridional flux across South Pole and North Pole
     fyl(:,0,:) = 0._wp
@@ -252,34 +250,28 @@ contains
     afy(:,maxj,:) = 0._wp
 
     ! Z-direction
-    !!$omp parallel do collapse(3) private(i,j,k,wvel,tracer_k,fzh)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          if (mask_w(i,j,k).eq.1) then
-            wvel = u(3,i,j,k)
-            tracer_k = tracer(i,j,k:k+1)
-            ! low order
-            fzl(i,j,k) = wvel * merge(tracer_k(1), tracer_k(2), wvel > 0._wp) * dx(j)*dy * dt  ! m/s*K * m2*s = m3 * K
-            ! high order
-            fzh=0.5_wp*(tracer_k(1)+tracer_k(2))*wvel*dx(j)*dy*dt
-            afz(i,j,k)=fzh-fzl(i,j,k)
-          else if (k.eq.maxk .and. mask_ocn(i,j).eq.1) then
-            ! atmosphere-ocean flux
-            fzl(i,j,k)=flx_sur(i,j)*dx(j)*dy*f_ocn(i,j)*dt  ! m/s * K * m2*s = m3*K
-            afz(i,j,k)=0._wp
-          else if (k.eq.(k1(i,j)-1)) then
-            ! bottom ocean flux
-            fzl(i,j,k)=flx_bot(i,j)*dx(j)*dy*f_ocn(i,j)*dt  ! m/s * K * m2*s = m3*K
-            afz(i,j,k)=0._wp
-          else
-            fzl(i,j,k)=0._wp
-            afz(i,j,k)=0._wp
-          endif
+          ! branchless 4-way select (interior / surface flux / bottom flux / zero); priority via nested merge.
+          ! clamp k+1 to maxk so the interior expression is always in-bounds (it is discarded where mask_w=0,
+          ! which includes the surface k=maxk, so the clamped value is never selected).
+          kp1 = min(k+1,maxk)
+          wvel = u(3,i,j,k)
+          tk   = tracer(i,j,k)
+          tkp1 = tracer(i,j,kp1)
+          fzl_int  = wvel * merge(tk, tkp1, wvel > 0._wp) * dx(j)*dy * dt   ! interior low-order flux
+          fzh      = 0.5_wp*(tk+tkp1)*wvel*dx(j)*dy*dt                      ! interior high-order flux
+          fzl_surf = flx_sur(i,j)*dx(j)*dy*f_ocn(i,j)*dt                    ! atmosphere-ocean flux (k=maxk)
+          fzl_bot  = flx_bot(i,j)*dx(j)*dy*f_ocn(i,j)*dt                    ! bottom ocean flux (k=k1-1)
+          is_int  = mask_w(i,j,k).eq.1
+          is_surf = (k.eq.maxk) .and. (mask_ocn(i,j).eq.1)
+          is_bot  = k.eq.(k1(i,j)-1)
+          fzl(i,j,k) = merge(fzl_int, merge(fzl_surf, merge(fzl_bot, 0._wp, is_bot), is_surf), is_int)
+          afz(i,j,k) = merge(fzh-fzl_int, 0._wp, is_int)
         enddo
       enddo
     enddo
-    !!$omp end parallel do
     fzl(:,:,0) = 0._wp
     afz(:,:,0) = 0._wp
     ! geothermal bottom flux for full-depth columns (k1=1): their bottom face is at index 0,
@@ -293,25 +285,20 @@ contains
     enddo
 
     ! STEP I: LOWER ORDER SOLUTION
-    !!$omp parallel do collapse(3) private(i,j,k)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
           tracer_ijk = tracer(i,j,k)
-          if (mask_c(i,j,k).eq.1) then
-            ! low order solution
-            tracer_tmp(i,j,k) = tracer_ijk-(fxl(i,j,k)-fxl(i-1,j,k)+fyl(i,j,k)-fyl(i,j-1,k)+fzl(i,j,k)-fzl(i,j,k-1)) &
-                              / (dx(j)*dy*dz(k)*f_ocn(i,j))
-          else
-            tracer_tmp(i,j,k) = 0._wp
-          endif 
-          ! for fluxes limits 
+          ! branchless mask_c; guard f_ocn (=0 on land) in the denominator
+          tracer_tmp(i,j,k) = real(mask_c(i,j,k),wp) &
+            * (tracer_ijk-(fxl(i,j,k)-fxl(i-1,j,k)+fyl(i,j,k)-fyl(i,j-1,k)+fzl(i,j,k)-fzl(i,j,k-1)) &
+              / (dx(j)*dy*dz(k)*max(f_ocn(i,j),f_min)))
+          ! for fluxes limits
           xa(i,j,k)=max(tracer_ijk,tracer_tmp(i,j,k))
           xb(i,j,k)=min(tracer_ijk,tracer_tmp(i,j,k))
         enddo
-      enddo      
+      enddo
     enddo
-    !!$omp end parallel do
 
     ! flux limiters
 
@@ -319,40 +306,34 @@ contains
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          ip1 = modulo(i,maxi) + 1
-          im1 = modulo(i - 2, maxi) + 1
-          ip2 = modulo(i+1, maxi) + 1
+          ip1 = ipw(i)
+          im1 = imw(i)
+          ip2 = ip2w(i)
           jm1=max(1,j-1)
           jp1=min(maxj,j+1)
           jp2=min(maxj,j+2)
           km1=max(1,k-1)
           kp1=min(maxk,k+1)
           kp2=min(maxk,k+2)
-          if (afx(I,j,k)*(tracer_tmp(ip1,j,k)-tracer_tmp(i,j,k)).lt.0._wp &
-            .and. (afx(I,j,k)*(tracer_tmp(ip2,j,k)-tracer_tmp(ip1,j,k)).lt.0._wp .or. afx(I,j,k)*(tracer_tmp(i,j,k)-tracer_tmp(im1,j,k)).lt.0._wp)) then
-            !print *,'afx set to zero'
-            afx(I,j,k) = 0._wp
-          endif
-          if (afy(i,J,k)*(tracer_tmp(i,jp1,k)-tracer_tmp(i,j,k)).lt.0._wp &
-            .and. (afy(i,J,k)*(tracer_tmp(i,jp2,k)-tracer_tmp(i,jp1,k)).lt.0._wp .or. afy(i,J,k)*(tracer_tmp(i,j,k)-tracer_tmp(i,jm1,k)).lt.0._wp)) then
-            !print *,'afy set to zero'
-            afy(i,J,k) = 0._wp
-          endif
-          if (afz(i,j,K)*(tracer_tmp(i,j,kp1)-tracer_tmp(i,j,k)).lt.0._wp &
-            .and. (afz(i,j,K)*(tracer_tmp(i,j,kp2)-tracer_tmp(i,j,kp1)).lt.0._wp .or. afz(i,j,K)*(tracer_tmp(i,j,k)-tracer_tmp(i,j,km1)).lt.0._wp)) then
-            !print *,'afz set to zero'
-            afz(i,j,K) = 0._wp
-          endif
+          afx(i,j,k) = merge(0._wp, afx(i,j,k), &
+            afx(i,j,k)*(tracer_tmp(ip1,j,k)-tracer_tmp(i,j,k)).lt.0._wp &
+            .and. (afx(i,j,k)*(tracer_tmp(ip2,j,k)-tracer_tmp(ip1,j,k)).lt.0._wp .or. afx(i,j,k)*(tracer_tmp(i,j,k)-tracer_tmp(im1,j,k)).lt.0._wp))
+          afy(i,j,k) = merge(0._wp, afy(i,j,k), &
+            afy(i,j,k)*(tracer_tmp(i,jp1,k)-tracer_tmp(i,j,k)).lt.0._wp &
+            .and. (afy(i,j,k)*(tracer_tmp(i,jp2,k)-tracer_tmp(i,jp1,k)).lt.0._wp .or. afy(i,j,k)*(tracer_tmp(i,j,k)-tracer_tmp(i,jm1,k)).lt.0._wp))
+          afz(i,j,k) = merge(0._wp, afz(i,j,k), &
+            afz(i,j,k)*(tracer_tmp(i,j,kp1)-tracer_tmp(i,j,k)).lt.0._wp &
+            .and. (afz(i,j,k)*(tracer_tmp(i,j,kp2)-tracer_tmp(i,j,kp1)).lt.0._wp .or. afz(i,j,k)*(tracer_tmp(i,j,k)-tracer_tmp(i,j,km1)).lt.0._wp))
         enddo
       enddo
     enddo
 
-    !!$omp parallel do collapse(3) private(i,j,k,im1,ip1,jm1,jp1,km1,kp1,xmin,xmax,pp,pm,qp,qm,qdp)
-    do k=1,maxk    
+    ! flux ratios rp/rn
+    do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          im1 = modulo(i-2, maxi) + 1
-          ip1 = modulo(i,maxi) + 1
+          im1 = imw(i)
+          ip1 = ipw(i)
           jm1=max(1,j-1)
           jp1=min(maxj,j+1)
           km1=max(1,k-1)
@@ -370,47 +351,40 @@ contains
         enddo
       enddo
     enddo
-    !!$omp end parallel do
 
-    !!$omp parallel do collapse(3) private(i,j,k,ip1)
+    ! apply flux limiters
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
-          if (mask_u(i,j,k).eq.1) then
-            ip1 = modulo(i,maxi) + 1
-            afx(i,j,k) = afx(i,j,k) * merge(min(rp(ip1,j,k),rn(i,j,k)), min(rp(i,j,k),rn(ip1,j,k)), afx(i,j,k) >= 0._wp)
-          endif
-          if (j.lt.maxj .and. mask_v(i,j,k).eq.1) then
-            afy(i,j,k) = afy(i,j,k) * merge(min(rp(i,j+1,k),rn(i,j,k)), min(rp(i,j,k),rn(i,j+1,k)), afy(i,j,k) >= 0._wp)
-          endif
-          if (mask_w(i,j,k).eq.1) then
-            afz(i,j,k) = afz(i,j,k) * merge(min(rp(i,j,k+1),rn(i,j,k)), min(rp(i,j,k),rn(i,j,k+1)), afz(i,j,k) >= 0._wp)
-          endif
+          ! branchless: af* are already zero where their mask is off, so the limiter factor is
+          ! harmless there; clamp jp1/kp1 to stay in bounds (the clamped cells are zero-af* cells)
+          ip1 = ipw(i)
+          jp1 = min(j+1,maxj)
+          kp1 = min(k+1,maxk)
+          afx(i,j,k) = afx(i,j,k) * merge(min(rp(ip1,j,k),rn(i,j,k)), min(rp(i,j,k),rn(ip1,j,k)), afx(i,j,k) >= 0._wp)
+          afy(i,j,k) = afy(i,j,k) * merge(min(rp(i,jp1,k),rn(i,j,k)), min(rp(i,j,k),rn(i,jp1,k)), afy(i,j,k) >= 0._wp)
+          afz(i,j,k) = afz(i,j,k) * merge(min(rp(i,j,kp1),rn(i,j,k)), min(rp(i,j,k),rn(i,j,kp1)), afz(i,j,k) >= 0._wp)
         enddo
       enddo
     enddo
-    !!$omp end parallel do
 
     !periodic b.c.
     afx(0,:,:) = afx(maxi,:,:)
 
 
-    ! STEP II: HIGH ORDER CORRECTION   
+    ! STEP II: HIGH ORDER CORRECTION
 
-    !!$omp parallel do collapse(3) private(i,j,k,tracer_tmp1)
     do k=1,maxk
        do j=1,maxj
           do i=1,maxi
-             if (mask_c(i,j,k).eq.1) then
-                tracer_tmp1 = tracer_tmp(i,j,k)-(afx(i,j,k)-afx(i-1,j,k)+afy(i,j,k)-afy(i,j-1,k)+afz(i,j,k)-afz(i,j,k-1)) &
-                            / (dx(j)*dy*dz(k)*f_ocn(i,j))
-                ! calculate the overall tracer tendency due to advection
-                tracer_tendency(i,j,k) = (tracer_tmp1 - tracer(i,j,k)) / dt
-             endif
+             ! branchless mask_c; guard f_ocn (=0 on land) in the denominator
+             tracer_tmp1 = tracer_tmp(i,j,k)-(afx(i,j,k)-afx(i-1,j,k)+afy(i,j,k)-afy(i,j-1,k)+afz(i,j,k)-afz(i,j,k-1)) &
+                         / (dx(j)*dy*dz(k)*max(f_ocn(i,j),f_min))
+             ! calculate the overall tracer tendency due to advection (zero on land via mask)
+             tracer_tendency(i,j,k) = real(mask_c(i,j,k),wp) * (tracer_tmp1 - tracer(i,j,k)) / dt
           enddo
-       enddo 
+       enddo
     enddo
-    !!$omp end parallel do
 
     fax(0:,:,:) = fxl(0:,:,:) + afx(0:,:,:)
     fay(:,0:,:) = fyl(:,0:,:) + afy(:,0:,:)

@@ -28,15 +28,17 @@ module adifa_mod
 
   use atm_params, only : wp
   use atm_params, only : cp
+  use atm_params, only : tstep
+  use atm_params, only : l_diff_impl
   use atm_grid, only : im, imc, jm, jmc, km
   use atm_grid, only : dplx, dply, dy, dxt, dxu, sqr
   !$ use omp_lib
 
   implicit none
-  
+
   private
   public :: adifa
-  
+
 contains
     
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -45,8 +47,8 @@ contains
   !              :  water and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine adifa(fax, fay, tp, q3, d3, cam, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, &
-    convdse, convwtr, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
-    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2) 
+    convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
+    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2)
 
     implicit none
 
@@ -64,7 +66,8 @@ contains
     real(wp), intent(in   ) :: diffydst(:,:)
     
     real(wp), intent(inout) :: convdse(:,:)
-    real(wp), intent(inout) :: convwtr(:,:)
+    real(wp), intent(inout) :: convwtr_adv(:,:)   ! advective moisture convergence
+    real(wp), intent(  out) :: convwtr_dif(:,:)   ! explicit diffusive moisture convergence (0 when l_diff_impl, then set by diffuse_impl)
     real(wp), intent(inout) :: convdst(:,:)
     real(wp), intent(inout) :: convco2(:,:)
 
@@ -93,6 +96,7 @@ contains
     real(wp) :: d3_ijk, d3_i1jk, d3_ij1k
     real(wp) :: c3_ij, c3_i1j, c3_ij1
     real(wp) :: fax_ijk, fay_ijk
+    real(wp) :: fdivdse, fdivwtr, fdivdst, fdivco2
 
 
     !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
@@ -112,12 +116,12 @@ contains
         faxdst(i,j) = 0._wp
         faxco2(i,j) = 0._wp
 
-        faydse(i,j) = 0._wp      
+        faydse(i,j) = 0._wp
         faywtr(i,j) = 0._wp
         faydst(i,j) = 0._wp
         fayco2(i,j) = 0._wp
 
-        fdxdse(i,j) = 0._wp      
+        fdxdse(i,j) = 0._wp
         fdxwtr(i,j) = 0._wp       
         fdxdst(i,j) = 0._wp       
         fdxco2(i,j) = 0._wp       
@@ -155,13 +159,14 @@ contains
           !-----------------------------------
           ! zonal components
 
-          ! Upstream values
+          ! upstream zonal advection: upstream is the west cell (imi)
+          ! for fax>0, the current cell (i) for fax<=0.
           if (fax_ijk.gt.0._wp) then
             tpup = tp_i1jk
             qup  = q3_i1jk
             dup  = d3_i1jk
             cup  = c3_i1j
-          else    
+          else
             tpup = tp_ijk
             qup  = q3_ijk
             dup  = d3_ijk
@@ -169,7 +174,7 @@ contains
           endif
           faxdse(i,j) = faxdse(i,j) + fax_ijk*tpup ! kg/s * K
           faxwtr(i,j) = faxwtr(i,j) + fax_ijk*qup  ! kg/s * kg/kg
-          faxdst(i,j) = faxdst(i,j) + fax_ijk*dup  
+          faxdst(i,j) = faxdst(i,j) + fax_ijk*dup
           faxco2(i,j) = faxco2(i,j) + fax_ijk*cup  ! kg/s * kgCO2/kg = kgCO2/s
 
           !-----------------------------------
@@ -250,44 +255,52 @@ contains
     ! fluxes convergency
     !-----------------------------------
 
-    !$omp parallel do collapse(2) private(i,j)
+    !$omp parallel do collapse(2) private(i,j,fdivdse,fdivwtr,fdivdst,fdivco2)
     do j=1,jm
-      do i=1,im 
+      do i=1,im
+
+        ! Diffusive flux divergence, only added if l_diff_impl==false
+        if (l_diff_impl) then
+          fdivdse = 0._wp
+          fdivwtr = 0._wp
+          fdivdst = 0._wp
+          fdivco2 = 0._wp
+        else
+          fdivdse = fdxdse(i,j)-fdxdse(i+1,j) + fdydse(i,j+1)-fdydse(i,j)
+          fdivwtr = fdxwtr(i,j)-fdxwtr(i+1,j) + fdywtr(i,j+1)-fdywtr(i,j)
+          fdivdst = fdxdst(i,j)-fdxdst(i+1,j) + fdydst(i,j+1)-fdydst(i,j)
+          fdivco2 = fdxco2(i,j)-fdxco2(i+1,j) + fdyco2(i,j+1)-fdyco2(i,j)
+        endif
 
         !-----------------------------------
-        ! dry static energy
+        ! dry static energy (advection [+ explicit diffusion])
         convdse(i,j)= &
-                       (faxdse(i,j)  -faxdse(i+1,j) &  
+                       (faxdse(i,j)  -faxdse(i+1,j) &
                        +faydse(i,j+1)-faydse(i,j) &
-                       +fdxdse(i,j)  -fdxdse(i+1,j) &
-                       +fdydse(i,j+1)-fdydse(i,j)) &
+                       +fdivdse) &
                        /sqr(i,j) * cp  ! K * kg/s / m2 * J/kg/K = J/m2/s = W/m2
 
         !-----------------------------------
-        ! water
-        convwtr(i,j)= 0.9_wp*convwtr(i,j) + 0.1_wp * &  ! relax in time
-                        (faxwtr(i,j)  -faxwtr(i+1,j) &
-                       +faywtr(i,j+1)-faywtr(i,j) &
-                       +fdxwtr(i,j)  -fdxwtr(i+1,j) &
-                       +fdywtr(i,j+1)-fdywtr(i,j)) &
-                       /sqr(i,j)       ! kg/kg * kg/s / m2 = kg/m2/s 
+        ! water (advection [+ explicit diffusion])
+        convwtr_adv(i,j)= (faxwtr(i,j)  -faxwtr(i+1,j) &
+                          +faywtr(i,j+1)-faywtr(i,j)) &
+                          /sqr(i,j)       ! kg/kg * kg/s / m2 = kg/m2/s
+        convwtr_dif(i,j)= fdivwtr/sqr(i,j)
 
         !-----------------------------------
-        ! dust
+        ! dust (advection [+ explicit diffusion])
         convdst(i,j)= &
                        (faxdst(i,j)  -faxdst(i+1,j) &
                        +faydst(i,j+1)-faydst(i,j) &
-                       +fdxdst(i,j)  -fdxdst(i+1,j) &
-                       +fdydst(i,j+1)-fdydst(i,j)) &
+                       +fdivdst) &
                        /sqr(i,j)
 
         !-----------------------------------
-        ! carbon
+        ! carbon (advection [+ explicit diffusion])
         convco2(i,j)= &
                        (faxco2(i,j)  -faxco2(i+1,j) &
                        +fayco2(i,j+1)-fayco2(i,j) &
-                       +fdxco2(i,j)  -fdxco2(i+1,j) &
-                       +fdyco2(i,j+1)-fdyco2(i,j)) &
+                       +fdivco2) &
                        /sqr(i,j)        ! kgCO2/s/m2
 
       enddo
