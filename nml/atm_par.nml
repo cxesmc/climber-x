@@ -101,7 +101,7 @@
   c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
   c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
   tsl_gams_min_lnd = 6.5e-3     ! K/m
-  tsl_gams_min_ice = 2.e-3      ! K/m
+  tsl_gams_min_ice = 6.5e-3     ! K/m
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
@@ -135,7 +135,6 @@
   c_wrt_1 = 1000.                 ! days, residence time of water in the atmosphere over ocean
   c_wrt_2 = 50.                   ! days, residence time of water in the atmosphere over land
   c_wrt_3 = 0. !0.005                 ! 
-  c_wrt_4 = 3e-5 !0.
 
   !-----------------------------------------------------------
   ! synoptic kinetic energy parameteres
@@ -152,8 +151,8 @@
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
   c_wind_ele = 0.               ! m/s / m, elevation gradient of surface wind speed
   c_diff_dse = 2.e5             ! m, factor for macro-diffusion of dry static energy
-  i_diff_wtr = 3                ! 
-  c_diff_wtr = 1.5e4            ! s, factor for macro-diffusion of moisture
+  i_diff_wtr = 1                ! 
+  c_diff_wtr = 1.6e4            ! s, factor for macro-diffusion of moisture
 
   !-----------------------------------------------------------
   ! diffusion and stability parameters 
@@ -174,7 +173,6 @@
   c_cld_55 = 0.                 !
   c_cld_6 = 0.1                 !
   c_cld_7 = 0.003               ! kg/kg, critical specific humidity for 'freezedry' reduction in cloud fraction
-  c_cld_8 = 0.004 !0.
   l_cld_low_ice = F
   cld_max = 0.95                ! maximum cloud fraction
   c_woro = 1e-5                 ! factor for orographic vertical velocity
