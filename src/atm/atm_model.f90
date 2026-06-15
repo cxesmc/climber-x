@@ -284,7 +284,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%rskina, atm%wcon, atm%htrop, atm%so4, atm%sam2, &    ! in
+        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%rskina, atm%wcon, atm%htrop, atm%so4, &    ! in
           atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%clot) ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'cld',time2-time1
@@ -328,9 +328,9 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call synop(atm%frst, atm%zs, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
-          atm%zsa, atm%sigoro, atm%cda, atm%cd, atm%epsa, atm%cos_acbar, &    ! in
-          atm%sam, atm%sam2, atm%cdif, &    ! inout
+        call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
+          atm%zsa, atm%cda, atm%cd, atm%epsa, atm%cos_acbar, &    ! in
+          atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
           atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst, atm%wsyn)    ! out
         !$ time2 = omp_get_wtime()
@@ -387,7 +387,7 @@ contains
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, atm%sam2, &   ! in
+      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, &   ! in
         atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
@@ -565,7 +565,6 @@ contains
          atm%rb_sur(i,j) = 0._wp
          atm%rb_atm(i,j) = 0._wp
          atm%sam(i,j) = 0._wp
-         atm%sam2(i,j) = 0._wp
          atm%cdif(i,j) = 0._wp
          atm%ps(i,j,:) = p0
          atm%psa(i,j) = p0
@@ -883,7 +882,6 @@ contains
 
      allocate(atm%eke(im,jm))
      allocate(atm%sam(im,jm))
-     allocate(atm%sam2(im,jm))
      allocate(atm%synprod(im,jm))
      allocate(atm%syndiss(im,jm))
      allocate(atm%synadv(im,jm))
@@ -1149,7 +1147,6 @@ contains
 
      deallocate(atm%eke)
      deallocate(atm%sam)
-     deallocate(atm%sam2)
      deallocate(atm%synprod)
      deallocate(atm%syndiss)
      deallocate(atm%synadv)
@@ -1219,7 +1216,6 @@ contains
     call nc_write(fnm,"ttrop    ",     atm%ttrop    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"rb_sur   ",     atm%rb_sur   ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"sam      ",     atm%sam      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"sam2     ",     atm%sam2     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"cdif     ",     atm%cdif     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"slp      ",     atm%slp      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"ps       ",     atm%ps       ,     dims=["lon","lat","nm "],long_name="",units="")
@@ -1310,7 +1306,6 @@ contains
     call nc_read(fnm,"ttrop    ",     atm%ttrop   ) 
     call nc_read(fnm,"rb_sur   ",     atm%rb_sur  ) 
     call nc_read(fnm,"sam      ",     atm%sam     ) 
-    call nc_read(fnm,"sam2     ",     atm%sam2    ) 
     call nc_read(fnm,"cdif     ",     atm%cdif    ) 
     call nc_read(fnm,"slp      ",     atm%slp     ) 
     call nc_read(fnm,"ps       ",     atm%ps      ) 

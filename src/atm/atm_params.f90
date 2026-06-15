@@ -127,7 +127,6 @@ module atm_params
   real(wp) :: c_wrt_1
   real(wp) :: c_wrt_2
   real(wp) :: c_wrt_3   
-  real(wp) :: c_wrt_4
 
   real(wp) :: c_hrs_1   
   real(wp) :: c_hrs_2
@@ -178,7 +177,6 @@ module atm_params
   real(wp) :: c_cld_55
   real(wp) :: c_cld_6
   real(wp) :: c_cld_7
-  real(wp) :: c_cld_8
   logical :: l_cld_low_ice
   real(wp) :: cld_max
   integer :: nsmooth_cld
@@ -347,7 +345,6 @@ contains
     call nml_read(filename,"atm_par","c_wrt_1",c_wrt_1)
     call nml_read(filename,"atm_par","c_wrt_2",c_wrt_2)
     call nml_read(filename,"atm_par","c_wrt_3",c_wrt_3)
-    call nml_read(filename,"atm_par","c_wrt_4",c_wrt_4)
     call nml_read(filename,"atm_par","hcld_base",hcld_base)
     call nml_read(filename,"atm_par","i_lw_cld",i_lw_cld)
     call nml_read(filename,"atm_par","c_lw_clot",c_lw_clot)
@@ -406,7 +403,6 @@ contains
     call nml_read(filename,"atm_par","c_cld_55",c_cld_55)
     call nml_read(filename,"atm_par","c_cld_6",c_cld_6)
     call nml_read(filename,"atm_par","c_cld_7",c_cld_7)
-    call nml_read(filename,"atm_par","c_cld_8",c_cld_8)
     call nml_read(filename,"atm_par","l_cld_low_ice",l_cld_low_ice)
     call nml_read(filename,"atm_par","c_hcld_1",c_hcld_1)
     call nml_read(filename,"atm_par","c_hcld_2",c_hcld_2)

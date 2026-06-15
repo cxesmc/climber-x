@@ -50,15 +50,13 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3, vt3, ut3f, vt3f, u700, v700, us, vs, tp, zsa, sigoro, cda, cd, epsa, cos_acbar, sam, sam2, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, cos_acbar, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, wsyn)
 
     implicit none
 
     real(wp), intent(in   ) :: frst(:,:,:)
     real(wp), intent(in   ) :: zs(:,:,:)
-    real(wp), intent(in   ) :: ut3(:,:,:)
-    real(wp), intent(in   ) :: vt3(:,:,:)
     real(wp), intent(in   ) :: ut3f(:,:,:)
     real(wp), intent(in   ) :: vt3f(:,:,:)
     real(wp), intent(in   ) :: u700(:,:)
@@ -67,14 +65,12 @@ contains
     real(wp), intent(in   ) :: vs(:,:,:)
     real(wp), intent(in   ) :: tp(:,:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: sigoro(:,:)
     real(wp), intent(in   ) :: cda(:,:)
     real(wp), intent(in   ) :: cd(:,:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
     real(wp), intent(in   ) :: cos_acbar(:,:,:)
 
     real(wp), intent(inout) :: sam(:,:)
-    real(wp), intent(inout) :: sam2(:,:)
     real(wp), intent(inout) :: cdif(:,:)
 
     real(wp), intent(out  ) :: synprod(:,:)
@@ -95,7 +91,7 @@ contains
     real(wp), intent(out  ) :: wsyn(:,:)
 
     integer :: i, j, k, n, imi, ipl, jmi, jpl
-    real(wp) :: dsdt, sqsam, synprod2, sigoro_sm
+    real(wp) :: dsdt, sqsam
     real(wp) :: sxadv, syadv, sxdif, sydif
     real(wp) :: uef, vef
     real(wp) :: dudz, dvdz
@@ -118,7 +114,7 @@ contains
     ! synoptic kinetic energy
     !-----------------------------------------------
 
-    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, sxadv, syadv, sxdif, sydif, synprod2, sigoro_sm)
+    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, sxadv, syadv, sxdif, sydif)
     do i=1,im
       do j=2,jm-1
 
@@ -142,15 +138,6 @@ contains
         ugrad = sqrt(dudz**2+dvdz**2)
         synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad * (1._wp-c_syn_8*zsa(i,j)/3000._wp)
         synprod(i,j) = max(0._wp,synprod(i,j))
-
-        dudz = (ut3(i,j,k500)-ut3(i,j,k850))/(zl(k500)-zl(k850))
-        dvdz = (vt3(i,j,k500)-vt3(i,j,k850))/(zl(k500)-zl(k850)) * cost(j)
-        ugrad = sqrt(dudz**2+dvdz**2)
-        synprod2 = c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad
-        sigoro_sm = 0.2_wp*(sigoro(i,j)+sigoro(imi,j)+sigoro(ipl,j)+sigoro(i,jpl)+sigoro(i,jmi))
-        synprod2 = synprod2 * (1._wp-min(1._wp,sigoro_sm/500._wp))
-        synprod2 = max(0._wp,synprod2)
-        sam2(i,j) = synprod2*12000._wp  ! m2/s2
 
         !-----------------------------------------------
         ! synoptic energy dissipation  
@@ -247,8 +234,6 @@ contains
     do i=1,im
       sam(i,1)  = sam(i,2)
       sam(i,jm) = sam(i,jm-1)
-      sam2(i,1)  = sam2(i,2)
-      sam2(i,jm) = sam2(i,jm-1)
     enddo 
     call zofil(sam,1,12)
     call zofil(sam,2,8)
@@ -318,8 +303,6 @@ contains
           diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 
         else if (i_diff_wtr.eq.2) then
           diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
-        else if (i_diff_wtr.eq.3) then
-          diffxwtr(i,j) = c_diff_wtr * (0.5_wp*(sam(imi,j)+sam(i,j)) + 10._wp*max(0._wp,0.5_wp*(sam2(imi,j)+sam2(i,j))-20._wp))
         endif
         ! diffusivity for dust
         diffxdst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
@@ -355,8 +338,6 @@ contains
           diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam(i,jmi)+sam(i,j)) 
         else if (i_diff_wtr.eq.2) then
           diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
-        else if (i_diff_wtr.eq.3) then
-          diffywtr(i,j) = c_diff_wtr * (0.5_wp*(sam(i,jmi)+sam(i,j)) + 10._wp*max(0._wp,0.5_wp*(sam2(i,jmi)+sam2(i,j))-20._wp))
         endif
         ! diffusivity for dust 
         diffydst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))

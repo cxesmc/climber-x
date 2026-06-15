@@ -276,7 +276,6 @@ module atm_def
 
       real(wp), allocatable, dimension(:,:) :: eke
       real(wp), allocatable, dimension(:,:) :: sam
-      real(wp), allocatable, dimension(:,:) :: sam2
       real(wp), allocatable, dimension(:,:) :: synprod
       real(wp), allocatable, dimension(:,:) :: syndiss
       real(wp), allocatable, dimension(:,:) :: synadv
