@@ -49,7 +49,7 @@ contains
     real(wp), dimension(:,0:,0:,:), intent(inout) :: u
 
     integer :: i, j, k, l, n, ii, jj, kk, iii, jjj, kkk
-    real(wp), dimension(n_tracers_tot) :: tr_before, tr_after, dtr, tr_sum
+    real(wp), dimension(n_tracers_tot) :: tr_before, tr_after, tr_sum
     real(wp), allocatable, dimension(:,:,:) :: ocn_vol_tmp
 
 
@@ -127,14 +127,10 @@ contains
 
     ! change in global ocean concentration needed to conserve tracers
     do l=2,n_tracers_tot
-      dtr(l) = (tr_after(l)-tr_before(l))/grid%ocn_vol_tot
-      if (l.eq.i_age .or. l.eq.i_dye) then
+      if (l.ne.i_age .and. l.ne.i_dye) then
+        ! multiplicative rescaling that conserves the tracer inventory
         where (grid%mask_c.eq.1)
-          tracers(:,:,:,l) = tracers(:,:,:,l) - dtr(l)
-        endwhere
-      else
-        where (grid%mask_c.eq.1)
-          tracers(:,:,:,l) = tracers(:,:,:,l) * (1._wp - dtr(l)/max(1.e-30_wp,tr_before(l)))
+          tracers(:,:,:,l) = tracers(:,:,:,l) * tr_before(l)/max(1.e-30_wp,tr_after(l))
         endwhere
       endif
     enddo
