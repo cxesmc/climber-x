@@ -73,6 +73,11 @@
  visc_1d_file = "visko_80_420_122_Clemens.inp"    ! name of file containing 1d viscosity structure, used only if l_visc_3d==F
  visc_3d_file = "visc3d_Bagge2021_min_19.5.nc"    ! name of file containing 3d viscosity structure, used only if l_visc_3d==T
  vilma_grid_file = "input/vilma/vilma_grid.nc"
+ ! viscosity uncertainty perturbation (applied to whichever of the above is active)
+ f_visc_sd = 0.0        ! viscosity perturbation factor: log10(visc) -> log10(visc) + f_visc_sd*sigma_log10_visc (0 = no perturbation)
+ sigma_log10_visc = 0.5 ! 1-sigma uncertainty of viscosity in log10 units (dex), applied uniformly
+ visc_log10_min = 19.5  ! floor re-applied to log10(visc) after perturbation
+ visc_log10_max = 30.0  ! ceiling re-applied to log10(visc) after perturbation
 
  !-------------------------------------------------------
  ! lakes 

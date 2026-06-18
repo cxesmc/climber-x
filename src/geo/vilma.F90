@@ -16,6 +16,7 @@ module vilma_model
     use control, only : out_dir, geo_restart, restart_in_dir
     use constants, only : rho_i, rho_sw
     use geo_params, only : vilma_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
+    use geo_params, only : f_visc_sd, sigma_log10_visc, visc_log10_min, visc_log10_max
     use coord, only : grid_class, grid_init
     use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
     use ncio
@@ -435,6 +436,10 @@ contains
 
     else
 
+      ! optionally perturb the input viscosity field by f_visc_sd standard deviations
+      ! (repoints io_nc3in%n / io_visko%n to a perturbed copy in out_dir) before setup reads it
+      call perturb_viscosity
+
       call setup
 
     endif
@@ -450,6 +455,108 @@ contains
     return
 
   end subroutine vilma_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Function :  p e r t u r b _ v i s c o s i t y
+  ! Purpose  :  perturb the input viscosity field by f_visc_sd standard
+  !             deviations and repoint the active VILMA viscosity input
+  !             file to the perturbed copy written in out_dir.
+  !             The perturbation is applied in log10 space:
+  !               log10(visc) -> log10(visc) + f_visc_sd*sigma_log10_visc
+  !             and re-clamped to [visc_log10_min, visc_log10_max].
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine perturb_viscosity
+
+    implicit none
+
+#ifdef VILMA
+
+    integer :: estat, cstat
+    character(len=256) :: cmsg
+    character(len=256) :: fnm_out
+
+    ! 3d
+    integer :: nlon, nlat, nrad
+    real(wp), allocatable :: lgvisc(:,:,:)
+
+    ! 1d
+    integer, parameter :: maxlay = 10000
+    real(wp), dimension(maxlay) :: rb, rt, vu, vl
+    integer :: nlay, ios, i, ufin, ufout
+
+    if (f_visc_sd == 0._wp) return   ! no perturbation requested -> use original input file
+
+    if (l_visc_3d) then
+
+      ! copy original 3d file to output dir, then overwrite lgvisc (log10 viscosity) in place
+      fnm_out = trim(out_dir)//'/visc3d_perturbed.nc'
+      call execute_command_line('cp '//trim(io_nc3in%n)//' '//trim(fnm_out), &
+        exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+
+      nlon = nc_size(trim(fnm_out),"lon")
+      nlat = nc_size(trim(fnm_out),"lat")
+      nrad = nc_size(trim(fnm_out),"radius")
+      allocate(lgvisc(nlon,nlat,nrad))
+      call nc_read(trim(fnm_out),"lgvisc",lgvisc)
+
+      lgvisc = lgvisc + f_visc_sd*sigma_log10_visc
+      where (lgvisc < visc_log10_min) lgvisc = visc_log10_min
+      where (lgvisc > visc_log10_max) lgvisc = visc_log10_max
+
+      call nc_write(trim(fnm_out),"lgvisc",lgvisc, dims=["lon   ","lat   ","radius"], &
+        start=[1,1,1],count=[nlon,nlat,nrad])
+      deallocate(lgvisc)
+
+      io_nc3in%n = trim(fnm_out)
+
+    else
+
+      ! read 1d ascii viscosity file: r_bottom  r_top  visc_upper  visc_lower (linear Pa s)
+      fnm_out = trim(out_dir)//'/visc1d_perturbed.inp'
+      open(newunit=ufin, file=trim(io_visko%n), status='old', action='read')
+      nlay = 0
+      do
+        read(ufin,*,iostat=ios) rb(nlay+1), rt(nlay+1), vu(nlay+1), vl(nlay+1)
+        if (ios /= 0) exit
+        nlay = nlay + 1
+      enddo
+      close(ufin)
+
+      ! perturb in log10 space, clamp, convert back to linear
+      do i=1,nlay
+        vu(i) = 10._wp**( min(max(log10(vu(i)) + f_visc_sd*sigma_log10_visc, visc_log10_min), visc_log10_max) )
+        vl(i) = 10._wp**( min(max(log10(vl(i)) + f_visc_sd*sigma_log10_visc, visc_log10_min), visc_log10_max) )
+      enddo
+
+      open(newunit=ufout, file=trim(fnm_out), status='replace', action='write')
+      do i=1,nlay
+        write(ufout,'(4(es14.6,2x))') rb(i), rt(i), vu(i), vl(i)
+      enddo
+      close(ufout)
+
+      io_visko%n = trim(fnm_out)
+
+    endif
+
+    print*
+    print*,'======================================================='
+    print*,' VILMA viscosity perturbed: f_visc_sd      =',f_visc_sd
+    print*,'                            sigma_log10_visc=',sigma_log10_visc
+    print*,'                            clamp [min,max] =',visc_log10_min,visc_log10_max
+    if (l_visc_3d) then
+      print*,'                            perturbed file  = '//trim(io_nc3in%n)
+    else
+      print*,'                            perturbed file  = '//trim(io_visko%n)
+    endif
+    print*,'======================================================='
+    print*
+
+#endif
+
+    return
+
+  end subroutine perturb_viscosity
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
