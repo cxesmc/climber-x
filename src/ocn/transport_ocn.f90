@@ -198,14 +198,11 @@ contains
                !Ri(i,j,K) = brunt_vaisala**2 / dudz2
                if (l_diff_dia_strat) then
                  ! stratification dependent diapycnal diffusivity following Marzeion 2007
-                 if (drho_dz(i,j,k).lt.-1.e-12_wp) then
-                   !rho1 = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
-                   !rho2 = eos(ts(i,j,k+1,1),ts(i,j,k+1,2),zro(k+1))
-                   drhodz = (rho2-rho1)*rdza(k)
-                   brunt_vaisala = sqrt(-g/rho0*drhodz) ! Brunt-Vaisala frequency
-                   diff_dia_tmp = diff_dia_ref*(brunt_vaisala/brunt_vaisala_ref)**(-alpha_strat)                   
+                 if (drho_dz(i,j,K).lt.-1.e-12_wp) then
+                   brunt_vaisala = sqrt(-g/rho0*drho_dz(i,j,K)) ! Brunt-Vaisala frequency
+                   diff_dia_tmp = diff_dia_ref*(brunt_vaisala/brunt_vaisala_ref)**(-alpha_strat)
                    diff_dia_tmp = max(diff_dia_min,diff_dia_tmp)
-                   diff_dia(i,j,K) = diff_dia_tmp !min(diff_dia_max,diff_dia_tmp)
+                   diff_dia(i,j,K) = min(diff_dia_max,diff_dia_tmp)
                  else
                    diff_dia(i,j,K) = diff_dia_max
                  endif

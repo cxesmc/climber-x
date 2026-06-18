@@ -161,6 +161,8 @@
                               ! when true, a fraction frac_brines of the rejected brine salt is removed from the surface and
                               ! distributed thickness-weighted from the surface down to the neutral-buoyancy depth
  frac_brines = 0.
+ drho_brines_coast = 0.       ! density overshoot [kg/m3] for the brine plume in coastal cells: there the plume overshoots the neutral-buoyancy level until the ambient
+                              ! density exceeds the parcel density by drho_brines_coast
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_calv = 0.              ! relaxation factor for calving fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_bmelt = 0.             ! relaxation factor for basal melt fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
