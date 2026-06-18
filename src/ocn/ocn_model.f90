@@ -40,7 +40,7 @@ module ocn_model
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
     use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, k1_pot, ocn_area, ocn_area_tot, ocn_vol
     use ocn_params, only : ocn_params_init, i_init, dbl
-    use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines
+    use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines, drho_brines_coast
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
     use ocn_params, only : l_mld, l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
@@ -336,6 +336,15 @@ contains
                 exit
               endif
             enddo
+
+            ! in coastal cells, let the brine plume overshoot the neutral-buoyancy level until
+            ! the ambient density exceeds the parcel density by drho_brines_coast 
+            if (ocn%mask_coast(i,j).eq.1 .and. drho_brines_coast.gt.0._wp) then
+              do k=k_nb-1,k1(i,j),-1
+                k_nb = k
+                if (eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),zw(k)) - eos(t_par,s_par,zw(k)) .ge. drho_brines_coast) exit
+              enddo
+            endif
 
             ! diagnostic: neutral-buoyancy penetration depth [m] (positive downward)
             ocn%z_brines(i,j) = -zw(k_nb-1)
