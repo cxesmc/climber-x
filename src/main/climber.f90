@@ -265,7 +265,6 @@ program climber
       call bgc_diag_init(ocn%grid%ni, ocn%grid%nj, ocn%grid%nk, ocn%grid%zro)
       ! flag for bgc tracers transport
       ocn%l_tracers_trans(n_tracers_ocn+1:) = bgc%l_trans_tracers
-      ocn%l_tracer_dic(n_tracers_ocn+1:) = bgc%l_tracer_dic
       ocn%l_tracers_isodiff(n_tracers_ocn+1:) = bgc%l_isodiff_tracers
     endif
 

@@ -93,7 +93,6 @@
  diff_dia_ref = 2e-5          ! m2/s, reference diapycnal diffusivity, used only if l_diff_dia_strat==T
  diff_dia_min = 1.e-5         ! m2/s, minimum (surface) diapycnal diffusivity, used only if i_diff_dia==0,3,4
  diff_dia_max = 1.5e-4        ! m2/s, maximum (deep ocean) diapycnal diffusivity, used only if i_diff_dia==3
- diff_dia_bgc_min = 1e-5      ! m2/s, minimum diapycnal diffusivity for DIC tracers
  l_diff_dia_strat = F         ! use stratification dependent vertical diffusivity? Added on top of the reference profile set by i_diff_dia
  alpha_strat = 1.0            ! exponent of Brunt-Vaisala frequency dependence for stratification dependent vertical diffusivity
  brunt_vaisala_ref = 7.e-3    ! 1/s, reference Brunt-Vaisala frequency for stratification dependent vertical diffusivity.  (~drho/dz=-5e-3 kg/m3 /m)

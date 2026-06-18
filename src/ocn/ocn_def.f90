@@ -73,8 +73,7 @@ module ocn_def
      real(wp) :: A_bering              !! Bering Strait cross-sectional area [m2]     
      real(wp) :: buoy_sic_NA(6)   !! buoyancy flux from sea ice export over North Atlantic [N]
      logical, allocatable :: l_tracers_trans(:)    !! flags for bgc tracer transport
-     logical, allocatable :: l_tracer_dic(:)    !! flags for bgc DIC tracers
-     logical, allocatable :: l_tracers_isodiff(:)    !! flags for isopycnal diffusion of tracers 
+     logical, allocatable :: l_tracers_isodiff(:)    !! flags for isopycnal diffusion of tracers
      real(wp), allocatable :: z_ocn_max(:,:)    !! ocean floor elevation [m]
      real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell, including floating ice [1]
      real(wp), allocatable :: f_ocn_old(:,:)    !! old ocean fraction in grid cell [1]

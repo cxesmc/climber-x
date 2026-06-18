@@ -94,7 +94,7 @@ module ocn_params
      integer :: i_diff
      integer :: i_diff_dia
      real(wp) :: diff_iso, diff_dia_zref
-     real(wp) :: diff_dia_min, diff_dia_bgc_min, diff_dia_max, diff_dia_ref
+     real(wp) :: diff_dia_min, diff_dia_max, diff_dia_ref
      logical :: l_diff_dia_strat
      real(wp) :: alpha_strat
      real(wp) :: brunt_vaisala_ref
@@ -182,7 +182,6 @@ module ocn_params
      real(wp), dimension(:), allocatable :: mlddec, mlddecd
 
      real(wp), dimension(:,:,:), allocatable :: diff_dia
-     real(wp), dimension(:,:,:), allocatable :: diff_dia_bgc
      real(wp), dimension(:,:), allocatable :: slope_crit
      real(wp), dimension(:), allocatable :: diffx_max
      real(wp), dimension(:), allocatable :: diffy_max
@@ -266,7 +265,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","diff_dia_zref",diff_dia_zref)
     call nml_read(filename,"ocn_par","diff_dia_min",diff_dia_min)
     call nml_read(filename,"ocn_par","diff_dia_max",diff_dia_max)
-    call nml_read(filename,"ocn_par","diff_dia_bgc_min",diff_dia_bgc_min)
     call nml_read(filename,"ocn_par","diff_dia_ref",diff_dia_ref)
     call nml_read(filename,"ocn_par","l_diff_dia_strat",l_diff_dia_strat)
     call nml_read(filename,"ocn_par","alpha_strat",alpha_strat)

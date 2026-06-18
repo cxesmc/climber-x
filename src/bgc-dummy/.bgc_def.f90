@@ -217,7 +217,6 @@ module bgc_def
       type(daily_input_save_t) :: daily_input_save          !! daily input fields over one year
       type(flx_sed_t) :: flx_sed                           !! fluxes to sediment for spinup
       logical, dimension(nocetra) :: l_trans_tracers           !! flag for tracer transport to be passed to ocean model
-      logical, dimension(nocetra) :: l_tracer_dic           !! flag for tracer transport to be passed to ocean model
       logical, dimension(nocetra) :: l_isodiff_tracers           !! flag for isopycnal diffusion to be passed to ocean model
       real(wp), dimension(natm) :: atm                         !! global mean atmosphere
       real(wp) :: delta_c !! cumulated air-sea carbon flux over one year [kgc]
