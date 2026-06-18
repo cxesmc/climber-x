@@ -158,13 +158,10 @@
                               ! 2 = use volume averaged salinity
  saln0_const = 34.7           ! psu, reference salinity, used only if i_saln0==1
  l_salinity_restore = F       ! restore salinity to globally integrated value saln0?
- i_brines = 0                 ! treatment of brines during sea ice formation
-                              ! 0 = no special treatment of brine rejection
-                              ! 1 = brine rejection 
-                              ! 2 = brine rejection only along coastal cells
- i_brines_z = 1                              
+ l_brines = F                 ! apply special treatment of brines during sea ice formation?
+                              ! when true, a fraction frac_brines of the rejected brine salt is removed from the surface and
+                              ! distributed thickness-weighted from the surface down to the neutral-buoyancy depth
  frac_brines = 0.
- z_mix_brines = 100.          ! m, depth over which brines are mixed, only for i_brines>0
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_calv = 0.              ! relaxation factor for calving fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation
  relax_bmelt = 0.             ! relaxation factor for basal melt fluxes from ice sheets: 0 = no relaxation, -> 1 = strong relaxation

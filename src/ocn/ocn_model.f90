@@ -38,9 +38,9 @@ module ocn_model
     use constants, only : pi, cap_w, Lf, omega
     use climber_grid, only : lon, lat
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
-    use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, k1_pot, k_mix_brines, ocn_area, ocn_area_tot, ocn_vol
+    use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, k1_pot, ocn_area, ocn_area_tot, ocn_vol
     use ocn_params, only : ocn_params_init, i_init, dbl
-    use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, i_brines, i_brines_z, frac_brines
+    use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
     use ocn_params, only : l_mld, l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
@@ -90,12 +90,13 @@ contains
 
     type(ocn_class) :: ocn
 
-    integer :: i, j, k, k1_max
-    logical :: flag_brines
+    integer :: i, j, k
+    integer :: k_nb
+    real(wp) :: t_par, s_par
     real(wp) :: tau
     real(wp) :: sal_before, sal_after
     real(wp) :: vsf_saln0, vsf_saloc
-    real(wp) :: avg, tv1
+    real(wp) :: avg
     ! variables for the per-time-step ocean energy conservation check (check_energy)
     real(dp) :: ocn_heat_bef, ocn_heat_aft   ! ocean heat content before/after transport [J]
     real(dp) :: ocn_heat_input               ! net surface+geothermal heat input over the time step [J]
@@ -305,36 +306,7 @@ contains
 
           ! virtual salinity flux
 
-          if (i_brines.eq.0) then
-            ! no brines
-            flag_brines = .false.
-          else if (i_brines.eq.1) then
-            ! brines everywhere
-            flag_brines = .true.
-          else if (i_brines.eq.2) then
-            ! brines only along coast
-            if (ocn%mask_coast(i,j).eq.1) then
-              flag_brines = .true.
-            else
-              flag_brines = .false.
-            endif
-          else if (i_brines.eq.3) then
-            ! brines only in SH
-            if (j.le.maxj/2) then
-              flag_brines = .true.
-            else
-              flag_brines = .false.
-            endif
-          else if (i_brines.eq.4) then
-            ! brines only in SH and along coast
-            if (ocn%mask_coast(i,j).eq.1 .and. j.le.maxj/2) then
-              flag_brines = .true.
-            else
-              flag_brines = .false.
-            endif
-          endif
-
-          if (flag_brines) then
+          if (l_brines) then
             ! freshwater flux excluding brines
 
             ! flux without brines
@@ -349,40 +321,29 @@ contains
               ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)-frac_brines*ocn%fw_brines(i,j)*ocn%saln0)/rho0  ! kg/m2/s -> m/s*psu 
             endif
 
-            ! put brines at ocean bottom
-            if (i_brines_z.eq.1) then
-              k = k1(i,j)
-              ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu 
-            else if (i_brines_z.eq.2) then
-              k1_max = k1(i,j)
-              tv1 = 5000._wp
-              do k=maxk,1,-1
-                if (abs(ocn%z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
-                  k1_max = k
-                  tv1 = abs(ocn%z_ocn_max(i,j)-zw(k-1))
-                endif
-              enddo
-              k = max(k1(i,j),k1_max)
-              ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu 
-            else if (i_brines_z.eq.3) then
-              k1_max = k1(i,j)
-              tv1 = 5000._wp
-              do k=maxk,1,-1
-                if (abs(ocn%z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
-                  k1_max = k
-                  tv1 = abs(ocn%z_ocn_max(i,j)-zw(k-1))
-                endif
-              enddo
-              ! distribute freshwater flux from brine rejection over several layers and update salinity
-              k1_max = max(k1(i,j),k1_max)
-              do k=k1_max,maxk
-                ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*dz(k)/sum(dz(k1_max:maxk))*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu 
-              enddo
-            else if (i_brines_z.eq.4) then
-              do k=k1(i,j),maxk
-                ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*dz(k)/sum(dz(k1(i,j):maxk))*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu 
-              enddo
-            endif
+            ! distribute brines from the surface down to the neutral-buoyancy depth
+
+            ! brine-loaded surface source parcel (T,S of surface layer with the full salt anomaly added)
+            t_par = ocn%ts(i,j,maxk,1)
+            s_par = ocn%ts(i,j,maxk,2) - frac_brines*ocn%fw_brines(i,j)*ocn%saln0/rho0/dz(maxk)*dt  ! fw_brines<0 -> s_par increased
+
+            ! find neutral-buoyancy level (parcel vs ambient density referenced to the interface, stop at first stable level)
+            k_nb = maxk
+            do k=maxk-1,k1(i,j),-1
+              if (eos(t_par,s_par,zw(k)).gt.eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),zw(k))) then
+                k_nb = k
+              else
+                exit
+              endif
+            enddo
+
+            ! diagnostic: neutral-buoyancy penetration depth [m] (positive downward)
+            ocn%z_brines(i,j) = -zw(k_nb-1)
+
+            ! distribute brines thickness-weighted from the neutral-buoyancy level to the surface
+            do k=k_nb,maxk
+              ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*dz(k)/sum(dz(k_nb:maxk))*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu
+            enddo
 
           else
             ! no special treatment of brines
@@ -852,6 +813,7 @@ contains
         ocn%kven(i,j) = 0
         ocn%dconv(i,j) = 0._wp
         ocn%dven(i,j) = 0._wp
+        ocn%z_brines(i,j) = 0._wp
         ocn%conv_pe(i,j) = 0._wp
       enddo
     enddo
@@ -998,6 +960,7 @@ contains
     allocate(ocn%kven(maxi,maxj))
     allocate(ocn%dconv(maxi,maxj))
     allocate(ocn%dven(maxi,maxj))
+    allocate(ocn%z_brines(maxi,maxj))
     allocate(ocn%conv_pe(maxi,maxj))
     allocate(ocn%ssh(maxi,maxj))
     allocate(ocn%q_geo(maxi,maxj))
@@ -1159,6 +1122,7 @@ contains
     deallocate(ocn%kven)
     deallocate(ocn%dconv)
     deallocate(ocn%dven)
+    deallocate(ocn%z_brines)
     deallocate(ocn%conv_pe)
     deallocate(ocn%ssh)
     deallocate(ocn%q_geo)

@@ -35,7 +35,7 @@ module ocn_grid
   use climber_grid, only: ni, nj, lon, lat, basin_mask, i_atlantic, area
   use control, only: in_dir, out_dir
   use ocn_params, only : shelf_depth, nlayers, i_smooth, smooth_fac, zw_in
-  use ocn_params, only : z_mix_brines, dbl
+  use ocn_params, only : dbl
   use ocn_params, only : i_isl, isl_area_min, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
   
   use, intrinsic :: iso_c_binding 
@@ -67,7 +67,6 @@ module ocn_grid
   integer :: k1_shelf
   integer :: k1_1000
   integer :: k1_3000
-  integer :: k_mix_brines
   integer, dimension(:,:,:), allocatable :: ku       !! index of the first wet ocean grid cell on velocity grid (u,v) []
   logical, dimension(:,:), allocatable :: getj     !!  array to avoid J term in flat regions
 
@@ -375,16 +374,6 @@ contains
     enddo
     print *,'k1_3000',k1_3000
     print *,'depth 3000',zw(k1_3000-1),zro(k1_3000)
-
-    ! define depth of mixing brines 
-    k_mix_brines = maxk
-    tv1 = 5000._wp
-    do k=maxk,1,-1
-      if (abs(zw(k-1)+z_mix_brines).lt.tv1) then
-        k_mix_brines = k
-        tv1 = abs(zw(k-1)+z_mix_brines)
-      endif
-    enddo
 
     !-------------------------------------------------------------
     ! set bathymetry
