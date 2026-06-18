@@ -38,6 +38,15 @@ YELMOROOT = yelmo
 INC_YELMO = -I${YELMOROOT}/libyelmo/include
 LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 
+# --- FastHydrology (subglacial hydrology; required transitively by yelmo >= v2.2:
+# yelmo_defs declares `type(hydro_class) :: hyd`, so every yelmo module references
+# the fasthydro .mod files and libyelmo.a references libfasthydro symbols).
+# Built into a single include/ dir (no serial/omp split). FastHydrology itself
+# pulls in FFTW, which is already wired above.
+FASTHYDROROOT = FastHydrology
+INC_FASTHYDRO = -I${FASTHYDROROOT}/include
+LIB_FASTHYDRO = -L${FASTHYDROROOT}/include -lfasthydro
+
 # --- VILMA (optional solid-earth lib; user-provided, not managed by configme)
 VILMAROOT = src/vilma
 INC_VILMA = -I${VILMAROOT}/include
@@ -66,11 +75,14 @@ CPPFLAGS_CLIM = $(CPPFLAGS_PP)
 CPPFLAGS_FULL = $(CPPFLAGS_PP) -DVILMA
 
 FFLAGS_CLIM = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
-FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_VILMA) $(INC_FFTW)
 
 # Extra link flags. -Wl,-zmuldefs works around duplicate symbols in the static
 # deps (the default on Linux). A machine fragment disables it with
 # `LFLAGS_EXTRA =` (macOS ld rejects -zmuldefs).
 LFLAGS_EXTRA ?= -Wl,-zmuldefs
 LFLAGS_CLIM = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
-LFLAGS_FULL = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FESMUTILS) $(LFLAGS_EXTRA)
+# LIB_FASTHYDRO follows LIB_YELMO (yelmo references its symbols); the trailing
+# LIB_FFTW resolves the FFTW symbols pulled in by fasthydro and fesmutils
+# (static archives resolve left-to-right, so deps must come after dependents).
+LFLAGS_FULL = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_VILMA) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
