@@ -44,7 +44,7 @@ module transport_ocn_mod
   use ocn_params, only : i_advection
   use ocn_params, only : i_diff, i_diff_dia
   use ocn_params, only : diff_iso
-  use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_bgc, diff_dia_zref, diff_dia_min, diff_dia_bgc_min, diff_dia_max
+  use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
   use ocn_params, only : slope_max, slope_crit
   use ocn_params, only : diffx_max, diffy_max
@@ -70,7 +70,7 @@ contains
   !   Subroutine :  t r a n s p o r t
   !   Purpose    :  transport of tracers
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine transport(l_tracers_trans,l_tracer_dic,l_tracers_isodiff,l_large_vol_change, &
+  subroutine transport(l_tracers_trans,l_tracers_isodiff,l_large_vol_change, &
                       u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
                       ts,rho,nconv,dconv,kven,dven,conv_pe, &
                       mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
@@ -80,7 +80,6 @@ contains
     implicit none
 
     logical, dimension(:), intent(in) :: l_tracers_trans
-    logical, dimension(:), intent(in) :: l_tracer_dic
     logical, dimension(:), intent(in) :: l_tracers_isodiff
     logical, intent(in) :: l_large_vol_change
     real(wp), dimension(1:,0:,0:,:), intent(in) :: u
@@ -207,10 +206,8 @@ contains
                    diff_dia_tmp = diff_dia_ref*(brunt_vaisala/brunt_vaisala_ref)**(-alpha_strat)                   
                    diff_dia_tmp = max(diff_dia_min,diff_dia_tmp)
                    diff_dia(i,j,K) = diff_dia_tmp !min(diff_dia_max,diff_dia_tmp)
-                   diff_dia_bgc(i,j,K) = max(diff_dia_bgc_min,diff_dia(i,j,K)) 
                  else
                    diff_dia(i,j,K) = diff_dia_max
-                   diff_dia_bgc(i,j,K) = diff_dia_max
                  endif
                endif
              endif
@@ -262,24 +259,8 @@ contains
        endif
 
        ! diffusion
-!       if (ll.eq.1 .or. ll.eq.2) then
-!         ! active tracers temperature and salinity
-!         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
-!       else
-!         ! passive tracers 
-!         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-!           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), slope2_w, dts_dt_diff(:,:,:,l),l)
-!       endif
-
-       if (l_tracer_dic(l)) then
-         ! DIC tracers 
-         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia_bgc,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
-       else
-         call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
-           fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
-       endif
+       call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
+         fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
 
        ! apply advection and diffusion to tracer field
        where (mask_c.eq.1)
@@ -446,7 +427,6 @@ contains
     allocate(mlddec(maxk))
     allocate(mlddecd(maxk))
     allocate(diff_dia(maxi,maxj,maxk))
-    allocate(diff_dia_bgc(maxi,maxj,maxk))
     allocate(diffx_max(maxj))
     allocate(diffy_max(maxj))
 
@@ -480,14 +460,12 @@ contains
 
     if (i_diff_dia.eq.0) then
       diff_dia = diff_dia_min
-      diff_dia_bgc = diff_dia_bgc_min
     else if (i_diff_dia.eq.1) then
       ! Use Bryan & Lewis (1979) type profile
       do i=1,maxi
         do j=1,maxj
           do k=1,maxk
             diff_dia(i,j,K) = 8.e-5 + 2.e-4/pi*atan(-2e-3*(zw(K)+1000.))
-            diff_dia_bgc(i,j,K) = max(diff_dia_bgc_min,diff_dia(i,j,K))
           enddo
         enddo
       enddo
@@ -497,7 +475,6 @@ contains
         do j=1,maxj
           do k=1,maxk
             diff_dia(i,j,K) = 8e-5 + 1.05e-4_wp/pi*atan(-4.5e-3_wp*(zw(K)+2500._wp))
-            diff_dia_bgc(i,j,K) = max(diff_dia_bgc_min,diff_dia(i,j,K))
           enddo
         enddo
       enddo
@@ -509,7 +486,6 @@ contains
             diff_dia(i,j,K) = diff_dia_min + (atan(-(zw(K)+diff_dia_zref)/1000._wp)-atan(-diff_dia_zref/1000._wp)) &
               / ((atan(-(-5000._wp+diff_dia_zref)/1000._wp)-atan(-diff_dia_zref/1000._wp))) &
               * (diff_dia_max-diff_dia_min)
-            diff_dia_bgc(i,j,K) = max(diff_dia_bgc_min,diff_dia(i,j,K))
           enddo
         enddo
       enddo
@@ -539,7 +515,6 @@ contains
             else
               diff_dia(i,j,K) = diff_dia_min + K_b
             endif
-            diff_dia_bgc(i,j,K) = max(diff_dia_bgc_min,diff_dia(i,j,K))
           enddo
         enddo
       enddo
