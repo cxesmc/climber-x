@@ -43,7 +43,7 @@ LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 # the fasthydro .mod files and libyelmo.a references libfasthydro symbols).
 # Built into a single include/ dir (no serial/omp split). FastHydrology itself
 # pulls in FFTW, which is already wired above.
-FASTHYDROROOT = FastHydrology
+FASTHYDROROOT = yelmo/FastHydrology
 INC_FASTHYDRO = -I${FASTHYDROROOT}/include
 LIB_FASTHYDRO = -L${FASTHYDROROOT}/include -lfasthydro
 
