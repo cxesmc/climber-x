@@ -1018,9 +1018,14 @@ contains
 
 
     ! find index of top 1 km ocean layers for basal melt
-    if (flag_bmb .and. time_soy_ocn) then
+    ! NOTE: k_bmb/nk must be set on every call (the omp loop below uses them
+    ! whenever flag_bmb), not only at start-of-year, otherwise they are read
+    ! uninitialised on non-soy steps -> out-of-bounds slicing / segfault.
+    if (flag_bmb) then
       k_bmb = minloc(abs(ocn%grid%zro+1000._wp),1)
       nk = ocn%grid%nk - k_bmb + 1
+    endif
+    if (flag_bmb .and. time_soy_ocn) then
       if (allocated(cmn%z_ocn_bmb))    deallocate(cmn%z_ocn_bmb)
       if (allocated(cmn%mask_ocn_bmb)) deallocate(cmn%mask_ocn_bmb)
       if (allocated(cmn%t_ocn_bmb))    deallocate(cmn%t_ocn_bmb)
