@@ -1030,7 +1030,7 @@ $(objdir)/smb_grid.o : $(dir_smb)smb_grid.f90 $(objdir)/smb_params.o
 $(objdir)/smb_params.o : $(dir_smb)smb_params.f90 $(objdir)/timer.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_def.o : $(dir_smb)smb_def.f90 $(objdir)/precision.o
+$(objdir)/smb_def.o : $(dir_smb)smb_def.f90 $(objdir)/precision.o $(objdir)/smb_simple.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_surface_par.o : $(dir_smb)smb_surface_par.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o 
@@ -1054,7 +1054,7 @@ $(objdir)/smb_temp.o : $(dir_smb)smb_temp.f90 $(objdir)/smb_grid.o $(objdir)/smb
 $(objdir)/snow.o : $(dir_smb)snow.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_simple.o : $(dir_smb)smb_simple.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o 
+$(objdir)/smb_simple.o : $(dir_smb)smb_simple.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_pdd.o : $(dir_smb)smb_pdd.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/downscaling.o

@@ -169,3 +169,59 @@
   l_monthly_output = F
   l_daily_output = F
 /
+
+&smb_simple
+  !-------------------------------------------------------------------
+  ! simple SMB scheme, used only if i_smb==3
+  ! Synthetic-elevation scheme: forces the ice sheet toward a target
+  ! geometry (target mask = maximum ice extent, see &smb_par/mask_maxice_file,
+  ! unless overridden by mask_file below). SMB in mm w.e./yr (== kg/m2/yr).
+  !-------------------------------------------------------------------
+
+  scheme    = "syn"    ! scheme to use ("syn"; "tg24" not yet wired)
+  co2_const = 280.     ! [ppm]  fallback CO2 (overwritten with live coupled CO2)
+  f_const   = 494.5    ! [W/m2] fallback 65N summer insolation (overwritten with live value)
+
+  ! optional target-mask override (read directly on the ice grid).
+  ! leave mask_file empty to use the maximum-ice-extent mask (mask_maxice).
+  mask_file = ""       ! target-mask file ("" => use mask_maxice)
+  mask_var  = ""       ! target-mask variable name (cells > 0 are ice)
+  mask_idx  = 1        ! index along the 3rd dim of mask_var
+
+  !--- climate snow line  z_SL = a1 + a2*phi + a3*CO2 + a4*(f - fmean) ---
+  a1    = 3750.        ! m (constant)
+  a2    =  -50.        ! m / deg N (negative: drops poleward)
+  a3    =    0.        ! m / ppm        (0 => snow line independent of CO2)
+  a4    =    0.        ! m / (W/m2)     (0 => snow line independent of insolation)
+  fmean =  494.5       ! W/m2 reference insolation
+
+  !--- ablation lapse rate  beta_abl(phi) = beta0 + beta1*(phiref - phi) ---
+  beta0      = 4.0     ! (mm/yr)/m at phiref
+  beta1      = 0.05    ! (mm/yr)/m per deg
+  phiref     = 60.0    ! deg N
+  beta_floor = 0.0     ! (mm/yr)/m floor
+
+  !--- accumulation  acc = c0 * f_lat(phi) * exp(-d_in_km / L_acc) ---
+  c0           = 150.0 ! mm w.e./yr, max (coastal) accumulation at the margin
+  L_acc        = 1000.0! km, e-folding length of inland accumulation decay
+  k_acc_lat    = 0.0   ! frac. accum decrease per deg N beyond phi_acc_ref (0 => off)
+  phi_acc_ref  = 0.0   ! deg N, latitude above which accum starts dropping
+  facc_lat_min = 0.3   ! floor on latitude modifier
+
+  !--- synthetic-elevation profile ---
+  use_plastic = T      ! T => plastic Nye/Vialov; F => linear wedge
+  slope       = 6.09e-3! m/m, linear inside (use_plastic=F)
+  tau0        = 36.0e3 ! Pa, plastic basal yield stress
+  slope_out   = 6.09e-3! m/m, linear outside ramp
+  z_max_in    = 2500.0 ! m, inside cap
+  z_max_out   = 200.0  ! m, outside floor
+  rho_ice     = 910.0  ! kg/m3
+  g           = 9.81   ! m/s2
+
+  !--- surface temperature  t_srf = t_sl - gamma_t*max(z_syn, 0) ---
+  gamma_t   = 6.5e-3   ! K/m lapse rate
+  t_ice_max = 273.15   ! K, clamp over ice-covered cells
+
+  !--- outside-mask SMB floor (must be <= 0) ---
+  smb_min = -2000.0    ! mm w.e./yr
+/

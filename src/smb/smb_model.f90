@@ -50,7 +50,7 @@ module smb_model
 
   use topo_mod, only : topo_filter, topo_grad_map, topo_factors
   use ice_mod, only : frac_ice, albedo_ice, margin_ice
-  use smb_simple_m, only : smb_simple
+  use smb_simple_m, only : smb_simple_init, smb_simple_set_mask, smb_simple_update
   use smb_pdd_m, only : smb_pdd
   use semi_m, only : semi
   use smb_bias_corr_mod, only : smb_ref_write, smb_bias_corr, t2m_bias_corr, prc_bias_corr
@@ -661,6 +661,9 @@ contains
 
   if (i_smb==3) then
 
+    ! during the year, smb%t_ice accumulates the annual-mean SEA-LEVEL
+    ! temperature [K] (input t_sl for the simple scheme). At end of year it is
+    ! overwritten with the scheme's surface temperature t_srf [degC].
     if (time_soy_smb) smb%t_ice(:,:) = 0._wp
 
     if (time_eom_smb) then
@@ -669,17 +672,24 @@ contains
       ! map temperature from low to high resolution grid
       call map_scrip_field(smb%maps_cmn_to_ice,"t2m",smb_in%t2m, smb%t2m_i,method="mean",missing_value=-9999._dp)
 
-      ! 2m temperature at ice sheet elevation
+      ! 2m temperature at ice sheet elevation (diagnostic)
       smb%t2m(:,:) = smb%t2m_i(:,:) + gamma*(smb%z_sur_i(:,:)-smb%z_sur_eff(:,:))
 
-      ! annual average temperature
-      smb%t_ice(:,:) = smb%t_ice(:,:) + (smb%t2m(:,:)-T0)/real(nmon_year,wp)    ! degC
+      ! accumulate annual-mean sea-level temperature [K]
+      ! (reduce t2m_i from the atmosphere mean elevation z_sur_i to z=0)
+      smb%t_ice(:,:) = smb%t_ice(:,:) + (smb%t2m_i(:,:) + gamma*smb%z_sur_i(:,:))/real(nmon_year,wp)    ! K
 
       if (time_eoy_smb) then
         !-------------------------------------
-        ! surface mass balance 
-        call smb_simple(smb%grid, smb_in%co2, smb_in%Smax65N, smb%mask_maxice, smb%z_sur_eff, smb%dz_dx_sur, smb%dz_dy_sur, &   ! in
-          smb%ann_smb)      ! out
+        ! surface mass balance (synthetic-elevation simple scheme)
+        ! feed live coupled climate (CO2 and 65N summer insolation)
+        smb%smbsimple%co2 = real(smb_in%co2,wp)
+        smb%smbsimple%f   = real(smb_in%Smax65N,wp)
+        ! at this point smb%t_ice holds the annual-mean sea-level temperature [K]
+        call smb_simple_update(smb%smbsimple, smb%z_sur_eff, smb%t_ice)   ! in: z_srf, t_sl
+
+        smb%ann_smb(:,:) = smb%smbsimple%smb(:,:)            ! mm w.e./yr == kg/m2/yr
+        smb%t_ice(:,:)   = smb%smbsimple%t_srf(:,:) - T0     ! K -> degC (ice-surface temperature)
 
         ! set to zero, not available for this SMB scheme
         smb%mon_runoff(:,:,:) = 0._wp
@@ -810,6 +820,17 @@ contains
 
       smb%mask_maxice(:,:) = 1
 
+    endif
+
+    !-------------------------------------
+    ! simple SMB scheme (synthetic-elevation, forced toward a target geometry)
+    if (i_smb==3) then
+      ! load settings + syn parameters and store the (static) ice grid
+      call smb_simple_init(smb%smbsimple, trim(out_dir)//"/smb_par.nml", &
+        smb%grid%x, smb%grid%y, smb%grid%lat, group="smb_simple", units="km")
+      ! target mask: maximum ice extent (already read + mapped to the ice grid).
+      ! An optional mask_file in the &smb_simple namelist overrides this.
+      call smb_simple_set_mask(smb%smbsimple, real(smb%mask_maxice,wp))
     endif
 
 
