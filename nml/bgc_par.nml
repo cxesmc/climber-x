@@ -230,7 +230,16 @@
                                 ! 3 = solid sediment material is added as precipitation flux to neighboring wet cells
 
     !----------------------------------------------------------------------------
-    ! preformed tracers 
+    ! upward sediment shift + deep geological reservoir 
+    !----------------------------------------------------------------------------
+    l_sed_upward_shift = T         ! allow upward sediment shift?
+    deep_res_volfrac   = 0.0, 0.0, 0.0, 1.0   ! deep-reservoir solid volume fractions (issso12,isssc12,issssil,issster); must sum to 1
+    deep_res_d13c_org  = -25.0     ! permil, delta13C of POC drawn from deep reservoir
+    deep_res_d13c_calc = 2.0       ! permil, delta13C of CaCO3 drawn from deep reservoir
+    deep_res_d14c      = -1000.0   ! permil, Delta14C (radiocarbon-dead) of material drawn from deep reservoir
+
+    !----------------------------------------------------------------------------
+    ! preformed tracers
     !----------------------------------------------------------------------------
     l_preformed_tracers = T     ! enable preformed tracers
 
