@@ -223,11 +223,12 @@
     disso_opal = 0.005          ! (kmol Si(OH)4/m3)-1 d-1, Dissolution rate constant of opal, 0.002592 in HAMOCC
     disso_calc = 0.02           ! (kmol CO3--/m3)-1 d-1, Dissolution rate constant of CaCO3, 0.00864 used in HAMOCC
     diff_porwat = 1e-9          ! m2/s, pore water diffusivity, 1e-9 in HAMOCC, ~1e-13 in Archer 2002 / Kobayashi 2018
-    i_sed_dry = 0               ! how to treat sediment material when cell becomes dry:
-                                ! 0 = do nothing, forget about solid sediment
-                                ! 1 = dissolve sediment material into the ocean when grid cell becomes dry
-                                ! 2 = dissolve only organic carbon from sediments (with associated nutrients) into the ocean when grid cell becomes dry
-                                ! 3 = solid sediment material is added as precipitation flux to neighboring wet cells
+    l_burial_preserve = T       ! preserve the consolidated burial pool of a drying cell in a dormant store and restore it on re-flooding?
+                                ! T: only the active sediment layer follows i_sed_dry below; the burial pool is kept (as rock) and restored
+                                ! F: the burial pool is eroded together with the active layer according to i_sed_dry
+    i_sed_dry = 0               ! how to treat the eroded ACTIVE sediment layer (and, if l_burial_preserve=F, also the burial pool) when a cell becomes dry:
+                                ! 0 = wash all solid material offshore as precipitation flux to the wet ocean, preserving every solid phase (no dissolution)
+                                ! 1 = most realistic: oxidize organic carbon to DOC in the surface ocean (releasing its nutrients) and wash carbonate/opal/clay offshore as precipitation flux
 
     !----------------------------------------------------------------------------
     ! upward sediment shift + deep geological reservoir 
