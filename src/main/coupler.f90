@@ -204,8 +204,9 @@ module coupler
       real(wp), dimension(:,:),   allocatable :: z_lake  !! mean surface elevation of lakes [m]
       real(wp), dimension(:,:),   allocatable :: z_sur_smooth_std   !! standard deviation of smoothed surface elevation of grid cell [m]
       real(wp), dimension(:,:),   allocatable :: z_veg_std   !! standard deviation of surface elevation of grid cell, ice-free land only [m]
-      real(wp), dimension(:,:,:), allocatable :: coral_f_area  !! ocean hypsometry for corals []
-      real(wp), dimension(:,:,:), allocatable :: coral_f_topo  !! topography factor for corals []
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_fine  !! coral-zone hypsometry: area fraction per depth bin (top photic zone) []
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_topo  !! coral seabed-slope (reef-suitability) factor per depth bin []
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_depth  !! sub-grid seafloor hypsometry: area fraction per fixed depth bin (for sediments) []
       integer, dimension(:,:),    allocatable :: coast_nbr     !! number of neighbors of coastal cells []
       integer, dimension(:,:,:),  allocatable :: i_coast_nbr     !! i index of neighbors of coastal cells []
       integer, dimension(:,:,:),  allocatable :: j_coast_nbr     !! j index of neighbors of coastal cells []
@@ -1636,6 +1637,10 @@ contains
   ! Purpose    :  from common grid (and ocean) to bgc
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine cmn_to_bgc(cmn,ocn,bgc)
+
+    use hypso_topo_mod, only : n_hypso, hypso_depth_centre, n_coral_fine, dz_coral
+    use bgc_params, only : l_sed_hypsometry, pk490
+
     type(cmn_class), intent(inout) :: cmn
     type(ocn_class), intent(in) :: ocn
     type(bgc_class), intent(inout) :: bgc
@@ -1645,6 +1650,8 @@ contains
     real(wp) :: avg, albedo
     real(wp) :: runoff_tot
     real(wp) :: runoff_weight
+    integer :: b, k, kb, kc, lev
+    real(wp) :: depth_b, ssum
 
 
     ! get updated grid from ocean
@@ -1660,10 +1667,59 @@ contains
       bgc%grid%layer_thk(1:maxk)     = ocn%grid%dz(maxk:1:-1)
       bgc%grid%level_depth(1:maxk+1) = -ocn%grid%zw(maxk:0:-1)
       bgc%grid%layer_depth(1:maxk)   = -ocn%grid%zro(maxk:1:-1)
-      bgc%grid%coral_f_area = cmn%coral_f_area(:,:,nint(cmn%sea_level)-50:nint(cmn%sea_level)-1) ! top 50 m of ocean considering sea level
-      ! todo
-      bgc%grid%coral_f_topo = cmn%coral_f_topo(:,:,nint(cmn%sea_level)-50:nint(cmn%sea_level)-1) ! top 50 m of ocean considering sea level
+      ! coral hypsometry, depth-binned 1..n_coral_fine (bin lev = depth bin ((lev-1)*dz_coral, lev*dz_coral]). 
+      ! coral_f_lev is the light fraction at bin centres.
+      if (.not.allocated(bgc%grid%coral_f_area)) then
+        allocate(bgc%grid%coral_f_area(ni,nj,n_coral_fine))
+        allocate(bgc%grid%coral_f_topo(ni,nj,n_coral_fine))
+        allocate(bgc%grid%coral_f_lev(n_coral_fine))
+        do lev=1,n_coral_fine
+          bgc%grid%coral_f_lev(lev) = exp(-pk490*(real(lev,wp)-0.5_wp)*dz_coral)
+        enddo
+      endif
+      bgc%grid%coral_f_area = cmn%hypso_f_fine
+      bgc%grid%coral_f_topo = cmn%hypso_f_topo
       bgc%A_shelf = cmn%A_shelf
+
+      ! sub-grid seafloor hypsometry: re-bin the fixed-datum elevation histogram
+      ! into the current ocean levels, given the present sea level and the
+      ! (volume-rescaled) level edges level_depth, to obtain the fraction of
+      ! each cell's wet seafloor area in each depth class (1 class per level).
+      ! Normalised so that the wet classes 1..kbo sum to 1; multiplied by
+      ! ocn_area elsewhere this gives consistent per-class seafloor areas.
+      bgc%grid%f_sed_lev_old = bgc%grid%f_sed_lev   ! keep last year's distribution for the sediment area-change handler
+      bgc%grid%f_sed_lev = 0._wp
+      do j=1,bgc%grid%nj
+        do i=1,bgc%grid%ni
+          kb = bgc%grid%kbo(i,j)
+          if (kb<=0) cycle   ! land / non-ocean column
+          if (l_sed_hypsometry) then
+            do b=1,n_hypso
+              ! depth of this bin below the current sea surface (z_bed referenced)
+              depth_b = hypso_depth_centre(b)
+              ! assign to the shallowest ocean level whose lower edge is below it;
+              ! beds deeper than the column bottom collapse into the bottom class
+              kc = kb
+              do k=1,kb
+                if (depth_b<=bgc%grid%level_depth(k+1)) then
+                  kc = k
+                  exit
+                endif
+              enddo
+              bgc%grid%f_sed_lev(i,j,kc) = bgc%grid%f_sed_lev(i,j,kc) + cmn%hypso_f_depth(i,j,b)
+            enddo
+            ssum = sum(bgc%grid%f_sed_lev(i,j,1:kb))
+            if (ssum>0._wp) then
+              bgc%grid%f_sed_lev(i,j,1:kb) = bgc%grid%f_sed_lev(i,j,1:kb)/ssum
+            else
+              bgc%grid%f_sed_lev(i,j,kb) = 1._wp   ! fallback: all at bottom cell
+            endif
+          else
+            ! single sediment class at the bottom cell (kbo)
+            bgc%grid%f_sed_lev(i,j,kb) = 1._wp
+          endif
+        enddo
+      enddo
     endif
 
     ! atmospheric CO2
@@ -1900,7 +1956,7 @@ contains
     type(cmn_class), intent(inout) :: cmn
     type(ocn_class), intent(inout) :: ocn
 
-    integer :: i, j, n, l
+    integer :: i, j, n, l, kc
     real(wp) :: cal, sil, tot
     real(wp) :: avg
 
@@ -1917,10 +1973,13 @@ contains
         cmn%delta_C14_ocn_2d(i,j) = bgc%bgc_1d(n)%delta_C14 ! kgC14/s
         if (time_eoy_bgc) then
           ! carbonate fraction in buried sediments needed for weathering on shelf
-          cal = bgc%bgc_1d(n)%sed%burial(isssc12) * 3.85e-2_wp  ! calcium carbonate
-          sil = bgc%bgc_1d(n)%sed%burial(issssil) * 2.73e-2_wp  ! silicate
-          !org = bgc%bgc_1d(n)%sed%burial(issso12) * 3.e-2_wp    ! organic carbon
-          !cla = bgc%bgc_1d(n)%sed%burial(issster) * 3.85e-4_wp  ! clay
+          ! (area-weighted over the sediment depth classes)
+          cal = 0._wp
+          sil = 0._wp
+          do kc=1,bgc%grid%nk
+            cal = cal + bgc%grid%f_sed_lev(i,j,kc)*bgc%bgc_1d(n)%sed(kc)%burial(isssc12) * 3.85e-2_wp  ! calcium carbonate
+            sil = sil + bgc%grid%f_sed_lev(i,j,kc)*bgc%bgc_1d(n)%sed(kc)%burial(issssil) * 2.73e-2_wp  ! silicate
+          enddo
           tot = cal + sil ! total weight
           if (tot.gt.0._wp) then
             cmn%f_carb(i,j) = cal/tot
@@ -3281,15 +3340,19 @@ contains
 
     ! for corals
     if (flag_bgc) then
-      do k=-250,50
-        where (cmn%f_ocn.gt.0._wp) 
-          cmn%coral_f_area(:,:,k) = geo%coral_f_area(:,:,k) / cmn%f_ocn
-          cmn%coral_f_topo(:,:,k) = geo%coral_f_topo(:,:,k)
+      do k=1,size(cmn%hypso_f_fine,3)
+        where (cmn%f_ocn.gt.0._wp)
+          ! coral-zone hypsometry, as fraction of the ocean part of the cell
+          cmn%hypso_f_fine(:,:,k) = geo%hypso_f_fine(:,:,k) / cmn%f_ocn
+          ! coral seabed-slope (reef-suitability) factor, depth-binned 
+          cmn%hypso_f_topo(:,:,k) = geo%hypso_f_topo(:,:,k)
         elsewhere
-          cmn%coral_f_area(:,:,k) = 0._wp
-          cmn%coral_f_topo(:,:,k) = 0._wp
+          cmn%hypso_f_fine(:,:,k) = 0._wp
+          cmn%hypso_f_topo(:,:,k) = 0._wp
         endwhere
       enddo
+      ! sub-grid seafloor hypsometry for the sediments 
+      cmn%hypso_f_depth = geo%hypso_f_depth
     endif
 
     ! geothermal heat flux
@@ -4354,12 +4417,14 @@ contains
 
   subroutine cmn_alloc(cmn)
 
+    use hypso_topo_mod, only : n_hypso, n_coral_fine
+
     implicit none
 
     type(cmn_class) :: cmn
 
 
-    allocate(cmn%delta_C_lnd_2d(ni,nj)) 
+    allocate(cmn%delta_C_lnd_2d(ni,nj))
     allocate(cmn%delta_C13_lnd_2d(ni,nj)) 
     allocate(cmn%delta_C14_lnd_2d(ni,nj)) 
     allocate(cmn%delta_C_ocn_2d(ni,nj))  
@@ -4400,8 +4465,9 @@ contains
     allocate(cmn%z_veg_std(ni,nj))    
     allocate(cmn%f_stp(ni,nj,nsurf))
     allocate(cmn%f_astp(ni,nj,nsurf_macro))
-    allocate(cmn%coral_f_area(ni,nj,-250:50))
-    allocate(cmn%coral_f_topo(ni,nj,-250:50))
+    allocate(cmn%hypso_f_fine(ni,nj,n_coral_fine))
+    allocate(cmn%hypso_f_topo(ni,nj,n_coral_fine))
+    allocate(cmn%hypso_f_depth(ni,nj,n_hypso))
     allocate(cmn%q_geo(ni,nj))
     allocate(cmn%sst(ni,nj))
     allocate(cmn%sss(ni,nj))

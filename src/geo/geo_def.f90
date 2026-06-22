@@ -129,8 +129,9 @@ module geo_def
       integer, dimension(:,:,:), allocatable :: i_coast_nbr     !! i index of neighbors of coastal cells []
       integer, dimension(:,:,:), allocatable :: j_coast_nbr     !! j index of neighbors of coastal cells []
       integer, dimension(:,:), allocatable :: coast_nbr     !! number of coastal cell neighbors []
-      real(wp), dimension(:,:,:), allocatable :: coral_f_area
-      real(wp), dimension(:,:,:), allocatable :: coral_f_topo
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_depth   !! sub-grid seafloor hypsometry: area fraction per coarse depth bin (sediments)
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_fine    !! sub-grid seafloor hypsometry: area fraction per 1 m depth bin in the coral photic zone
+      real(wp), dimension(:,:,:), allocatable :: hypso_f_topo    !! coral seabed-slope (reef-suitability) factor per 1 m depth bin
       real(wp), dimension(:,:), allocatable :: q_geo     !! geothermal_heat flux [W/m2]
       type(hires_type) :: hires
       integer :: n_lakes !! number of lakes

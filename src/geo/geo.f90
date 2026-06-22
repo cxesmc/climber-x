@@ -58,7 +58,7 @@ module geo_mod
   use hires_to_lowres_mod, only : hires_to_lowres
   use coast_cells_mod, only : coast_cells
   use drainage_basins_mod, only : drainage_basins
-  use corals_topo_mod, only : corals_topo
+  use hypso_topo_mod, only : hypso_topo, hypso_topo_factor, n_hypso, n_coral_fine, n_topo_update
   !$ use omp_lib
 
   implicit none
@@ -90,6 +90,7 @@ contains
     real(wp) :: dlon_rel, dlat_rel
     character(len=256) :: fnm
     logical :: l_coral_exist
+    logical :: l_hypso_exist
     real(wp), dimension(:), allocatable :: lon_rel
     real(wp), dimension(:), allocatable :: lat_rel
     integer, dimension(:), allocatable :: mask_cell
@@ -187,8 +188,9 @@ contains
     allocate(geo%drain_basins_ocn(ni,nj))
     allocate(geo%idivide_pac_atl(nj))
     allocate(geo%idivide_atl_indpac(nj))
-    allocate(geo%coral_f_area(ni,nj,-250:50))
-    allocate(geo%coral_f_topo(ni,nj,-250:50))
+    allocate(geo%hypso_f_depth(ni,nj,n_hypso))
+    allocate(geo%hypso_f_fine(ni,nj,n_coral_fine))
+    allocate(geo%hypso_f_topo(ni,nj,n_coral_fine))
     allocate(geo%q_geo(ni,nj))
 
     !-------------------------------------------------------------------
@@ -528,39 +530,12 @@ contains
     endif
 
     !-------------------------------------------------------------------
-    ! topography factor for corals (Kleypas 1997)
+    ! sub-grid seafloor hypsometry for the marine sediments and corals
     !-------------------------------------------------------------------
 
     if (flag_bgc) then
-
-      fnm = trim(in_dir)//"corals_"//trim(geo_ref_file(7:))
-      inquire( file=fnm, exist=l_coral_exist ) 
-      if (.not.l_coral_exist) then  
-
-        ! recompute only if coral file does not exist (has not been generated during previous runs)
-        call corals_topo(geo%hires%z_topo_ref, &  ! in
-          geo%coral_f_area, geo%coral_f_topo)    ! out
-
-        ! write coral topographic variables to netcdf file
-        print *,'create new coral file: ',trim(fnm)
-        call nc_create(fnm)
-        call nc_write_dim(fnm,dim_lon,x=lon,axis="x")
-        call nc_write_dim(fnm,dim_lat,x=lat,axis="y")
-        call nc_write_dim(fnm,dim_depth,x=-250._wp,dx=1._wp,nx=301,units="m",axis="z")
-        call nc_write_dim(fnm,dim_lon1,x=lon_topo,axis="x")
-        call nc_write_dim(fnm,dim_lat1,x=lat_topo,axis="y")
-        call nc_write(fnm,"coral_f_area",geo%coral_f_area,  dims=[dim_lon,dim_lat,dim_depth],start=[1,1,1],count=[ni,nj,301])
-        call nc_write(fnm,"coral_f_topo",geo%coral_f_topo,  dims=[dim_lon,dim_lat,dim_depth],start=[1,1,1],count=[ni,nj,301])
-
-      else
-
-        ! read from existing netcdf file
-        print *,'read from existing coral file: ',trim(fnm)
-        call nc_read(trim(fnm),"coral_f_area",geo%coral_f_area)
-        call nc_read(trim(fnm),"coral_f_topo",geo%coral_f_topo)
-
-      endif
-
+      call hypso_topo(geo%hires%z_bed, geo%hypso_f_depth, geo%hypso_f_fine)
+      call hypso_topo_factor(geo%hires%z_bed, geo%hypso_f_topo)
     endif
 
     !-------------------------------------------------------------------
@@ -611,6 +586,7 @@ contains
   logical :: l_was_ice_grd
   real(wp) :: A_bering, dx
   logical, save :: firstcall = .true.
+  integer, save :: n_hypso_topo_call = 0
 
   !$ real(wp) :: time1,time2
 
@@ -959,6 +935,18 @@ contains
   !-------------------------------------------------------------------
   geo%A_shelf = sum(geo%hires%grid%area, mask = geo%hires%z_bed>=-100._wp .and. geo%hires%z_bed<=0._wp)
 
+  !-------------------------------------------------------------------
+  ! update sub-grid seafloor hypsometry for the marine sediments and corals
+  ! from the current (sea-level-referenced) bed topography. 
+  !-------------------------------------------------------------------
+  if (flag_bgc) then
+    call hypso_topo(geo%hires%z_bed, geo%hypso_f_depth, geo%hypso_f_fine)
+    n_hypso_topo_call = n_hypso_topo_call + 1
+    if (mod(n_hypso_topo_call,n_topo_update)==0) then
+      call hypso_topo_factor(geo%hires%z_bed, geo%hypso_f_topo)
+    endif
+  endif
+
   if (firstcall) firstcall = .false.
 
 
@@ -1071,8 +1059,9 @@ contains
     deallocate(geo%drain_basins_ocn)
     deallocate(geo%idivide_pac_atl)
     deallocate(geo%idivide_atl_indpac)
-    deallocate(geo%coral_f_area)
-    deallocate(geo%coral_f_topo)
+    deallocate(geo%hypso_f_depth)
+    deallocate(geo%hypso_f_fine)
+    deallocate(geo%hypso_f_topo)
     deallocate(geo%q_geo)
 
 

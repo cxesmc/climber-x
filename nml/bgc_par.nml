@@ -73,6 +73,10 @@
     ! corals
     !----------------------------------------------------------------------------
     l_corals = F    ! flag for shallow water carbonate sedimentation, coral reefs
+    l_coral_omega = T      ! scale coral CaCO3 production by the aragonite saturation state (Omega)?
+    omega_arag_ref = 3.5   ! aragonite saturation state at which the coral factor = 1 (calibration, ~present-day surface)
+    omega_arag_crit = 1.0  ! aragonite saturation state below which coral calcification stops
+    omega_arag_fmax = 2.0  ! cap on the saturation factor (max enhancement at high Omega)
     l_pa_th = F     ! enable Pa-231 / Th-230 reversible-scavenging tracers?
     k_des       = 4.0    ! desorption rate [1/yr] (2.4 in Rempfer 2017, 4.0 in Scheen 2025)
     sigma_pa_poc  = 0.005   ! m2/mol C, Pa cross-section on POC
@@ -229,9 +233,13 @@
     i_sed_dry = 0               ! how to treat the eroded ACTIVE sediment layer (and, if l_burial_preserve=F, also the burial pool) when a cell becomes dry:
                                 ! 0 = wash all solid material offshore as precipitation flux to the wet ocean, preserving every solid phase (no dissolution)
                                 ! 1 = most realistic: oxidize organic carbon to DOC in the surface ocean (releasing its nutrients) and wash carbonate/opal/clay offshore as precipitation flux
+    l_sed_hypsometry = F        ! resolve sub-grid hypsometry of the sediments (one sediment column per ocean level that holds seafloor area)?
+                                ! T: sinking flux is intercepted at its true depth; shelf vs deep burial/preservation differ and respond to sea level
+                                ! F: single sediment column at the bottom cell (kbo)
+    shelf_deep_depth = 2000.    ! m, depth separating "shelf/margin" from "deep ocean" in the burial/flux diagnostics (true shelf break is ~200 m; 2000 m lumps the continental slope with the shelf)
 
     !----------------------------------------------------------------------------
-    ! upward sediment shift + deep geological reservoir 
+    ! upward sediment shift + deep geological reservoir
     !----------------------------------------------------------------------------
     l_sed_upward_shift = T         ! allow upward sediment shift?
     deep_res_volfrac   = 0.0, 0.0, 0.0, 1.0   ! deep-reservoir solid volume fractions (issso12,isssc12,issssil,issster); must sum to 1
@@ -255,6 +263,7 @@
     l_isodiff = T
 
     l_output_3d_mon = F ! write monthly 3D output?
+    l_write_sed_classes = F     ! write additional per-depth-class sediment diagnostics to the bgc sediment output (only meaningful with l_sed_hypsometry=T)
 
 
 /
