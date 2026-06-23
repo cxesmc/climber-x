@@ -51,6 +51,7 @@ module dim_name
   character(len=len), parameter :: dim_depth0l = "depth0l"
   character(len=len), parameter :: dim_depth1 = "depth1"
   character(len=len), parameter :: dim_depth_sed = "depth_sed"
+  character(len=len), parameter :: dim_sedclass = "sedclass"
   character(len=len), parameter :: dim_depth_eu = "depth_eu"
   character(len=len), parameter :: dim_isles = "isles"
   character(len=len), parameter :: dim_kc = "kc"

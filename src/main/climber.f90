@@ -802,7 +802,8 @@ subroutine write_restart(restart_out_dir, year_now)
   if (year_now.ne.9999) call geo_write_restart(trim(rest_dir),trim(rest_dir)//"/geo_restart.nc",geo)
   if (flag_atm) call atm_write_restart(trim(rest_dir)//"/atm_restart.nc",atm)
   if (flag_ocn) call ocn_write_restart(trim(rest_dir)//"/ocn_restart.nc",ocn)
-  if (flag_bgc) call bgc_write_restart(trim(rest_dir)//"/bgc_restart.nc",bgc)
+  if (flag_bgc) call bgc_write_restart(trim(rest_dir)//"/bgc_restart.nc", &
+                                       trim(rest_dir)//"/sed_restart.nc",bgc)
   if (flag_sic) call sic_write_restart(trim(rest_dir)//"/sic_restart.nc",sic)
   if (flag_lnd) call lnd_write_restart(trim(rest_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
   if (flag_smb) then

@@ -88,7 +88,7 @@ obj_co2 = $(patsubst %, $(objdir)/%, $(tmp_co2) )
 dir_geo = $(srcdir)/geo/
 files_geo = geo_params.f90 geo_grid.f90 geo_def.f90 runoff_routing.f90 lakes.f90 fill_ocean.f90 topo_filter.f90 topo_fill.f90 \
 						connect_ocn.f90 vilma.f90 gia.f90 q_geo.f90 sed.f90 \
-						corals_topo.f90 fix_runoff.f90 hires_to_lowres.f90 coast_cells.f90 drainage_basins.f90 geo.f90 geo_out.f90
+						hypso_topo.f90 fix_runoff.f90 hires_to_lowres.f90 coast_cells.f90 drainage_basins.f90 geo.f90 geo_out.f90
 tmp_geo = $(patsubst %.f90, %.o, $(files_geo) )
 obj_geo = $(patsubst %, $(objdir)/%, $(tmp_geo) )
 ########################################################################
@@ -796,7 +796,7 @@ $(objdir)/geo.o : $(dir_geo)geo.f90 $(objdir)/climber_grid.o $(objdir)/control.o
 	$(objdir)/geo_params.o $(objdir)/geo_grid.o $(objdir)/geo_def.o \
 	$(objdir)/runoff_routing.o $(objdir)/lakes.o $(objdir)/fill_ocean.o $(objdir)/topo_filter.o $(objdir)/topo_fill.o $(objdir)/connect_ocn.o \
 	$(objdir)/q_geo.o $(objdir)/sed.o $(objdir)/vilma.o $(objdir)/gia.o $(objdir)/fix_runoff.o \
-	$(objdir)/hires_to_lowres.o $(objdir)/corals_topo.o $(objdir)/coast_cells.o $(objdir)/drainage_basins.o
+	$(objdir)/hires_to_lowres.o $(objdir)/hypso_topo.o $(objdir)/coast_cells.o $(objdir)/drainage_basins.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/vilma.o : $(dir_geo)vilma.F90
@@ -814,7 +814,7 @@ $(objdir)/q_geo.o : $(dir_geo)q_geo.f90
 $(objdir)/sed.o : $(dir_geo)sed.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/corals_topo.o : $(dir_geo)corals_topo.f90 
+$(objdir)/hypso_topo.o : $(dir_geo)hypso_topo.f90 $(objdir)/geo_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/fix_runoff.o : $(dir_geo)fix_runoff.f90 
