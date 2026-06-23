@@ -29,6 +29,7 @@ module smb_def
     use coord, only : grid_class
     use coord, only : map_class, map_scrip_class
     use timer, only : nmon_year, nday_year
+    use smb_simple_m, only : smb_simple_class
 
     implicit none
 
@@ -260,6 +261,8 @@ module smb_def
       type(map_scrip_class) :: maps_from_latlon
 
       type(simple_smb_class) :: simple
+
+      type(smb_simple_class) :: smbsimple   !! synthetic-elevation simple SMB scheme (i_smb==3)
 
       integer :: ncells                                        !! total number of active smb columns
       integer, dimension(:), allocatable :: idx_cell_active    !! index of active smb cells
