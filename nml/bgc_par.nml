@@ -233,7 +233,7 @@
     i_sed_dry = 0               ! how to treat the eroded ACTIVE sediment layer (and, if l_burial_preserve=F, also the burial pool) when a cell becomes dry:
                                 ! 0 = wash all solid material offshore as precipitation flux to the wet ocean, preserving every solid phase (no dissolution)
                                 ! 1 = most realistic: oxidize organic carbon to DOC in the surface ocean (releasing its nutrients) and wash carbonate/opal/clay offshore as precipitation flux
-    l_sed_hypsometry = F        ! resolve sub-grid hypsometry of the sediments (one sediment column per ocean level that holds seafloor area)?
+    l_sed_hypsometry = T        ! resolve sub-grid hypsometry of the sediments (one sediment column per ocean level that holds seafloor area)?
                                 ! T: sinking flux is intercepted at its true depth; shelf vs deep burial/preservation differ and respond to sea level
                                 ! F: single sediment column at the bottom cell (kbo)
     shelf_deep_depth = 2000.    ! m, depth separating "shelf/margin" from "deep ocean" in the burial/flux diagnostics (true shelf break is ~200 m; 2000 m lumps the continental slope with the shelf)
