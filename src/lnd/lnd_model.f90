@@ -117,7 +117,8 @@ contains
     endif
 
     !$omp parallel do &
-    !$omp private ( i, j, n)
+    !$omp private ( i, j, n) &
+    !$omp schedule(dynamic,8)
     do n=1,lnd%ncells
       i = lnd%ij_1d(1,n)
       j = lnd%ij_1d(2,n)

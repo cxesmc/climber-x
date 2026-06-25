@@ -43,21 +43,24 @@ contains
   !   Subroutine :  u b a r s o l v
   !   Purpose    :  calculate barotropic velocity on c grid
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ubarsolv(ratm,gap, &
+  subroutine ubarsolv(Lband,Uband,Udiag, &
                       gb, &
                       ub,psi)
 
     implicit none
 
-    real(wp), dimension(:,:), intent(in) :: ratm
-    real(wp), dimension(:,:), intent(in) :: gap
+    ! contiguous band storage of the LU factors (built once in momentum from ratm/gap):
+    !   Lband(off,i) = ratm(i+off,off) ; Uband(off,i) = gap(i,n+2+off) ; Udiag(i) = gap(i,n+2)
+    real(wp), dimension(:,:), intent(in) :: Lband
+    real(wp), dimension(:,:), intent(in) :: Uband
+    real(wp), dimension(:),   intent(in) :: Udiag
 
     real(wp), dimension(:), intent(inout) :: gb
 
     real(wp), dimension(:,0:,0:), intent(out) :: ub
     real(wp), dimension(0:,0:), intent(out) :: psi
 
-    integer i, j, k, n, m, km, im
+    integer i, j, k, n, m, km, im, off
 
 
     n = maxi
@@ -65,21 +68,21 @@ contains
 
     ! solve Psi equation
 
-!    !$omp parallel do private(i,j,im)
+    ! forward substitution: gb(i+1:im) -= gb(i)*Lband(1:im-i,i) 
     do i=1,n*m-1
        im = min(i+n+1,n*m)
-       do j=i+1,im
-          gb(j) = gb(j) - ratm(j,j-i)*gb(i)
+       do off=1,im-i
+          gb(i+off) = gb(i+off) - Lband(off,i)*gb(i)
        enddo
     enddo
-!    !$omp end parallel do
-    gb(n*m) = gb(n*m)/gap(n*m,n+2)
+    ! back substitution: unit-stride dot product over the upper band
+    gb(n*m) = gb(n*m)/Udiag(n*m)
     do i=n*m-1,1,-1
        km=min(n+1,n*m-i)
        do k=1,km
-          gb(i)=gb(i) - gap(i,n+2+k)*gb(i+k)
+          gb(i)=gb(i) - Uband(k,i)*gb(i+k)
        enddo
-       gb(i)=gb(i)/gap(i,n+2) ! kg/s
+       gb(i)=gb(i)/Udiag(i) ! kg/s
     enddo
 
     ! write to Psi for convenience

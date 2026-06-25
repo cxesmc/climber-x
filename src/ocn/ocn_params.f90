@@ -87,7 +87,6 @@ module ocn_params
      integer :: i_conv_shuffle
      logical :: l_conv_shuffle_passive
      logical :: l_mix_bgc_all
-     logical :: l_mld
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
      real(wp) :: drhcor_max
@@ -277,7 +276,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","l_conv_shuffle_passive",l_conv_shuffle_passive)
     call nml_read(filename,"ocn_par","l_mix_bgc_all",l_mix_bgc_all)
 
-    call nml_read(filename,"ocn_par","l_mld",l_mld)
     call nml_read(filename,"ocn_par","pe_buoy_coeff",pe_buoy_coeff)
     call nml_read(filename,"ocn_par","ke_tau_coeff",ke_tau_coeff)
     call nml_read(filename,"ocn_par","ke_wind_dec",ke_wind_dec)

@@ -62,6 +62,11 @@ module momentum_mod
   real(wp), allocatable :: gb(:)
   real(wp), allocatable :: bp(:,:,:)
   real(wp), allocatable :: gap(:,:)
+  ! contiguous band-storage copies of the LU factors used by ubarsolv (built once per mask
+  ! update from ratm/gap), so the per-step substitutions are unit-stride
+  real(wp), allocatable :: Lband(:,:)   ! lower factors,  Lband(off,i) = ratm(i+off,off)
+  real(wp), allocatable :: Uband(:,:)   ! upper factors,  Uband(off,i) = gap(i,n+2+off)
+  real(wp), allocatable :: Udiag(:)     ! diagonal,        Udiag(i)    = gap(i,n+2)
   real(wp), allocatable :: psisl(:,:,:)
   real(wp), allocatable :: ubisl(:,:,:,:)
   real(wp), allocatable :: erisl(:,:)
@@ -147,7 +152,7 @@ contains
     enddo
 
     !$ time1 = omp_get_wtime()
-    call ubarsolv(ratm,gap, &
+    call ubarsolv(Lband,Uband,Udiag, &
                   gb, &
                   ub,psi)
     !$ time2 = omp_get_wtime()
@@ -235,6 +240,7 @@ contains
 
     integer :: i, j, l, isl, isol
     integer :: i1, i1p, j1, ii, ip1
+    integer :: n_band, nm_band, off
     real(wp) :: tmp, min_dep, dep_fac, topo_fac, min_frac
 
 
@@ -333,6 +339,19 @@ contains
 
     call invert(gap,ratm)
 
+    ! repack the banded LU factors into contiguous band storage so the per-step ubarsolv
+    ! substitutions are unit-stride (cache- and SIMD-friendly). done once per mask update;
+    ! the arithmetic is unchanged, only the memory layout differs
+    n_band  = mpxi
+    nm_band = mpxi*mpxj
+    do i=1,nm_band
+      Udiag(i) = gap(i,n_band+2)
+      do off=1,min(n_band+1,nm_band-i)
+        Lband(off,i) = ratm(i+off,off)        ! lower factor (forward substitution)
+        Uband(off,i) = gap(i,n_band+2+off)     ! upper factor (back substitution)
+      enddo
+    enddo
+
     do isol=1,n_isles
 
      ! set source term to 1 on the ith island (i+1th landmass) only
@@ -347,7 +366,7 @@ contains
              endif
           enddo
        enddo
-       call ubarsolv(ratm,gap, &
+       call ubarsolv(Lband,Uband,Udiag, &
                      gb,ubisl(:,:,:,isol),psisl(:,:,isol))
 
        ! find island path integral due to unit source on boundary
@@ -398,6 +417,9 @@ contains
     allocate(ratm(mpxi*mpxj,mpxi+1))
     allocate(gb(mpxi*mpxj))
     allocate(gap(mpxi*mpxj,2*mpxi+3))
+    allocate(Lband(mpxi+1,mpxi*mpxj))
+    allocate(Uband(mpxi+1,mpxi*mpxj))
+    allocate(Udiag(mpxi*mpxj))
     allocate(bp(maxi+1,maxj,maxk))
     allocate(psisl(0:maxi,0:maxj,maxisles))
     allocate(ubisl(2,0:maxi+1,0:maxj,maxisles))

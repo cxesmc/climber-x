@@ -48,7 +48,7 @@ module transport_ocn_mod
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
   use ocn_params, only : slope_max, slope_crit
   use ocn_params, only : diffx_max, diffy_max
-  use ocn_params, only : l_mld, mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
+  use ocn_params, only : mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
 
   use advection_mod, only : advection_upstream, advection_fct
   use diffusion_mod, only : diffusion
@@ -125,31 +125,29 @@ contains
     allocate(mldk(maxi,maxj))
     allocate(pe_layer1(maxi,maxj))
 
-    if (l_mld) then
     !$ time1 = omp_get_wtime()
-       ! before calculating fluxes, calculate energy consumed
-       ! or released in mixing surface forcing over top layer. Needed for
-       ! mld calculation, especially if mixed layer is <1 cell thick.
-       ! NOTE: all energies in this scheme are calculated in units of (Energy/area). Still true?
-       !$omp parallel do collapse(2) private(i,j,mldtstmp,mldrhotmp)
-       do j=1,maxj
-          do i=1,maxi
-            if (mask_ocn(i,j).eq.1) then
-              ! apply surface fluxes and compute new virtual temperature and salinity
-              mldtstmp(1) = ts(i,j,maxk,1)-flx_sur(i,j,1)*dt/dz(maxk)  ! C
-              mldtstmp(2) = ts(i,j,maxk,2)-flx_sur(i,j,2)*dt/dz(maxk)  ! psu
-              mldtstmp(2) = max(0._wp,mldtstmp(2))
-              ! compute new virtual density
-              mldrhotmp = eos(mldtstmp(1),mldtstmp(2),zro(maxk))
-              ! potential energy change induced by mixing the top layer
-              pe_layer1(i,j) = 0.5_wp*g*(mldrhotmp-rho(i,j,maxk))*z2dzg(maxk,maxk) ! J/m2 or kg/s2
-            endif
-          enddo
+    ! before calculating fluxes, calculate energy consumed
+    ! or released in mixing surface forcing over top layer. Needed for
+    ! mld calculation, especially if mixed layer is <1 cell thick.
+    ! NOTE: all energies in this scheme are calculated in units of (Energy/area). Still true?
+    !$omp parallel do collapse(2) private(i,j,mldtstmp,mldrhotmp)
+    do j=1,maxj
+       do i=1,maxi
+         if (mask_ocn(i,j).eq.1) then
+           ! apply surface fluxes and compute new virtual temperature and salinity
+           mldtstmp(1) = ts(i,j,maxk,1)-flx_sur(i,j,1)*dt/dz(maxk)  ! C
+           mldtstmp(2) = ts(i,j,maxk,2)-flx_sur(i,j,2)*dt/dz(maxk)  ! psu
+           mldtstmp(2) = max(0._wp,mldtstmp(2))
+           ! compute new virtual density
+           mldrhotmp = eos(mldtstmp(1),mldtstmp(2),zro(maxk))
+           ! potential energy change induced by mixing the top layer
+           pe_layer1(i,j) = 0.5_wp*g*(mldrhotmp-rho(i,j,maxk))*z2dzg(maxk,maxk) ! J/m2 or kg/s2
+         endif
        enddo
-       !$omp end parallel do
+    enddo
+    !$omp end parallel do
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: mldini ',time2-time1
-    endif
 
 
     ! tracer-independent part of isoneutral diffusion
@@ -288,115 +286,93 @@ contains
     !$ if(print_omp) print *,'transport: advdiff ',time2-time1
 
     ! convection and mixed layer scheme
-    if (l_mld) then
     !$ time1 = omp_get_wtime()
-
-      !$omp parallel do collapse(2) private(i,j,k,rho_old,pe_conv,pe_buoy,e_mix,tv1,k1_max)
-      do j=1,maxj
-        do i=1,maxi
-          if (mask_ocn(i,j).eq.1) then
-            ! check for NaNs
-            if (ts(i,j,maxk,1).ne.ts(i,j,maxk,1) .or. ts(i,j,maxk,2).ne.ts(i,j,maxk,2)) then
-              print *,'NaN produced in ocn'
-              print *,'i,j',i,j
-              print *,'t',ts(i,j,maxk,1)
-              print *,'s',ts(i,j,maxk,2)
-              error=.true.
-            endif
-            ! update density
-            do k=k1(i,j),maxk
-              ts(i,j,k,2) = max(0._wp,ts(i,j,k,2))  ! make sure that salinity is positive
-              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
-              ! remember old density needed to calculate PE change. 
-              rho_old(k) = rho(i,j,k)
-            enddo
-            ! convection 
-            k1_max = k1(i,j)
-            tv1 = 5000._wp
-            do k=maxk,1,-1
-              if (abs(z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
-                k1_max = k
-                tv1 = abs(z_ocn_max(i,j)-zw(k-1))
-              endif
-            enddo
-            k1_max = max(k1_max,k1(i,j))
-            call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
-            ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
-            pe_conv = 0._wp
-            do k=kven(i,j),maxk 
-              pe_conv = pe_conv+0.5_wp*g*(rho(i,j,k)-rho_old(k))*z2dzg(k,k)  ! J/m2 or kg/s2
-            enddo
-            conv_pe(i,j) = pe_conv   ! J/m2
-            ! add energy consumed or released in mixing surface forcing over top layer
-            pe_buoy = pe_conv+pe_layer1(i,j)
-            ! multiply by efficiency of recycling of potential energy
-            if (pe_buoy.gt.0._wp) then
-              pe_buoy = pe_buoy*pe_buoy_coeff
-            endif
-            ! Add wind energy to get total energy available for mixing 
-            e_mix = pe_buoy+ke_tau(i,j)*mlddec(maxk)  ! J/m2
-            if (e_mix.gt.0._wp) then
-              ! Kraus Turner mixed layer scheme. Static instability driven convection has already been done in convection, 
-              ! and will differ from standard KT if l_conv_shuffle.eq.T. 
-              ! krausturner uses PE released in convection and KE from the wind to deepen the mixed layer further.
-              call krausturner(l_tracers_trans,pe_buoy,ke_tau(i,j),k1(i,j), & 
-                ts(i,j,1:maxk,1:n_tracers_tot), &
-                mld(i,j),mldk(i,j))
-            else
-              ! Not enough energy even to homogenise first layer. The first layer *is* still homogeneous for all tracers, 
-              ! but an mld shallower than the first cell is output as a diagnostic
-              mldk(i,j) = maxk
-              if (pe_layer1(i,j).lt.0._wp) then
-                !          mldtadd = 2._wp*em/(g*zw(K)*(rhol-rhou))
-                !          mldt = zw(K)+mldtadd
-                mld(i,j) = zw(maxk-1)*(1._wp-e_mix/pe_layer1(i,j))
-              else
-                mld(i,j) = zw(maxk-1)
-              endif
-              ! in rare cases the resulting mld can be positive due to termobaricity effects (see email discussion with Edwards and Oliver)
-              mld(i,j) = min(0._wp,mld(i,j))
-            endif
-            !if(mld(i,j).gt.0._wp) then
-            !  print *,''
-            !  print *,'WARNING: mld>0', i,j
-            !  print *,'mld',mld(i,j),mldk(i,j)
-            !  print *,'e_mix',e_mix
-            !  print *,'pe_layer1',pe_layer1(i,j)
-            !  print *,'pe_conv',pe_conv
-            !  print *,'pe_buoy',pe_buoy
-            !  print *,'ke_tau',ke_tau(i,j)*mlddec(maxk)
-            !  !stop 'mld > 0'
-            !endif
-            ! update density
-            do k=k1(i,j),maxk
-              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
-            enddo
+    !$omp parallel do collapse(2) private(i,j,k,rho_old,pe_conv,pe_buoy,e_mix,tv1,k1_max)
+    do j=1,maxj
+      do i=1,maxi
+        if (mask_ocn(i,j).eq.1) then
+          ! check for NaNs
+          if (ts(i,j,maxk,1).ne.ts(i,j,maxk,1) .or. ts(i,j,maxk,2).ne.ts(i,j,maxk,2)) then
+            print *,'NaN produced in ocn'
+            print *,'i,j',i,j
+            print *,'t',ts(i,j,maxk,1)
+            print *,'s',ts(i,j,maxk,2)
+            error=.true.
           endif
-        enddo
+          ! update density
+          do k=k1(i,j),maxk
+            ts(i,j,k,2) = max(0._wp,ts(i,j,k,2))  ! make sure that salinity is positive
+            rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+            ! remember old density needed to calculate PE change. 
+            rho_old(k) = rho(i,j,k)
+          enddo
+          ! convection 
+          k1_max = k1(i,j)
+          tv1 = 5000._wp
+          do k=maxk,1,-1
+            if (abs(z_ocn_max(i,j)-zw(k-1)).lt.tv1) then
+              k1_max = k
+              tv1 = abs(z_ocn_max(i,j)-zw(k-1))
+            endif
+          enddo
+          k1_max = max(k1_max,k1(i,j))
+          call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+          ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
+          pe_conv = 0._wp
+          do k=kven(i,j),maxk 
+            pe_conv = pe_conv+0.5_wp*g*(rho(i,j,k)-rho_old(k))*z2dzg(k,k)  ! J/m2 or kg/s2
+          enddo
+          conv_pe(i,j) = pe_conv   ! J/m2
+          ! add energy consumed or released in mixing surface forcing over top layer
+          pe_buoy = pe_conv+pe_layer1(i,j)
+          ! multiply by efficiency of recycling of potential energy
+          if (pe_buoy.gt.0._wp) then
+            pe_buoy = pe_buoy*pe_buoy_coeff
+          endif
+          ! Add wind energy to get total energy available for mixing 
+          e_mix = pe_buoy+ke_tau(i,j)*mlddec(maxk)  ! J/m2
+          if (e_mix.gt.0._wp) then
+            ! Kraus Turner mixed layer scheme. Static instability driven convection has already been done in convection, 
+            ! and will differ from standard KT if l_conv_shuffle.eq.T. 
+            ! krausturner uses PE released in convection and KE from the wind to deepen the mixed layer further.
+            call krausturner(l_tracers_trans,pe_buoy,ke_tau(i,j),k1(i,j), & 
+              ts(i,j,1:maxk,1:n_tracers_tot), &
+              mld(i,j),mldk(i,j))
+          else
+            ! Not enough energy even to homogenise first layer. The first layer *is* still homogeneous for all tracers, 
+            ! but an mld shallower than the first cell is output as a diagnostic
+            mldk(i,j) = maxk
+            if (pe_layer1(i,j).lt.0._wp) then
+              !          mldtadd = 2._wp*em/(g*zw(K)*(rhol-rhou))
+              !          mldt = zw(K)+mldtadd
+              mld(i,j) = zw(maxk-1)*(1._wp-e_mix/pe_layer1(i,j))
+            else
+              mld(i,j) = zw(maxk-1)
+            endif
+            ! in rare cases the resulting mld can be positive due to termobaricity effects (see email discussion with Edwards and Oliver)
+            mld(i,j) = min(0._wp,mld(i,j))
+          endif
+          !if(mld(i,j).gt.0._wp) then
+          !  print *,''
+          !  print *,'WARNING: mld>0', i,j
+          !  print *,'mld',mld(i,j),mldk(i,j)
+          !  print *,'e_mix',e_mix
+          !  print *,'pe_layer1',pe_layer1(i,j)
+          !  print *,'pe_conv',pe_conv
+          !  print *,'pe_buoy',pe_buoy
+          !  print *,'ke_tau',ke_tau(i,j)*mlddec(maxk)
+          !  !stop 'mld > 0'
+          !endif
+          ! update density
+          do k=k1(i,j),maxk
+            rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+          enddo
+        endif
       enddo
-      !$omp end parallel do
+    enddo
+    !$omp end parallel do
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: mld ',time2-time1
-
-    else
-
-      ! Not applying mixed layer scheme. Just call convection scheme
-      !$omp parallel do private(i,j)
-      do j=1,maxj
-        do i=1,maxi
-          if (mask_ocn(i,j).eq.1) then
-            ! update density
-            do k=k1(i,j),maxk
-              ts(i,j,k,2) = max(0._wp,ts(i,j,k,2))  ! make sure that salinity is positive
-              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
-            enddo
-            call convection(l_tracers_trans,ts(:,i,j,:),rho(i,j,:),k1(i,j),k1(i,j),mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
-          endif
-        enddo
-      enddo
-      !$omp end parallel do
-
-    endif
 
     deallocate(mldk)
     deallocate(pe_layer1)

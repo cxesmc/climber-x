@@ -1,4 +1,4 @@
-!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 !
 !  Module : f r e e _ s u r f a c e _ m o d
 !
@@ -41,7 +41,7 @@ contains
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  f r e e _ s u r f a c e
-  !   Purpose    :  diagnose elevation of the free surface 
+  !   Purpose    :  diagnose elevation of the free surface
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine free_surface(rho, ssh, error)
 
@@ -52,21 +52,24 @@ contains
     logical, intent(inout) :: error
 
     real(wp), allocatable :: rho_tmp(:,:,:)
-    real(wp), allocatable :: rho_tmp1(:,:,:)
     real(wp), allocatable :: ssh_tmp(:,:)
+
+    ! list of cells to be filled (sub-seafloor levels of shallow columns) 
+    integer, allocatable :: hole_i(:), hole_j(:), hole_k(:)
+    real(wp), allocatable :: hole_val(:)
+    integer :: nhole, p
 
     integer :: i, j, n, k, k_ref, nbr, ii, jj, iii, jjj
     real(wp) :: rhotmp, rho_sum, zs_sum
     logical :: flag
     real(wp) :: p_ref, z_ref, integral
-    
+
     real(wp), parameter :: misval = -999._wp
 
 
     ! local copy of rho which will be filled
     allocate(rho_tmp,source=rho)
     where (mask_c.eq.0) rho_tmp = misval  ! missing value
-    allocate(rho_tmp1,source=rho_tmp)
 
     ! find level closest to reference depth
     k_ref = minloc(abs(-zw-depth_ref),1)
@@ -75,101 +78,127 @@ contains
     ! reference pressure at depth z_ref
     p_ref = rho0*g*z_ref
 
-    flag = .true.
+    ! build the list of cells that need filling: the sub-seafloor levels (k_ref..k1-1) of
+    ! ocean columns shallower than z_ref. this set is fixed by the bathymetry, so the
+    ! iterative fill below only visits these holes instead of rescanning the whole grid and
+    ! copying the full 3-D array on every sweep (which is what made this loop expensive)
+    nhole = 0
+    do j=1,maxj
+      do i=1,maxi
+        if (mask_ocn(i,j).eq.1 .and. k1(i,j).gt.k_ref) nhole = nhole + (k1(i,j)-k_ref)
+      enddo
+    enddo
+    allocate(hole_i(nhole), hole_j(nhole), hole_k(nhole), hole_val(nhole))
+    p = 0
+    do j=1,maxj
+      do i=1,maxi
+        if (mask_ocn(i,j).eq.1 .and. k1(i,j).gt.k_ref) then
+          do k=k_ref,k1(i,j)-1
+            p = p+1
+            hole_i(p) = i
+            hole_j(p) = j
+            hole_k(p) = k
+          enddo
+        endif
+      enddo
+    enddo
 
+    ! iteratively fill the holes by averaging valid neighbours at the same level. 
+    flag = .true.
     n = 0
 
-    loop : do while (flag)
+    loop : do while (flag .and. nhole.gt.0)
 
       n=n+1
       flag = .false.
 
-      ! fill rho values in regions shallower than z_ref
-      do j=1,maxj
-        do i=1,maxi
+      ! emergency stop if the fill does not converge
+      if (n.gt.1e5) then
+        do p=1,nhole
+          if (rho_tmp(hole_i(p),hole_j(p),hole_k(p)).eq.misval) then
+            i = hole_i(p); j = hole_j(p); k = hole_k(p)
+            print *
+            print *,'ERROR: stuck in ocean free_surface loop'
+            print *,'i,j,k',i,j,k
+            print *,'k1,k_ref',k1(i,j),k_ref
+            print *,'mask_ocn',mask_ocn(i,j)
+            print *,'rho',rho_tmp(i,j,k)
+            print *
+            print *,'mask'
+            print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
+            print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
+            print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),j)
+            print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-1))
+            print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-2))
+            print *
+            print *,'k1'
+            print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
+            print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
+            print '(5i4)', k1(max(1,i-2):min(maxi,i+2),j)
+            print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-1))
+            print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-2))
+            print *
+            print *,'rho'
+            print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+2),k)
+            print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+1),k)
+            print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),j,k)
+            print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-1),k)
+            print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-2),k)
+            error = .true.
+            exit loop
+          endif
+        enddo
+      endif
 
-          if (mask_ocn(i,j).eq.1 .and. k1(i,j).gt.k_ref) then ! fixme, check
-
-            do k=k_ref,k1(i,j)-1
-              if (rho_tmp(i,j,k).eq.misval) then  
-                if (n.gt.1e5) then
-                  print *
-                  print *,'ERROR: stuck in ocean free_surface loop'
-                  print *,'i,j,k',i,j,k
-                  print *,'k1,k_ref',k1(i,j),k_ref
-                  print *,'mask_ocn',mask_ocn(i,j)
-                  print *,'rho',rho_tmp(i,j,k)
-                  print *
-                  print *,'mask'
-                  print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
-                  print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
-                  print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),j)
-                  print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-1))
-                  print '(5i4)', mask_ocn(max(1,i-2):min(maxi,i+2),max(1,j-2))
-                  print *
-                  print *,'k1'
-                  print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+2))
-                  print '(5i4)', k1(max(1,i-2):min(maxi,i+2),min(maxj,j+1))
-                  print '(5i4)', k1(max(1,i-2):min(maxi,i+2),j)
-                  print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-1))
-                  print '(5i4)', k1(max(1,i-2):min(maxi,i+2),max(1,j-2))
-                  print *
-                  print *,'rho'
-                  print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+2),k)
-                  print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),min(maxj,j+1),k)
-                  print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),j,k)
-                  print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-1),k)
-                  print '(5F7.1)', rho_tmp(max(1,i-2):min(maxi,i+2),max(1,j-2),k)
-                  !stop
-                  error = .true.
-                  exit loop
-                endif
-                flag = .true.
-                ! mean density from neighbor wet cells at same level
-                nbr = 0
-                rho_sum = 0._wp
-                do ii=i-1,i+1
-                  do jj=j-1,j+1
-                    iii = ii
-                    if (iii.eq.0) iii = maxi
-                    if (iii.eq.maxi+1) iii = 1
-                    jjj = jj
-                    jjj = max(1,jjj)
-                    jjj = min(maxj,jjj)
-                    rhotmp = rho_tmp(iii,jjj,k)
-                    if (rhotmp.ne.misval) then
-                      nbr = nbr+1
-                      rho_sum = rho_sum + rhotmp
-                    endif
-                  enddo
-                enddo
-                if (nbr.gt.0) then
-                  rho_tmp1(i,j,k) = rho_sum/nbr
-                endif
-                if (n.eq.100) then
-                  ! probably isolated ocean points, fill with global mean density 
-                  nbr = 0
-                  rho_sum = 0._wp
-                  do ii=1,maxi
-                    do jj=1,maxj
-                      rhotmp = rho_tmp(ii,jj,k)
-                      if (rhotmp.ne.misval) then
-                        nbr = nbr+1
-                        rho_sum = rho_sum + rhotmp
-                      endif
-                    enddo
-                  enddo
-                  rho_tmp1(i,j,k) = rho_sum/nbr
-                endif
+      ! one sweep over the holes 
+      do p=1,nhole
+        i = hole_i(p); j = hole_j(p); k = hole_k(p)
+        hole_val(p) = rho_tmp(i,j,k)   ! default: leave unchanged
+        if (rho_tmp(i,j,k).eq.misval) then
+          flag = .true.
+          ! mean density from neighbor wet cells at same level
+          nbr = 0
+          rho_sum = 0._wp
+          do ii=i-1,i+1
+            do jj=j-1,j+1
+              iii = ii
+              if (iii.eq.0) iii = maxi
+              if (iii.eq.maxi+1) iii = 1
+              jjj = jj
+              jjj = max(1,jjj)
+              jjj = min(maxj,jjj)
+              rhotmp = rho_tmp(iii,jjj,k)
+              if (rhotmp.ne.misval) then
+                nbr = nbr+1
+                rho_sum = rho_sum + rhotmp
               endif
             enddo
-
+          enddo
+          if (nbr.gt.0) then
+            hole_val(p) = rho_sum/nbr
           endif
-
-        enddo
+          if (n.eq.100) then
+            ! probably isolated ocean points, fill with global mean density
+            nbr = 0
+            rho_sum = 0._wp
+            do ii=1,maxi
+              do jj=1,maxj
+                rhotmp = rho_tmp(ii,jj,k)
+                if (rhotmp.ne.misval) then
+                  nbr = nbr+1
+                  rho_sum = rho_sum + rhotmp
+                endif
+              enddo
+            enddo
+            hole_val(p) = rho_sum/nbr
+          endif
+        endif
       enddo
 
-      rho_tmp = rho_tmp1
+      ! apply the staged values (only the holes, no full-array copy)
+      do p=1,nhole
+        rho_tmp(hole_i(p),hole_j(p),hole_k(p)) = hole_val(p)
+      enddo
 
     enddo loop
 
@@ -218,7 +247,7 @@ contains
             enddo
           enddo
           if (nbr.gt.0) then
-            ssh(i,j) = zs_sum/nbr 
+            ssh(i,j) = zs_sum/nbr
           endif
         endif
 
@@ -226,8 +255,8 @@ contains
     enddo
 
     deallocate(rho_tmp)
-    deallocate(rho_tmp1)
     deallocate(ssh_tmp)
+    deallocate(hole_i, hole_j, hole_k, hole_val)
 
     return
   end subroutine free_surface
