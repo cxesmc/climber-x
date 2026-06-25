@@ -757,7 +757,7 @@ contains
     integer :: i, j, ip1, jp1
 
     real(wp) :: avg
-    real(wp), dimension(:,:), allocatable :: taux, tauy
+    real(wp) :: taux(ni,nj), tauy(ni,nj)   ! fixed-size local scratch (ni,nj are compile-time parameters), avoids per-call heap allocation
 
 
     ! update masks and sea level at beginning of year
@@ -781,16 +781,10 @@ contains
     ocn%buoy_sic_NA(:) = cmn%buoy_sic_NA(:)
 
     ! weighted average of wind stress over sea ice-free ocean and sea ice stress over sea ice covered fraction
-    allocate(taux(ni,nj))
-    allocate(tauy(ni,nj))
-
     if (flag_atm .and. atm_fix_tau) then
-
       taux = cmn%taux_dat
       tauy = cmn%tauy_dat
-
     else
-
       do j=1,nj
         do i=1,ni
           if (cmn%f_ocn(i,j).gt.0._wp) then
@@ -802,38 +796,58 @@ contains
           endif
         enddo
       enddo
-
     endif
 
-    ! interpolate stresses on u- and v-grid
+!    !$omp parallel do collapse(2) private(i,j,ip1,jp1)
     do j=1,nj
       do i=1,ni
         ip1 = i+1
         if (ip1.eq.ni+1) ip1=1
         jp1 = j+1
         if (jp1.eq.nj+1) jp1=nj
+        ! interpolate stresses on u- and v-grid
         ocn%stressxu(i,j) = 0.5_wp*(taux(i,j)+taux(ip1,j))  ! zonal wind stress on u-grid
         ocn%stressyv(i,j) = 0.5_wp*(tauy(i,j)+tauy(i,jp1))  ! meridional wind stress on v-grid
         ocn%stressxv(i,j) = 0.5_wp*(taux(i,j)+taux(i,jp1))  ! zonal wind stress on v-grid
         ocn%stressyu(i,j) = 0.5_wp*(tauy(i,j)+tauy(ip1,j))  ! meridional wind stress on u-grid
-!        if (lat(j)>-20._wp .and. lat(j)<20._wp) then
-!          ocn%stressxu(i,j) = min(0.1_wp,ocn%stressxu(i,j)) 
-!          ocn%stressyv(i,j) = min(0.05_wp,ocn%stressyv(i,j)) 
-!          ocn%stressxv(i,j) = min(0.1_wp,ocn%stressxv(i,j)) 
-!          ocn%stressyu(i,j) = min(0.05_wp,ocn%stressyu(i,j)) 
-!          ocn%stressxu(i,j) = max(-0.1_wp,ocn%stressxu(i,j)) 
-!          ocn%stressxv(i,j) = max(-0.1_wp,ocn%stressxv(i,j)) 
-!        endif
+        ! wind
+        ocn%wind(i,j) = cmn%wind(i,j,i_surf_macro_ocn)
+        if (cmn%mask_ocn(i,j).eq.1) then
+          ocn%f_sic(i,j) = cmn%f_sic(i,j)
+          ocn%slp(i,j)   = cmn%slp(i,j)
+          ! pass P-E, runoff and calving separately
+          ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
+          ocn%p_e_sic(i,j)   = cmn%p_e_sic_ocn(i,j) * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) 
+          ocn%fw_brines(i,j) = cmn%fw_brines(i,j)   * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) 
+          ocn%runoff(i,j)    = cmn%runoff_o(i,j)
+          ocn%runoff_veg(i,j)    = cmn%runoff_veg_o(i,j)
+          ocn%runoff_ice(i,j)    = cmn%runoff_ice_o(i,j)
+          ocn%runoff_lake(i,j)   = cmn%runoff_lake_o(i,j)
+          ocn%melt_ice(i,j)  = cmn%melt_ice_o(i,j)
+          ocn%calving(i,j)   = cmn%calving_o(i,j)
+          ocn%bmelt_grd(i,j) = cmn%bmelt_grd_o(i,j)
+          ocn%bmelt_flt(i,j) = cmn%bmelt_flt_o(i,j)
+          ocn%bmelt(i,j)     = ocn%bmelt_grd(i,j)+ocn%bmelt_flt(i,j)
+          ocn%fw_dhdt_ice(i,j) = cmn%fw_dhdt_ice_o(i,j)
+          ! net heat flux into the ocean
+          ocn%flx(i,j) = cmn%flx_ocn(i,j) * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
+        else
+          ocn%p_e_sic(i,j)     = 0._wp 
+          ocn%fw_brines(i,j)   = 0._wp 
+          ocn%runoff(i,j)      = 0._wp 
+          ocn%runoff_veg(i,j)  = 0._wp 
+          ocn%runoff_ice(i,j)  = 0._wp 
+          ocn%runoff_lake(i,j) = 0._wp 
+          ocn%melt_ice(i,j)    = 0._wp 
+          ocn%calving(i,j)     = 0._wp 
+          ocn%bmelt_grd(i,j)   = 0._wp 
+          ocn%bmelt_flt(i,j)   = 0._wp 
+          ocn%bmelt(i,j)       = 0._wp 
+          ocn%fw_dhdt_ice(i,j) = 0._wp 
+        endif
       enddo
     enddo
-    deallocate(taux,tauy)
-
-    ocn%wind(:,:) = cmn%wind(:,:,i_surf_macro_ocn)
-
-    where (cmn%mask_ocn.eq.1)
-      ocn%f_sic = cmn%f_sic
-      ocn%slp   = cmn%slp
-    endwhere
+ !   !$omp end parallel do
 
     if (ocn_restore_sal) then
       ! compute restoring salinity flux
@@ -849,36 +863,6 @@ contains
       ocn%calving = 0._wp
       ocn%bmelt_grd = 0._wp
       ocn%bmelt_flt = 0._wp
-    else
-      where (cmn%mask_ocn.eq.1)
-        ! pass P-E, runoff and calving separately
-        ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
-        ocn%p_e_sic   = cmn%p_e_sic_ocn * ocn%f_ocn2/ocn%f_ocn 
-        ocn%fw_brines = cmn%fw_brines   * ocn%f_ocn2/ocn%f_ocn 
-        ocn%runoff    = cmn%runoff_o
-        ocn%runoff_veg    = cmn%runoff_veg_o
-        ocn%runoff_ice    = cmn%runoff_ice_o
-        ocn%runoff_lake   = cmn%runoff_lake_o
-        ocn%melt_ice  = cmn%melt_ice_o
-        ocn%calving   = cmn%calving_o
-        ocn%bmelt_grd = cmn%bmelt_grd_o
-        ocn%bmelt_flt = cmn%bmelt_flt_o
-        ocn%bmelt     = ocn%bmelt_grd+ocn%bmelt_flt
-        ocn%fw_dhdt_ice = cmn%fw_dhdt_ice_o
-      elsewhere
-        ocn%p_e_sic     = 0._wp 
-        ocn%fw_brines   = 0._wp 
-        ocn%runoff      = 0._wp 
-        ocn%runoff_veg  = 0._wp 
-        ocn%runoff_ice  = 0._wp 
-        ocn%runoff_lake = 0._wp 
-        ocn%melt_ice    = 0._wp 
-        ocn%calving     = 0._wp 
-        ocn%bmelt_grd   = 0._wp 
-        ocn%bmelt_flt   = 0._wp 
-        ocn%bmelt       = 0._wp 
-        ocn%fw_dhdt_ice = 0._wp 
-      endwhere
     endif
 
     if (ocn_restore_temp) then
@@ -891,11 +875,6 @@ contains
           endif
         enddo
       enddo
-    else
-      where (cmn%mask_ocn.eq.1)
-        ! net heat flux into the ocean
-        ocn%flx = cmn%flx_ocn * ocn%f_ocn2/ocn%f_ocn ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
-      endwhere
     endif
 
     !------------------------------------------------------------

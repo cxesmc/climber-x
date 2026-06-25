@@ -111,7 +111,6 @@
  !-------------------------------------------------------------------------------------------
  ! mixed layer settings
  !-------------------------------------------------------------------------------------------
- l_mld = T                    ! use ocean mixed layer scheme?
  pe_buoy_coeff = 0.1          ! mixed layer - efficiency of buoyancy-forced mixing (0.15 used in SEA model)
  ke_tau_coeff = 2.5           ! coefficient for wind-forced mixing (value of 2.5 from S Roudesli tuning in isolation)
  ke_wind_dec = 100.           ! m, e-folding depth-scale for decay of efficiency of wind-mixing 

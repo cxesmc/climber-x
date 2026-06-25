@@ -628,6 +628,7 @@ program climber
       !$   print *,'time ice',time_ice 
       !$   print *,'time smb',time_smb 
       !$   print *,'time bmb',time_bmb 
+      !$   print *,'time all',time_atm+time_ocn+time_sic+time_lnd+time_bgc+time_bnd+time_geo+time_ice+time_smb+time_bmb
       !$ endif
 
       !---------------------------------------------------------

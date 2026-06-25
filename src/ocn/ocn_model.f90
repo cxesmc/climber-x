@@ -43,7 +43,7 @@ module ocn_model
     use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines, drho_brines_coast
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
-    use ocn_params, only : l_mld, l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
+    use ocn_params, only : l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
     use ocn_params, only : l_ocn_input_fix, i_ocn_input_fix, l_ocn_input_fix_write, ocn_input_fix_file
     use ocn_params, only : l_noise_fw, l_noise_flx
     use ocn_params, only : tau_scale, ke_tau_coeff
@@ -164,6 +164,8 @@ contains
     ! calculate wind stresses
     !------------------------------------------------------------------------
 
+    ! wind stresses and the wind calculations needed for the mixed layer share the same
+    ! grid sweep and mask, so they are computed in a single loop
     !$ time1 = omp_get_wtime()
     do j=1,maxj
       do i=1,maxi
@@ -174,40 +176,25 @@ contains
           ocn%dtau_dz2(2,i,j) = 2._wp*ocn%stressyu(i,j)/dbl**2 !dzz  ! N/m4
           ocn%dtav_dz2(1,i,j) = 2._wp*ocn%stressxv(i,j)/dbl**2 !dzz  ! N/m4
           ocn%dtav_dz2(2,i,j) = 2._wp*ocn%stressyv(i,j)/dbl**2 !dzz  ! N/m4
+          ! compute wind stress from magnitude of surface wind: tau = Cd*rho_a*V^2
+          tau = 1.3e-3_wp*1.3_wp*ocn%wind(i,j)**2
+          ! kinetic energy input into the ocean by wind stress, proportional to tau^(3/2), only over ice-free fraction
+          ocn%ke_tau(i,j) = ocn%f_ocn2(i,j)/ocn%f_ocn(i,j)*(1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
         else
           ocn%tau(1,i,j) = 0._wp
           ocn%tau(2,i,j) = 0._wp
+          ocn%ke_tau(i,j) = 0._wp
         endif
       enddo
     enddo
     !$ time2 = omp_get_wtime()
-    !$ if(print_omp) print *,'tau',time2-time1
-
-    !------------------------------------------------------------------------
-    ! wind calculations needed for mixed layer
-    !------------------------------------------------------------------------
-
-    !$ time1 = omp_get_wtime()
-    if (l_mld) then
-      do j=1,maxj
-        do i=1,maxi
-          if (mask_ocn(i,j).eq.1) then
-            ! compute wind stress from magnitude of surface wind: tau = Cd*rho_a*V^2
-            tau = 1.3e-3_wp*1.3_wp*ocn%wind(i,j)**2
-            ! kinetic energy input into the ocean by wind stress, proportional to tau^(3/2), only over ice-free fraction
-            ocn%ke_tau(i,j) = ocn%f_ocn2(i,j)/ocn%f_ocn(i,j)*(1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
-          else
-            ocn%ke_tau(i,j) = 0._wp
-          endif
-        enddo
-      enddo
-    endif
-    !$ time2 = omp_get_wtime()
-    !$ if(print_omp) print *,'mld',time2-time1
+    !$ if(print_omp) print *,'tau+mld',time2-time1
 
     !------------------------------------------------------------------------
     ! assign heat and freshwater fluxes 
     !------------------------------------------------------------------------
+
+    !$ time1 = omp_get_wtime()
 
     ! surface freshwater flux, P-E+sea ice fluxes
     ocn%fw = ocn%p_e_sic
@@ -222,8 +209,6 @@ contains
     if (l_flux_adj_atl .or. l_flux_adj_ant .or. l_flux_adj_pac) then
       ocn%fw = ocn%fw + ocn%fw_flux_adj
     endif
-
-    !$ time1 = omp_get_wtime()
 
     if (l_fw_melt_ice_sep) then
       ! add runoff (with contribution by melting of ice sheets removed), calving and basal melt freshwater fluxes
@@ -296,6 +281,10 @@ contains
       ocn%dvsf = 0._wp
     endif
 
+    ! flux conversion is column-independent (each cell writes only its own (i,j) column),
+    ! so it is parallelised over the surface grid; no reduction -> bit-reproducible
+    !$omp parallel do collapse(2) schedule(guided) &
+    !$omp private(i,j,k,k_nb,t_par,s_par)
     do j=1,maxj
       do i=1,maxi
         if (mask_ocn(i,j).eq.1) then
@@ -395,6 +384,7 @@ contains
         endif
       enddo
     enddo
+    !$omp end parallel do
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'fluxes',time2-time1
 
@@ -419,7 +409,10 @@ contains
     !$ if(print_omp) print *,'momentum',time2-time1
 
     ! check velocity range
+    !$ time1 = omp_get_wtime()
     call check_vel(ocn%u, ocn%error)
+    !$ time2 = omp_get_wtime()
+    !$ if(print_omp) print *,'check_vel',time2-time1
 
     !------------------------------------------------------------------------
     ! tracer transport (advection+diffusion+convection)
@@ -933,6 +926,7 @@ contains
     allocate(ocn%bmelt(maxi,maxj))
     allocate(ocn%bmelt_grd(maxi,maxj))
     allocate(ocn%bmelt_flt(maxi,maxj))
+    allocate(ocn%fw_dhdt_ice(maxi,maxj))
 
     allocate(ocn%u(3,0:maxi,0:maxj,maxk))
     allocate(ocn%ub(2,0:maxi+1,0:maxj))

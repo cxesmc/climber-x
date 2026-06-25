@@ -1101,6 +1101,8 @@ contains
     real(wp) :: buoy_NA(nlatv_buoy), buoyT_NA(nlatv_buoy), buoyS_NA(nlatv_buoy)
     real(wp) :: buoySw_NA(nlatv_buoy), buoySi_NA(nlatv_buoy), buoySw_lab, fw_lab
     real(wp) :: alpha, beta, rho1, rho2
+    real(wp) :: alpha2d(maxi,maxj), beta2d(maxi,maxj)   ! surface thermal/haline expansion coefficients, precomputed once per call and reused in all buoyancy diagnostics
+    real(wp) :: ou_g, ou_p, ou_i, ou_a                  ! scratch for fused overturning streamfunction
     real(wp), allocatable, dimension(:,:,:) :: rho
 
 
@@ -1160,6 +1162,28 @@ contains
     fwtz = 0._wp
     fwpz = 0._wp
     fwaz = 0._wp
+    ! global buoyancy flux accumulators (folded into the main loop below)
+    buoyT = 0._wp
+    buoyS = 0._wp
+    buoyT_N = 0._wp
+    buoyS_N = 0._wp
+    buoyT_tr = 0._wp
+    buoyS_tr = 0._wp
+    buoyT_S = 0._wp
+    buoyS_S = 0._wp
+    ! Atlantic meridional density gradient (Bonan 2022) accumulators (folded into the main loop below)
+    area_b = 0._wp
+    area_n = 0._wp
+    area_n3 = 0._wp
+    rho_b2 = 0._wp
+    rho_n2 = 0._wp
+    rho_n3 = 0._wp
+    rhoT_b2 = 0._wp
+    rhoT_n2 = 0._wp
+    rhoT_n3 = 0._wp
+    rhoS_b2 = 0._wp
+    rhoS_n2 = 0._wp
+    rhoS_n3 = 0._wp
 
     if (year.eq.1 .and. time_soy_ocn) then
       rsl_hosing = 0._wp
@@ -1171,16 +1195,63 @@ contains
       rho_0 = ocn%rho
     endif
 
-    !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2) &
+    !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2,area_ij) &
     !$omp reduction(+:sum_2d,sum_3d,ohc,ohc700,ohc2000,tdocn,tdocn_atl,tdocn_pac,tdocn_ind,tdocn_so,sdocn,sdocn_atl,sdocn_pac,sdocn_ind,sdocn_so,ocnvol_tot) &
     !$omp reduction(+:ocnvol_atl,ocnvol_pac,ocnvol_ind,ocnvol_so,global_cons,global_age,global_dye,global_cfc11,global_cfc12) &
     !$omp reduction(+:rsl_steric,rsl_mass,fw,fw_corr,fw_noise,p_e_sic,runoff,runoff_veg,runoff_ice,runoff_lake,icemelt,calving,bmelt,fw_dhdt_ice,vsf,flx) &
-    !$omp reduction(+:hft,hfp,hfa,hftz,hfpz,hfaz,fwt,fwp,fwa,fwtz,fwpz,fwaz)
+    !$omp reduction(+:hft,hfp,hfa,hftz,hfpz,hfaz,fwt,fwp,fwa,fwtz,fwpz,fwaz) &
+    !$omp reduction(+:buoyT,buoyS,buoyT_N,buoyS_N,buoyT_tr,buoyS_tr,buoyT_S,buoyS_S) &
+    !$omp reduction(+:area_b,area_n,area_n3,rho_b2,rho_n2,rho_n3,rhoT_b2,rhoT_n2,rhoT_n3,rhoS_b2,rhoS_n2,rhoS_n3)
     do i=1,maxi
       do j=1,maxj
         bmask = basin_mask(i,j)
         bmask2 = basin_mask2(i,j)
         if (ocn%f_ocn(i,j).gt.0._wp) then
+          ! surface thermal expansion (alpha) and haline contraction (beta) coefficients,
+          ! computed once here and reused in all buoyancy diagnostics below (global, North Atlantic and regional)
+          if (i_alphabeta.eq.1) then
+            alpha2d(i,j) = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp) - eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)  ! kg/m3/K
+            beta2d(i,j)  = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp) - eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)  ! kg/m3/psu
+          else if (i_alphabeta.eq.2) then
+            alpha2d(i,j) = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
+            beta2d(i,j)  = 0.8_wp   ! kg/m3/psu
+          endif
+          ! global buoyancy flux (folded in from a former separate full-grid loop); uses precomputed alpha2d/beta2d
+          ! thermal component
+          buoyT = buoyT + g/cap_w*ocn%flx(i,j)*alpha2d(i,j)/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
+          if (lat(j).gt.30._wp) then
+            buoyT_N = buoyT_N + g/cap_w*ocn%flx(i,j)*alpha2d(i,j)/rho0*ocn%grid%ocn_area(i,j)*dt
+          endif
+          if (lat(j).lt.-30._wp) then
+            buoyT_S = buoyT_S + g/cap_w*ocn%flx(i,j)*alpha2d(i,j)/rho0*ocn%grid%ocn_area(i,j)*dt
+          endif
+          if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
+            buoyT_tr = buoyT_tr + g/cap_w*ocn%flx(i,j)*alpha2d(i,j)/rho0*ocn%grid%ocn_area(i,j)*dt
+          endif
+          ! haline component
+          if (i_fwf_buoy.eq.1) then
+            buoyS = buoyS + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
+            if (lat(j).gt.30._wp) then
+              buoyS_N = buoyS_N + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+            endif
+            if (lat(j).lt.-30._wp) then
+              buoyS_S = buoyS_S + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+            endif
+            if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
+              buoyS_tr = buoyS_tr + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+            endif
+          else if (i_fwf_buoy.eq.2) then
+            buoyS = buoyS + g*ocn%flx_sur(i,j,2)*beta2d(i,j)*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
+            if (lat(j).gt.30._wp) then
+              buoyS_N = buoyS_N + g*ocn%flx_sur(i,j,2)*beta2d(i,j)*ocn%grid%ocn_area(i,j)*dt
+            endif
+            if (lat(j).lt.-30._wp) then
+              buoyS_S = buoyS_S + g*ocn%flx_sur(i,j,2)*beta2d(i,j)*ocn%grid%ocn_area(i,j)*dt
+            endif
+            if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
+              buoyS_tr = buoyS_tr + g*ocn%flx_sur(i,j,2)*beta2d(i,j)*ocn%grid%ocn_area(i,j)*dt
+            endif
+          endif
           ! mean SST and SSS
           do l=1,n_tracers_ocn
             sum_2d(l) = sum_2d(l) + ocn%ts(i,j,maxk,l)*dx(j)*dy*ocn%f_ocn(i,j)
@@ -1476,9 +1547,51 @@ contains
           endif
         enddo
 
+        ! Atlantic meridional density gradient at k_drho following Bonan 2022 (folded in from a former separate loop)
+        ! difference between average 40-60N and the whole Atlantic basin south of 60N.
+        ! alpha and beta are taken as constants here (value at 5 degC and 0.8 kg/m3/psu), as in the original code.
+        if (bmask.eq.i_atlantic .and. k_drho.ge.k1(i,j)) then
+          area_ij = ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j)
+          if (j.ge.js_drho2 .and. j.le.jn2_drho2) then
+            area_b = area_b + area_ij
+            rho_b2 = rho_b2 + ocn%rho(i,j,k_drho)*area_ij
+            rhoT_b2 = rhoT_b2 - (519._wp+122._wp*5._wp)*1.e-4_wp*ocn%ts(i,j,k_drho,1)*area_ij
+            rhoS_b2 = rhoS_b2 + 0.8_wp*ocn%ts(i,j,k_drho,2)*area_ij
+          endif
+          if (j.ge.jn1_drho2 .and. j.le.jn2_drho2) then
+            area_n = area_n + area_ij
+            rho_n2 = rho_n2 + ocn%rho(i,j,k_drho)*area_ij
+            rhoT_n2 = rhoT_n2 - (519._wp+122._wp*5._wp)*1.e-4_wp*ocn%ts(i,j,k_drho,1)*area_ij
+            rhoS_n2 = rhoS_n2 + 0.8_wp*ocn%ts(i,j,k_drho,2)*area_ij
+          endif
+          if (j.ge.(jn1_drho2+2) .and. j.le.(jn2_drho2+2)) then
+            area_n3 = area_n3 + area_ij
+            rho_n3 = rho_n3 + ocn%rho(i,j,k_drho)*area_ij
+            rhoT_n3 = rhoT_n3 - (519._wp+122._wp*5._wp)*1.e-4_wp*ocn%ts(i,j,k_drho,1)*area_ij
+            rhoS_n3 = rhoS_n3 + 0.8_wp*ocn%ts(i,j,k_drho,2)*area_ij
+          endif
+        endif
+
       enddo
     enddo
     !$omp end parallel do
+
+    ! finalize global buoyancy flux (reductions complete)
+    buoy = buoyT + buoyS
+    buoy_N = buoyT_N + buoyS_N
+    buoy_tr = buoyT_tr + buoyS_tr
+    buoy_S = buoyT_S + buoyS_S
+
+    ! finalize Atlantic meridional density gradient (Bonan 2022)
+    rho_b2 = rho_b2/area_b
+    rho_n2 = rho_n2/area_n
+    rho_n3 = rho_n3/area_n3
+    rhoT_b2 = rhoT_b2/area_b
+    rhoT_n2 = rhoT_n2/area_n
+    rhoT_n3 = rhoT_n3/area_n3
+    rhoS_b2 = rhoS_b2/area_b
+    rhoS_n2 = rhoS_n2/area_n
+    rhoS_n3 = rhoS_n3/area_n3
 
     if (year.eq.1) then
       rsl_steric0 = rsl_steric
@@ -1504,62 +1617,42 @@ contains
 
     ! calculate meridional overturning streamfunctions
 
+    ! All independent per-timestep diagnostic blocks run concurrently in a single OpenMP sections region
+    !$omp parallel sections default(shared) &
+    !$omp private(i,j,k,n,ntot,nxa,JNS,ou_g,ou_p,ou_i,ou_a,vbar,dxdz,vzab,vzam,sza1,sza2,fazz,alpha,beta) &
+    !$omp private(int_drake,int_bering,int_davis,int_medi,int_indo,int_agulhas,mldst,rho_maxk,rho_k,rho1,rho2)
+    !$omp section
     ! initialize
     opsi  = 0._wp
     opsia = 0._wp
     opsip = 0._wp
     opsii = 0._wp
 
-    ! global
+    ! global and basin (Pacific/Indian/Atlantic) overturning in a single sweep over the grid.
     do j=1,maxj-1
        do k=1,maxk
-          ou(j,k) = 0._wp
+          ou_g = 0._wp
+          ou_p = 0._wp
+          ou_i = 0._wp
+          ou_a = 0._wp
           do i=1,maxi
-             ou(j,k) = ou(j,k) + ocn%u(2,i,j,k)
+             ou_g = ou_g + ocn%u(2,i,j,k)
+             if (basin_mask(i,j).eq.i_pacific) then
+                ou_p = ou_p + ocn%u(2,i,j,k)
+             else if (basin_mask(i,j).eq.i_indian) then
+                ou_i = ou_i + ocn%u(2,i,j,k)
+             else if (basin_mask(i,j).eq.i_atlantic) then
+                ou_a = ou_a + ocn%u(2,i,j,k)
+             endif
           enddo
-          opsi(j,k) = opsi(j,k-1) - ou(j,k)*dxv(j)*dz(k)  ! m3/s
+          opsi(j,k)  = opsi(j,k-1)  - ou_g*dxv(j)*dz(k)  ! m3/s
+          opsip(j,k) = opsip(j,k-1) - ou_p*dxv(j)*dz(k)
+          opsii(j,k) = opsii(j,k-1) - ou_i*dxv(j)*dz(k)
+          opsia(j,k) = opsia(j,k-1) - ou_a*dxv(j)*dz(k)
        enddo
     enddo
 
-    ! Pacific
-    do j=1,maxj-1
-       do k=1,maxk
-          ou(j,k) = 0
-             do i=1,maxi
-               if (basin_mask(i,j).eq.i_pacific) then
-                ou(j,k) = ou(j,k) + ocn%u(2,i,j,k)
-              endif
-             enddo
-          opsip(j,k) = opsip(j,k-1) - ou(j,k)*dxv(j)*dz(k)
-       enddo
-    enddo
-
-    ! Indian
-    do j=1,maxj-1
-       do k=1,maxk
-          ou(j,k) = 0
-             do i=1,maxi
-               if (basin_mask(i,j).eq.i_indian) then
-                ou(j,k) = ou(j,k) + ocn%u(2,i,j,k)
-              endif
-             enddo
-          opsii(j,k) = opsii(j,k-1) - ou(j,k)*dxv(j)*dz(k)
-       enddo
-    enddo
-
-    ! Atlantic
-    do j=1,maxj-1
-       do k=1,maxk
-          ou(j,k) = 0
-          do i=1,maxi
-            if (basin_mask(i,j).eq.i_atlantic) then
-             ou(j,k) = ou(j,k) + ocn%u(2,i,j,k)
-           endif
-          enddo
-          opsia(j,k) = opsia(j,k-1) - ou(j,k)*dxv(j)*dz(k)
-       enddo
-    enddo
-
+    !$omp section
     ! freshwater fluxes by the MOC and gyre into the Atlantic at its southern border (Liu 2017, eq 1)
     j = jas    ! index of south atlantic border
 
@@ -1621,6 +1714,7 @@ contains
     fovs = fovs/ocn%saln0    ! m3/s
     fazs = fazs/ocn%saln0    ! m3/s
 
+    !$omp section
     ! freshwater fluxes by the MOC and gyre out of the Atlantic into the Arctic (Liu 2017, eq 1)
     fovn = 0._wp
     fazn = 0._wp
@@ -1665,76 +1759,7 @@ contains
     fovn = fovn/ocn%saln0    ! m3/s
     fazn = fazn/ocn%saln0    ! m3/s
 
-    fov = fovs-fovn
-    faz = fazs-fazn
-
-    ! global buoyancy flux
-    buoyT = 0._wp
-    buoyS = 0._wp
-    buoyT_N = 0._wp
-    buoyS_N = 0._wp
-    buoyT_tr = 0._wp
-    buoyS_tr = 0._wp
-    buoyT_S = 0._wp
-    buoyS_S = 0._wp
-    do j=1,maxj
-      do i=1,maxi
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          buoyT = buoyT + g/cap_w*ocn%flx(i,j)*alpha/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
-          if (lat(j).gt.30._wp) then
-            buoyT_N = buoyT_N + g/cap_w*ocn%flx(i,j)*alpha/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
-          endif
-          if (lat(j).lt.-30._wp) then
-            buoyT_S = buoyT_S + g/cap_w*ocn%flx(i,j)*alpha/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
-          endif
-          if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
-            buoyT_tr = buoyT_tr + g/cap_w*ocn%flx(i,j)*alpha/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
-          endif
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)    
-            beta = rho1-rho2
-          else if (i_alphabeta.eq.2) then
-            beta = 0.8_wp   ! kg/m3/psu
-          endif
-          if (i_fwf_buoy.eq.1) then 
-            buoyS = buoyS + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
-            if (lat(j).gt.30._wp) then
-              buoyS_N = buoyS_N + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
-            endif
-            if (lat(j).lt.-30._wp) then
-              buoyS_S = buoyS_S + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
-            endif
-            if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
-              buoyS_tr = buoyS_tr + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
-            endif
-          else if (i_fwf_buoy.eq.2) then
-            buoyS = buoyS + g*ocn%flx_sur(i,j,2)*beta*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
-            if (lat(j).gt.30._wp) then
-              buoyS_N = buoyS_N + g*ocn%flx_sur(i,j,2)*beta*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
-            endif
-            if (lat(j).lt.-30._wp) then
-              buoyS_S = buoyS_S + g*ocn%flx_sur(i,j,2)*beta*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
-            endif
-            if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
-              buoyS_tr = buoyS_tr + g*ocn%flx_sur(i,j,2)*beta*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
-            endif
-          endif
-        endif
-      enddo
-    enddo
-    buoy = buoyT + buoyS
-    buoy_N = buoyT_N + buoyS_N
-    buoy_tr = buoyT_tr + buoyS_tr
-    buoy_S = buoyT_S + buoyS_S
-
+    !$omp section
     ! buoyancy balance of the North Atlantic at different latitudes
     do n=1,nlatv_buoy
       JNS = minloc(abs(sv(:)-sin(pi*latv_buoy(n)/180.0)),1) + lbound(sv,1) - 1    ! -1 because index of sv array starts from 0!
@@ -1743,13 +1768,7 @@ contains
       do j=JNS+1,maxj
         do i=1,maxi
           if (ocn%f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) then
-            if (i_alphabeta.eq.1) then
-              rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-              rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-              alpha = rho2-rho1
-            else if (i_alphabeta.eq.2) then
-              alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-            endif
+            alpha = alpha2d(i,j)
             !print *,'T,S,alpha,alpha1',ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),alpha,rho2-rho1
             buoyT_NA(n) = buoyT_NA(n) + g/cap_w*ocn%flx(i,j)*alpha/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg*K/J * J/s/m2 * kg/m3/K * m3/kg * m2 *s = kg*m/s2 = N
           endif
@@ -1760,13 +1779,7 @@ contains
       do j=JNS+1,maxj
         do i=1,maxi
           if (ocn%f_ocn(i,j).gt.0._wp .and. basin_mask(i,j).eq.i_atlantic) then
-            if (i_alphabeta.eq.1) then
-              rho1 = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2)+0.5_wp,0._wp)    
-              rho2 = eos(ocn%ts(i,j,maxk,1),max(0._wp,ocn%ts(i,j,maxk,2)-0.5_wp),0._wp)    
-              beta = rho1-rho2
-            else if (i_alphabeta.eq.2) then
-              beta = 0.8_wp   ! kg/m3/psu
-            endif
+            beta = beta2d(i,j)
             !print *,'beta,beta1',beta,rho2-rho1
             if (i_fwf_buoy.eq.1) then 
               buoyS_NA(n) = buoyS_NA(n) + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
@@ -1810,6 +1823,7 @@ contains
     fw_lab = fw_lab*1.e-6_wp  ! Sv
 
 
+    !$omp section
     ! 1. Drake Passage through flow (Sv)
     tf_drake = 0.0
     int_drake = .true.
@@ -2029,63 +2043,320 @@ contains
     enddo
     tf_agulhas = tf_agulhas*1.e-6_wp  ! Sv
 
+    !$omp section
     ! Atlantic meridional density gradient at 750 m depth between 52.5N and 32.5S
     ntot = count(basin_mask(:,js_drho1).eq.i_atlantic .and. k_drho.ge.k1(1:maxi,js_drho1))
     rho_s1 = sum(ocn%rho(:,js_drho1,k_drho), basin_mask(:,js_drho1).eq.i_atlantic .and. k_drho.ge.k1(1:maxi,js_drho1)) / ntot
     ntot = count(basin_mask(:,jn_drho1).eq.i_atlantic .and. k_drho.ge.k1(1:maxi,jn_drho1))
     rho_n1 = sum(ocn%rho(:,jn_drho1,k_drho), basin_mask(:,jn_drho1).eq.i_atlantic .and. k_drho.ge.k1(1:maxi,jn_drho1)) / ntot
-    ! Atlantic meridional density gradient following Bonan 2022, difference
-    ! between average 40-60N and the whole Atl basin south of 60N
-    area_n = 0._wp
-    area_n3 = 0._wp
-    area_b = 0._wp
-    rho_b2 = 0._wp
-    rho_n2 = 0._wp
-    rho_n3 = 0._wp
-    rhoT_b2 = 0._wp
-    rhoT_n2 = 0._wp
-    rhoT_n3 = 0._wp
-    rhoS_b2 = 0._wp
-    rhoS_n2 = 0._wp
-    rhoS_n3 = 0._wp
-    alpha = (519._wp+122._wp*5._wp)*1.e-4_wp    ! kg/m3/K, assume value at 5 degC
-    beta = 0.8_wp   ! kg/m3/psu
-    do j=1,maxj
-      do i=1,maxi
-        if (basin_mask(i,j).eq.i_atlantic .and. k_drho.ge.k1(i,j)) then
-          if (j.ge.js_drho2 .and. j.le.jn2_drho2) then
-            area_ij = ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j)
-            area_b = area_b + area_ij 
-            rho_b2 = rho_b2 + ocn%rho(i,j,k_drho)*area_ij
-            rhoT_b2 = rhoT_b2 - alpha*ocn%ts(i,j,k_drho,1)*area_ij
-            rhoS_b2 = rhoS_b2 + beta*ocn%ts(i,j,k_drho,2)*area_ij
-          endif
-          if (j.ge.jn1_drho2 .and. j.le.jn2_drho2) then
-            area_ij = ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j)
-            area_n = area_n + area_ij 
-            rho_n2 = rho_n2 + ocn%rho(i,j,k_drho)*area_ij
-            rhoT_n2 = rhoT_n2 - alpha*ocn%ts(i,j,k_drho,1)*area_ij
-            rhoS_n2 = rhoS_n2 + beta*ocn%ts(i,j,k_drho,2)*area_ij
-          endif
-          if (j.ge.(jn1_drho2+2) .and. j.le.(jn2_drho2+2)) then
-            area_ij = ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j)
-            area_n3 = area_n3 + area_ij 
-            rho_n3 = rho_n3 + ocn%rho(i,j,k_drho)*area_ij
-            rhoT_n3 = rhoT_n3 - alpha*ocn%ts(i,j,k_drho,1)*area_ij
-            rhoS_n3 = rhoS_n3 + beta*ocn%ts(i,j,k_drho,2)*area_ij
-          endif
+    !$omp section
+    pe_atlN = 0._wp
+    do i=i_atlN(1),i_atlN(2)
+      do j=j_atlN(1),j_atlN(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          pe_atlN = pe_atlN + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
         endif
       enddo
     enddo
-    rho_b2 = rho_b2/area_b
-    rho_n2 = rho_n2/area_n
-    rho_n3 = rho_n3/area_n3
-    rhoT_b2 = rhoT_b2/area_b
-    rhoT_n2 = rhoT_n2/area_n
-    rhoT_n3 = rhoT_n3/area_n3
-    rhoS_b2 = rhoS_b2/area_b
-    rhoS_n2 = rhoS_n2/area_n
-    rhoS_n3 = rhoS_n3/area_n3
+
+    !$omp section
+    mld_atlN50 = 0._wp
+    mldst_atlN50 = 0._wp
+    pe_atlN50 = 0._wp
+    t_atlN50 = 0._wp
+    s_atlN50 = 0._wp
+    area_atlN50 = 0._wp
+    do i=i_atlN50(1),i_atlN50(2)
+      do j=j_atlN50(1),j_atlN50(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_atlN50 = max(mldst_atlN50,mldst)
+          mld_atlN50 = max(mld_atlN50,-ocn%mld(i,j))
+          pe_atlN50 = pe_atlN50 + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
+          t_atlN50 = t_atlN50 + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_atlN50 = s_atlN50 + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_atlN50 = area_atlN50 + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_atlN50 = t_atlN50/area_atlN50
+    s_atlN50 = s_atlN50/area_atlN50
+
+
+    !$omp section
+    mld_lab = 0._wp
+    mldst_lab = 0._wp
+    pe_lab = 0._wp
+    buoy_lab = 0._wp
+    t_lab = 0._wp
+    s_lab = 0._wp
+    area_lab = 0._wp
+    do i=i_lab(1),i_lab(2)
+      do j=j_lab(1),j_lab(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_lab = max(mldst_lab,mldst)
+          mld_lab = max(mld_lab,-ocn%mld(i,j))
+          pe_lab = pe_lab + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_lab = buoy_lab + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_lab = t_lab + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_lab = s_lab + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_lab = area_lab + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_lab = t_lab/area_lab
+    s_lab = s_lab/area_lab
+
+    !$omp section
+    mld_irm = 0._wp
+    mldst_irm = 0._wp
+    pe_irm = 0._wp
+    buoy_irm = 0._wp
+    t_irm = 0._wp
+    s_irm = 0._wp
+    area_irm = 0._wp
+    do i=i_irm(1),i_irm(2)
+      do j=j_irm(1),j_irm(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_irm = max(mldst_irm,mldst)
+          mld_irm = max(mld_irm,-ocn%mld(i,j))
+          pe_irm = pe_irm + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_irm = buoy_irm + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_irm = t_irm + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_irm = s_irm + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_irm = area_irm + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_irm = t_irm/area_irm
+    s_irm = s_irm/area_irm
+
+    !$omp section
+    mld_gin = 0._wp
+    mldst_gin = 0._wp
+    pe_gin = 0._wp
+    buoy_gin = 0._wp
+    t_gin = 0._wp
+    s_gin = 0._wp
+    area_gin = 0._wp
+    do i=i_gin(1),i_gin(2)
+      do j=j_gin(1),j_gin(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_gin = max(mldst_gin,mldst)
+          mld_gin = max(mld_gin,-ocn%mld(i,j))
+          pe_gin = pe_gin + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_gin = buoy_gin + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_gin = t_gin + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_gin = s_gin + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_gin = area_gin + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_gin = t_gin/area_gin
+    s_gin = s_gin/area_gin
+
+    !$omp section
+    mld_bkn = 0._wp
+    mldst_bkn = 0._wp
+    pe_bkn = 0._wp
+    buoy_bkn = 0._wp
+    t_bkn = 0._wp
+    s_bkn = 0._wp
+    area_bkn = 0._wp
+    do i=i_bkn(1),i_bkn(2)
+      do j=j_bkn(1),j_bkn(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_bkn = max(mldst_bkn,mldst)
+          mld_bkn = max(mld_bkn,-ocn%mld(i,j))
+          pe_bkn = pe_bkn + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_bkn = buoy_bkn + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_bkn = t_bkn + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_bkn = s_bkn + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_bkn = area_bkn + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_bkn = t_bkn/area_bkn
+    s_bkn = s_bkn/area_bkn
+
+    !$omp section
+    mld_wedd = 0._wp
+    mldst_wedd = 0._wp
+    pe_wedd = 0._wp
+    buoy_wedd = 0._wp
+    t_wedd = 0._wp
+    s_wedd = 0._wp
+    area_wedd = 0._wp
+    do i=i_wedd(1),i_wedd(2)
+      do j=j_wedd(1),j_wedd(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_wedd = max(mldst_wedd,mldst)
+          mld_wedd = max(mld_wedd,-ocn%mld(i,j))
+          pe_wedd = pe_wedd + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_wedd = buoy_wedd + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_wedd = t_wedd + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_wedd = s_wedd + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_wedd = area_wedd + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_wedd = t_wedd/area_wedd
+    s_wedd = s_wedd/area_wedd
+
+    !$omp section
+    mld_ross = 0._wp
+    mldst_ross = 0._wp
+    pe_ross = 0._wp
+    buoy_ross = 0._wp
+    t_ross = 0._wp
+    s_ross = 0._wp
+    area_ross = 0._wp
+    do i=i_ross(1),i_ross(2)
+      do j=j_ross(1),j_ross(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_ross = max(mldst_ross,mldst)
+          mld_ross = max(mld_ross,-ocn%mld(i,j))
+          pe_ross = pe_ross + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_ross = buoy_ross + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          t_ross = t_ross + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_ross = s_ross + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_ross = area_ross + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_ross = t_ross/area_ross
+    s_ross = s_ross/area_ross
+
+    !$omp section
+    mld_so = 0._wp
+    mldst_so = 0._wp
+    pe_so = 0._wp
+    buoy_so = 0._wp
+    t_sos = 0._wp
+    s_sos = 0._wp
+    area_so = 0._wp
+    do i=i_so(1),i_so(2)
+      do j=j_so(1),j_so(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          mldst = -zw(k1(i,j))
+          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
+          do k=maxk,k1(i,j),-1
+            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
+            if ((rho_k-rho_maxk).gt.0.125_wp) then
+              mldst = -zw(k)
+              exit
+            endif
+          enddo
+          mldst_so = max(mldst_so,mldst)
+          mld_so = max(mld_so,-ocn%mld(i,j))
+          pe_so = pe_so + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_so = buoy_so + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+
+          t_sos = t_sos + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
+          s_sos = s_sos + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
+          area_so = area_so + ocn%grid%ocn_area(i,j)
+        endif
+      enddo
+    enddo
+    t_sos = t_sos/area_so
+    s_sos = s_sos/area_so
+
+    !$omp section
+    buoy_soS60 = 0._wp
+    buoyT_soS60 = 0._wp
+    buoyS_soS60 = 0._wp
+    do i=i_soS60(1),i_soS60(2)
+      do j=j_soS60(1),j_soS60(2)
+        if (ocn%f_ocn(i,j).gt.0._wp) then
+          alpha = alpha2d(i,j)
+          beta = 0.8_wp   ! kg/m3/psu
+          buoy_soS60  = buoy_soS60  + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoyT_soS60 = buoyT_soS60 + ocn%flx(i,j)*alpha/cap_w * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoyS_soS60 = buoyS_soS60 + ocn%fw_corr(i,j)*beta*ocn%saln0 * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+        endif
+      enddo
+    enddo
+    !$omp end parallel sections
+
+    ! combine MOC/gyre freshwater transports (both contributions computed in the sections above)
+    fov = fovs-fovn
+    faz = fazs-fazn
 
     ! set to zero at start of the year
     if( time_soy_ocn ) then
@@ -2347,347 +2618,6 @@ contains
     ann_o%hfaz(:,:) = ann_o%hfaz(:,:) + hfaz*1e-15 * ann_avg ! PW/m
     ann_o%fwa(1:3,:) = ann_o%fwa(1:3,:) + fwa*1e-6 * ann_avg  ! Sv
 
-    pe_atlN = 0._wp
-    do i=i_atlN(1),i_atlN(2)
-      do j=j_atlN(1),j_atlN(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          pe_atlN = pe_atlN + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
-        endif
-      enddo
-    enddo
-
-    mld_atlN50 = 0._wp
-    mldst_atlN50 = 0._wp
-    pe_atlN50 = 0._wp
-    t_atlN50 = 0._wp
-    s_atlN50 = 0._wp
-    area_atlN50 = 0._wp
-    do i=i_atlN50(1),i_atlN50(2)
-      do j=j_atlN50(1),j_atlN50(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_atlN50 = max(mldst_atlN50,mldst)
-          mld_atlN50 = max(mld_atlN50,-ocn%mld(i,j))
-          pe_atlN50 = pe_atlN50 + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
-          t_atlN50 = t_atlN50 + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_atlN50 = s_atlN50 + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_atlN50 = area_atlN50 + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_atlN50 = t_atlN50/area_atlN50
-    s_atlN50 = s_atlN50/area_atlN50
-
-
-    mld_lab = 0._wp
-    mldst_lab = 0._wp
-    pe_lab = 0._wp
-    buoy_lab = 0._wp
-    t_lab = 0._wp
-    s_lab = 0._wp
-    area_lab = 0._wp
-    do i=i_lab(1),i_lab(2)
-      do j=j_lab(1),j_lab(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_lab = max(mldst_lab,mldst)
-          mld_lab = max(mld_lab,-ocn%mld(i,j))
-          pe_lab = pe_lab + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_lab = buoy_lab + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_lab = t_lab + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_lab = s_lab + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_lab = area_lab + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_lab = t_lab/area_lab
-    s_lab = s_lab/area_lab
-
-    mld_irm = 0._wp
-    mldst_irm = 0._wp
-    pe_irm = 0._wp
-    buoy_irm = 0._wp
-    t_irm = 0._wp
-    s_irm = 0._wp
-    area_irm = 0._wp
-    do i=i_irm(1),i_irm(2)
-      do j=j_irm(1),j_irm(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_irm = max(mldst_irm,mldst)
-          mld_irm = max(mld_irm,-ocn%mld(i,j))
-          pe_irm = pe_irm + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_irm = buoy_irm + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_irm = t_irm + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_irm = s_irm + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_irm = area_irm + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_irm = t_irm/area_irm
-    s_irm = s_irm/area_irm
-
-    mld_gin = 0._wp
-    mldst_gin = 0._wp
-    pe_gin = 0._wp
-    buoy_gin = 0._wp
-    t_gin = 0._wp
-    s_gin = 0._wp
-    area_gin = 0._wp
-    do i=i_gin(1),i_gin(2)
-      do j=j_gin(1),j_gin(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_gin = max(mldst_gin,mldst)
-          mld_gin = max(mld_gin,-ocn%mld(i,j))
-          pe_gin = pe_gin + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_gin = buoy_gin + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_gin = t_gin + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_gin = s_gin + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_gin = area_gin + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_gin = t_gin/area_gin
-    s_gin = s_gin/area_gin
-
-    mld_bkn = 0._wp
-    mldst_bkn = 0._wp
-    pe_bkn = 0._wp
-    buoy_bkn = 0._wp
-    t_bkn = 0._wp
-    s_bkn = 0._wp
-    area_bkn = 0._wp
-    do i=i_bkn(1),i_bkn(2)
-      do j=j_bkn(1),j_bkn(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_bkn = max(mldst_bkn,mldst)
-          mld_bkn = max(mld_bkn,-ocn%mld(i,j))
-          pe_bkn = pe_bkn + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_bkn = buoy_bkn + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_bkn = t_bkn + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_bkn = s_bkn + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_bkn = area_bkn + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_bkn = t_bkn/area_bkn
-    s_bkn = s_bkn/area_bkn
-
-    mld_wedd = 0._wp
-    mldst_wedd = 0._wp
-    pe_wedd = 0._wp
-    buoy_wedd = 0._wp
-    t_wedd = 0._wp
-    s_wedd = 0._wp
-    area_wedd = 0._wp
-    do i=i_wedd(1),i_wedd(2)
-      do j=j_wedd(1),j_wedd(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_wedd = max(mldst_wedd,mldst)
-          mld_wedd = max(mld_wedd,-ocn%mld(i,j))
-          pe_wedd = pe_wedd + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_wedd = buoy_wedd + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_wedd = t_wedd + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_wedd = s_wedd + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_wedd = area_wedd + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_wedd = t_wedd/area_wedd
-    s_wedd = s_wedd/area_wedd
-
-    mld_ross = 0._wp
-    mldst_ross = 0._wp
-    pe_ross = 0._wp
-    buoy_ross = 0._wp
-    t_ross = 0._wp
-    s_ross = 0._wp
-    area_ross = 0._wp
-    do i=i_ross(1),i_ross(2)
-      do j=j_ross(1),j_ross(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_ross = max(mldst_ross,mldst)
-          mld_ross = max(mld_ross,-ocn%mld(i,j))
-          pe_ross = pe_ross + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_ross = buoy_ross + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          t_ross = t_ross + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_ross = s_ross + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_ross = area_ross + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_ross = t_ross/area_ross
-    s_ross = s_ross/area_ross
-
-    mld_so = 0._wp
-    mldst_so = 0._wp
-    pe_so = 0._wp
-    buoy_so = 0._wp
-    t_sos = 0._wp
-    s_sos = 0._wp
-    area_so = 0._wp
-    do i=i_so(1),i_so(2)
-      do j=j_so(1),j_so(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          mldst = -zw(k1(i,j))
-          rho_maxk = eos(ocn%ts(i,j,maxk,1),ocn%ts(i,j,maxk,2),0._wp)    ! in-situ density at the surface
-          do k=maxk,k1(i,j),-1
-            rho_k = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),0._wp)   ! in-situ density
-            if ((rho_k-rho_maxk).gt.0.125_wp) then
-              mldst = -zw(k)
-              exit
-            endif
-          enddo
-          mldst_so = max(mldst_so,mldst)
-          mld_so = max(mld_so,-ocn%mld(i,j))
-          pe_so = pe_so + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_so = buoy_so + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-
-          t_sos = t_sos + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
-          s_sos = s_sos + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
-          area_so = area_so + ocn%grid%ocn_area(i,j)
-        endif
-      enddo
-    enddo
-    t_sos = t_sos/area_so
-    s_sos = s_sos/area_so
-
-    buoy_soS60 = 0._wp
-    buoyT_soS60 = 0._wp
-    buoyS_soS60 = 0._wp
-    do i=i_soS60(1),i_soS60(2)
-      do j=j_soS60(1),j_soS60(2)
-        if (ocn%f_ocn(i,j).gt.0._wp) then
-          if (i_alphabeta.eq.1) then
-            rho1 = eos(ocn%ts(i,j,maxk,1)+0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            rho2 = eos(ocn%ts(i,j,maxk,1)-0.5_wp,ocn%ts(i,j,maxk,2),0._wp)    
-            alpha = rho2-rho1
-          else if (i_alphabeta.eq.2) then
-            alpha = (519._wp+122._wp*ocn%ts(i,j,maxk,1))*1.e-4_wp    ! kg/m3/K
-          endif
-          beta = 0.8_wp   ! kg/m3/psu
-          buoy_soS60  = buoy_soS60  + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          buoyT_soS60 = buoyT_soS60 + ocn%flx(i,j)*alpha/cap_w * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          buoyS_soS60 = buoyS_soS60 + ocn%fw_corr(i,j)*beta*ocn%saln0 * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-        endif
-      enddo
-    enddo
 
     ann_ts(y)%mld_atlN50= max(ann_ts(y)%mld_atlN50,mld_atlN50)
     ann_ts(y)%mld_lab   = max(ann_ts(y)%mld_lab,mld_lab)

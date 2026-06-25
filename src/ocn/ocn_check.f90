@@ -69,6 +69,9 @@ contains
     v_max_CFL =  dy/dt
 
     ! check CFL stability
+    ! column-independent read-only scan; error is only ever set .true., handled as an .or.
+    ! reduction so the incoming value is preserved and there is no race on the shared flag
+    !$omp parallel do collapse(2) private(i,j,k) reduction(.or.:error)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -137,6 +140,7 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
 
     return
