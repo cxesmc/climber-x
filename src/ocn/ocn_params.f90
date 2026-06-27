@@ -54,6 +54,8 @@ module ocn_params
      integer :: nlayers
      integer :: i_smooth
      real(wp) :: smooth_fac
+     logical :: l_limit_ratio   !! limit the neighbour ocean-depth ratio of the bathymetry by deepening shallow cells (despike for barotropic stability)?
+     real(wp) :: depth_ratio_max  !! maximum allowed neighbour depth ratio (threshold for l_limit_ratio) []
      real(wp), dimension(:), allocatable :: zw_in
      integer :: i_isl
      real(wp) :: isl_area_min
@@ -123,7 +125,7 @@ module ocn_params
      integer :: i_saln0
      real(wp) :: saln0_const
      logical :: l_salinity_restore
-     real(wp) :: shelf_depth
+     real(wp) :: ocn_depth_min
      logical :: age_tracer
      logical :: dye_tracer
      logical :: cons_tracer
@@ -227,6 +229,8 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","levels",zw_in)
     call nml_read(filename,"ocn_par","i_smooth",i_smooth)
     call nml_read(filename,"ocn_par","smooth_fac",smooth_fac)
+    call nml_read(filename,"ocn_par","l_limit_ratio",l_limit_ratio)
+    call nml_read(filename,"ocn_par","depth_ratio_max",depth_ratio_max)
     call nml_read(filename,"ocn_par","i_isl",i_isl)
     call nml_read(filename,"ocn_par","isl_area_min",isl_area_min)
     call nml_read(filename,"ocn_par","l_isl_ant",l_isl_ant)
@@ -283,7 +287,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_sst",tau_sst)
     call nml_read(filename,"ocn_par","tau_sss",tau_sss)
 
-    call nml_read(filename,"ocn_par","shelf_depth",shelf_depth)
+    call nml_read(filename,"ocn_par","ocn_depth_min",ocn_depth_min)
 
     call nml_read(filename,"ocn_par","age_tracer",age_tracer)
     call nml_read(filename,"ocn_par","dye_tracer",dye_tracer)

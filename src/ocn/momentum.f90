@@ -70,6 +70,7 @@ module momentum_mod
   real(wp), allocatable :: psisl(:,:,:)
   real(wp), allocatable :: ubisl(:,:,:,:)
   real(wp), allocatable :: erisl(:,:)
+  integer, allocatable :: erisl_ipiv(:)   ! row-pivot vector from matinv, replayed by matmult each step
   real(wp), allocatable :: psibc(:)
   real(wp), allocatable :: tmpdrg(:,:)
   real(wp), allocatable :: rho_tb(:,:,:)
@@ -171,7 +172,7 @@ contains
     ! solve system of simultaneous equations
     !$ time1 = omp_get_wtime()
     if (n_isles > 1) then
-       call matmult(n_isles,erisl,erisl(:,n_isles+1))
+       call matmult(n_isles,erisl,erisl_ipiv,erisl(:,n_isles+1))
        do isl=1,n_isles
           psibc(isl) = - erisl(isl,n_isles+1)
        enddo
@@ -385,7 +386,7 @@ contains
     !enddo
 
     ! partially invert inland integral error matrix for psi bc calc
-    call matinv(n_isles,erisl)  ! inverted erisl in s2/m?
+    call matinv(n_isles,erisl,erisl_ipiv)  ! LU factors of island matrix (+ pivots)
 
     !print*,'island path integrals due to unit sources after matinv'
     !do isl=1,n_isles
@@ -424,6 +425,7 @@ contains
     allocate(psisl(0:maxi,0:maxj,maxisles))
     allocate(ubisl(2,0:maxi+1,0:maxj,maxisles))
     allocate(erisl(maxisles,maxisles+1))
+    allocate(erisl_ipiv(maxisles))
     allocate(psibc(maxisles))
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))

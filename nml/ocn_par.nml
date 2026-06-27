@@ -18,9 +18,12 @@
  levels =  0. 10. 25. 50. 100. 150. 200. 250. 300. 400. 500. 600. 800. 1000. 1250. 1500. 1750. 2000. 2500. 3000. 3500. 4000. 4500. 5000.
  i_smooth = 1                 ! topography smoothing:
                               ! 1 = smooth smooth_fac times in physical space
-                              ! 2 = smooth smooth_fac times in physical space, cos corrected weghting of dlat vs dlon
-                              ! 3 = smooth in Fourier space with smooth factor smooth_fac (values ~0.1 almost unsmoothed, values ~1 very sine like)
+                              ! 2 = smooth in Fourier space with smooth factor smooth_fac (values ~0.1 almost unsmoothed, values ~1 very sine like)
  smooth_fac = 1               ! bathymetry smooth factor
+ l_limit_ratio = .false.      ! despike the bathymetry by DEEPENING shallow cells until no neighbour depth ratio exceeds depth_ratio_max
+                              ! (aggressive, one-directional; has a narrow stable window because it can flood shelves / over-flatten)
+ depth_ratio_max = 12.        ! maximum allowed neighbour depth ratio (threshold for l_limit_ratio)
+                              ! (smooth_fac=1 has max ratio ~15 and is stable; smooth_fac=0 reaches ~25 and crashes)
  i_isl = 1                    ! method to determine islands for barotropic flow:
                               ! 0 = automatic
                               ! 1 = specify specific islands (l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame), valid for present-day geography
@@ -35,7 +38,7 @@
  n_isl = 3                    ! number of islands for barotropic flow, only for i_isl==2
  lon_isl = 90  60 140         ! longitude of grid cell on islands, only for i_isl==2. 
  lat_isl = 50 -85 -30         ! latitude of grid cell on islands, only for i_isl==2. 
- shelf_depth = 200.           ! m, depth of ocean shelf
+ ocn_depth_min = 50.          ! m, minimum ocean depth (shallow ocean columns are clamped to at least this depth)
  dbl = 50.                    ! m, depth of surface boundary layer
 
  !-------------------------------------------------------------------------------------------

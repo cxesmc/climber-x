@@ -197,6 +197,7 @@ module coupler
       real(wp), dimension(:,:),   allocatable :: z_sur   !! mean surface elevation of grid cell [m]
       real(wp), dimension(:,:,:), allocatable :: z_sur_n   !! mean surface elevation of each surface type in atmosphere model [m]
       real(wp), dimension(:,:),   allocatable :: z_ocn_max   !! max elevation of ocean, Q10 [m]
+      real(wp), dimension(:,:),   allocatable :: z_ocn   !! ocean-model bathymetry (= geo%z_bed, grid-cell bedrock elevation), relative to sea level [m]
       real(wp), dimension(:,:),   allocatable :: z_veg   !! mean surface elevation of ice free land [m]
       real(wp), dimension(:,:),   allocatable :: z_veg_min   !! min surface elevation of ice free land [m]
       real(wp), dimension(:,:),   allocatable :: z_veg_max   !! max surface elevation of ice free land [m]
@@ -769,6 +770,7 @@ contains
       ocn%grid%ocn_area_old = ocn%grid%ocn_area
       ocn%grid%ocn_vol_old  = ocn%grid%ocn_vol
       ocn%z_ocn_max = cmn%z_ocn_max
+      ocn%z_ocn     = cmn%z_ocn
       ocn%f_ocn     = cmn%f_ocn
       ocn%f_ocn2    = cmn%f_ocn2
       ocn%mask_coast= cmn%mask_coast2
@@ -3299,6 +3301,7 @@ contains
     ! surface elevation on common grid
     cmn%z_sur = geo%z_sur
     cmn%z_ocn_max = geo%z_ocn_max_q
+    cmn%z_ocn = geo%z_bed   
     cmn%z_veg = geo%z_veg
     cmn%z_veg_min = geo%z_veg_min
     cmn%z_veg_max = geo%z_veg_max
@@ -4434,7 +4437,8 @@ contains
     allocate(cmn%disturbance(5,ni,nj))    
     allocate(cmn%z_sur(ni,nj))    
     allocate(cmn%z_sur_n(ni,nj,nsurf_macro))    
-    allocate(cmn%z_ocn_max(ni,nj))    
+    allocate(cmn%z_ocn_max(ni,nj))
+    allocate(cmn%z_ocn(ni,nj))
     allocate(cmn%z_veg(ni,nj))    
     allocate(cmn%z_veg_min(ni,nj))    
     allocate(cmn%z_veg_max(ni,nj))    

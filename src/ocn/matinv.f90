@@ -46,25 +46,51 @@ contains
   !   Purpose    :  invert
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine matinv(nisl, &
-                    amat)
-    
+                    amat,ipiv)
+
     implicit none
 
     integer, intent(in) :: nisl
     real(wp), intent(inout) :: amat(:,:)
+    integer, intent(out) :: ipiv(:)
 
-    integer i, j, k
+    integer :: i, j, k, p
+    real(wp) :: tmp
+    real(wp), parameter :: pivtol = 1.e-30_wp   ! singularity floor (exact-zero / denormal guard)
 
-    ! elimination
+    ! LU factorization with partial (row) pivoting: P*amat = L*U.
+    ! U is stored in the upper triangle (incl. diagonal), the unit-lower multipliers L in
+    ! the strict lower triangle, and the row swaps in ipiv; matmult replays ipiv on the rhs
+    ! and back-solves. Replaces the old fraction-free elimination, whose entries grew like
+    ! the running product of pivots (overflow risk) and which could divide by a zero pivot
+    ! without warning. Only the factorization columns (1..nisl) are touched; the rhs column
+    ! held in amat(:,nisl+1) is left for matmult.
 
-    do i=1,nisl-1
+    do i=1,nisl
+       ! find pivot row (largest magnitude in column i, rows i..nisl)
+       p = i
        do j=i+1,nisl
+          if (abs(amat(j,i)).gt.abs(amat(p,i))) p = j
+       enddo
+       ipiv(i) = p
+       ! swap rows i and p over the factorization columns
+       if (p.ne.i) then
+          do k=1,nisl
+             tmp = amat(i,k); amat(i,k) = amat(p,k); amat(p,k) = tmp
+          enddo
+       endif
+       if (abs(amat(i,i)).lt.pivtol) then
+          print *
+          print *,'ERROR: singular island matrix in matinv'
+          print *,'island',i,' pivot',amat(i,i)
+          print *
+          stop 'matinv: singular island matrix'
+       endif
+       ! eliminate below the pivot, storing the multipliers in the lower triangle
+       do j=i+1,nisl
+          amat(j,i) = amat(j,i)/amat(i,i)
           do k=i+1,nisl
-             amat(j,k) = amat(i,i)*amat(j,k) - amat(j,i)*amat(i,k)
-             !if (j.eq.nisl .and. k.eq.nisl) then
-             !  print *,i,amat(i,i),amat(j,k),amat(j,i),amat(i,k)
-             !  print *,amat(j,k),amat(i,i)*amat(j,k),amat(j,i)*amat(i,k)
-             !endif
+             amat(j,k) = amat(j,k) - amat(j,i)*amat(i,k)
           enddo
        enddo
     enddo
@@ -78,46 +104,42 @@ contains
   !   Subroutine :  m a t m u l t
   !   Purpose    :  multiply
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine matmult(nisl,amat, &
+  subroutine matmult(nisl,amat,ipiv, &
                      rhs)
 
     implicit none
 
     integer, intent(in) :: nisl
     real(wp), intent(in) :: amat(:,:)
+    integer, intent(in) :: ipiv(:)
     real(wp), intent(inout) :: rhs(:)
 
-    integer i, j
+    integer :: i, j
+    real(wp) :: tmp
 
+    ! solve P*amat = L*U system for rhs using the factors stored by matinv
 
-    do i=1,nisl-1
-       do j=i+1,nisl
-          rhs(j) = amat(i,i)*rhs(j) - amat(j,i)*rhs(i)
+    ! apply the row permutation recorded during factorization
+    do i=1,nisl
+       if (ipiv(i).ne.i) then
+          tmp = rhs(i); rhs(i) = rhs(ipiv(i)); rhs(ipiv(i)) = tmp
+       endif
+    enddo
+
+    ! forward substitution (unit lower triangular L)
+    do i=2,nisl
+       do j=1,i-1
+          rhs(i) = rhs(i) - amat(i,j)*rhs(j)
        enddo
     enddo
 
-    ! back substitution
-    !print *,'nisl',nisl
-    !print *,'rhs(nisl)',rhs(nisl)
-    !print *,'amat(nisl,nisl)',amat(nisl,nisl)
-
-    rhs(nisl) = rhs(nisl)/amat(nisl,nisl)
-    do i=nisl-1,1,-1
+    ! back substitution (upper triangular U)
+    do i=nisl,1,-1
        do j=i+1,nisl
           rhs(i) = rhs(i) - amat(i,j)*rhs(j)
        enddo
        rhs(i) = rhs(i)/amat(i,i)
     enddo
-
-!c     print*,(rhs(i),i=1,nisl)
-!c     print*
-!c     print*,cmat(1,1)*rhs(1) + cmat(1,2)*rhs(2) + cmat(1,3)*rhs(3) &
-!c           + cmat(1,4)*rhs(4) - orhs(1), &
-!c           cmat(2,1)*rhs(1) + cmat(2,2)*rhs(2) + cmat(2,3)*rhs(3) &
-!c           + cmat(2,4)*rhs(4) - orhs(2), &
-!c           cmat(3,1)*rhs(1) + cmat(3,2)*rhs(2) + cmat(3,3)*rhs(3) &
-!c           + cmat(3,4)*rhs(4) - orhs(3)
-!c     print*,((amat(i,j),i=1,nisl),j=1,nisl)
 
    return
 
