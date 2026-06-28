@@ -30,7 +30,7 @@ module geo_grid
   use constants, only: pi, R_earth 
   use control, only : out_dir
   use climber_grid, only : ni, nj, lon, lat, dlon, dlat
-  use coord, only : grid_class, grid_init
+  use coords, only : grid_class, grid_init
   use geo_params, only : geo_ref_file
 
   implicit none

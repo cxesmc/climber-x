@@ -27,7 +27,7 @@ module topo_filter_mod
 
   use precision, only : wp
   use constants, only : pi, R_earth
-  use coord, only : grid_class
+  use coords, only : grid_class
 
   implicit none
     

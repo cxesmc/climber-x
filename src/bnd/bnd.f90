@@ -76,7 +76,7 @@ module bnd_mod
     use fake_ice_mod
     use fake_geo_mod
     use ncio
-    use coord, only : grid_class
+    use coords, only : grid_class
 
     implicit none 
 

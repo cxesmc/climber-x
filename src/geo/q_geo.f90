@@ -30,9 +30,8 @@ module q_geo_mod
   use geo_params, only : i_q_geo_ice, q_geo_ice_const, q_geo_ice_file
 
   use ncio
-  use coord, only : grid_class, grid_init
-  use coord, only : map_class, map_init, map_field
-  use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
+  use coords, only : grid_class, grid_init
+  use coords, only : map_class, map_init, map_field
 
   implicit none
 
@@ -55,7 +54,7 @@ contains
     real(wp), dimension(:), allocatable :: lon_qgeo, lat_qgeo
     real(wp), dimension(:,:), allocatable :: q_geo_in
     type(grid_class) :: qgeo_grid
-    type(map_scrip_class) :: maps_qgeo_to_geo
+    type(map_class) :: maps_qgeo_to_geo
 
 
     if (i_q_geo.eq.1) then
@@ -80,8 +79,8 @@ contains
       ppos = scan(trim(q_geo_file),".", BACK= .true.)-1
       call grid_init(qgeo_grid,name=trim(q_geo_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
       ! map to geo grid
-      call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
+      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
 
@@ -109,8 +108,8 @@ contains
       ppos = scan(trim(q_geo_ice_file),".", BACK= .true.)-1
       call grid_init(qgeo_grid,name=trim(q_geo_ice_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
       ! map to geo grid
-      call map_scrip_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_scrip_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo_ice,method="mean",missing_value=-9999._dp)
+      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo_ice,method="mean",missing_value=-9999._dp)
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
 

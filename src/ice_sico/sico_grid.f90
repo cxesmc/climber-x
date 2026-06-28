@@ -2,7 +2,7 @@ module sico_grid_mod
 
   use nml
   use control, only : out_dir
-  use coord, only : grid_class, grid_init, grid_write
+  use coords, only : grid_class, grid_init, grid_write
 
   use sico_types_m
   use sico_params, only : sico_par_class

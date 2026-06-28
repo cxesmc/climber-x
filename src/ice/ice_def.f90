@@ -26,7 +26,7 @@
 module ice_def
 
     use precision, only : wp
-    use coord, only : grid_class
+    use coords, only : grid_class
 
     implicit none
     

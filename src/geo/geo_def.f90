@@ -26,7 +26,7 @@
 module geo_def
 
     use precision, only : wp, dp
-    use coord, only : grid_class
+    use coords, only : grid_class
 
     implicit none
     

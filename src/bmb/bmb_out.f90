@@ -34,7 +34,7 @@ module bmb_out
   use bmb_def, only : bmb_class, ts_out, s_out 
   use bmb_params, only : l_monthly_output
   use ncio
-  use coord, only : grid_class
+  use coords, only : grid_class
 
   implicit none
 
