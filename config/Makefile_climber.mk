@@ -1200,7 +1200,7 @@ climber_clim_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
 
 climber_clim_bgc_obj = $(obj_utils) $(obj_bnd) $(obj_geo)\
 			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
-				$(obj_bgc) $(obj_m4ago) $(obj_co2) $(obj_ch4) $(obj_n2o) \
+				$(obj_bgc) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice_dummy) $(obj_smb_dummy) $(obj_bmb_dummy) $(obj_main_clim_bgc)
 
 # climber-clim-ice: clim plus with ice #
@@ -1214,7 +1214,7 @@ climber_clim_ice_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
 
 climber_clim_bgc_ice_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
 			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
-				$(obj_bgc) $(obj_m4ago) $(obj_co2) $(obj_ch4) $(obj_n2o) \
+				$(obj_bgc) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice) $(obj_ice_sico) $(obj_smb) $(obj_bmb) $(obj_main)
 
 ########################################################################
