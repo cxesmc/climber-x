@@ -60,11 +60,12 @@ contains
   ! subroutine :  b g c _ w r i t e _ r e s t a r t
   ! purpose  :  write restart netcdf file 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine bgc_write_restart(fnm,bgc)
+  subroutine bgc_write_restart(fnm,fnm_sed,bgc)
 
     implicit none
 
     character (len=*) :: fnm
+    character (len=*) :: fnm_sed
     type(bgc_class) :: bgc
 
    return
@@ -76,11 +77,12 @@ contains
   ! subroutine :  b g c _ r e a d _ r e s t a r t
   ! purpose  :  read restart netcdf file 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine bgc_read_restart(fnm,bgc)
+  subroutine bgc_read_restart(fnm,fnm_sed,bgc)
 
     implicit none
 
     character (len=*) :: fnm
+    character (len=*) :: fnm_sed
     type(bgc_class) :: bgc
 
    return
