@@ -10,10 +10,6 @@ NC_FROOT=/opt/homebrew/Cellar/netcdf-fortran/4.6.1_1
 INC_NC  = -I${NC_FROOT}/include
 LIB_NC  = -L${NC_FROOT}/lib -lnetcdff -L${NC_CROOT}/lib -lnetcdf 
 
-# coordinates
-COORDROOT = coordinates
-INC_COORD = -I${COORDROOT}/libcoordinates/include
-LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
 FESMUTILSROOT=fesm-utils/utils
@@ -50,10 +46,10 @@ DFLAGS_NODEBUG = -Ofast
 DFLAGS_DEBUG   = -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -fbacktrace -fcheck=all 
 DFLAGS_PROFILE = -O3 -pg -g
 
-FFLAGS_FULL = -I$(objdir) -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
-FFLAGS_CLIM = -I$(objdir) -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
+FFLAGS_FULL = -I$(objdir) -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_CLIM = -I$(objdir) -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
 FFLAGS_OPENMP  = -Wopenmp
 
-LFLAGS_FULL  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW)
-LFLAGS_CLIM  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW)
+LFLAGS_FULL  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW)
+LFLAGS_CLIM  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW)
 

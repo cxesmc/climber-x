@@ -9,10 +9,6 @@ INC_NC  = -I${NETCDFF_ROOT}/include
 LIB_NC  = -L${NETCDFF_ROOT}/lib -Wl\,-rpath=${NETCDFF_ROOT}/lib -lnetcdff -L${NETCDFC_ROOT}/lib -Wl\,-rpath=${NETCDFC_ROOT}/lib -lnetcdf
 # the -rpath options ensure that the same shared libraries are found at runtime
 
-# coordinates
-COORDROOT = coordinates_gfortran
-INC_COORD = -I${COORDROOT}/libcoordinates/include
-LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
 FESMUTILSROOT=fesm-utils_gfortran/utils
@@ -48,10 +44,10 @@ DFLAGS_NODEBUG = -O3 -ffree-line-length-none
 DFLAGS_DEBUG   = -ffree-line-length-none -w -g -p -ggdb -ffpe-trap=invalid,zero,overflow,underflow -finit-real=snan -fbacktrace -fcheck=all -Wall
 DFLAGS_PROFILE = -O3 -ffree-line-length-none -pg 
 
-FFLAGS_FULL = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
-FFLAGS_CLIM = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
+FFLAGS_FULL = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_CLIM = -J$(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
 FFLAGS_OPENMP  = -fopenmp 
 
-LFLAGS_FULL  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) -Wl,-zmuldefs
-LFLAGS_CLIM  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS_FULL  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) -Wl,-zmuldefs
+LFLAGS_CLIM  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) -Wl,-zmuldefs
 

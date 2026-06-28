@@ -11,10 +11,6 @@ INC_NC  = -I${NETCDFFI_ROOT}/include
 LIB_NC  = -L${NETCDFFI_ROOT}/lib -Wl\,-rpath=${NETCDFFI_ROOT}/lib -lnetcdff -L${NETCDFC_ROOT}/lib -Wl\,-rpath=${NETCDFC_ROOT}/lib -lnetcdf
 # the -rpath options ensure that the same shared libraries are found at runtime
 
-# coordinates
-COORDROOT = coordinates
-INC_COORD = -I${COORDROOT}/libcoordinates/include
-LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
 FESMUTILSROOT=fesm-utils/utils
@@ -50,10 +46,10 @@ DFLAGS_NODEBUG = -Ofast -march=core-avx2 -mtune=core-avx2 -traceback  # -mno-lzc
 DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all,nouninit -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
 DFLAGS_PROFILE = -O3 -pg -g 
 
-FFLAGS_FULL = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
-FFLAGS_CLIM = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
+FFLAGS_FULL = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_CLIM = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
 FFLAGS_OPENMP  = -qopenmp 
 
-LFLAGS_FULL  = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FESMUTILS) -Wl,-zmuldefs
-LFLAGS_CLIM  = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS_FULL  = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FESMUTILS) -Wl,-zmuldefs
+LFLAGS_CLIM  = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) -Wl,-zmuldefs
 
