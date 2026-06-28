@@ -9,10 +9,6 @@ NETCDF_CROOT = /sw/rhel6-x64/netcdf/netcdf_c-4.3.2-intel14/
 INC_NC  = -I${NETCDF_FORTRANROOT}/include
 LIB_NC  = -L${NETCDF_FORTRANROOT}/lib -lnetcdff -L${NETCDF_CROOT}/lib -lnetcdf
 
-# coordinates
-COORDROOT = coordinates
-INC_COORD = -I${COORDROOT}/libcoordinates/include
-LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
 
 # FESM-UTILS
 FESMUTILSROOT=fesm-utils/utils
@@ -49,8 +45,8 @@ DFLAGS_NODEBUG = -Ofast -xHASWELL -traceback #-O3  #-O2 -fp-model precise
 DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
 DFLAGS_PROFILE = -O3 -pg -g #-O2 -fp-model precise -pg 
 
-FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
 FFLAGS_OPENMP  = $(FFLAGS_DEFAULT) -qopenmp #-parallel -qopt-report-phase=par #-qopt-report=5 #-ipo -parallel -par-threshold90 -qopt-report #-mcmodel=medium
 
-LFLAGS  = $(LIB_NC) $(LIB_COORD) $(LIB_LIS) $(LIB_FESMUTILS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FESMUTILS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW) -Wl,-zmuldefs
 

@@ -16,9 +16,6 @@
 # to $(FFLAGS) here would be a recursive self-reference.
 
 # --- fesm-utils (serial build by default; OpenMP variants swapped in below)
-# Grid/mapping (the former standalone `coordinates` library) is now folded into
-# fesm-utils/utils as the `coords` module, so libfesmutils is the only dependency
-# providing grids, mapping and ncio.
 FESMUTILSROOT = fesm-utils/utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
