@@ -9,7 +9,7 @@ on your behalf.
 `configme install` performs the following phases:
 
 1. **Clone** the CLIMBER-X checkout and each component repository it needs. The
-   open components (`fesm-utils`, `coordinates`, `yelmo`) are cloned at the
+   open components (`fesm-utils`, `yelmo`) are cloned at the
    CLIMBER-X root; `yelmo` is pinned to its `climber-x` branch. The private
    components (`bgc`, `vilma`) are attempted too, but a clone failure (no access)
    is a soft skip recorded as "unavailable" — never a hard failure. They live
@@ -44,7 +44,6 @@ set -euo pipefail
 git clone git@github.com:cxesmc/climber-x.git $CLIMBERXROOT
 git clone git@github.com:fesmc/fesm-utils.git $CLIMBERXROOT/fesm-utils
 # fesm-utils/utils: component of fesm-utils (not cloned)
-git clone git@github.com:fesmc/coordinates.git $CLIMBERXROOT/coordinates
 git clone git@github.com:fesmc/yelmo.git $CLIMBERXROOT/yelmo
 (cd $CLIMBERXROOT/yelmo && git checkout climber-x)
 git clone git@github.com:cxesmc/bgc.git $CLIMBERXROOT/src/bgc          # private (soft skip without access)
@@ -64,7 +63,6 @@ ln -s ../fesm-utils $CLIMBERXROOT/yelmo/fesm-utils
 # fesm-utils/utils: build (serial, omp):
 (cd $CLIMBERXROOT/fesm-utils/utils && make openmp=0 fesmutils-static)
 (cd $CLIMBERXROOT/fesm-utils/utils && make openmp=1 fesmutils-static)
-(cd $CLIMBERXROOT/coordinates && configme config coordinates -m pik_hpc2024 -c ifx)
 (cd $CLIMBERXROOT/yelmo && configme config yelmo -m pik_hpc2024 -c ifx)
 # bgc: clone-only (configme does not configure it)
 # vilma: clone-only (configme does not configure it)
