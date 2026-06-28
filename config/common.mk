@@ -15,12 +15,10 @@
 # the template reassigns `FFLAGS = $(FFLAGS_CLIM)` per build target, so referring
 # to $(FFLAGS) here would be a recursive self-reference.
 
-# --- coordinates
-COORDROOT = coordinates
-INC_COORD = -I${COORDROOT}/libcoordinates/include
-LIB_COORD = -L${COORDROOT}/libcoordinates/include -lcoordinates
-
 # --- fesm-utils (serial build by default; OpenMP variants swapped in below)
+# Grid/mapping (the former standalone `coordinates` library) is now folded into
+# fesm-utils/utils as the `coords` module, so libfesmutils is the only dependency
+# providing grids, mapping and ncio.
 FESMUTILSROOT = fesm-utils/utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
@@ -74,15 +72,15 @@ endif
 CPPFLAGS_CLIM = $(CPPFLAGS_PP)
 CPPFLAGS_FULL = $(CPPFLAGS_PP) -DVILMA
 
-FFLAGS_CLIM = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_COORD) $(INC_FFTW)
-FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_COORD) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_CLIM = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
+FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_VILMA) $(INC_FFTW)
 
 # Extra link flags. -Wl,-zmuldefs works around duplicate symbols in the static
 # deps (the default on Linux). A machine fragment disables it with
 # `LFLAGS_EXTRA =` (macOS ld rejects -zmuldefs).
 LFLAGS_EXTRA ?= -Wl,-zmuldefs
-LFLAGS_CLIM = $(LIB_NC) $(LIB_COORD) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
+LFLAGS_CLIM = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
 # LIB_FASTHYDRO follows LIB_YELMO (yelmo references its symbols); the trailing
 # LIB_FFTW resolves the FFTW symbols pulled in by fasthydro and fesmutils
 # (static archives resolve left-to-right, so deps must come after dependents).
-LFLAGS_FULL = $(LIB_NC) $(LIB_COORD) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_VILMA) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
+LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_VILMA) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)

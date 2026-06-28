@@ -66,10 +66,7 @@ include config/Makefile_climber.mk
 ###############################################
 
 # Compile the static libraries using their own Makefiles
-coord-static: 
-	$(MAKE) -C $(COORDROOT) coord-static openmp=$(openmp)
-
-yelmo-static: 
+yelmo-static:
 	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp_yelmo)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
 
@@ -77,7 +74,7 @@ climber-clim: FFLAGS = $(FFLAGS_CLIM)
 climber-clim: LFLAGS = $(LFLAGS_CLIM)
 climber-clim: CPPFLAGS = $(CPPFLAGS_CLIM)
 climber-clim: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim: coord-static \
+climber-clim: \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -92,7 +89,7 @@ climber-clim-bgc: FFLAGS = $(FFLAGS_CLIM)
 climber-clim-bgc: LFLAGS = $(LFLAGS_CLIM)
 climber-clim-bgc: CPPFLAGS = $(CPPFLAGS_CLIM)
 climber-clim-bgc: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc: coord-static \
+climber-clim-bgc: \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
@@ -107,7 +104,7 @@ climber-clim-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-ice: coord-static yelmo-static \
+climber-clim-ice: yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -122,7 +119,7 @@ climber-clim-bgc-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-bgc-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-bgc-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc-ice: coord-static yelmo-static \
+climber-clim-bgc-ice: yelmo-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
@@ -457,5 +454,4 @@ clean:
 	rm -rf *.x.dSYM
 
 cleanall: clean
-	$(MAKE) -C $(COORDROOT) clean
 	if [ -d "$(YELMOROOT)" ]; then $(MAKE) -C $(YELMOROOT) clean; fi
