@@ -26,8 +26,8 @@
 module bmb_def
 
     use precision, only : wp
-    use coord, only : grid_class
-    use coord, only : map_class, map_scrip_class
+    use coords, only : grid_class
+    use coords, only : map_class
     use timer, only : nmon_year, nday_year
 
     implicit none
@@ -65,7 +65,7 @@ module bmb_def
       type(grid_class) :: grid
       type(grid_class) :: grid_in
       type(map_class) :: map_cmn_to_ice
-      type(map_scrip_class) :: maps_cmn_to_ice
+      type(map_class) :: maps_cmn_to_ice
 
       integer :: ncells                                        !! total number of active bmb columns
       integer, dimension(:), allocatable :: idx_cell_active    !! index of active bmb cells

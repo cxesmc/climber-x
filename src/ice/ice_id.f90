@@ -28,8 +28,8 @@ module ice_id_mod
   use precision, only : wp, dp
 
   use ncio
-  use coord, only : grid_class, grid_init
-  use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
+  use coords, only : grid_class, grid_init
+  use coords, only : map_class, map_init, map_field
 
   implicit none
 
@@ -61,7 +61,7 @@ contains
     real(wp), dimension(:), allocatable :: lon_ice_id, lat_ice_id
     integer, dimension(:,:), allocatable :: ice_id_in
     type(grid_class) :: ice_id_grid
-    type(map_scrip_class) :: maps_ice_id_to_ice
+    type(map_class) :: maps_ice_id_to_ice
 
 
     ! read from file
@@ -79,8 +79,8 @@ contains
     ppos = scan(trim(ice_id_file),".", BACK= .true.)-1
     call grid_init(ice_id_grid,name=trim(ice_id_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_ice_id,dp),y=real(lat_ice_id,dp))
     ! map to ice grid
-    call map_scrip_init(maps_ice_id_to_ice,ice_id_grid,ice_grid,method="nn",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_scrip_field(maps_ice_id_to_ice,"ice_id",ice_id_in,ice_id_mask,method="mean",missing_value=-9999._dp)
+    call map_init(maps_ice_id_to_ice,ice_id_grid,ice_grid,method="nn",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_field(maps_ice_id_to_ice,"ice_id",ice_id_in,ice_id_mask,method="mean",missing_value=-9999)
 
     deallocate(ice_id_in, lon_ice_id, lat_ice_id)
 

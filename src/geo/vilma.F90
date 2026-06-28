@@ -17,8 +17,8 @@ module vilma_model
     use constants, only : rho_i, rho_sw
     use geo_params, only : vilma_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
     use geo_params, only : f_visc_sd, sigma_log10_visc, visc_log10_min, visc_log10_max
-    use coord, only : grid_class, grid_init
-    use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
+    use coords, only : grid_class, grid_init
+    use coords, only : map_class, map_init, map_field
     use ncio
 
     implicit none
@@ -40,7 +40,7 @@ module vilma_model
     real(wp), dimension(:,:), allocatable :: h_ice(:,:)
 
     type(grid_class) :: vilma_grid
-    type(map_scrip_class) :: maps_geo_to_vilma, maps_vilma_to_geo
+    type(map_class) :: maps_geo_to_vilma, maps_vilma_to_geo
 
 
 contains
@@ -90,7 +90,7 @@ contains
     iepoch = iepoch + 1
 
     ! interpolate ice thickness to vilma grid
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_g>0._wp) 
@@ -99,7 +99,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
@@ -129,7 +129,7 @@ contains
 
     ! interpolate from Gauss-Legendre vilma_grid to geo_grid (regular lat-lon)
     ! relative sea level
-    call map_scrip_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="mean",missing_value=-9999._dp)
+    call map_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="mean",missing_value=-9999._dp)
 
     ! update bedrock elevation
     z_bed_g = z_bed_eq_g - rsl_g
@@ -202,8 +202,8 @@ contains
     call grid_init(vilma_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
 
     ! generate maps for mapping between geo and vilma
-    call map_scrip_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_scrip_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     ! initialize VILMA
 
@@ -351,9 +351,9 @@ contains
 
     z_bed_eq_g = z_bed_eq_g_in
     ! interpolate to vilma grid
-    call map_scrip_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,method="mean",missing_value=-9999._dp)
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,method="mean",missing_value=-9999._dp)
-    call map_scrip_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_eq_g>0._wp) 
@@ -362,7 +362,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice_eq = 0._wp
     where (h_ice_g>0._wp) 
       mask_ice_g = 1.
@@ -370,7 +370,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_scrip_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)

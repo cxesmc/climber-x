@@ -26,8 +26,8 @@
 module smb_def
 
     use precision, only : wp
-    use coord, only : grid_class
-    use coord, only : map_class, map_scrip_class
+    use coords, only : grid_class
+    use coords, only : map_class
     use timer, only : nmon_year, nday_year
     use smb_simple_m, only : smb_simple_class
 
@@ -256,9 +256,9 @@ module smb_def
       type(map_class) :: map_cmn_to_ice
       type(map_class) :: map_to_latlon
       type(map_class) :: map_from_latlon
-      type(map_scrip_class) :: maps_cmn_to_ice
-      type(map_scrip_class) :: maps_to_latlon
-      type(map_scrip_class) :: maps_from_latlon
+      type(map_class) :: maps_cmn_to_ice
+      type(map_class) :: maps_to_latlon
+      type(map_class) :: maps_from_latlon
 
       type(simple_smb_class) :: simple
 

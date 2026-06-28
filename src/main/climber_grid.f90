@@ -28,7 +28,7 @@ module climber_grid
   use precision, only : wp, dp
   use constants, only : pi, r_earth
   use control, only : in_dir, out_dir
-  use coord, only : grid_class, grid_init
+  use coords, only : grid_class, grid_init
   use ncio
   use nml
 

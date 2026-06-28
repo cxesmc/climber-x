@@ -38,7 +38,7 @@ module smb_out
   use smb_grid, only : z, nl
   use smb_params, only : dt, i_smb, l_daily_output, l_monthly_output
   use ncio
-  use coord, only : grid_class
+  use coords, only : grid_class
 
   implicit none
 

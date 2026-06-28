@@ -27,7 +27,7 @@ module topo_mod
 
   use precision, only : wp
   use constants, only : pi, r_earth
-  use coord, only : grid_class, grid_allocate, map_class, map_field, map_scrip_class, map_scrip_field
+  use coords, only : grid_class, grid_allocate, map_class, map_field
   use smb_params, only : h_atm, p0, prc_par, surf_par, gamma
 
   implicit none
@@ -111,8 +111,8 @@ contains
   implicit none
 
   type(grid_class), intent(in) :: grid_latlon
-  type(map_scrip_class), intent(in) :: maps_to_latlon
-  type(map_scrip_class), intent(in) :: maps_from_latlon
+  type(map_class), intent(in) :: maps_to_latlon
+  type(map_class), intent(in) :: maps_from_latlon
   real(wp), dimension(:,:), intent(in) :: z_sur
   real(wp), dimension(:,:), intent(out) :: dz_sur, dz_dx_sur, dz_dy_sur
 
@@ -130,7 +130,7 @@ contains
   call grid_allocate(grid_latlon, z_sur_latlon)
   call grid_allocate(grid_latlon, dz_dx_sur_latlon)
   call grid_allocate(grid_latlon, dz_dy_sur_latlon)
-  call map_scrip_field(maps_to_latlon,"z_sur",z_sur,z_sur_latlon,method="mean")
+  call map_field(maps_to_latlon,"z_sur",z_sur,z_sur_latlon,method="mean")
 
   ! compute topography gradients in spherical coordinates
   nx = grid_latlon%G%nx
@@ -157,8 +157,8 @@ contains
   enddo
 
   ! map topography gradients back to stereographic projection
-  call map_scrip_field(maps_from_latlon,"dz_dx_sur",dz_dx_sur_latlon,dz_dx_sur,method="mean")
-  call map_scrip_field(maps_from_latlon,"dz_dy_sur",dz_dy_sur_latlon,dz_dy_sur,method="mean")
+  call map_field(maps_from_latlon,"dz_dx_sur",dz_dx_sur_latlon,dz_dx_sur,method="mean")
+  call map_field(maps_from_latlon,"dz_dy_sur",dz_dy_sur_latlon,dz_dy_sur,method="mean")
 
   dz_sur = sqrt(dz_dx_sur**2+dz_dy_sur**2)
 

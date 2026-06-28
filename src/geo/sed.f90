@@ -29,8 +29,8 @@ module sed_mod
   use geo_params, only : sed_file
 
   use ncio
-  use coord, only : grid_class, grid_init
-  use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
+  use coords, only : grid_class, grid_init
+  use coords, only : map_class, map_init, map_field
 
   implicit none
 
@@ -52,7 +52,7 @@ contains
     real(wp), dimension(:), allocatable :: lon_sed, lat_sed
     real(wp), dimension(:,:), allocatable :: h_sed_in
     type(grid_class) :: sed_grid
-    type(map_scrip_class) :: maps_sed_to_geo
+    type(map_class) :: maps_sed_to_geo
 
 
     ! read from file
@@ -70,8 +70,8 @@ contains
     ppos = scan(trim(sed_file),".", BACK= .true.)-1
     call grid_init(sed_grid,name=trim(sed_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_sed,dp),y=real(lat_sed,dp))
     ! map to geo grid
-    call map_scrip_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_scrip_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,method="mean",missing_value=-9999._dp)
+    call map_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,method="mean",missing_value=-9999._dp)
 
     deallocate(h_sed_in, lon_sed, lat_sed)
 

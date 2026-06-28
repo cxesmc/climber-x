@@ -1,7 +1,7 @@
 module bmb_model
 
   use precision, only : wp, dp
-  use coord, only : grid_class
+  use coords, only : grid_class
   use bmb_def, only : bmb_class
 
   implicit none

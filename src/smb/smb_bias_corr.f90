@@ -29,8 +29,8 @@ module smb_bias_corr_mod
    use timer, only: doy, nday_year, monthly2daily
    use control, only : out_dir
    use smb_params, only : smb_ref_file, smb_cx_ref_file 
-   use coord, only : grid_init, grid_class
-   use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
+   use coords, only : grid_init, grid_class
+   use coords, only : map_init, map_class, map_field
    use ncio
 
    implicit none
@@ -106,7 +106,7 @@ contains
    real(wp), dimension(:,:), allocatable :: smb, prc, evp
    character(len=256) :: fnm
    type(grid_class) :: grid_ref
-   type(map_scrip_class) :: maps_to_smb
+   type(map_class) :: maps_to_smb
 
 
    ! read CLIMBER-X reference SMB file, has to be on the same grid as the current domain
@@ -144,12 +144,12 @@ contains
      x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
    ! initialize map
-   call map_scrip_init(maps_to_smb,grid_ref,grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
+   call map_init(maps_to_smb,grid_ref,grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
 
    ! mapping
-   call map_scrip_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 
-   call map_scrip_field(maps_to_smb,"prc",prc,ann_prc_ref,method="mean") 
-   call map_scrip_field(maps_to_smb,"evp",evp,ann_evp_ref,method="mean") 
+   call map_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 
+   call map_field(maps_to_smb,"prc",prc,ann_prc_ref,method="mean") 
+   call map_field(maps_to_smb,"evp",evp,ann_evp_ref,method="mean") 
 
    deallocate(smb)
    deallocate(prc)

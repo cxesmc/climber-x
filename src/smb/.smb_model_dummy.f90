@@ -1,7 +1,7 @@
 module smb_model
 
   use precision, only : wp
-  use coord, only : grid_class
+  use coords, only : grid_class
   use smb_def, only : smb_class, smb_in_class
 
   implicit none
