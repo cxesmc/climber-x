@@ -1201,15 +1201,7 @@ contains
     character (len=*) :: fnm
     type(ocn_class) :: ocn
 
-    call nc_read(fnm,"zro",  ocn%grid%zro)
-    call nc_read(fnm,"zw",   ocn%grid%zw)
-    call nc_read(fnm,"dz",   ocn%grid%dz)
-    call nc_read(fnm,"dza",  ocn%grid%dza)
-
     !call nc_read(fnm,"f_ocn",  ocn%f_ocn)
-    ! k1 (bottom-layer index) is intentionally NOT read: it is recomputed from z_ocn in
-    ! ocn_grid_init (and again at every start-of-year ocn_grid_update), so a stored value would
-    ! only be overwritten before use. Old restarts may still contain k1/k1_pot; they are ignored.
     call nc_read(fnm,"ocn_area", ocn%grid%ocn_area)
     call nc_read(fnm,"ocn_vol",  ocn%grid%ocn_vol)
 
