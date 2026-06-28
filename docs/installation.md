@@ -19,7 +19,7 @@ yourself are:
 - **netCDF** (C and Fortran libraries) — see [Dependencies](dependencies.md#installing-netcdf-preferably-version-4.0-or-higher) for installation tips.
 - **CDO** ([Climate Data Operators](https://code.mpimet.mpg.de/projects/cdo/)) — only needed to (re)generate maps that transform between coordinate grids.
 
-Everything else — `coordinates`, the `fesm-utils` libraries (LIS + FFTW + utils),
+Everything else — the `fesm-utils` libraries (LIS + FFTW + utils),
 `yelmo`, and `runme` — is managed by `configme`. For the full dependency list see
 [Dependencies](dependencies.md).
 
@@ -51,8 +51,8 @@ from the directory where you want the checkout to live:
 configme install climber-x
 ```
 
-This clones CLIMBER-X and its component repositories (`fesm-utils`,
-`coordinates`, and `yelmo` on its `climber-x` branch), configures each for your
+This clones CLIMBER-X and its component repositories (`fesm-utils`
+and `yelmo` on its `climber-x` branch), configures each for your
 machine and compiler, links them into the CLIMBER-X directory, builds
 `fesm-utils` (LIS + FFTW + utils, which can take 10-30 min), installs `runme`,
 creates a `.runme_config`, and clones the large input-data repository into

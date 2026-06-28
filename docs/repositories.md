@@ -15,12 +15,9 @@ Repositories are organized into several communities.
 | Main CLIMBER-X code base | base | [https://github.com/cxesmc/climber-x](https://github.com/cxesmc/climber-x) |
 | CLIMBER-X input files | base | [https://gitlab.pik-potsdam.de/cxesmc/climber-x-input](https://gitlab.pik-potsdam.de/cxesmc/climber-x-input) |
 | FESM Utilities | base | [https://github.com/fesmc/fesm-utils](https://github.com/fesmc/fesm-utils) |
-| Coordinates package¹ | base | [https://github.com/fesmc/coordinates](https://github.com/fesmc/coordinates) |
 | Biogeochemistry (BGC, i.e. HAMOCC)² | optional | [https://github.com/cxesmc/bgc](https://github.com/cxesmc/bgc) |
 | Solid Earth model (VILMA)³ | optional | [https://github.com/cxesmc/vilma](https://github.com/cxesmc/vilma) |
 | Ice-sheet model (Yelmo) | optional | [https://github.com/palma-ice/yelmo](https://github.com/palma-ice/yelmo) |
-
-¹Repository will eventually be merged into `fesm-utils`.
 
 ²PRIVATE. Since the HAMOCC model code is not open source, the `bgc` repository is private at the moment and
 you need to be given permission in order to access it. HAMOCC is covered by the Max Planck Institute for
