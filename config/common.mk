@@ -6,7 +6,7 @@
 #   FFLAGS_BASE / FFLAGS_OPENMP / CPPFLAGS_PP  (compiler fragment)
 #   INC_NC / LIB_NC                            (machine or auto-detected netCDF)
 #
-# External dependency repos (coordinates, fesm-utils, yelmo) live at the
+# External dependency repos (fesm-utils, yelmo) live at the
 # climber-x root — the layout configme uses for every orchestrator. VILMA is
 # optional and user-provided under src/vilma (not managed by configme); it is
 # only referenced by the fully-coupled (FULL) build variant.
