@@ -1039,19 +1039,23 @@ contains
           print *,lnd%f_shelf,lnd%f_shelf_old
           print *,lnd%alt
           !if (minval(lnd%litter_c).lt.-1e-10) stop
+          where (lnd%litter_c.lt.0._wp) lnd%litter_c = 0._wp
         endif
         if (lnd%litter_c_peat.lt.0._wp) then
           print *,lnd%litter_c_peat
           print *,lnd%litterfall(:,ic_peat)
           !stop
+          lnd%litter_c_peat = 0._wp
         endif
         if (minval(lnd%fast_c).lt.0._wp) then
           print *,'fast_c<0',doy,year,i,j
           print *,lnd%fast_c
+          where (lnd%fast_c.lt.0._wp) lnd%fast_c = 0._wp
         endif
         if (minval(lnd%slow_c).lt.0._wp) then
           print *,'slow_c<0',doy,year,i,j
           print *,lnd%slow_c
+          where (lnd%slow_c.lt.0._wp) lnd%slow_c = 0._wp
         endif
 
        endif
