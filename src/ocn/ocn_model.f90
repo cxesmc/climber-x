@@ -551,7 +551,7 @@ contains
     integer :: ni, nj, nk
     real(wp), dimension(:,:,:), allocatable :: tmp
     real(wp), dimension(:), allocatable :: tmp_depth
-    real(wp) :: tmp_sum, tmp_cnt
+    real(wp) :: tmp_sum, tmp_cnt, misval
     integer :: ncid
     character (len=256) :: fnm
 
@@ -693,6 +693,10 @@ contains
         allocate(tmp(ni,nj,nk))
         ! temperature
         call nc_read(fnm,"t",tmp,start=[1,1,1,13],count=[ni,nj,nk,1])
+        misval = -999._wp
+        where (tmp<=-990._wp) tmp = misval
+        call fill_missing_3d(tmp, ni, nj, nk, misval)   ! smooth extrapolation into undefined cells
+        call smooth_3d(tmp, ni, nj, nk)                 ! general horizontal smoothing to remove residual steps
         do k=1,maxk
           do j=1,maxj
             do i=1,maxi
@@ -712,6 +716,10 @@ contains
         enddo
         ! salinity
         call nc_read(fnm,"s",tmp,start=[1,1,1,13],count=[ni,nj,nk,1])
+        misval = -999._wp
+        where (tmp<=-990._wp) tmp = misval
+        call fill_missing_3d(tmp, ni, nj, nk, misval)   ! smooth extrapolation into undefined cells
+        call smooth_3d(tmp, ni, nj, nk)                 ! general horizontal smoothing to remove residual steps
         do k=1,maxk
           do j=1,maxj
             do i=1,maxi
@@ -1236,6 +1244,109 @@ contains
    return
 
   end subroutine ocn_read_restart
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! subroutine :  f i l l _ m i s s i n g _ 3 d
+  ! Purpose  :  smoothly extrapolate an observational field into cells
+  !             flagged with misval, by iterative averaging of valid
+  !             neighbours (horizontal, longitude-periodic, plus vertical).
+  !             This replaces the hard 0 / constant fallbacks, which leave
+  !             step discontinuities in the cold-start fields that seed
+  !             numerical over/undershoots in the ocean tracer transport.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine fill_missing_3d(a, ni, nj, nk, misval)
+
+    real(wp), intent(inout) :: a(ni,nj,nk)
+    integer,  intent(in)    :: ni, nj, nk
+    real(wp), intent(in)    :: misval
+
+    real(wp), allocatable :: b(:,:,:)
+    integer :: i, j, k, it, ip, im, cnt, nmiss
+    real(wp) :: s
+    integer, parameter :: maxit = 1000
+
+    allocate(b(ni,nj,nk))
+
+    do it = 1, maxit
+      nmiss = 0
+      b = a
+      do k = 1, nk
+        do j = 1, nj
+          do i = 1, ni
+            if (a(i,j,k) == misval) then
+              s = 0._wp; cnt = 0
+              ip = i+1; if (ip > ni) ip = 1     ! periodic in longitude
+              im = i-1; if (im < 1)  im = ni
+              if (a(ip,j,k) /= misval) then; s = s + a(ip,j,k); cnt = cnt+1; endif
+              if (a(im,j,k) /= misval) then; s = s + a(im,j,k); cnt = cnt+1; endif
+              if (j < nj) then; if (a(i,j+1,k) /= misval) then; s = s + a(i,j+1,k); cnt = cnt+1; endif; endif
+              if (j > 1 ) then; if (a(i,j-1,k) /= misval) then; s = s + a(i,j-1,k); cnt = cnt+1; endif; endif
+              if (k < nk) then; if (a(i,j,k+1) /= misval) then; s = s + a(i,j,k+1); cnt = cnt+1; endif; endif
+              if (k > 1 ) then; if (a(i,j,k-1) /= misval) then; s = s + a(i,j,k-1); cnt = cnt+1; endif; endif
+              if (cnt > 0) then
+                b(i,j,k) = s / real(cnt,wp)
+              else
+                nmiss = nmiss + 1            ! no valid neighbour yet, try next sweep
+              endif
+            endif
+          enddo
+        enddo
+      enddo
+      a = b
+      if (nmiss == 0) exit
+    enddo
+
+    deallocate(b)
+
+  end subroutine fill_missing_3d
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! subroutine :  s m o o t h _ 3 d
+  ! Purpose  :  general horizontal smoothing of a (gap-filled) obs field,
+  !             npass sweeps of a longitude-periodic 5-point relaxation.
+  !             Removes the grid-scale (~2dx) gradients that remain even in
+  !             the defined data (coastlines, fronts) and that the ocean
+  !             tracer transport amplifies into over/undershoots when started
+  !             from a cold state. Operate on a field with no missing values
+  !             (call after fill_missing_3d). npass / w are tunable.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine smooth_3d(a, ni, nj, nk)
+
+    real(wp), intent(inout) :: a(ni,nj,nk)
+    integer,  intent(in)    :: ni, nj, nk
+
+    real(wp), allocatable :: b(:,:,:)
+    integer :: i, j, k, it, ip, im
+    real(wp) :: s, cnt
+    integer,  parameter :: npass = 10        ! number of smoothing sweeps (tunable)
+    real(wp), parameter :: w     = 0.5_wp    ! relaxation weight per sweep, 0..1 (tunable)
+
+    allocate(b(ni,nj,nk))
+
+    do it = 1, npass
+      b = a
+      do k = 1, nk
+        do j = 1, nj
+          do i = 1, ni
+            s = 0._wp; cnt = 0._wp
+            ip = i+1; if (ip > ni) ip = 1     ! periodic in longitude
+            im = i-1; if (im < 1)  im = ni
+            s = s + a(ip,j,k); cnt = cnt + 1._wp
+            s = s + a(im,j,k); cnt = cnt + 1._wp
+            if (j < nj) then; s = s + a(i,j+1,k); cnt = cnt + 1._wp; endif
+            if (j > 1 ) then; s = s + a(i,j-1,k); cnt = cnt + 1._wp; endif
+            b(i,j,k) = (1._wp - w)*a(i,j,k) + w*(s/cnt)
+          enddo
+        enddo
+      enddo
+      a = b
+    enddo
+
+    deallocate(b)
+
+  end subroutine smooth_3d
 
 end module ocn_model
 
