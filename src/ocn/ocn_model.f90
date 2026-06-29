@@ -38,7 +38,7 @@ module ocn_model
     use constants, only : pi, cap_w, Lf, omega
     use climber_grid, only : lon, lat
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
-    use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, k1_pot, ocn_area, ocn_area_tot, ocn_vol
+    use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, ocn_area, ocn_area_tot, ocn_vol
     use ocn_params, only : ocn_params_init, i_init, dbl
     use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines, drho_brines_coast
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
@@ -114,7 +114,7 @@ contains
       !------------------------------------------------------------------------
       ! update ocean area and volume accounting for actual ocean fraction
       !------------------------------------------------------------------------
-      call ocn_grid_update(ocn%f_ocn,ocn%grid)  
+      call ocn_grid_update(ocn%f_ocn,ocn%z_ocn,ocn%grid)
 
       !------------------------------------------------------------------------
       ! adjust velocities and tracer concentrations after changes in ocean mask/volume
@@ -563,7 +563,7 @@ contains
     !------------------------------------------------------------------------
     ! setup grid 
     !------------------------------------------------------------------------
-    call ocn_grid_init(f_ocn,z_ocn,z_ocn_max,mask_coast,ocn_vol_tot_real,ocn%grid)
+    call ocn_grid_init(f_ocn,z_ocn,ocn_vol_tot_real,ocn%grid)
 
     !------------------------------------------------------------------------
     ! number and index of tracers
@@ -601,6 +601,9 @@ contains
     ! allocate 
     !------------------------------------------------------------------------
     call ocn_alloc(ocn, l_daily_input_save)
+    
+    ! store initial ocean bed elevation (refreshed each year by the coupler), used for partial bottom cells
+    ocn%z_ocn = z_ocn
 
     ! default is to transport all tracers, can be changed by bgc
     ocn%l_tracers_trans = .true.
@@ -902,6 +905,7 @@ contains
     allocate(ocn%l_tracers_isodiff(n_tracers_tot))
 
     allocate(ocn%z_ocn_max(maxi,maxj))
+    allocate(ocn%z_ocn(maxi,maxj))
     allocate(ocn%f_ocn(maxi,maxj))
     allocate(ocn%f_ocn2(maxi,maxj))
     allocate(ocn%f_sic(maxi,maxj))
@@ -1076,6 +1080,7 @@ contains
 
 
     deallocate(ocn%z_ocn_max)
+    deallocate(ocn%z_ocn)
     deallocate(ocn%f_ocn)
     deallocate(ocn%f_ocn2)
     deallocate(ocn%f_sic)
@@ -1163,7 +1168,6 @@ contains
     call nc_write_dim(fnm,"c",x=1)
 
     call nc_write(fnm,"f_ocn", ocn%f_ocn,   dims=["lon  ","lat  "],long_name="ocean fraction",units="/")
-    call nc_write(fnm,"k1_pot",ocn%grid%k1_pot,  dims=["lon  ","lat  "],long_name="index of bottom layer",units="/")
     call nc_write(fnm,"ocn_area", ocn%grid%ocn_area,  dims=["lon  ","lat  "],long_name="ocean area",units="/")
     call nc_write(fnm,"ocn_vol",  ocn%grid%ocn_vol,   dims=["lon  ","lat  ", "zro  "],long_name="ocean volume",units="/")
     
@@ -1197,24 +1201,9 @@ contains
     character (len=*) :: fnm
     type(ocn_class) :: ocn
 
-    call nc_read(fnm,"zro",  ocn%grid%zro)
-    call nc_read(fnm,"zw",   ocn%grid%zw)
-    call nc_read(fnm,"dz",   ocn%grid%dz)
-    call nc_read(fnm,"dza",  ocn%grid%dza)
-
     !call nc_read(fnm,"f_ocn",  ocn%f_ocn)
-    call nc_read(fnm,"k1_pot", ocn%grid%k1_pot)
     call nc_read(fnm,"ocn_area", ocn%grid%ocn_area)
     call nc_read(fnm,"ocn_vol",  ocn%grid%ocn_vol)
-
-    k1_pot = ocn%grid%k1_pot
-    k1(1:maxi,1:maxj) = k1_pot
-    ! periodic boundary conditions
-    k1(0,1:maxj) = k1(maxi,1:maxj)
-    k1(maxi+1,1:maxj) = k1(1,1:maxj)
-    ! North Pole and South Pole 'islands'
-    k1(:,0) = 99
-    k1(:,maxj+1) = 99
 
     call nc_read(fnm,"ssh",   ocn%ssh(:,:))
 

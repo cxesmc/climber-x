@@ -36,7 +36,7 @@ module transport_ocn_mod
   use control, only: out_dir
   use climber_grid, only : lon, lat
   use constants, only : g, pi
-  use ocn_grid, only : mask_ocn, mask_c, mask_u, mask_v, mask_w, k1, k1_pot
+  use ocn_grid, only : mask_ocn, mask_c, mask_u, mask_v, mask_w, k1
   use ocn_grid, only : maxi, maxj, maxk
   use ocn_grid, only : zro, zw, dz, rdza, z2dzg, depth, dx, dxv, rdx, dy, rdy
   use ocn_params, only : dt, rho0
@@ -483,8 +483,8 @@ contains
             h0 = 170._wp
           endif
           do k=1,maxk
-            if (k1_pot(i,j).le.k) then
-              diff_dia(i,j,K) = diff_dia_min + K_b*(1._wp+(zw(K)-zw(k1_pot(i,j)))/h0)**(-2)
+            if (k1(i,j).le.k) then
+              diff_dia(i,j,K) = diff_dia_min + K_b*(1._wp+(zw(K)-zw(k1(i,j)))/h0)**(-2)
             else
               diff_dia(i,j,K) = diff_dia_min + K_b
             endif

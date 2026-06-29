@@ -92,7 +92,7 @@ contains
                 print *,'u',u(1,i,j,k)
                 print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
                 print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-                if (year>1 .and. doy>1) error = .true.
+                if ((year>1 .and. doy>1) .or. (abs(u(1,i,j,k))*dt/dx(j).gt.10._wp)) error = .true.
               endif
               if (u(1,i,j,k).lt.u_min_CFL(j)) then
                 print *
@@ -102,7 +102,7 @@ contains
                 print *,'u',u(1,i,j,k)
                 print *,'CFL: ',abs(u(1,i,j,k))*dt/dx(j)
                 print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-                if (year>1 .and. doy>1) error = .true.
+                if ((year>1 .and. doy>1) .or. (abs(u(1,i,j,k))*dt/dx(j).gt.10._wp)) error = .true.
               endif
             endif
           endif
@@ -123,7 +123,7 @@ contains
                 print *,'v',u(2,i,j,k)
                 print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
                 print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-                if (year>1 .and. doy>1) error = .true.
+                if ((year>1 .and. doy>1) .or. (abs(u(2,i,j,k))*dt/dy.gt.10._wp)) error = .true.
               endif
               if (u(2,i,j,k).lt.v_min_CFL) then
                 print *
@@ -133,7 +133,7 @@ contains
                 print *,'v',u(2,i,j,k)
                 print *,'CFL: ',abs(u(2,i,j,k))*dt/dy
                 print *,'Try reducing the ocean time step dt_day_ocn in control.nml'
-                if (year>1 .and. doy>1) error = .true.
+                if ((year>1 .and. doy>1) .or. (abs(u(2,i,j,k))*dt/dy.gt.10._wp)) error = .true.
               endif
             endif
           endif
