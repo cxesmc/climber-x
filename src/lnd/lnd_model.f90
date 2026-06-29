@@ -2945,7 +2945,7 @@ end subroutine lnd_update
     integer :: i, j, ncid
 
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.false.)
     call nc_read(fnm,"Cflx_avg",l0d%Cflx_avg,ncid=ncid)
     call nc_read(fnm,"weath_carb_avg",l0d%weath_carb_avg,ncid=ncid)
     call nc_read(fnm,"weath_sil_avg",l0d%weath_sil_avg,ncid=ncid)
