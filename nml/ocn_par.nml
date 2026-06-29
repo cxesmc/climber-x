@@ -12,6 +12,16 @@
  init3_bg   = 15.0            ! degC, background temperature, used only for i_init==3
 
  !-------------------------------------------------------------------------------------------
+ ! time step ramping 
+ !-------------------------------------------------------------------------------------------
+ l_ocn_dt_ramp = F            ! ramp the effective ocean time step up (e.g. during cold-start spin-up)?
+                              ! the ocean is still called once per dt_day_ocn (coupling unchanged); internally it
+                              ! runs n_sub sub-steps of dt/n_sub, advancing a full coupling step. n_sub halves from
+                              ! ocn_dt_ramp_nsub0 down to 1 over ocn_dt_ramp_years
+ ocn_dt_ramp_nsub0 = 8        ! initial number of sub-steps N0 (power of two); effective initial step = dt/N0
+ ocn_dt_ramp_years = 100      ! number of years over which n_sub halves from N0 down to 1
+
+ !-------------------------------------------------------------------------------------------
  ! ocean grid settings
  !-------------------------------------------------------------------------------------------
  nlayers = 23                 ! number of ocean layers
@@ -20,10 +30,8 @@
                               ! 1 = smooth smooth_fac times in physical space
                               ! 2 = smooth in Fourier space with smooth factor smooth_fac (values ~0.1 almost unsmoothed, values ~1 very sine like)
  smooth_fac = 1               ! bathymetry smooth factor
- l_limit_ratio = .false.      ! despike the bathymetry by DEEPENING shallow cells until no neighbour depth ratio exceeds depth_ratio_max
-                              ! (aggressive, one-directional; has a narrow stable window because it can flood shelves / over-flatten)
+ l_limit_ratio = F            ! despike the bathymetry by deepening shallow cells until no neighbour depth ratio exceeds depth_ratio_max
  depth_ratio_max = 12.        ! maximum allowed neighbour depth ratio (threshold for l_limit_ratio)
-                              ! (smooth_fac=1 has max ratio ~15 and is stable; smooth_fac=0 reaches ~25 and crashes)
  i_isl = 1                    ! method to determine islands for barotropic flow:
                               ! 0 = automatic
                               ! 1 = specify specific islands (l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame), valid for present-day geography

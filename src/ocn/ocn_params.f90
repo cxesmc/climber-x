@@ -38,6 +38,12 @@ module ocn_params
 
      real(wp) :: dt !! time step [s]
 
+     ! ramped ocean sub-cycling for cold-start spin-up
+     logical :: l_ocn_dt_ramp       !! enable ramped sub-cycling of the ocean time step on cold start (ocn_restart=F)?
+     integer :: ocn_dt_ramp_nsub0   !! initial number of sub-steps N0 (power of two), effective initial step = dt/N0 []
+     integer :: ocn_dt_ramp_years   !! number of years over which N halves from N0 down to 1 [years]
+     integer :: n_sub               !! current number of sub-steps per ocean call []
+
      integer :: n_tracers_tot    !! total number of tracers (ocn+bgc) []
      integer :: n_tracers_ocn    !! number of ocean model tracers []
      integer :: n_tracers_bgc    !! number of bgc tracers []
@@ -202,6 +208,9 @@ contains
      ! time step
      dt = dt_ocn
 
+     ! default to a single sub-step (overridden each year in ocn_update when l_ocn_dt_ramp)
+     n_sub = 1
+
     ! read model settings and parameters from namelist
     call ocn_par_load(trim(out_dir)//"/ocn_par.nml")
 
@@ -223,6 +232,9 @@ subroutine ocn_par_load(filename)
 
     ! Read parameters from file
     write(*,*) "ocean parameters ==========="
+    call nml_read(filename,"ocn_par","l_ocn_dt_ramp",l_ocn_dt_ramp)
+    call nml_read(filename,"ocn_par","ocn_dt_ramp_nsub0",ocn_dt_ramp_nsub0)
+    call nml_read(filename,"ocn_par","ocn_dt_ramp_years",ocn_dt_ramp_years)
     call nml_read(filename,"ocn_par","i_init",i_init)
     call nml_read(filename,"ocn_par","nlayers",nlayers)
     allocate(zw_in(nlayers+1))

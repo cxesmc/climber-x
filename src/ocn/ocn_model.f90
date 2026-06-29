@@ -32,7 +32,7 @@ module ocn_model
     use nml
     use ncio
 
-    use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, year_now, year, nyears, nday_year, nstep_year_ocn, doy
+    use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, sec_day, year_now, year, nyears, nday_year, nstep_year_ocn, doy
     use control, only : ocn_restart, restart_in_dir, out_dir
     use control, only : check_energy
     use constants, only : pi, cap_w, Lf, omega
@@ -40,6 +40,7 @@ module ocn_model
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
     use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, ocn_area, ocn_area_tot, ocn_vol
     use ocn_params, only : ocn_params_init, i_init, dbl
+    use ocn_params, only : l_ocn_dt_ramp, ocn_dt_ramp_nsub0, ocn_dt_ramp_years, n_sub
     use ocn_params, only : dt, rho0, init3_peak, init3_bg, i_saln0, saln0_const, i_fw, l_fw_corr, l_fw_melt_ice_sep, l_brines, frac_brines, drho_brines_coast
     use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_bgc, idx_tracers_trans, age_tracer, dye_tracer, cons_tracer, l_cfc
     use ocn_params, only : i_age, i_dye, i_cons, i_cfc11, i_cfc12
@@ -102,6 +103,11 @@ contains
     real(dp) :: ocn_heat_input               ! net surface+geothermal heat input over the time step [J]
     real(dp) :: dheat_tot, dheat_adv, dheat_diff, dheat_conv  ! heat content change by process [J]
     real(wp) :: res_tot, res_adv, res_diff, res_conv          ! heat imbalance by process [W/m2]
+    ! variables for ramped sub-cycling of the ocean time step (l_ocn_dt_ramp)
+    integer :: nsub                          ! sub-step index
+    integer :: nlev, yrs_per_lev             ! number of halving levels and years held per level
+    real(wp) :: dt_full                      ! full coupling-step ocean time step [s]
+    real(wp), dimension(maxi,maxj) :: ke_tau_full  ! wind kinetic energy input over the full step [J/m2]
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -129,6 +135,19 @@ contains
       if (i_saln0.eq.2) then
         ! compute average salinity to be used as reference for virtual salinity flux
         ocn%saln0 = sum(ocn%ts(:,:,:,2)*ocn%grid%ocn_vol(:,:,:))/ocn%grid%ocn_vol_tot ! psu
+      endif
+
+      !------------------------------------------------------------------------
+      ! ramped sub-cycling of the ocean time step:
+      ! determine the number of internal sub-steps n_sub for this year. The effective
+      ! time step (dt/n_sub) ramps up by halving n_sub from ocn_dt_ramp_nsub0 to 1 over ocn_dt_ramp_years. 
+      !------------------------------------------------------------------------
+      if (l_ocn_dt_ramp .and. year.le.ocn_dt_ramp_years) then
+        nlev = nint(log(real(ocn_dt_ramp_nsub0,wp))/log(2._wp)) + 1   ! number of halving levels
+        yrs_per_lev = max(1, ocn_dt_ramp_years/nlev)                  ! years held at each level
+        n_sub = max(1, ocn_dt_ramp_nsub0 / 2**((year-1)/yrs_per_lev))
+      else
+        n_sub = 1
       endif
 
     endif
@@ -399,57 +418,74 @@ contains
     endif
 
     !------------------------------------------------------------------------
-    ! solve frictional-geostrophic balance equation
+    ! set up ramped sub-cycling of the ocean time step:
+    ! run n_sub internal sub-steps of dt_full/n_sub, advancing a full coupling step
     !------------------------------------------------------------------------
-
-    !$ time1 = omp_get_wtime()
-    call momentum(ocn%f_ocn,ocn%tau,ocn%dtau_dz2,ocn%dtav_dz2,ocn%rho, &
-      ocn%ub,ocn%ub_isl,ocn%u,ocn%psi)
-    !$ time2 = omp_get_wtime()
-    !$ if(print_omp) print *,'momentum',time2-time1
-
-    ! check velocity range
-    !$ time1 = omp_get_wtime()
-    call check_vel(ocn%u, ocn%error)
-    !$ time2 = omp_get_wtime()
-    !$ if(print_omp) print *,'check_vel',time2-time1
-
-    !------------------------------------------------------------------------
-    ! tracer transport (advection+diffusion+convection)
-    !------------------------------------------------------------------------
-
-    !print *
-    !print *,'before'
-    !do i=1,n_tracers_tot
-    !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
-    !enddo
+    dt_full = dt
+    dt = dt_full / real(n_sub,wp)
+    ! ke_tau was computed above with the full step; distribute it over the sub-steps
+    ! so that the wind kinetic energy input summed over the sub-steps equals the full step
+    ke_tau_full = ocn%ke_tau
+    ocn%ke_tau = ke_tau_full / real(n_sub,wp)
 
     !------------------------------------------------------------------------
     ! energy conservation check: heat content and net heat input before transport
     !------------------------------------------------------------------------
-    ! Transport (advection+diffusion+convection) is the only process changing the
-    ! ocean temperature, and the only heat sources are the surface and geothermal
-    ! fluxes entering through flx_sur(:,:,1) and flx_bot(:,:,1).
     if (check_energy) then
       ! total ocean heat content before transport [J] (ocn_vol=0 outside the ocean)
       ocn_heat_bef = cap_w*rho0*sum(real(ocn%ts(:,:,:,1),dp)*real(ocn_vol,dp))
-      ! net surface + geothermal heat input over this time step [J]
+      ! net surface + geothermal heat input over the full coupling step [J]
       ! flx_sur(:,:,1) [m/s*K] is positive upward (-> -flx_sur is the downward surface heat flux)
       ! flx_bot(:,:,1) [m/s*K] is positive into the bottom ocean layer (= q_geo/cap_w/rho0)
-      ocn_heat_input = cap_w*rho0*sum(real(-ocn%flx_sur(:,:,1)+ocn%flx_bot(:,:,1),dp)*real(ocn_area,dp))*dt
+      ocn_heat_input = cap_w*rho0*sum(real(-ocn%flx_sur(:,:,1)+ocn%flx_bot(:,:,1),dp)*real(ocn_area,dp))*dt_full
+      ! accumulators for the per-process heat content change, summed over the sub-steps
+      dheat_adv  = 0._dp
+      dheat_diff = 0._dp
     endif
 
-    !$ time1 = omp_get_wtime()
-    call transport(ocn%l_tracers_trans,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
-                  ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
-                  ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe, &
-                  ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
-    !$ time2 = omp_get_wtime()
-    !$ if(print_omp) print *,'transport',time2-time1
-    !print *,'after'
-    !do i=1,n_tracers_tot
-    !  print *,i,sum(ocn%ts(:,:,:,i)*ocn_vol(:,:,:))
-    !enddo
+    do nsub=1,n_sub
+
+      if (l_ocn_dt_ramp .and. year.le.ocn_dt_ramp_years .and. time_soy_ocn) then
+        print *,'ocn time-step ramp-up: step ',nsub,'/',n_sub, ' | dt = ',dt/sec_day
+      endif
+
+      !------------------------------------------------------------------------
+      ! solve frictional-geostrophic balance equation
+      !------------------------------------------------------------------------
+      !$ time1 = omp_get_wtime()
+      call momentum(ocn%f_ocn,ocn%tau,ocn%dtau_dz2,ocn%dtav_dz2,ocn%rho, &
+        ocn%ub,ocn%ub_isl,ocn%u,ocn%psi)
+      !$ time2 = omp_get_wtime()
+      !$ if(print_omp) print *,'momentum',time2-time1
+
+      ! check velocity range
+      !$ time1 = omp_get_wtime()
+      call check_vel(ocn%u, ocn%error)
+      !$ time2 = omp_get_wtime()
+      !$ if(print_omp) print *,'check_vel',time2-time1
+
+      !------------------------------------------------------------------------
+      ! tracer transport (advection+diffusion+convection)
+      !------------------------------------------------------------------------
+      !$ time1 = omp_get_wtime()
+      call transport(ocn%l_tracers_trans,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
+                    ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
+                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe, &
+                    ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
+      !$ time2 = omp_get_wtime()
+      !$ if(print_omp) print *,'transport',time2-time1
+
+      ! accumulate the per-process heat content change over the sub-steps (dt = sub-step here)
+      if (check_energy) then
+        dheat_adv  = dheat_adv  + cap_w*rho0*sum(real(ocn%dts_dt_adv(:,:,:,1),dp)*real(ocn_vol,dp))*dt
+        dheat_diff = dheat_diff + cap_w*rho0*sum(real(ocn%dts_dt_diff(:,:,:,1),dp)*real(ocn_vol,dp))*dt
+      endif
+
+    enddo
+
+    ! restore full-step ke_tau (for diagnostics/output) and the module time step
+    ocn%ke_tau = ke_tau_full
+    dt = dt_full
 
     !------------------------------------------------------------------------
     ! energy conservation check: evaluate heat budget after transport
@@ -460,9 +496,7 @@ contains
       ! total heat content change [J]
       dheat_tot  = ocn_heat_aft - ocn_heat_bef
       ! heat content change by advection [J] (carries the surface and geothermal boundary fluxes)
-      dheat_adv  = cap_w*rho0*sum(real(ocn%dts_dt_adv(:,:,:,1),dp)*real(ocn_vol,dp))*dt
-      ! heat content change by diffusion [J] (internal redistribution, should be ~0)
-      dheat_diff = cap_w*rho0*sum(real(ocn%dts_dt_diff(:,:,:,1),dp)*real(ocn_vol,dp))*dt
+      ! and by diffusion [J] (internal redistribution, should be ~0) accumulated over the sub-steps above
       ! heat content change by convection + mixed layer [J] (in-place, should be ~0)
       dheat_conv = dheat_tot - dheat_adv - dheat_diff
       ! express the imbalances as mean heat fluxes over the ocean surface [W/m2]
@@ -551,7 +585,7 @@ contains
     integer :: ni, nj, nk
     real(wp), dimension(:,:,:), allocatable :: tmp
     real(wp), dimension(:), allocatable :: tmp_depth
-    real(wp) :: tmp_sum, tmp_cnt
+    real(wp) :: tmp_sum, tmp_cnt, misval
     integer :: ncid
     character (len=256) :: fnm
 
@@ -693,6 +727,10 @@ contains
         allocate(tmp(ni,nj,nk))
         ! temperature
         call nc_read(fnm,"t",tmp,start=[1,1,1,13],count=[ni,nj,nk,1])
+        misval = -999._wp
+        where (tmp<=-990._wp) tmp = misval
+        call fill_missing_3d(tmp, ni, nj, nk, misval)   ! smooth extrapolation into undefined cells
+        call smooth_3d(tmp, ni, nj, nk)                 ! general horizontal smoothing to remove residual steps
         do k=1,maxk
           do j=1,maxj
             do i=1,maxi
@@ -712,6 +750,10 @@ contains
         enddo
         ! salinity
         call nc_read(fnm,"s",tmp,start=[1,1,1,13],count=[ni,nj,nk,1])
+        misval = -999._wp
+        where (tmp<=-990._wp) tmp = misval
+        call fill_missing_3d(tmp, ni, nj, nk, misval)   ! smooth extrapolation into undefined cells
+        call smooth_3d(tmp, ni, nj, nk)                 ! general horizontal smoothing to remove residual steps
         do k=1,maxk
           do j=1,maxj
             do i=1,maxi
@@ -1236,6 +1278,109 @@ contains
    return
 
   end subroutine ocn_read_restart
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! subroutine :  f i l l _ m i s s i n g _ 3 d
+  ! Purpose  :  smoothly extrapolate an observational field into cells
+  !             flagged with misval, by iterative averaging of valid
+  !             neighbours (horizontal, longitude-periodic, plus vertical).
+  !             This replaces the hard 0 / constant fallbacks, which leave
+  !             step discontinuities in the cold-start fields that seed
+  !             numerical over/undershoots in the ocean tracer transport.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine fill_missing_3d(a, ni, nj, nk, misval)
+
+    real(wp), intent(inout) :: a(ni,nj,nk)
+    integer,  intent(in)    :: ni, nj, nk
+    real(wp), intent(in)    :: misval
+
+    real(wp), allocatable :: b(:,:,:)
+    integer :: i, j, k, it, ip, im, cnt, nmiss
+    real(wp) :: s
+    integer, parameter :: maxit = 1000
+
+    allocate(b(ni,nj,nk))
+
+    do it = 1, maxit
+      nmiss = 0
+      b = a
+      do k = 1, nk
+        do j = 1, nj
+          do i = 1, ni
+            if (a(i,j,k) == misval) then
+              s = 0._wp; cnt = 0
+              ip = i+1; if (ip > ni) ip = 1     ! periodic in longitude
+              im = i-1; if (im < 1)  im = ni
+              if (a(ip,j,k) /= misval) then; s = s + a(ip,j,k); cnt = cnt+1; endif
+              if (a(im,j,k) /= misval) then; s = s + a(im,j,k); cnt = cnt+1; endif
+              if (j < nj) then; if (a(i,j+1,k) /= misval) then; s = s + a(i,j+1,k); cnt = cnt+1; endif; endif
+              if (j > 1 ) then; if (a(i,j-1,k) /= misval) then; s = s + a(i,j-1,k); cnt = cnt+1; endif; endif
+              if (k < nk) then; if (a(i,j,k+1) /= misval) then; s = s + a(i,j,k+1); cnt = cnt+1; endif; endif
+              if (k > 1 ) then; if (a(i,j,k-1) /= misval) then; s = s + a(i,j,k-1); cnt = cnt+1; endif; endif
+              if (cnt > 0) then
+                b(i,j,k) = s / real(cnt,wp)
+              else
+                nmiss = nmiss + 1            ! no valid neighbour yet, try next sweep
+              endif
+            endif
+          enddo
+        enddo
+      enddo
+      a = b
+      if (nmiss == 0) exit
+    enddo
+
+    deallocate(b)
+
+  end subroutine fill_missing_3d
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! subroutine :  s m o o t h _ 3 d
+  ! Purpose  :  general horizontal smoothing of a (gap-filled) obs field,
+  !             npass sweeps of a longitude-periodic 5-point relaxation.
+  !             Removes the grid-scale (~2dx) gradients that remain even in
+  !             the defined data (coastlines, fronts) and that the ocean
+  !             tracer transport amplifies into over/undershoots when started
+  !             from a cold state. Operate on a field with no missing values
+  !             (call after fill_missing_3d). npass / w are tunable.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine smooth_3d(a, ni, nj, nk)
+
+    real(wp), intent(inout) :: a(ni,nj,nk)
+    integer,  intent(in)    :: ni, nj, nk
+
+    real(wp), allocatable :: b(:,:,:)
+    integer :: i, j, k, it, ip, im
+    real(wp) :: s, cnt
+    integer,  parameter :: npass = 10        ! number of smoothing sweeps (tunable)
+    real(wp), parameter :: w     = 0.5_wp    ! relaxation weight per sweep, 0..1 (tunable)
+
+    allocate(b(ni,nj,nk))
+
+    do it = 1, npass
+      b = a
+      do k = 1, nk
+        do j = 1, nj
+          do i = 1, ni
+            s = 0._wp; cnt = 0._wp
+            ip = i+1; if (ip > ni) ip = 1     ! periodic in longitude
+            im = i-1; if (im < 1)  im = ni
+            s = s + a(ip,j,k); cnt = cnt + 1._wp
+            s = s + a(im,j,k); cnt = cnt + 1._wp
+            if (j < nj) then; s = s + a(i,j+1,k); cnt = cnt + 1._wp; endif
+            if (j > 1 ) then; s = s + a(i,j-1,k); cnt = cnt + 1._wp; endif
+            b(i,j,k) = (1._wp - w)*a(i,j,k) + w*(s/cnt)
+          enddo
+        enddo
+      enddo
+      a = b
+    enddo
+
+    deallocate(b)
+
+  end subroutine smooth_3d
 
 end module ocn_model
 

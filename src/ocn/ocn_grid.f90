@@ -532,6 +532,10 @@ contains
     logical :: is_island
     real(wp) :: isl_area
     real(wp) :: zfac
+    integer :: lo, rk, mm, itmp                    ! for ordering automatic islands by area
+    integer, dimension(maxisles) :: perm, newlab   ! perm(rk)=old label of rk-th largest; newlab(old)=new label
+    real(wp), dimension(maxisles) :: a_isl         ! landmass area per label
+    integer, allocatable :: map_edge_tmp(:,:,:)
     real(dp) :: ocn_vol_tot_1000
     real(dp) :: ocn_vol_tot_old
 
@@ -912,8 +916,9 @@ contains
           if (i_isl.eq.0) then
             ! automatic island determination
             isl_area = sum(area, islands==1)*1.e-12_wp      ! mln km2
-            if (isl_area>isl_area_min) then 
-              ! create new island
+            if (isl_area>isl_area_min) then
+              ! create new island (provisional label, in scan order; final labels are
+              ! reordered by decreasing area after the loop, with the largest as mainland)
               n_isles = n_isles+1 ! increase index
               if (n_isles.gt.maxisles) then
                 print *
@@ -926,9 +931,10 @@ contains
                 map_isles = n_isles
               endwhere
             else
-              ! add island to mainland (island 1)
+              ! sub-threshold land: mark to be merged into the mainland (done after the
+              ! area ordering below, so it follows the largest landmass, not scan-order label 1)
               where (islands.eq.1)
-                map_isles = 1
+                map_isles = -2
               endwhere
             endif
           endif
@@ -936,6 +942,50 @@ contains
         endif
       enddo
     enddo
+
+    ! for automatic island determination, order the landmass labels by decreasing area so
+    ! that label 1 (the mainland) is the largest landmass and the remaining islands are
+    ! indexed by decreasing area (deterministic, and a well-conditioned mainland reference).
+    ! Physical results are invariant to island indexing, but the labelling is made reproducible.
+    if (i_isl.eq.0 .and. n_isles.ge.1) then
+      ! area of each provisional label
+      do lo=1,n_isles
+        a_isl(lo) = sum(area, map_isles.eq.lo)
+      enddo
+      ! selection sort of labels by decreasing area: perm(rk) = old label of the rk-th largest
+      do lo=1,n_isles
+        perm(lo) = lo
+      enddo
+      do rk=1,n_isles-1
+        do mm=rk+1,n_isles
+          if (a_isl(perm(mm)).gt.a_isl(perm(rk))) then
+            itmp = perm(rk); perm(rk) = perm(mm); perm(mm) = itmp
+          endif
+        enddo
+      enddo
+      ! new label for each old label
+      do rk=1,n_isles
+        newlab(perm(rk)) = rk
+      enddo
+      ! relabel the landmass map (single pass; newlab is a bijection on 1..n_isles)
+      do j=1,maxj
+        do i=1,maxi
+          if (map_isles(i,j).ge.1) map_isles(i,j) = newlab(map_isles(i,j))
+        enddo
+      enddo
+      ! reorder the island edge maps consistently
+      allocate(map_edge_tmp(maxi,maxj,maxisles))
+      map_edge_tmp(:,:,1:n_isles) = map_edge(:,:,1:n_isles)
+      do rk=1,n_isles
+        map_edge(:,:,rk) = map_edge_tmp(:,:,perm(rk))
+      enddo
+      deallocate(map_edge_tmp)
+    endif
+
+    ! attach the sub-threshold land to the mainland (largest landmass, label 1)
+    if (i_isl.eq.0) then
+      where (map_isles.eq.-2) map_isles = 1
+    endif
 
     ! number of isles, remove the mainland
     n_isles = n_isles-1
@@ -1028,27 +1078,27 @@ contains
       enddo
     enddo
 
-    if (l_write_isl) then
-    fnm = trim(out_dir)//"/check_islands.nc"
-    call nc_create(fnm)
-    call nc_open(fnm,ncid)
-    call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
-    call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
-    call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
-    call nc_write_dim(fnm,"nisles",x=[(i, i=1,maxisles)],axis="z",ncid=ncid)
-    call nc_close(ncid)
+    if (l_write_isl .or. year.eq.1) then
+      fnm = trim(out_dir)//"/check_islands.nc"
+      call nc_create(fnm)
+      call nc_open(fnm,ncid)
+      call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
+      call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
+      call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
+      call nc_write_dim(fnm,"nisles",x=[(i, i=1,maxisles)],axis="z",ncid=ncid)
+      call nc_close(ncid)
 
-    call nc_open(fnm,ncid)
-    call nc_write(fnm,dim_time,    real(year+1,wp), dim1=dim_time,start=[year+1],count=[1],ncid=ncid)    
-    call nc_write(fnm,"k1",     k1(1:maxi,1:maxj),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"mask_ocn",     real(mask_ocn,wp),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_isles",     map_isles,dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_edge",     map_edge,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year+1],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_path",     map_path,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year+1],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
-    call nc_close(ncid)
+      call nc_open(fnm,ncid)
+      call nc_write(fnm,dim_time,    real(year,wp), dim1=dim_time,start=[year],count=[1],ncid=ncid)    
+      call nc_write(fnm,"k1",     k1(1:maxi,1:maxj),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"mask_ocn",     real(mask_ocn,wp),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_isles",     map_isles,dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_edge",     map_edge,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_path",     map_path,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
+      call nc_close(ncid)
 
-    stop
-  endif
+      if (l_write_isl) stop
+    endif
 
 
   end subroutine ocn_grid_update
