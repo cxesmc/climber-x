@@ -28,7 +28,7 @@ module bmb_model
   use nml
   use ncio
   use precision, only : wp, dp
-  use constants, only : rho_i, rho_sw, Lf, cap_w
+  use constants, only : rho_i, rho_sw, Lf, cap_w, map_gen
   use timer, only : year_ini, year_now, nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
   use control, only : out_dir, restart_in_dir, bmb_restart
   use bmb_grid, only : bmb_grid_init
@@ -408,7 +408,7 @@ contains
     bmb%grid = grid
 
     ! Generate mapping from cmn to bmb/ice
-    call map_init(bmb%maps_cmn_to_ice,cmn_grid,bmb%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(bmb%maps_cmn_to_ice,cmn_grid,bmb%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     bmb%grid_in = cmn_grid
 

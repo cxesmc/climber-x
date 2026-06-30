@@ -28,7 +28,7 @@ module geo_mod
   use precision, only : wp, dp
   use control, only : in_dir, sea_level_init, flag_geo, flag_lakes, flag_ice, flag_smb, flag_bgc
   use control, only : geo_restart, restart_in_dir
-  use constants, only : rho_i, rho_sw, pi, R_earth
+  use constants, only : rho_i, rho_sw, pi, R_earth, map_gen
   use dim_name, only: dim_lon, dim_lat, dim_depth, dim_lon1, dim_lat1, dim_time
   use coords, only : grid_class, grid_init
   use coords, only : map_init, map_class, map_field
@@ -227,7 +227,7 @@ contains
       else
         ! different grid, map 
         call grid_init(grid_z_bed_std,name="z_bed_std",mtype="latlon",units="degrees", x=real(lon_z_bed_std,dp),y=real(lat_z_bed_std,dp))
-        call map_init(maps_z_bed_std_to_geo,grid_z_bed_std,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_z_bed_std_to_geo,grid_z_bed_std,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_z_bed_std_to_geo,"z_bed_std",z_bed_std,geo%hires%z_bed_std,method="mean",missing_value=-9999._dp)
       endif
       deallocate(lon_z_bed_std)
@@ -261,7 +261,7 @@ contains
       else
         ! different grid, compute anomalies and add on top of reference bedrock elevation
         allocate(z_bed_anom(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
-        call map_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,method="mean",missing_value=-9999._dp)
         geo%hires%z_bed = geo%hires%z_bed_ref + z_bed_anom 
         deallocate(z_bed_anom)
@@ -313,7 +313,7 @@ contains
       if (bnd_ice_grid%name==geo%hires%grid%name) then
         geo%hires%h_ice = h_ice
       else
-        call map_init(maps_bndice_to_geo,bnd_ice_grid,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_bndice_to_geo,bnd_ice_grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_bndice_to_geo,"h_ice",h_ice,geo%hires%h_ice,method="mean",missing_value=-9999._dp,reset=.false.)
         allocate(mask_ice(bnd_ice_grid%G%nx,bnd_ice_grid%G%ny))
         allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
@@ -520,7 +520,7 @@ contains
 
         allocate( tmp(ni_rel,nj_rel) )
         call nc_read(trim(z_bed_rel_file),"z_bed_rel",tmp)
-        call map_init(maps_rel_to_geo,grid_rel,geo%hires%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_rel_to_geo,grid_rel,geo%hires%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_rel_to_geo,"z_bed_rel",tmp,geo%hires%z_bed_rel,method="mean",missing_value=-9999._dp)
         deallocate( tmp )
 
@@ -544,7 +544,7 @@ contains
     !-------------------------------------------------------------------
 
     call geo_heat(geo%hires%grid, geo%hires%q_geo, geo%hires%q_geo_ice)
-    call map_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_hires_to_lowres,geo%hires%grid,geo%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
     call map_field(maps_hires_to_lowres,"q_geo",geo%hires%q_geo,geo%q_geo,method="mean",missing_value=-9999._dp)
 
     !-------------------------------------------------------------------

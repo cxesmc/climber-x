@@ -30,7 +30,7 @@ module smb_model
   use precision, only : wp, dp
   use timer, only : year, year_ini, year_now, doy, mon, nmon_year, nday_year, day_year, nstep_mon_smb, nstep_year_smb, sec_year, sec_mon
   use timer, only : time_soy_smb, time_eoy_smb, time_eom_smb
-  use constants, only : pi, rho_i, fcoriolis, T0, r_earth
+  use constants, only : pi, rho_i, fcoriolis, T0, r_earth, map_gen
   use control, only : out_dir, restart_in_dir, smb_restart
   use smb_grid, only : smb_grid_init, nl
   use smb_params, only : i_smb, gamma, i_z_sur_eff, alpha_zstd, l_regional_climate_forcing, l_diurnal_cycle, prc_par
@@ -771,7 +771,7 @@ contains
     enddo
 
     ! Generate mapping from cmn to smb/ice
-    call map_init(smb%maps_cmn_to_ice,smb_in%grid,smb%grid,method=map_method,gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(smb%maps_cmn_to_ice,smb_in%grid,smb%grid,method=map_method,gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     ! generate regular lat-lon grid covering smb domain 
     if (i_smb.eq.3 .or. prc_par%l_slope_effect) then
@@ -786,8 +786,8 @@ contains
       nlat = ceiling((lat_max-lat_min)/dlat)
       call grid_init(smb%grid_latlon,name=trim(smb%grid%name)//trim("_latlon"),mtype="latlon",units="degrees", &
         x0=real(lon_min,dp),dx=real(dlon,dp),nx=nlon,y0=real(lat_min,dp),dy=real(dlat,dp),ny=nlat)
-      call map_init(smb%maps_to_latlon,smb%grid,smb%grid_latlon,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_init(smb%maps_from_latlon,smb%grid_latlon,smb%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_init(smb%maps_to_latlon,smb%grid,smb%grid_latlon,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_init(smb%maps_from_latlon,smb%grid_latlon,smb%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     endif
 
@@ -811,7 +811,7 @@ contains
       ppos = scan(trim(mask_maxice_file),".", BACK= .true.)-1
       call grid_init(mask_maxice_grid,name=trim(mask_maxice_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
       ! map to ice grid
-      call map_init(maps_maxice_to_ice,mask_maxice_grid,smb%grid,method="nn",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_init(maps_maxice_to_ice,mask_maxice_grid,smb%grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,method="mean",missing_value=-9999)
 
       deallocate(maxi, lon_maxi, lat_maxi)

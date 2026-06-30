@@ -14,7 +14,7 @@ module vilma_model
 
     use timer, only : year_ini, nyears, n_year_geo
     use control, only : out_dir, geo_restart, restart_in_dir
-    use constants, only : rho_i, rho_sw
+    use constants, only : rho_i, rho_sw, map_gen
     use geo_params, only : vilma_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
     use geo_params, only : f_visc_sd, sigma_log10_visc, visc_log10_min, visc_log10_max
     use coords, only : grid_class, grid_init
@@ -202,8 +202,8 @@ contains
     call grid_init(vilma_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
 
     ! generate maps for mapping between geo and vilma
-    call map_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     ! initialize VILMA
 

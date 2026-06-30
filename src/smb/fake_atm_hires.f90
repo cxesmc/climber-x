@@ -30,6 +30,7 @@ module fake_atm_hires_mod
   use smb_params, only : ifake_atm_hires, fake_atm_hires_const_file, fake_atm_hires_var_file, prc_forcing, wind_forcing
   use coords, only : grid_init, grid_class
   use coords, only : map_init, map_class
+  use constants, only : map_gen
   use ncio
 
   implicit none
@@ -95,7 +96,7 @@ contains
     x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
   ! initialize map
-  call map_init(atm%maps_atm_to_smb,atm%grid,smb_grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+  call map_init(atm%maps_atm_to_smb,atm%grid,smb_grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
   ! allocate atm type variables
   allocate(atm%tair(ni,nj))
