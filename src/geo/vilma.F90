@@ -90,7 +90,7 @@ contains
     iepoch = iepoch + 1
 
     ! interpolate ice thickness to vilma grid
-    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_g>0._wp) 
@@ -99,7 +99,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
@@ -129,7 +129,7 @@ contains
 
     ! interpolate from Gauss-Legendre vilma_grid to geo_grid (regular lat-lon)
     ! relative sea level
-    call map_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,method="mean",missing_value=-9999._dp)
+    call map_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,stat="mean",missing_value=-9999._dp)
 
     ! update bedrock elevation
     z_bed_g = z_bed_eq_g - rsl_g
@@ -351,9 +351,9 @@ contains
 
     z_bed_eq_g = z_bed_eq_g_in
     ! interpolate to vilma grid
-    call map_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,method="mean",missing_value=-9999._dp)
-    call map_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,method="mean",missing_value=-9999._dp)
-    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
     allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
     where (h_ice_eq_g>0._wp) 
@@ -362,7 +362,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice_eq = 0._wp
     where (h_ice_g>0._wp) 
       mask_ice_g = 1.
@@ -370,7 +370,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,method="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)

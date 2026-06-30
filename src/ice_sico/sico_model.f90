@@ -400,7 +400,7 @@ contains
     ! map to ice grid
     allocate(tmpi(1:ice%grid%IMAX+1,1:ice%grid%JMAX+1))
     call map_init(maps_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_field(maps_maxextent_to_ice,"mask",maxi,tmpi,method="mean",missing_value=-9999)
+    call map_field(maps_maxextent_to_ice,"mask",maxi,tmpi,stat="mean",missing_value=-9999)
     ice%state%mask_maxextent = transpose(tmpi)
 
     deallocate(maxi, lon_maxi, lat_maxi, tmpi)

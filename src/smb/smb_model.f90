@@ -115,7 +115,7 @@ contains
   if (time_soy_smb) then
 
     ! interpolate low resolution elevation
-    call map_field(smb%maps_cmn_to_ice,"z_sur",smb_in%z_sur, smb%z_sur_i,method="mean",missing_value=-9999._dp)
+    call map_field(smb%maps_cmn_to_ice,"z_sur",smb_in%z_sur, smb%z_sur_i,stat="mean",missing_value=-9999._dp)
 
     ! filter topography for precipitation downscaling (orographic enhancement of precipitation follows a smoothed topography (Pedgley 1970))
     call topo_filter(smb%grid, smb%z_sur, smb%z_sur_fil)
@@ -210,22 +210,22 @@ contains
       !$omp parallel sections
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"t2m",smb_in%t2m, smb%t2m_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"t2m",smb_in%t2m, smb%t2m_i,stat="mean",missing_value=-9999._dp)
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"prc",smb_in%prc, smb%prc_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"prc",smb_in%prc, smb%prc_i,stat="mean",missing_value=-9999._dp)
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"u700",smb_in%u700, smb%u700_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"u700",smb_in%u700, smb%u700_i,stat="mean",missing_value=-9999._dp)
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"v700",smb_in%v700, smb%v700_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"v700",smb_in%v700, smb%v700_i,stat="mean",missing_value=-9999._dp)
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"wind",smb_in%wind, smb%wind_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"wind",smb_in%wind, smb%wind_i,stat="mean",missing_value=-9999._dp)
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"cld",smb_in%cld, smb%cld_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"cld",smb_in%cld, smb%cld_i,stat="mean",missing_value=-9999._dp)
       !$omp end parallel sections
 
       !$omp parallel do private (i,j) 
@@ -338,126 +338,126 @@ contains
       !$omp parallel sections
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"tam",smb_in%tam, smb%tam_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"tam",smb_in%tam, smb%tam_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"ram",smb_in%ram, smb%ram_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"ram",smb_in%ram, smb%ram_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"gam",smb_in%gam, smb%gam_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"gam",smb_in%gam, smb%gam_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"tstd",smb_in%tstd, smb%tstd_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"tstd",smb_in%tstd, smb%tstd_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"prc",smb_in%prc, smb%prc_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"prc",smb_in%prc, smb%prc_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"u700",smb_in%u700, smb%u700_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"u700",smb_in%u700, smb%u700_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"v700",smb_in%v700, smb%v700_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"v700",smb_in%v700, smb%v700_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"wind",smb_in%wind, smb%wind_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"wind",smb_in%wind, smb%wind_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"cld",smb_in%cld, smb%cld_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"cld",smb_in%cld, smb%cld_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dust",smb_in%dust, smb%dust_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dust",smb_in%dust, smb%dust_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
       if (time_soy_smb) then
-        call map_field(smb%maps_cmn_to_ice,"t_ground",smb_in%t_ground, smb%t_ground_i,method="mean",missing_value=-9999._dp)
+        call map_field(smb%maps_cmn_to_ice,"t_ground",smb_in%t_ground, smb%t_ground_i,stat="mean",missing_value=-9999._dp)
       endif
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"swd_toa",smb_in%swd_toa, smb%swd_toa_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"swd_toa",smb_in%swd_toa, smb%swd_toa_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
       if (l_diurnal_cycle) then
-        call map_field(smb%maps_cmn_to_ice,"swd_toa_min",smb_in%swd_toa_min, smb%swd_toa_min_i,method="mean",missing_value=-9999._dp, &
+        call map_field(smb%maps_cmn_to_ice,"swd_toa_min",smb_in%swd_toa_min, smb%swd_toa_min_i,stat="mean",missing_value=-9999._dp, &
           mask_pack=(smb%mask_smb==1))
       endif
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"swd_sur_vis_dir",smb_in%swd_sur_vis_dir, smb%swd_sur_vis_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"swd_sur_vis_dir",smb_in%swd_sur_vis_dir, smb%swd_sur_vis_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"swd_sur_nir_dir",smb_in%swd_sur_nir_dir, smb%swd_sur_nir_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"swd_sur_nir_dir",smb_in%swd_sur_nir_dir, smb%swd_sur_nir_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"swd_sur_vis_dif",smb_in%swd_sur_vis_dif, smb%swd_sur_vis_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"swd_sur_vis_dif",smb_in%swd_sur_vis_dif, smb%swd_sur_vis_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"swd_sur_nir_dif",smb_in%swd_sur_nir_dif, smb%swd_sur_nir_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"swd_sur_nir_dif",smb_in%swd_sur_nir_dif, smb%swd_sur_nir_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_vis_dir",smb_in%dswd_dalb_vis_dir, smb%dswd_dalb_vis_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_vis_dir",smb_in%dswd_dalb_vis_dir, smb%dswd_dalb_vis_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_nir_dir",smb_in%dswd_dalb_nir_dir, smb%dswd_dalb_nir_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_nir_dir",smb_in%dswd_dalb_nir_dir, smb%dswd_dalb_nir_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_vis_dif",smb_in%dswd_dalb_vis_dif, smb%dswd_dalb_vis_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_vis_dif",smb_in%dswd_dalb_vis_dif, smb%dswd_dalb_vis_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_nir_dif",smb_in%dswd_dalb_nir_dif, smb%dswd_dalb_nir_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dalb_nir_dif",smb_in%dswd_dalb_nir_dif, smb%dswd_dalb_nir_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dz_nir_dir",smb_in%dswd_dz_nir_dir, smb%dswd_dz_nir_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dz_nir_dir",smb_in%dswd_dz_nir_dir, smb%dswd_dz_nir_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"dswd_dz_nir_dif",smb_in%dswd_dz_nir_dif, smb%dswd_dz_nir_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"dswd_dz_nir_dif",smb_in%dswd_dz_nir_dif, smb%dswd_dz_nir_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"alb_vis_dir",smb_in%alb_vis_dir, smb%alb_vis_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"alb_vis_dir",smb_in%alb_vis_dir, smb%alb_vis_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"alb_nir_dir",smb_in%alb_nir_dir, smb%alb_nir_dir_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"alb_nir_dir",smb_in%alb_nir_dir, smb%alb_nir_dir_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"alb_vis_dif",smb_in%alb_vis_dif, smb%alb_vis_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"alb_vis_dif",smb_in%alb_vis_dif, smb%alb_vis_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"alb_nir_dif",smb_in%alb_nir_dif, smb%alb_nir_dif_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"alb_nir_dif",smb_in%alb_nir_dif, smb%alb_nir_dif_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"coszm",smb_in%coszm, smb%coszm_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"coszm",smb_in%coszm, smb%coszm_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"lwdown",smb_in%lwdown, smb%lwdown_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"lwdown",smb_in%lwdown, smb%lwdown_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp section
       !!$ print *,omp_get_thread_num(),'/',omp_get_num_threads()
-      call map_field(smb%maps_cmn_to_ice,"gam_lw",smb_in%gam_lw, smb%gam_lw_i,method="mean",missing_value=-9999._dp, &
+      call map_field(smb%maps_cmn_to_ice,"gam_lw",smb_in%gam_lw, smb%gam_lw_i,stat="mean",missing_value=-9999._dp, &
         mask_pack=(smb%mask_smb==1))
       !$omp end parallel sections
 
@@ -474,17 +474,17 @@ contains
       ! get high-resolution climate forcing from regional climate model
 
       call fake_atm_hires_update(real(year_now,wp),atm)
-      call map_field(atm%maps_atm_to_smb,"t2m",atm%tair, smb%t2m,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"tstd",atm%tstd, smb%tstd_i,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"q2m",atm%qair, smb%q2m,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"rain",atm%rain, smb%rain,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"snow",atm%snow, smb%snow,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"swdown",atm%swdown, smb%swdown,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"lwdown",atm%lwdown, smb%lwdown,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"wind",atm%wind, smb%wind,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"cod",atm%cod, smb%cod,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"albedo",atm%alb, smb%albedo,method="mean") 
-      call map_field(atm%maps_atm_to_smb,"pressure",atm%pressure, smb%pressure,method="mean") 
+      call map_field(atm%maps_atm_to_smb,"t2m",atm%tair, smb%t2m,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"tstd",atm%tstd, smb%tstd_i,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"q2m",atm%qair, smb%q2m,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"rain",atm%rain, smb%rain,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"snow",atm%snow, smb%snow,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"swdown",atm%swdown, smb%swdown,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"lwdown",atm%lwdown, smb%lwdown,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"wind",atm%wind, smb%wind,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"cod",atm%cod, smb%cod,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"albedo",atm%alb, smb%albedo,stat="mean") 
+      call map_field(atm%maps_atm_to_smb,"pressure",atm%pressure, smb%pressure,stat="mean") 
 
       !    fnm = "test_smb.nc"
       !    call nc_create(fnm)
@@ -670,7 +670,7 @@ contains
 
       !-------------------------------------
       ! map temperature from low to high resolution grid
-      call map_field(smb%maps_cmn_to_ice,"t2m",smb_in%t2m, smb%t2m_i,method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"t2m",smb_in%t2m, smb%t2m_i,stat="mean",missing_value=-9999._dp)
 
       ! 2m temperature at ice sheet elevation (diagnostic)
       smb%t2m(:,:) = smb%t2m_i(:,:) + gamma*(smb%z_sur_i(:,:)-smb%z_sur_eff(:,:))
@@ -812,7 +812,7 @@ contains
       call grid_init(mask_maxice_grid,name=trim(mask_maxice_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
       ! map to ice grid
       call map_init(maps_maxice_to_ice,mask_maxice_grid,smb%grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
-      call map_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,method="mean",missing_value=-9999)
+      call map_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,stat="mean",missing_value=-9999)
 
       deallocate(maxi, lon_maxi, lat_maxi)
 
@@ -1182,8 +1182,8 @@ contains
     do d=1,nday_year
       ! filter close to poles
       call filter_smb(smb_in%t2m_bias(:,:,d),real(smb_in%grid%lat(1,:),wp)) 
-      call map_field(smb%maps_cmn_to_ice,"t2m_bias",smb_in%t2m_bias(:,:,d), smb%t2m_bias_i(:,:,d),method="mean",missing_value=-9999._dp)
-      call map_field(smb%maps_cmn_to_ice,"prc_bias",smb_in%prc_bias(:,:,d), smb%prc_bias_i(:,:,d),method="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"t2m_bias",smb_in%t2m_bias(:,:,d), smb%t2m_bias_i(:,:,d),stat="mean",missing_value=-9999._dp)
+      call map_field(smb%maps_cmn_to_ice,"prc_bias",smb_in%prc_bias(:,:,d), smb%prc_bias_i(:,:,d),stat="mean",missing_value=-9999._dp)
     enddo
     ! apply scaling factor and add additional uniform bias correction
     smb%t2m_bias_i = t2m_bias_scale_fac*smb%t2m_bias_i - t2m_bias_corr_uniform

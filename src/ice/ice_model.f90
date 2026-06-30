@@ -314,14 +314,14 @@ contains
         call set_ice_id(ice%grid, id_mask)
 
         call map_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="mean")
-        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="mean", &
+        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,stat="mean")
+        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,stat="mean", &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-        call map_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,method="mean")
-        call map_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="mean")
-        call map_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="mean", missing_value=-9999._dp, &
+        call map_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,stat="mean")
+        call map_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,stat="mean")
+        call map_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,stat="mean", missing_value=-9999._dp, &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-        call map_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp)
+        call map_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,stat="mean", missing_value=-9999._dp)
 
         where (h_ice<10._wp) h_ice = 0._wp
 
