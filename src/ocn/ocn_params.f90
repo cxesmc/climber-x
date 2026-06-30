@@ -38,6 +38,12 @@ module ocn_params
 
      real(wp) :: dt !! time step [s]
 
+     ! ramped ocean sub-cycling for cold-start spin-up
+     logical :: l_ocn_dt_ramp       !! enable ramped sub-cycling of the ocean time step on cold start (ocn_restart=F)?
+     integer :: ocn_dt_ramp_nsub0   !! initial number of sub-steps N0 (power of two), effective initial step = dt/N0 []
+     integer :: ocn_dt_ramp_years   !! number of years over which N halves from N0 down to 1 [years]
+     integer :: n_sub               !! current number of sub-steps per ocean call []
+
      integer :: n_tracers_tot    !! total number of tracers (ocn+bgc) []
      integer :: n_tracers_ocn    !! number of ocean model tracers []
      integer :: n_tracers_bgc    !! number of bgc tracers []
@@ -54,6 +60,8 @@ module ocn_params
      integer :: nlayers
      integer :: i_smooth
      real(wp) :: smooth_fac
+     logical :: l_limit_ratio   !! limit the neighbour ocean-depth ratio of the bathymetry by deepening shallow cells (despike for barotropic stability)?
+     real(wp) :: depth_ratio_max  !! maximum allowed neighbour depth ratio (threshold for l_limit_ratio) []
      real(wp), dimension(:), allocatable :: zw_in
      integer :: i_isl
      real(wp) :: isl_area_min
@@ -123,7 +131,7 @@ module ocn_params
      integer :: i_saln0
      real(wp) :: saln0_const
      logical :: l_salinity_restore
-     real(wp) :: shelf_depth
+     real(wp) :: ocn_depth_min
      logical :: age_tracer
      logical :: dye_tracer
      logical :: cons_tracer
@@ -200,6 +208,9 @@ contains
      ! time step
      dt = dt_ocn
 
+     ! default to a single sub-step (overridden each year in ocn_update when l_ocn_dt_ramp)
+     n_sub = 1
+
     ! read model settings and parameters from namelist
     call ocn_par_load(trim(out_dir)//"/ocn_par.nml")
 
@@ -221,12 +232,17 @@ subroutine ocn_par_load(filename)
 
     ! Read parameters from file
     write(*,*) "ocean parameters ==========="
+    call nml_read(filename,"ocn_par","l_ocn_dt_ramp",l_ocn_dt_ramp)
+    call nml_read(filename,"ocn_par","ocn_dt_ramp_nsub0",ocn_dt_ramp_nsub0)
+    call nml_read(filename,"ocn_par","ocn_dt_ramp_years",ocn_dt_ramp_years)
     call nml_read(filename,"ocn_par","i_init",i_init)
     call nml_read(filename,"ocn_par","nlayers",nlayers)
     allocate(zw_in(nlayers+1))
     call nml_read(filename,"ocn_par","levels",zw_in)
     call nml_read(filename,"ocn_par","i_smooth",i_smooth)
     call nml_read(filename,"ocn_par","smooth_fac",smooth_fac)
+    call nml_read(filename,"ocn_par","l_limit_ratio",l_limit_ratio)
+    call nml_read(filename,"ocn_par","depth_ratio_max",depth_ratio_max)
     call nml_read(filename,"ocn_par","i_isl",i_isl)
     call nml_read(filename,"ocn_par","isl_area_min",isl_area_min)
     call nml_read(filename,"ocn_par","l_isl_ant",l_isl_ant)
@@ -283,7 +299,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_sst",tau_sst)
     call nml_read(filename,"ocn_par","tau_sss",tau_sss)
 
-    call nml_read(filename,"ocn_par","shelf_depth",shelf_depth)
+    call nml_read(filename,"ocn_par","ocn_depth_min",ocn_depth_min)
 
     call nml_read(filename,"ocn_par","age_tracer",age_tracer)
     call nml_read(filename,"ocn_par","dye_tracer",dye_tracer)

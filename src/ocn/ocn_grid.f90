@@ -34,8 +34,9 @@ module ocn_grid
   use constants, only : pi, r_earth
   use climber_grid, only: ni, nj, lon, lat, basin_mask, i_atlantic, area
   use control, only: in_dir, out_dir
-  use ocn_params, only : shelf_depth, nlayers, i_smooth, smooth_fac, zw_in
+  use ocn_params, only : ocn_depth_min, nlayers, i_smooth, smooth_fac, zw_in
   use ocn_params, only : dbl
+  use ocn_params, only : l_limit_ratio, depth_ratio_max
   use ocn_params, only : i_isl, isl_area_min, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
   
   use, intrinsic :: iso_c_binding 
@@ -62,7 +63,6 @@ module ocn_grid
 
   real(wp), dimension(:,:), allocatable :: topo   !! topography [m]
   real(wp), dimension(:,:), allocatable :: bathy   !! bathymetry [m]
-  integer, dimension(:,:), allocatable :: k1_pot   !! potential index of the first wet ocean grid cell, counting starts from bottom []
   integer, dimension(:,:), allocatable :: k1       !! index of the first wet ocean grid cell, counting starts from bottom []
   integer :: k1_shelf
   integer :: k1_1000
@@ -107,8 +107,9 @@ module ocn_grid
   real(wp), dimension(:), allocatable :: dxv !! longitudinal grid-cell width at cell edges [m]
   real(wp), dimension(:), allocatable :: rdxv!! reverse of dxv
   real(wp), dimension(:), allocatable :: zro !! depth of layer center, zero at the surface, decreasing [m]
+  real(wp), dimension(:), allocatable :: zro_nom !! NOMINAL (un-stretched) layer-centre depth, for truncating bathymetry to levels consistently in init and update [m]
   real(wp), dimension(:), allocatable :: zw  !! depth of layer edges, zero at the surface, decreasing [m]
-  real(wp), dimension(:), allocatable :: dz  !! thickness of layers [m] 
+  real(wp), dimension(:), allocatable :: dz  !! nominal thickness of layers [m]
   real(wp), dimension(:), allocatable :: dza !! thickness between layer centers [m]
   real(wp), dimension(:), allocatable :: rdz  !! reverse of dz [1/m] 
   real(wp), dimension(:), allocatable :: rdza !! reverse of dza [1/m]
@@ -131,7 +132,6 @@ module ocn_grid
     real(wp), dimension(:), allocatable :: lat  !! latitude [deg]
     real(wp), dimension(:), allocatable :: lon  !! longitude [deg]
     integer, dimension(:,:), allocatable :: k1  !! ocean first layer (bottom) index []
-    integer, dimension(:,:), allocatable :: k1_pot   !! potential index of the first wet ocean grid cell, counting starts from bottom []
     integer, dimension(:,:), allocatable :: mask_ocn  !! ocean mask []
     real(dp) :: ocn_area_tot   !! total surface area of ocean [m2]
     real(wp), dimension(:,:), allocatable :: ocn_area  !! horizonzal area of ocean cells (ocean fraction is accounted for) [m2]
@@ -154,14 +154,12 @@ contains
   ! Function :  o c n _ g r i d _ i n i t
   ! Purpose  :  initialize ocean grid
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ocn_grid_init(f_ocn,topo_in,z_ocn_max,mask_coast,ocn_vol_tot_real,grid)
+  subroutine ocn_grid_init(f_ocn,topo_in,ocn_vol_tot_real,grid)
 
     implicit none
- 
+
     real(wp), intent(in) :: f_ocn(:,:)  !! ocean fracŧion
     real(wp), intent(in) :: topo_in(:,:)  !! 'real' ocean bathymetry [m]
-    real(wp), intent(in) :: z_ocn_max(:,:)  !! 'real' ocean bathymetry [m]
-    integer, intent(in) :: mask_coast(:,:)  !! 'real' ocean bathymetry [m]
     real(dp), intent(in) :: ocn_vol_tot_real
     type(grid_class), intent(inout) :: grid
 
@@ -169,6 +167,7 @@ contains
     real(wp) :: th0, th1, s0, s1, theta, thv, dth, deg_to_rad
     real(wp) :: tv1
     real(wp) :: zfac
+    real(dp) :: ocn_vol_tot_1000
     real(wp) :: dist_isl
 
 
@@ -182,7 +181,6 @@ contains
 
     ! allocate variables
     allocate(grid%k1(maxi,maxj))
-    allocate(grid%k1_pot(maxi,maxj))
     allocate(grid%mask_ocn(maxi,maxj))
     allocate(grid%ocn_area(maxi,maxj))
     allocate(grid%ocn_vol(maxi,maxj,maxk))
@@ -214,6 +212,7 @@ contains
     allocate(dxv(0:maxj))
     allocate(rdxv(0:maxj))
     allocate(zro(maxk))
+    allocate(zro_nom(maxk))
     allocate(zw(0:maxk))
     allocate(dz(maxk))
     allocate(dza(maxk))
@@ -229,7 +228,6 @@ contains
     allocate(ocn_vol(maxi,maxj,maxk))
     allocate(topo(maxi,maxj))
     allocate(bathy(maxi,maxj))
-    allocate(k1_pot(maxi,maxj))
     allocate(k1(0:maxi+1,0:maxj+1))
     allocate(ku(2,maxi,maxj))
     allocate(getj(maxi,maxj))
@@ -331,6 +329,10 @@ contains
     dz  = dz*depth  ! m
     dza = dza*depth  ! m
 
+    ! store the nominal (un-stretched) layer centres; bathymetry is always truncated to these,
+    ! so init and the dynamic update produce consistent level indices regardless of the zfac depth stretch
+    zro_nom = zro
+
     ! define fraction of layers in boundary layer
     do k=maxk,1,-1
       f_pbl(k) = max(0.,min(1.,(zw(k)+dbl)/(zw(k)-zw(k-1))))
@@ -343,9 +345,9 @@ contains
     k1_shelf = maxk
     tv1 = 1000._wp
     do k=maxk,1,-1
-      if (abs(zw(k-1)+shelf_depth).lt.tv1) then
+      if (abs(zw(k-1)+ocn_depth_min).lt.tv1) then
         k1_shelf = k
-        tv1 = abs(zw(k-1)+shelf_depth)
+        tv1 = abs(zw(k-1)+ocn_depth_min)
       endif
     enddo
     print *,'k1_shelf',k1_shelf
@@ -376,82 +378,42 @@ contains
     print *,'depth 3000',zw(k1_3000-1),zro(k1_3000)
 
     !-------------------------------------------------------------
-    ! set bathymetry
+    ! set bathymetry (smooth -> condition -> truncate -> shelf clamp -> mask)
     !-------------------------------------------------------------
 
-    ! first derive 'potential' bathymetry (k1_pot)
-    topo = topo_in
+    call compute_bathy(topo_in, f_ocn, .true.)
 
-    ! smooth real bathymetry
-    if (i_smooth.eq.1) then
-      call smooth_topo(topo, int(smooth_fac))
-    else if (i_smooth.eq.2) then
-      call smooth_topo2(topo, int(smooth_fac))
-    else if (i_smooth.eq.3) then
-      ! smooth using FFT filter
-      call smooth_topo_fft(topo, smooth_fac)
-    else if (i_smooth.eq.4) then
-      call smooth_topo(topo, int(smooth_fac))
-      do j=1,maxj
-        do i=1,maxi
-          if (j.lt.7 .and.mask_coast(i,j).eq.1) then
-            topo(i,j) = z_ocn_max(i,j)
-          endif
-        enddo
-      enddo
-    else if (i_smooth.eq.5) then
-      call smooth_topo(topo, int(smooth_fac))
-      do j=1,maxj
-        do i=1,maxi
-          if (mask_coast(i,j).eq.1) then
-            topo(i,j) = z_ocn_max(i,j)
-          endif
-        enddo
-      enddo
-    endif
-      
-
-    ! truncate to depth levels and get index of bottom layer in k1_pot
-    call truncate_topo(topo,k1_pot)
-
-    ! minimum depth <-> shelf depth
-    where (k1_pot.gt.k1_shelf) k1_pot = k1_shelf
-    !where (f_ocn.lt.0.5_wp) k1_pot = k1_shelf
-
-    ! derive actual bathymetry applying ocean mask
-    k1(1:maxi,1:maxj) = k1_pot(1:maxi,1:maxj)
-    ! apply land/sea mask
-    where (f_ocn.eq.0._wp)
-      k1(1:maxi,1:maxj) = 99
-    endwhere
-
-    ! periodic boundary conditions
-    k1(0,1:maxj) = k1(maxi,1:maxj)
-    k1(maxi+1,1:maxj) = k1(1,1:maxj)
-    ! North Pole and South Pole 'islands'
-    k1(:,0) = 99
-    k1(:,maxj+1) = 99
-
-    ! actual total ocean volume
+    ! actual total ocean volume, and the part below 1000 m, on nominal levels
     ocn_vol_tot = 0._wp
+    ocn_vol_tot_1000 = 0._wp
     do j=1,maxj
       do i=1,maxi
         do k=1,maxk
           if (k.ge.k1(i,j)) then
             ocn_vol_tot = ocn_vol_tot + dx(j)*dy*dz(k)*f_ocn(i,j)
+            if (k.le.k1_1000) ocn_vol_tot_1000 = ocn_vol_tot_1000 + dx(j)*dy*dz(k)*f_ocn(i,j)
           endif
         enddo
       enddo
     enddo
 
-    ! scale depth to get total ocean volume right (matching high resolution bathymetry)
-    zfac = ocn_vol_tot_real/ocn_vol_tot
+    ! scale only the deep (below 1000 m) layer thicknesses to match the real total ocean volume
+    ! (high-resolution bathymetry), leaving the dynamically active upper ocean -- and the depth
+    ! coordinate there -- at nominal levels. Consistent with the deep-only correction in ocn_grid_update.
+    zfac = 1._wp + (ocn_vol_tot_real-ocn_vol_tot)/ocn_vol_tot_1000
 
-    ! update layer depth and thickness
-    zro = zro * zfac  ! m
-    zw  = zw  * zfac  ! m
-    dz  = dz  * zfac  ! m
-    dza = dza * zfac  ! m
+    dz(1:k1_1000) = dz(1:k1_1000) * zfac
+
+    ! rebuild interfaces, mid-depths and centre spacings from the adjusted thicknesses
+    zw(maxk) = 0._wp
+    do k=maxk,1,-1
+      zw(k-1) = zw(k) - dz(k)
+      zro(k) = 0.5_wp*(zw(k) + zw(k-1))
+    enddo
+    dza(maxk) = 0._wp ! never referenced
+    do k=maxk-1,1,-1
+      dza(k) = zro(k+1)-zro(k)
+    enddo
 
     ! truncated bathymetry for output
     do j=1,maxj
@@ -490,7 +452,6 @@ contains
     grid%dz     = dz     
     grid%dza    = dza    
     grid%k1     = k1(1:maxi,1:maxj)
-    grid%k1_pot = k1_pot 
 
     grid%ocn_area = ocn_area
     grid%ocn_vol  = ocn_vol
@@ -552,7 +513,7 @@ contains
   ! Function :  o c n _ g r i d _ u p d a t e
   ! Purpose  :  update ocean grid
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ocn_grid_update(f_ocn,grid)
+  subroutine ocn_grid_update(f_ocn,z_ocn,grid)
 
     use dim_name, only: dim_lon, dim_lat, dim_time
     use climber_grid, only : lon, lat
@@ -560,6 +521,7 @@ contains
     implicit none
 
     real(wp), dimension(:,:), intent(in) :: f_ocn
+    real(wp), dimension(:,:), intent(in) :: z_ocn   !! ocean-model bathymetry (grid-cell bedrock elevation), relative to sea level [m]
     type(grid_class), intent(inout) :: grid
 
     integer :: i, j, k, kk, ip1, jp1, ncells, n
@@ -570,6 +532,10 @@ contains
     logical :: is_island
     real(wp) :: isl_area
     real(wp) :: zfac
+    integer :: lo, rk, mm, itmp                    ! for ordering automatic islands by area
+    integer, dimension(maxisles) :: perm, newlab   ! perm(rk)=old label of rk-th largest; newlab(old)=new label
+    real(wp), dimension(maxisles) :: a_isl         ! landmass area per label
+    integer, allocatable :: map_edge_tmp(:,:,:)
     real(dp) :: ocn_vol_tot_1000
     real(dp) :: ocn_vol_tot_old
 
@@ -587,25 +553,12 @@ contains
     mask_ocn = grid%mask_ocn
 
     !--------------------------------------------------------
-    ! update k1
+    ! dynamically recompute the bathymetry from the current ocean bed elevation z_ocn,
+    ! applying the same smoothing/conditioning/truncation/shelf-clamp/masking as at init.
+    ! cells thus wet/dry/deepen/shoal with sea level; the tracer re-mapping in
+    ! ocn_grid_update_state handles the resulting volume changes.
     !--------------------------------------------------------
-    do j=1,maxj
-      do i=1,maxi
-        if (mask_ocn(i,j).eq.1 .and. k1(i,j).gt.maxk) then
-          ! new ocean (shelf) cell forming
-          k1(i,j) = k1_pot(i,j)
-        else if (mask_ocn(i,j).eq.0 .and. k1(i,j).le.maxk) then
-          ! ocean cell disappearing
-          k1(i,j) = 99
-        endif
-      enddo
-    enddo
-    ! periodic boundary conditions
-    k1(0,1:maxj) = k1(maxi,1:maxj)
-    k1(maxi+1,1:maxj) = k1(1,1:maxj)
-    ! North Pole and South Pole 'islands'
-    k1(:,0) = 99
-    k1(:,maxj+1) = 99
+    call compute_bathy(z_ocn, f_ocn, .false.)
 
     grid%k1 = k1(1:maxi,1:maxj)
 
@@ -963,8 +916,9 @@ contains
           if (i_isl.eq.0) then
             ! automatic island determination
             isl_area = sum(area, islands==1)*1.e-12_wp      ! mln km2
-            if (isl_area>isl_area_min) then 
-              ! create new island
+            if (isl_area>isl_area_min) then
+              ! create new island (provisional label, in scan order; final labels are
+              ! reordered by decreasing area after the loop, with the largest as mainland)
               n_isles = n_isles+1 ! increase index
               if (n_isles.gt.maxisles) then
                 print *
@@ -977,9 +931,10 @@ contains
                 map_isles = n_isles
               endwhere
             else
-              ! add island to mainland (island 1)
+              ! sub-threshold land: mark to be merged into the mainland (done after the
+              ! area ordering below, so it follows the largest landmass, not scan-order label 1)
               where (islands.eq.1)
-                map_isles = 1
+                map_isles = -2
               endwhere
             endif
           endif
@@ -987,6 +942,50 @@ contains
         endif
       enddo
     enddo
+
+    ! for automatic island determination, order the landmass labels by decreasing area so
+    ! that label 1 (the mainland) is the largest landmass and the remaining islands are
+    ! indexed by decreasing area (deterministic, and a well-conditioned mainland reference).
+    ! Physical results are invariant to island indexing, but the labelling is made reproducible.
+    if (i_isl.eq.0 .and. n_isles.ge.1) then
+      ! area of each provisional label
+      do lo=1,n_isles
+        a_isl(lo) = sum(area, map_isles.eq.lo)
+      enddo
+      ! selection sort of labels by decreasing area: perm(rk) = old label of the rk-th largest
+      do lo=1,n_isles
+        perm(lo) = lo
+      enddo
+      do rk=1,n_isles-1
+        do mm=rk+1,n_isles
+          if (a_isl(perm(mm)).gt.a_isl(perm(rk))) then
+            itmp = perm(rk); perm(rk) = perm(mm); perm(mm) = itmp
+          endif
+        enddo
+      enddo
+      ! new label for each old label
+      do rk=1,n_isles
+        newlab(perm(rk)) = rk
+      enddo
+      ! relabel the landmass map (single pass; newlab is a bijection on 1..n_isles)
+      do j=1,maxj
+        do i=1,maxi
+          if (map_isles(i,j).ge.1) map_isles(i,j) = newlab(map_isles(i,j))
+        enddo
+      enddo
+      ! reorder the island edge maps consistently
+      allocate(map_edge_tmp(maxi,maxj,maxisles))
+      map_edge_tmp(:,:,1:n_isles) = map_edge(:,:,1:n_isles)
+      do rk=1,n_isles
+        map_edge(:,:,rk) = map_edge_tmp(:,:,perm(rk))
+      enddo
+      deallocate(map_edge_tmp)
+    endif
+
+    ! attach the sub-threshold land to the mainland (largest landmass, label 1)
+    if (i_isl.eq.0) then
+      where (map_isles.eq.-2) map_isles = 1
+    endif
 
     ! number of isles, remove the mainland
     n_isles = n_isles-1
@@ -1079,31 +1078,176 @@ contains
       enddo
     enddo
 
-    if (l_write_isl) then
-    fnm = trim(out_dir)//"/check_islands.nc"
-    call nc_create(fnm)
-    call nc_open(fnm,ncid)
-    call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
-    call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
-    call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
-    call nc_write_dim(fnm,"nisles",x=[(i, i=1,maxisles)],axis="z",ncid=ncid)
-    call nc_close(ncid)
+    if (l_write_isl .or. year.eq.1) then
+      fnm = trim(out_dir)//"/check_islands.nc"
+      call nc_create(fnm)
+      call nc_open(fnm,ncid)
+      call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
+      call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
+      call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
+      call nc_write_dim(fnm,"nisles",x=[(i, i=1,maxisles)],axis="z",ncid=ncid)
+      call nc_close(ncid)
 
-    call nc_open(fnm,ncid)
-    call nc_write(fnm,dim_time,    real(year+1,wp), dim1=dim_time,start=[year+1],count=[1],ncid=ncid)    
-    call nc_write(fnm,"k1_pot",     k1_pot,dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"k1",     k1(1:maxi,1:maxj),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"mask_ocn",     real(mask_ocn,wp),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_isles",     map_isles,dims=[dim_lon,dim_lat,dim_time],start=[1,1,year+1],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_edge",     map_edge,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year+1],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
-    call nc_write(fnm,"map_path",     map_path,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year+1],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
-    call nc_close(ncid)
+      call nc_open(fnm,ncid)
+      call nc_write(fnm,dim_time,    real(year,wp), dim1=dim_time,start=[year],count=[1],ncid=ncid)    
+      call nc_write(fnm,"k1",     k1(1:maxi,1:maxj),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"mask_ocn",     real(mask_ocn,wp),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_isles",     map_isles,dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_edge",     map_edge,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
+      call nc_write(fnm,"map_path",     map_path,dims=[dim_lon,dim_lat,"nisles",dim_time],start=[1,1,1,year],count=[maxi,maxj,maxisles,1],long_name="density",units="?",ncid=ncid)
+      call nc_close(ncid)
 
-    stop
-  endif
+      if (l_write_isl) stop
+    endif
 
 
   end subroutine ocn_grid_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  c o m p u t e _ b a t h y
+  ! Purpose  :  derive the discrete bathymetry (bottom-layer index k1, masked by the land/sea
+  !             fraction) from the (real, possibly time-varying) ocean bed elevation
+  !             z_bed: smooth -> optionally condition (steep-smooth/despike) -> truncate to the
+  !             NOMINAL levels -> clamp to shelf depth -> apply the land/sea mask. Used in both
+  !             ocn_grid_init (fixed bathymetry at start) and ocn_grid_update (dynamic bathymetry
+  !             following sea level / GIA / sediment each year).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine compute_bathy(z_bed, f_ocn, verbose)
+
+    implicit none
+
+    real(wp), intent(in) :: z_bed(:,:)   !! ocean bed elevation, relative to sea level, negative [m]
+    real(wp), intent(in) :: f_ocn(:,:)   !! ocean fraction []
+    logical, intent(in) :: verbose       !! print conditioning diagnostics? (init .true., yearly update .false.)
+
+    integer :: k1p(maxi,maxj)   ! potential bottom-layer index (before applying the land/sea mask)
+
+    topo = z_bed
+
+    ! smooth the bathymetry
+    if (i_smooth.eq.1) then
+      call smooth_topo(topo, int(smooth_fac))
+    else if (i_smooth.eq.2) then
+      call smooth_topo_fft(topo, smooth_fac)
+    endif
+
+    ! optional conditioning against steep f/H contrasts that destabilise the barotropic solve
+    if (l_limit_ratio)  call limit_depth_ratio(topo, f_ocn, depth_ratio_max, verbose=verbose)
+
+    ! truncate to nominal depth levels -> potential bottom-layer index
+    call truncate_topo(topo, k1p)
+    ! minimum depth <-> shelf depth
+    where (k1p.gt.k1_shelf) k1p = k1_shelf
+
+    ! apply land/sea mask
+    k1(1:maxi,1:maxj) = k1p(1:maxi,1:maxj)
+    where (f_ocn.eq.0._wp) k1(1:maxi,1:maxj) = 99
+    ! periodic boundary conditions in longitude
+    k1(0,1:maxj) = k1(maxi,1:maxj)
+    k1(maxi+1,1:maxj) = k1(1,1:maxj)
+    ! North Pole and South Pole 'islands'
+    k1(:,0) = 99
+    k1(:,maxj+1) = 99
+
+  end subroutine compute_bathy
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  l i m i t _ d e p t h _ r a t i o
+  ! Purpose  :  limit the depth ratio between adjacent ocean cells.
+  !             Iteratively deepens any ocean cell that is shallower than
+  !             max(deepest ocean neighbour)/ratio_max, i.e. it removes isolated
+  !             shallow seamounts and one-cell shelf->abyss cliffs (which create
+  !             closed f/H contours / trapped modes that destabilise the barotropic
+  !             solve) while leaving coherent slopes and the rest of the bathymetry
+  !             untouched. This targets the actual instability (the f/H *contrast*
+  !             between neighbours), not the local rh gradient, so it allows realistic
+  !             little/no-smoothing bathymetry. Basins are never filled (only shallow
+  !             cells are deepened).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine limit_depth_ratio(topo, f_ocn, ratio_max, verbose)
+
+    implicit none
+
+    real(wp), intent(inout) :: topo(:,:)   !! bathymetry, negative below sea level [m]
+    real(wp), intent(in) :: f_ocn(:,:)     !! ocean fraction []
+    real(wp), intent(in) :: ratio_max      !! maximum allowed neighbour depth ratio []
+    logical, intent(in), optional :: verbose !! print diagnostics? (default .true.; off for the yearly bathymetry update)
+
+    integer :: i, j, iter, ip, im, ni_, nj_, ntouch
+    real(wp) :: dmx, dmin_allowed, worst
+    real(wp), allocatable :: d(:,:)
+    logical, allocatable :: ocn(:,:), touched(:,:)
+    logical :: changed, verb
+    integer, parameter :: maxiter = 200
+
+    verb = .true.
+    if (present(verbose)) verb = verbose
+
+    ni_ = size(topo,1); nj_ = size(topo,2)
+    allocate(d(ni_,nj_), ocn(ni_,nj_), touched(ni_,nj_))
+    ocn = f_ocn > 0._wp
+    d = -topo            ! positive ocean depth
+    touched = .false.
+
+    do iter=1,maxiter
+      changed = .false.
+      do j=1,nj_
+        do i=1,ni_
+          if (.not.ocn(i,j)) cycle
+          ip = modulo(i,ni_) + 1          ! periodic in longitude
+          im = modulo(i-2,ni_) + 1
+          dmx = 0._wp
+          if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
+          if (ocn(im,j)) dmx = max(dmx,d(im,j))
+          if (j.lt.nj_) then
+            if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
+          endif
+          if (j.gt.1) then
+            if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
+          endif
+          dmin_allowed = dmx/ratio_max
+          if (d(i,j).lt.dmin_allowed) then
+            d(i,j) = dmin_allowed
+            touched(i,j) = .true.
+            changed = .true.
+          endif
+        enddo
+      enddo
+      if (.not.changed) exit
+    enddo
+
+    topo = -d
+    ntouch = count(touched)
+
+    ! worst residual neighbour depth ratio (for diagnostics; should be <= ratio_max)
+    worst = 1._wp
+    do j=1,nj_
+      do i=1,ni_
+        if (.not.ocn(i,j) .or. d(i,j).le.0._wp) cycle
+        ip = modulo(i,ni_) + 1
+        im = modulo(i-2,ni_) + 1
+        dmx = 0._wp
+        if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
+        if (ocn(im,j)) dmx = max(dmx,d(im,j))
+        if (j.lt.nj_) then
+          if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
+        endif
+        if (j.gt.1) then
+          if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
+        endif
+        worst = max(worst, dmx/d(i,j))
+      enddo
+    enddo
+
+    if (verb) print '(a,f6.1,a,i4,a,i5,a,f6.1)', &
+      ' limit_depth_ratio: ratio_max=',ratio_max,' iters=',min(iter,maxiter), &
+      ' cells deepened=',ntouch,' worst residual ratio=',worst
+
+    deallocate(d, ocn, touched)
+
+  end subroutine limit_depth_ratio
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1148,67 +1292,6 @@ contains
     deallocate(Y)
 
   end subroutine smooth_topo
-
-  subroutine smooth_topo2(topo, nsmooth)
-
-  implicit none
-
-    real(wp), intent(inout) :: topo(:,:)
-    integer, intent(in) :: nsmooth
-
-    integer :: iter, i, j, imi, ipl, im, jm
-    real(wp) :: wx, wy, wsum
-    real(wp), allocatable :: Y(:,:)
-
-
-    im = size(topo,1)
-    jm = size(topo,2)
-    allocate(Y(im,jm))
-
-    do iter=1,nsmooth
-
-      do j=1,jm
-        do i=1,im
-          Y(i,j)=topo(i,j)
-        enddo
-      enddo        
-
-      j=1
-      do i=1,im
-        imi=i-1
-        if (imi.eq.0)imi=im
-        ipl=i+1
-        if (ipl.gt.im)ipl=1
-        topo(i,j)=0.25*(Y(i,j)+Y(imi,j)+Y(ipl,j)+Y(i,j+1))
-      enddo
-
-      do j=2,jm-1       
-        do i=1,im
-          imi=i-1
-          if (imi.eq.0)imi=im
-          ipl=i+1
-          if (ipl.gt.im)ipl=1
-          wx = 1._wp/dx(j)
-          wy = 1._wp/dy
-          wsum = wx+wy
-          topo(i,j)=0.2_wp*Y(i,j) + 0.8_wp*(wx*0.5_wp*(Y(imi,j)+Y(ipl,j))+wy*0.5_wp*(Y(i,j+1)+Y(i,j-1)))/wsum
-        enddo
-      enddo
-
-      j=jm
-      do i=1,im
-        imi=i-1
-        if (imi.eq.0)imi=im
-        ipl=i+1
-        if (ipl.gt.im)ipl=1
-        topo(i,j)=0.25*(Y(i,j)+Y(imi,j)+Y(ipl,j)+Y(i,j-1))
-      enddo
-
-    enddo       
-
-    deallocate(Y)
-
-  end subroutine smooth_topo2
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1342,9 +1425,9 @@ contains
 
     k1 = 99
     do k=maxk,1,-1
-      where (topo < zro(k)) k1 = k
+      where (topo < zro_nom(k)) k1 = k
     enddo
-    where (topo > zro(maxk) .and. topo < 0) k1 = maxk
+    where (topo > zro_nom(maxk) .and. topo < 0) k1 = maxk
 
 
   end subroutine truncate_topo

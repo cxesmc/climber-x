@@ -174,7 +174,7 @@
     k_ice        = 1.e4         ! yr, turnover time of carbon below ice sheets
     gamma_luc_Clitter_crop = 1.    ! 1/yr, litter carbon turnover rate for land use change (cropland)
     gamma_luc_Clitter_pasture = 1. ! 1/yr, litter carbon turnover rate for land use change (pasture)
-    gamma_luc_Csoil_crop = 0.1     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
+    gamma_luc_Csoil_crop = 0.0     ! 1/yr, fast soil carbon turnover rate for land use change (cropland)
 
     !------------------------------------------------------------------------------------
     ! permafrost-thaw mobilisation of slow soil carbon
@@ -232,16 +232,16 @@
     ich4_ftemp       = 2        ! temperature dependence of ch4 emission fraction. 1=Arrhenius, 2=q10
     Ea_ch4           = 0.96     ! eV, activation energy for temperature dependence of ch4 emission fraction, 0.96 in Yvon-Durocher 2014 (only for ich4_ftemp=1)
     q10_ch4          = 1.8      ! q10 for temperature dependence of ch4 emission fraction (only for ich4_ftemp==2)
-    ch4_frac_wet     = 0.0725   ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
+    ch4_frac_wet     = 0.082    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
     ch4_frac_shelf   = 0.0      ! fraction of carbon emitted as methane from ocean shelf
-    ch4_frac_peat    = 0.0725   ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
+    ch4_frac_peat    = 0.082    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------
     ! N2O emission params
     !------------------------------------------------------------------------------------
-    k_n2o_nit        = 5.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
-    k_n2o_denit      = 5.7e-4   ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
+    k_n2o_nit        = 4.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
+    k_n2o_denit      = 5.e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
     q10_n2o          = 1.0      ! q10 for temperature dependence of N2O emission
     wfps_crit_denit  = 0.7      ! critical water filled pore space for denitrification
 
@@ -326,7 +326,7 @@
     i_weath_sc = 1              ! carbonate weathering model:
                                 ! 1 .. runoff-dependent model of Amiotte-Suchet 1995
                                 ! 2 .. runoff- and temperature-dependent model of Romero-Mujalli et al. (2019)
-    kweath_scale = 1.           ! scaling factor for carbonate and silicate weathering fluxes
+    kweath_scale = 1.1          ! scaling factor for carbonate and silicate weathering fluxes
     l_river_export = F          ! enable export of land particulate and dissolved organic carbon through rivers?
     lithology_gemco2_file = "input/GEM_CO2_lithology_5x5.nc"   ! lithology file for GEM-CO2 weathering model (used only if i_weathering==1)
     lithology_uhh_file = "input/Lithology_pi_UHH.nc"           ! lithology file for UHH weathering model (used only if i_weathering==2)
