@@ -50,6 +50,7 @@ module geo_mod
   use topo_fill_mod, only : topo_fill
   use topo_filter_mod, only : topo_filter
   use vilma_model, only : vilma_init, vilma_update, vilma_end, vilma_write_restart
+  use fastearth_model, only : fastearth_init, fastearth_update, fastearth_end, fastearth_write_restart
   use gia_mod, only : gia_init, gia_update
   use q_geo_mod, only : geo_heat
   use sed_mod, only : sed
@@ -558,7 +559,10 @@ contains
     ! initialize VILMA
     !-------------------------------------------------------------------
     if (flag_geo .and. i_geo.eq.2) then
-      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice) 
+      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+    endif
+    if (flag_geo .and. i_geo.eq.3) then
+      call fastearth_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
     endif
 
     print*
@@ -627,6 +631,17 @@ contains
         ! takes current ice load (thickness) as input
         ! returns relative sea level and new bedrock elevation
         call vilma_update(geo%hires%grid, geo%hires%h_ice, & ! in
+          geo%hires%rsl, geo%hires%z_bed)    ! out
+      endif
+
+    else if (i_geo==3) then
+      !-------------------------------------------------------------------
+      ! FastEarth3D solid Earth model
+
+      if (.not.firstcall) then
+        ! takes current ice load (thickness) as input
+        ! returns relative sea level and new bedrock elevation
+        call fastearth_update(geo%hires%h_ice, &  ! in
           geo%hires%rsl, geo%hires%z_bed)    ! out
       endif
 
@@ -970,6 +985,10 @@ contains
       ! end VILMA
       call vilma_end
     endif
+    if (flag_geo .and. i_geo==3) then
+      ! end FastEarth3D
+      call fastearth_end
+    endif
 
     call geo_dealloc(geo)
 
@@ -1103,6 +1122,9 @@ contains
 
     if (flag_geo .and. i_geo.eq.2) then
       call vilma_write_restart(dir)
+    endif
+    if (flag_geo .and. i_geo.eq.3) then
+      call fastearth_write_restart(dir)
     endif
 
    return

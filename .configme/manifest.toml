@@ -4,6 +4,7 @@ deps = [
     "fesm-utils:dev",
     "fesm-utils/utils",
     "yelmo:climber-x",
+    "FastEarth3D",
     "bgc",
     "vilma",
 ]
