@@ -336,7 +336,7 @@ contains
                 ! First define the Yelmo grid information from cmn%grid 
                 ! Note: yelmo expects grid axes in [m], so use conversion factor.
                 call yelmo_init_grid(grd=ylmo%grd,grid_name=grid%name, &
-                        xc=real(grid%G%x*grid%xy_conv,wp_yelmo),yc=real(grid%G%y*grid%xy_conv,wp_yelmo), &
+                        xc=real(grid%G%x*grid%cs%xy_conv,wp_yelmo),yc=real(grid%G%y*grid%cs%xy_conv,wp_yelmo), &
                         lon=real(grid%lon,wp_yelmo),lat=real(grid%lat,wp_yelmo),area=real(grid%area,wp_yelmo))
 
                 ! Define the parameter file we expect for this simulation
