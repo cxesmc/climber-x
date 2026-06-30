@@ -148,9 +148,9 @@ contains
    call map_init(maps_to_smb,grid_ref,grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
    ! mapping
-   call map_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 
-   call map_field(maps_to_smb,"prc",prc,ann_prc_ref,method="mean") 
-   call map_field(maps_to_smb,"evp",evp,ann_evp_ref,method="mean") 
+   call map_field(maps_to_smb,"smb",smb,ann_smb_ref,stat="mean") 
+   call map_field(maps_to_smb,"prc",prc,ann_prc_ref,stat="mean") 
+   call map_field(maps_to_smb,"evp",evp,ann_evp_ref,stat="mean") 
 
    deallocate(smb)
    deallocate(prc)

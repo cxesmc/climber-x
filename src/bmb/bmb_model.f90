@@ -80,7 +80,7 @@ contains
   if (i_Tocn_bias_corr.eq.2) then
     call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_now,wp), bmb%t_ocn_bias_in)
     ! interpolate to ice sheet grid
-    call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,stat="mean",missing_value=-9999._dp)
   endif
 
   ! apply additional uniform offset if needed
@@ -166,8 +166,8 @@ contains
   ! map shelf temperature and salinity to ice sheet grid
   !$omp parallel do private(k)
   do k=1,nk_ocn
-    call map_field(bmb%maps_cmn_to_ice,"t_ocn",bmb%t_ocn_in(:,:,k), bmb%t_ocn(:,:,k),method="mean",missing_value=-9999._dp)
-    call map_field(bmb%maps_cmn_to_ice,"s_ocn",bmb%s_ocn_in(:,:,k), bmb%s_ocn(:,:,k),method="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"t_ocn",bmb%t_ocn_in(:,:,k), bmb%t_ocn(:,:,k),stat="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"s_ocn",bmb%s_ocn_in(:,:,k), bmb%s_ocn(:,:,k),stat="mean",missing_value=-9999._dp)
   enddo
   !$omp end parallel do 
 
@@ -237,8 +237,8 @@ contains
     ! map lake temperature and salinity to ice sheet grid
     !$omp parallel do private(k)
     do k=1,nk_lake
-      call map_field(bmb%maps_cmn_to_ice,"t_lake",bmb%t_lake_in(:,:,k), bmb%t_lake(:,:,k),method="mean",missing_value=-9999._dp)
-      call map_field(bmb%maps_cmn_to_ice,"s_lake",bmb%s_lake_in(:,:,k), bmb%s_lake(:,:,k),method="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"t_lake",bmb%t_lake_in(:,:,k), bmb%t_lake(:,:,k),stat="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"s_lake",bmb%s_lake_in(:,:,k), bmb%s_lake(:,:,k),stat="mean",missing_value=-9999._dp)
     enddo
     !$omp end parallel do 
 
@@ -436,7 +436,7 @@ contains
       endif
       call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_ini,wp), bmb%t_ocn_bias_in)
       ! interpolate to ice sheet grid
-      call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,stat="mean",missing_value=-9999._dp)
     else
       bmb%t_ocn_bias = 0._wp
     endif

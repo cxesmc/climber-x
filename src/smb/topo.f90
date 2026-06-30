@@ -130,7 +130,7 @@ contains
   call grid_allocate(grid_latlon, z_sur_latlon)
   call grid_allocate(grid_latlon, dz_dx_sur_latlon)
   call grid_allocate(grid_latlon, dz_dy_sur_latlon)
-  call map_field(maps_to_latlon,"z_sur",z_sur,z_sur_latlon,method="mean")
+  call map_field(maps_to_latlon,"z_sur",z_sur,z_sur_latlon,stat="mean")
 
   ! compute topography gradients in spherical coordinates
   nx = grid_latlon%G%nx
@@ -157,8 +157,8 @@ contains
   enddo
 
   ! map topography gradients back to stereographic projection
-  call map_field(maps_from_latlon,"dz_dx_sur",dz_dx_sur_latlon,dz_dx_sur,method="mean")
-  call map_field(maps_from_latlon,"dz_dy_sur",dz_dy_sur_latlon,dz_dy_sur,method="mean")
+  call map_field(maps_from_latlon,"dz_dx_sur",dz_dx_sur_latlon,dz_dx_sur,stat="mean")
+  call map_field(maps_from_latlon,"dz_dy_sur",dz_dy_sur_latlon,dz_dy_sur,stat="mean")
 
   dz_sur = sqrt(dz_dx_sur**2+dz_dy_sur**2)
 
