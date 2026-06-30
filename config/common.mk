@@ -83,16 +83,37 @@ ifeq ($(openmp), 1)
     LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns_omp
 endif
 
+# --- solid-earth backend selection (FULL build). The vilma= / fastearth= toggles
+# (defined in config/Makefile, default 1) gate each backend's -D flag plus its
+# include/link flags, accumulated into the *_EARTH pieces spliced into the FULL
+# sets below. -DVILMA and -DFASTEARTH are independent; both are on by default and
+# chosen at runtime by i_geo (2=VILMA, 3=FastEarth3D). A backend toggled off is
+# compiled as a stub that aborts cleanly if selected (see vilma.F90/fastearth.F90).
+CPPFLAGS_EARTH =
+INC_EARTH =
+LIB_EARTH =
+ifeq ($(vilma),1)
+    CPPFLAGS_EARTH += -DVILMA
+    INC_EARTH      += $(INC_VILMA)
+    LIB_EARTH      += $(LIB_VILMA)
+endif
+ifeq ($(fastearth),1)
+    CPPFLAGS_EARTH += -DFASTEARTH
+    INC_EARTH      += $(INC_FASTEARTH) $(INC_SHTNS)
+    # order: LIB_FASTEARTH precedes LIB_SHTNS (it calls SHTns), which precedes the
+    # trailing LIB_FFTW in LFLAGS_FULL (SHTns calls FFTW).
+    LIB_EARTH      += $(LIB_FASTEARTH) $(LIB_SHTNS)
+endif
+
 # --- compile-flag sets: climate-only (CLIM) vs fully-coupled (FULL, adds ice +
-# VILMA + FastEarth3D). The template appends -DVERSION and, for openmp=1, $(FFLAGS_OPENMP).
-# $(CPPFLAGS_PP) is the compiler's Fortran-preprocessor flag (-fpp Intel, -cpp GNU).
-# -DVILMA and -DFASTEARTH are independent: both solid-earth backends compile into
-# the FULL binary and are chosen at runtime by i_geo (2=VILMA, 3=FastEarth3D).
+# the selected solid-earth backends). The template appends -DVERSION and, for
+# openmp=1, $(FFLAGS_OPENMP). $(CPPFLAGS_PP) is the compiler's Fortran-preprocessor
+# flag (-fpp Intel, -cpp GNU).
 CPPFLAGS_CLIM = $(CPPFLAGS_PP)
-CPPFLAGS_FULL = $(CPPFLAGS_PP) -DVILMA -DFASTEARTH
+CPPFLAGS_FULL = $(CPPFLAGS_PP) $(CPPFLAGS_EARTH)
 
 FFLAGS_CLIM = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
-FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_VILMA) $(INC_FASTEARTH) $(INC_SHTNS) $(INC_FFTW)
+FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_EARTH) $(INC_FFTW)
 
 # Extra link flags. -Wl,-zmuldefs works around duplicate symbols in the static
 # deps (the default on Linux). A machine fragment disables it with
@@ -102,7 +123,6 @@ LFLAGS_CLIM = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
 # LIB_FASTHYDRO follows LIB_YELMO (yelmo references its symbols); the trailing
 # LIB_FFTW resolves the FFTW symbols pulled in by fasthydro and fesmutils
 # (static archives resolve left-to-right, so deps must come after dependents).
-# LIB_FASTEARTH precedes LIB_SHTNS (it calls SHTns), which precedes the trailing
-# LIB_FFTW (SHTns calls FFTW); LIB_FESMUTILS resolves the coords/ncio symbols both
-# VILMA and FastEarth3D share.
-LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_VILMA) $(LIB_FASTEARTH) $(LIB_SHTNS) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
+# LIB_EARTH (the selected solid-earth libs, see above) precedes LIB_FESMUTILS,
+# which resolves the coords/ncio symbols VILMA and FastEarth3D share.
+LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_EARTH) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)

@@ -450,6 +450,17 @@ contains
     print*,'======================================================='
     print*
 
+#else
+
+    ! VILMA backend not compiled in (built with vilma=0). Fail fast rather than
+    ! silently no-op (which would leave rsl/z_bed unset).
+    print*,'======================================================='
+    print*,' ERROR: i_geo=2 requires the VILMA solid-earth backend,'
+    print*,'        but this binary was built with vilma=0.'
+    print*,'        Rebuild with vilma=1, or choose i_geo=0/1/3.'
+    print*,'======================================================='
+    stop 1
+
 #endif
 
     return

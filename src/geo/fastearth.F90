@@ -70,6 +70,17 @@ contains
     print*,'======================================================='
     print*
 
+#else
+
+    ! FastEarth3D backend not compiled in (built with fastearth=0). Fail fast
+    ! rather than silently no-op (which would leave rsl/z_bed unset).
+    print*,'======================================================='
+    print*,' ERROR: i_geo=3 requires the FastEarth3D solid-earth backend,'
+    print*,'        but this binary was built with fastearth=0.'
+    print*,'        Rebuild with fastearth=1, or choose i_geo=0/1/2.'
+    print*,'======================================================='
+    stop 1
+
 #endif
 
     return
