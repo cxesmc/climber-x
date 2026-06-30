@@ -32,6 +32,7 @@ module q_geo_mod
   use ncio
   use coords, only : grid_class, grid_init
   use coords, only : map_class, map_init, map_field
+  use constants, only : map_gen
 
   implicit none
 
@@ -79,7 +80,7 @@ contains
       ppos = scan(trim(q_geo_file),".", BACK= .true.)-1
       call grid_init(qgeo_grid,name=trim(q_geo_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
       ! map to geo grid
-      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo,method="mean",missing_value=-9999._dp)
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)
@@ -108,7 +109,7 @@ contains
       ppos = scan(trim(q_geo_ice_file),".", BACK= .true.)-1
       call grid_init(qgeo_grid,name=trim(q_geo_ice_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_qgeo,dp),y=real(lat_qgeo,dp))
       ! map to geo grid
-      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+      call map_init(maps_qgeo_to_geo,qgeo_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_field(maps_qgeo_to_geo,"q_geo",q_geo_in,q_geo_ice,method="mean",missing_value=-9999._dp)
 
       deallocate(q_geo_in, lon_qgeo, lat_qgeo)

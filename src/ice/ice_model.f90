@@ -29,6 +29,7 @@ module ice_model
     use control, only : out_dir
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
+    use constants, only : map_gen
     use ice_def, only : ice_class
     use yelmo, only : wp_yelmo, yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
@@ -312,7 +313,7 @@ contains
         ! set ice ID mask
         call set_ice_id(ice%grid, id_mask)
 
-        call map_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="mean")
         call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="mean", &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])

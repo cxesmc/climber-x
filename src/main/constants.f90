@@ -28,6 +28,8 @@ module constants
   use precision, only : wp, sp, dp
   implicit none
 
+  character(len=*), parameter :: map_gen = "coords"   !! mapping weight generator: "coords" (in-package) or "cdo" (external)
+
   real(wp), parameter :: pi = 3.141592653589793_wp
 
   real(wp), parameter :: rho_i   = 910._wp      !! kg/m3, density of ice

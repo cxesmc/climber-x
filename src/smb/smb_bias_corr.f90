@@ -31,6 +31,7 @@ module smb_bias_corr_mod
    use smb_params, only : smb_ref_file, smb_cx_ref_file 
    use coords, only : grid_init, grid_class
    use coords, only : map_init, map_class, map_field
+   use constants, only : map_gen
    use ncio
 
    implicit none
@@ -144,7 +145,7 @@ contains
      x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
    ! initialize map
-   call map_init(maps_to_smb,grid_ref,grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+   call map_init(maps_to_smb,grid_ref,grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
    ! mapping
    call map_field(maps_to_smb,"smb",smb,ann_smb_ref,method="mean") 

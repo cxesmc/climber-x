@@ -45,7 +45,7 @@ module coupler
     use control, only : l_weathering
     use control, only : restart_in_dir
     use control, only : l_aqua_slab
-    use constants, only : fqsat, q_sat_w, q_sat_i, Le, Lf, frac_vu
+    use constants, only : fqsat, q_sat_w, q_sat_i, Le, Lf, frac_vu, map_gen
     use constants, only : rho_w, rho_sw, cap_w, rho_i, T0, c13_c12_std, c14_c_std, pi, ppm_to_PgC
     use constants, only : sigma, cap_a
     use coords, only : grid_class, grid_init
@@ -2568,7 +2568,7 @@ contains
 
 
     ! no ice model, use ice sheets from bnd
-    call map_init(maps_geo_to_smb,geo%hires%grid,smb%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_geo_to_smb,geo%hires%grid,smb%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
     ! map surface elevation
     call map_field(maps_geo_to_smb,"topo",geo%hires%z_topo,smb%z_sur,method="mean",missing_value=-9999._dp)
     ! map ice thickness
@@ -2756,7 +2756,7 @@ contains
     allocate(h_ice(bmb%grid%G%nx,bmb%grid%G%ny))
     allocate(z_bed(bmb%grid%G%nx,bmb%grid%G%ny))
     ! initialize map
-    call map_init(maps_geo_to_bmb,geo%hires%grid,bmb%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_geo_to_bmb,geo%hires%grid,bmb%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
     ! map ice base elevation
     call map_field(maps_geo_to_bmb,"zb",geo%hires%z_topo-geo%hires%h_ice,bmb%zb,method="mean",missing_value=-9999._dp)
     ! map ice thickness and bedrock elevation
@@ -2919,8 +2919,8 @@ contains
       allocate(maps_hice_to_geo(n_ice_domain))
       allocate(maps_mask_to_geo(n_ice_domain))
       do n=1,n_ice_domain
-        call map_init(maps_hice_to_geo(n),ice(n)%grid,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_init(maps_mask_to_geo(n),ice(n)%grid,geo%hires%grid,method="nn",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_hice_to_geo(n),ice(n)%grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_mask_to_geo(n),ice(n)%grid,geo%hires%grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       enddo
     endif
 
@@ -3032,8 +3032,8 @@ contains
       allocate(maps_geo_to_ice(n_ice_domain))
       allocate(maps_geo_to_ice_nn(n_ice_domain))
       do n=1,n_ice_domain
-        call map_init(maps_geo_to_ice(n),geo%hires%grid,ice(n)%grid,method="con",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_init(maps_geo_to_ice_nn(n),geo%hires%grid,ice(n)%grid,method="nn",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_geo_to_ice(n),geo%hires%grid,ice(n)%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_init(maps_geo_to_ice_nn(n),geo%hires%grid,ice(n)%grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       enddo
     endif
 
@@ -3112,7 +3112,7 @@ contains
           ! grids are different
           l_samegrid_geo_bndice = .false.
           ! initialize map
-          call map_init(maps_bndice_to_geo,bnd%ice%grid,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+          call map_init(maps_bndice_to_geo,bnd%ice%grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         endif
       endif
 
@@ -3125,7 +3125,7 @@ contains
           ! grids are different
           l_samegrid_geo_bndgeo = .false.
           ! initialize map
-          call map_init(maps_bndgeo_to_geo,bnd%geo%grid,geo%hires%grid,method="bil",gen="cdo",fldr="maps",load=.TRUE.,clean=.FALSE.)
+          call map_init(maps_bndgeo_to_geo,bnd%geo%grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         endif
       endif
 
