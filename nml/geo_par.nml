@@ -124,14 +124,12 @@
 &fe3d
  !-------------------------------------------------------
  ! FastEarth3D solid Earth model (used only if i_geo==3)
- ! Compact overrides only. The COMPLETE, documented default set is
- ! input/fastearth.nml (used as defaults_file by fe_par_load); any key
- ! omitted here falls back to that file. Time fields are in YEARS.
+ ! Minimal overrides only. Every other &fe3d parameter comes from the complete
+ ! default set input/fastearth3d_defaults.nml (loaded as defaults_file by
+ ! fe_par_load); any key omitted here falls back to that file.
  !-------------------------------------------------------
- lmax           = 64          ! maximum spherical-harmonic degree (spectral resolution)
- earth_response = "ve"        ! ve | modal | elastic | null
- rotation       = .true.      ! rotational (TPW) feedback
+ lmax           = 170         ! maximum spherical-harmonic degree (spectral resolution); matches VILMA jmax=170
+ earth          = "PREM"      ! radial structure; PREM (incompressible) to match VILMA (l_prem=1)
  l_visc_3d      = .true.      ! use a lateral (3d) log10(viscosity) field?
- visc_3d_file   = "input/fastearth/bagge2021.nc"   ! 3d viscosity file, used only if l_visc_3d==T
- f_visc_sd      = 0.0         ! viscosity perturbation in units of sigma (0 = mean field)
+ visc_3d_file   = "input/fastearth/visc3d_Bagge2021.nc"   ! 3d viscosity file, used only if l_visc_3d==T
 /

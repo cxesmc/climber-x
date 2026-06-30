@@ -51,9 +51,11 @@ contains
 
 #ifdef FASTEARTH
 
-    ! Load configuration into se%par. The &fe3d group lives in geo_par.nml
-    ! (compact overrides); the complete default set is input/fastearth.nml.
-    call fe_par_load(se%par, trim(out_dir)//"/geo_par.nml", defaults_file="input/fastearth.nml", group="fe3d")
+    ! Load configuration into se%par. The &fe3d group in geo_par.nml holds the
+    ! minimal climber-x overrides; the complete default set is the canonical
+    ! FastEarth3D defaults file shipped in input/.
+    call fe_par_load(se%par, trim(out_dir)//"/geo_par.nml", &
+      defaults_file="input/fastearth3d_defaults.nml", group="fe3d")
 
     ! Build the model and set the relaxed reference state. FastEarth3D owns its
     ! Gauss grid and builds the host<->Gauss remap from geo_grid internally.
