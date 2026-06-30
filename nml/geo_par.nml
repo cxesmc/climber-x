@@ -5,9 +5,10 @@
  ! geo model (only if flag_geo==true)
  !-------------------------------------------------------
  i_geo = 2                     ! geography update model:
-                               ! 0 = No bed model, only sea level from ice volume 
+                               ! 0 = No bed model, only sea level from ice volume
                                ! 1 = Local Litosphere Relaxing Astenosphere GIA model + sea level from ice volume
                                ! 2 = VILMA solid Earth model
+                               ! 3 = FastEarth3D solid Earth model (configured via the &fe3d group below)
 
  !-------------------------------------------------------
  ! land-sea mask and Straits settings  
@@ -118,4 +119,19 @@
 
  l_write_timer = F             ! write simulation times of the different atm model components to standard output?
  l_output_hires = T
+/
+
+&fe3d
+ !-------------------------------------------------------
+ ! FastEarth3D solid Earth model (used only if i_geo==3)
+ ! Compact overrides only. The COMPLETE, documented default set is
+ ! input/fastearth.nml (used as defaults_file by fe_par_load); any key
+ ! omitted here falls back to that file. Time fields are in YEARS.
+ !-------------------------------------------------------
+ lmax           = 64          ! maximum spherical-harmonic degree (spectral resolution)
+ earth_response = "ve"        ! ve | modal | elastic | null
+ rotation       = .true.      ! rotational (TPW) feedback
+ l_visc_3d      = .true.      ! use a lateral (3d) log10(viscosity) field?
+ visc_3d_file   = "input/fastearth/bagge2021.nc"   ! 3d viscosity file, used only if l_visc_3d==T
+ f_visc_sd      = 0.0         ! viscosity perturbation in units of sigma (0 = mean field)
 /

@@ -6,9 +6,10 @@ objdir = obj
 srcdir = src
 
 # Command-line options at make call
-debug  ?= 0  
+debug  ?= 0
 openmp ?= 1
 openmp_yelmo ?= $(openmp)
+openmp_fastearth ?= $(openmp)
 
 defaulttarget: usage
 
@@ -70,6 +71,12 @@ yelmo-static:
 	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp_yelmo)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
 
+# FastEarth3D solid-earth library (i_geo=3). Built with the same openmp toggle as
+# climber-x so its objects match (FastEarth3D adds -fopenmp to its own per-degree
+# loop; its fesm-utils/SHTns/FFTW deps stay serial by its own design).
+fastearth-static:
+	$(MAKE) -C $(FASTEARTHROOT) fastearth-static openmp=$(openmp_fastearth)
+
 climber-clim: FFLAGS = $(FFLAGS_CLIM)
 climber-clim: LFLAGS = $(LFLAGS_CLIM)
 climber-clim: CPPFLAGS = $(CPPFLAGS_CLIM)
@@ -104,7 +111,7 @@ climber-clim-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-ice: yelmo-static \
+climber-clim-ice: yelmo-static fastearth-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -119,7 +126,7 @@ climber-clim-bgc-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-bgc-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-bgc-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc-ice: yelmo-static \
+climber-clim-bgc-ice: yelmo-static fastearth-static \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
