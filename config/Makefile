@@ -11,6 +11,22 @@ openmp ?= 1
 openmp_yelmo ?= $(openmp)
 openmp_fastearth ?= $(openmp)
 
+# Solid-earth backend toggles (FULL build only; inert for CLIM targets). Default
+# on. Set vilma=0 / fastearth=0 to drop a backend when its library is unavailable
+# on this machine (e.g. the VILMA prebuilt archive). They gate -DVILMA/-DFASTEARTH
+# and the corresponding INC_/LIB_ flags in config/common.mk; selecting a dropped
+# backend at runtime (i_geo=2/3) aborts with a clear message (see the #else stubs
+# in src/geo/vilma.F90 / src/geo/fastearth.F90).
+vilma     ?= 1
+fastearth ?= 1
+
+# FastEarth3D static-lib prerequisite, gated so a fastearth=0 build neither
+# requires the FastEarth3D checkout nor builds its library.
+FASTEARTH_STATIC_DEP = fastearth-static
+ifeq ($(fastearth),0)
+    FASTEARTH_STATIC_DEP =
+endif
+
 defaulttarget: usage
 
 ## COMPILER CONFIGURATION ##
@@ -111,7 +127,7 @@ climber-clim-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-ice: yelmo-static fastearth-static \
+climber-clim-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -126,7 +142,7 @@ climber-clim-bgc-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-bgc-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-bgc-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc-ice: yelmo-static fastearth-static \
+climber-clim-bgc-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
