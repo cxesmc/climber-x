@@ -137,8 +137,11 @@ function main()
     bsl = (vilma = d.vilma.sea_level, fastearth = d.fastearth.sea_level)
     println("\nBarystatic sea level (sea_level scalar in restart):")
     @printf("  %-22s % .3f m\n", LABELS.vilma,     bsl.vilma)
-    @printf("  %-22s % .3f m  (FE3D leaves the scalar at 0; use the rsl field)\n",
-            LABELS.fastearth, bsl.fastearth)
+    @printf("  %-22s % .3f m\n", LABELS.fastearth, bsl.fastearth)
+    if bsl.fastearth == 0
+        println("  (FE3D sea_level == 0 => this output predates the geo.f90 fix that " *
+                "computes the scalar for i_geo==3; the rsl field is valid regardless.)")
+    end
 
     figs = (
         ("z_bed",  panel_field(d.vilma, d.fastearth, x -> x.z_bed;
