@@ -924,7 +924,7 @@ contains
   !-------------------------------------------------------------------
   ! diagnostic global mean relative sea level 
   !-------------------------------------------------------------------
-  if (i_geo==2) then
+  if (i_geo==2 .or. i_geo==3) then
     geo%sea_level = sum(geo%hires%rsl*area_dp, mask=geo%hires%mask.eq.2 .or. geo%hires%mask.eq.3)/geo%ocn_area_tot
   endif
 
