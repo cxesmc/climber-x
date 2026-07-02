@@ -18,9 +18,11 @@
 #   rsl                relative sea level                [m]
 #   z_bed - z_bed_ref  bedrock deflection (GIA response) [m]
 #
-# Figures are written to analysis/figures/ (gitignored).
+# Figures are written to analysis/figures/<run>/ (gitignored).
 #
-# Run:  julia --project=analysis analysis/earth_model_comparison.jl
+# Run:  julia --project=analysis analysis/earth_model_comparison.jl [run]
+#       where [run] is the output/ subdirectory holding igeo2/ and igeo3/
+#       (default: lgm_ice_nh).
 
 using NCDatasets
 using CairoMakie
@@ -29,7 +31,9 @@ using Statistics
 
 # --- Configuration ----------------------------------------------------------
 
-const OUTDIR = joinpath(@__DIR__, "..", "output", "lgm_ice_nh")
+const RUN = isempty(ARGS) ? "lgm_ice_nh" : ARGS[1]
+
+const OUTDIR = joinpath(@__DIR__, "..", "output", RUN)
 
 const RUNS = (
     vilma      = joinpath(OUTDIR, "igeo2", "restart_out", "year_500", "geo_restart.nc"),
@@ -38,7 +42,7 @@ const RUNS = (
 
 const LABELS = (vilma = "VILMA (i_geo=2)", fastearth = "FastEarth3D (i_geo=3)")
 
-const FIGDIR = joinpath(@__DIR__, "figures")
+const FIGDIR = joinpath(@__DIR__, "figures", RUN)
 
 # --- Data loading -----------------------------------------------------------
 
