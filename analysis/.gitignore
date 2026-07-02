@@ -1,0 +1,10 @@
+# Generated figures
+figures/
+*.png
+*.pdf
+
+# Ad-hoc run logs
+logs/
+
+# Julia environment resolution (kept out of repo; regenerate via Pkg.instantiate)
+Manifest.toml
