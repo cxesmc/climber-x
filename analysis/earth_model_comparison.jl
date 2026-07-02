@@ -40,9 +40,6 @@ const LABELS = (vilma = "VILMA (i_geo=2)", fastearth = "FastEarth3D (i_geo=3)")
 
 const FIGDIR = joinpath(@__DIR__, "figures")
 
-# Northern-hemisphere crop (deg N) — where the LGM NH ice sheets sit.
-const LAT_MIN = 20.0
-
 # --- Data loading -----------------------------------------------------------
 
 """Load one geo_restart.nc; return NamedTuple of lon, lat and 2D fields."""
@@ -61,13 +58,6 @@ function load_geo(path)
     end
 end
 
-"""Restrict fields to lat >= LAT_MIN, returning the cropped lat and views."""
-function crop_nh(d)
-    jj = findall(>=(LAT_MIN), d.lat)
-    (; d.lon, lat = d.lat[jj],
-       z_bed = d.z_bed[:, jj], z_bed_ref = d.z_bed_ref[:, jj], rsl = d.rsl[:, jj])
-end
-
 # --- Plotting helpers -------------------------------------------------------
 
 """Symmetric limit for a difference field, ignoring NaNs."""
@@ -82,34 +72,54 @@ function shared_limits(a, b)
     isempty(v) ? (-1.0, 1.0) : (minimum(v), maximum(v))
 end
 
+"""Overlay present-day continent outlines (z_bed_ref = 0) on an axis."""
+add_coast!(ax, a) =
+    contour!(ax, a.lon, a.lat, a.z_bed_ref; levels = [0.0],
+             color = :black, linewidth = 0.5)
+
 """
-Three-panel comparison map for one field.
-`get` extracts the 2D array (lon,lat) from a cropped-run NamedTuple.
+Three-panel comparison map for one field, stacked vertically:
+row 1 = VILMA, row 2 = FastEarth3D (sharing one colorbar), row 3 = difference.
+
+`get` extracts the 2D array (lon,lat) from a run NamedTuple. `coast` overlays
+present-day continent outlines. `bsl`, if given as (vilma=, fastearth=), prints
+the barystatic sea level on each absolute panel.
 """
-function panel_field(a, b, get; title, unit, cmap = :vik)
+function panel_field(a, b, get; title, unit, cmap = :vik, coast = false, bsl = nothing)
     da, db = get(a), get(b)
     ddiff = db .- da
     lims = shared_limits(da, db)
     dlim = sym_limit(ddiff)
 
-    fig = Figure(size = (1600, 460), fontsize = 15)
-    Label(fig[0, 1:3], title; fontsize = 20, font = :bold)
+    fig = Figure(size = (1000, 1400), fontsize = 15)
+    Label(fig[0, 1:2], title; fontsize = 20, font = :bold)
 
-    specs = (
-        (1, da, LABELS.vilma,               lims, cmap),
-        (2, db, LABELS.fastearth,           lims, cmap),
-        (3, ddiff, "Difference (FE3D − VILMA)", (-dlim, dlim), :RdBu),
+    abs_panels = (
+        (1, da, LABELS.vilma,     bsl === nothing ? nothing : bsl.vilma),
+        (2, db, LABELS.fastearth, bsl === nothing ? nothing : bsl.fastearth),
     )
 
-    for (col, data, ttl, clim, cm) in specs
-        ax = Axis(fig[1, col]; title = ttl, xlabel = "Longitude",
-                  ylabel = col == 1 ? "Latitude" : "", aspect = DataAspect())
-        hm = heatmap!(ax, a.lon, a.lat, data; colorrange = clim, colormap = cm)
-        Colorbar(fig[2, col], hm; vertical = false, flipaxis = false,
-                 label = "$title [$unit]")
+    local hm_abs
+    for (row, data, ttl, bslval) in abs_panels
+        ax = Axis(fig[row, 1]; title = ttl, ylabel = "Latitude",
+                  xlabel = "", aspect = DataAspect())
+        hm_abs = heatmap!(ax, a.lon, a.lat, data; colorrange = lims, colormap = cmap)
+        coast && add_coast!(ax, a)
+        if bslval !== nothing
+            text!(ax, -160, -60; text = @sprintf("bsl = %.1f m", bslval),
+                  align = (:left, :center), fontsize = 15, color = :black)
+        end
     end
-    rowgap!(fig.layout, 8)
-    rowsize!(fig.layout, 2, Relative(0.12))
+    # One shared colorbar for the two absolute panels, half their combined height.
+    Colorbar(fig[1:2, 2], hm_abs; label = "$title [$unit]", height = Relative(1 / 2))
+
+    axd = Axis(fig[3, 1]; title = "Difference (FE3D − VILMA)",
+               xlabel = "Longitude", ylabel = "Latitude", aspect = DataAspect())
+    hmd = heatmap!(axd, a.lon, a.lat, ddiff; colorrange = (-dlim, dlim), colormap = :RdBu)
+    coast && add_coast!(axd, a)
+    Colorbar(fig[3, 2], hmd; label = "$title [$unit]")
+
+    rowgap!(fig.layout, 6)
     fig
 end
 
@@ -122,25 +132,26 @@ function main()
     for (k, p) in pairs(RUNS)
         println("  $(LABELS[k]): $p")
     end
-    raw = map(load_geo, RUNS)
-    d = map(crop_nh, raw)
+    d = map(load_geo, RUNS)
 
-    println("\nGlobal-mean relative sea level (sea_level scalar in restart):")
-    @printf("  %-22s % .3f m\n", LABELS.vilma,     raw.vilma.sea_level)
+    bsl = (vilma = d.vilma.sea_level, fastearth = d.fastearth.sea_level)
+    println("\nBarystatic sea level (sea_level scalar in restart):")
+    @printf("  %-22s % .3f m\n", LABELS.vilma,     bsl.vilma)
     @printf("  %-22s % .3f m  (FE3D leaves the scalar at 0; use the rsl field)\n",
-            LABELS.fastearth, raw.fastearth.sea_level)
+            LABELS.fastearth, bsl.fastearth)
 
     figs = (
         ("z_bed",  panel_field(d.vilma, d.fastearth, x -> x.z_bed;
                                title = "Bedrock elevation", unit = "m", cmap = :bukavu)),
         ("rsl",    panel_field(d.vilma, d.fastearth, x -> x.rsl;
-                               title = "Relative sea level", unit = "m", cmap = :vik)),
+                               title = "Relative sea level", unit = "m", cmap = :vik,
+                               coast = true, bsl = bsl)),
         ("dz_bed", panel_field(d.vilma, d.fastearth, x -> x.z_bed .- x.z_bed_ref;
                                title = "Bedrock deflection (z_bed − z_bed_ref)", unit = "m",
-                               cmap = :vik)),
+                               cmap = :vik, coast = true)),
     )
 
-    println("\nField statistics (NH, lat ≥ $(LAT_MIN)°), mean ± std over |FE3D − VILMA|:")
+    println("\nField statistics (global), mean ± std over (FE3D − VILMA):")
     for (name, _) in figs
         get = name == "z_bed"  ? (x -> x.z_bed) :
               name == "rsl"    ? (x -> x.rsl)   :
