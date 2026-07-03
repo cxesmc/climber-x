@@ -16,9 +16,15 @@
 # to $(FFLAGS) here would be a recursive self-reference.
 
 # --- fesm-utils (serial build by default; OpenMP variants swapped in below)
+# FESMUTILS_LIB is the on-disk libfesmutils.a (the artifact behind LIB_FESMUTILS).
+# Climber objects that `use` a fesm-utils module (coords/ncio/nml) depend on it
+# (see the blanket rule at the end of Makefile_climber.mk) so a rebuilt fesm-utils
+# with a changed module interface forces a recompile against the new .mod, rather
+# than silently relinking a stale object (ABI mismatch -> segfault).
 FESMUTILSROOT = fesm-utils/utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
+FESMUTILS_LIB = ${FESMUTILSROOT}/include-serial/libfesmutils.a
 
 FFTWROOT = fesm-utils/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
@@ -69,6 +75,7 @@ LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns
 ifeq ($(openmp), 1)
     INC_FESMUTILS = -I${FESMUTILSROOT}/include-omp
     LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
+    FESMUTILS_LIB = ${FESMUTILSROOT}/include-omp/libfesmutils.a
 
     FFTWROOT = fesm-utils/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include

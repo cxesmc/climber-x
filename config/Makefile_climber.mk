@@ -1221,5 +1221,23 @@ climber_clim_bgc_ice_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
 			  $(obj_ice) $(obj_ice_sico) $(obj_smb) $(obj_bmb) $(obj_main)
 
 ########################################################################
+# fesm-utils interface safety
+#
+# Many climber objects `use` a fesm-utils module (coords/ncio/nml, all in
+# libfesmutils.a). If the fesm-utils interface changes, an object built against
+# the old .mod that is not recompiled ABI-mismatches the new library and can
+# segfault (the i_geo=3 FastEarth3D coords crash was exactly this, one level down).
+# Rather than track which objects use fesm-utils, make EVERY linked object depend
+# on the library artifact: a fesm-utils rebuild then forces a clean climber
+# recompile against the new .mod. FESMUTILS_LIB (config/common.mk) is the on-disk
+# libfesmutils.a; it is required by every build variant (it is in LFLAGS_CLIM too),
+# so this never introduces a missing prerequisite. The union of the four link sets
+# is exactly the set of objects that get linked.
+########################################################################
+climber_all_obj = $(sort $(climber_clim_obj) $(climber_clim_bgc_obj) \
+                         $(climber_clim_ice_obj) $(climber_clim_bgc_ice_obj))
+$(climber_all_obj): $(FESMUTILS_LIB)
+
+########################################################################
 
 
