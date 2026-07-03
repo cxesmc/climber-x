@@ -35,7 +35,7 @@ module ocn_model
     use timer, only: time_soy_ocn, time_eoy_ocn, sec_year, sec_day, year_now, year, nyears, nday_year, nstep_year_ocn, doy
     use control, only : ocn_restart, restart_in_dir, out_dir
     use control, only : check_energy
-    use constants, only : pi, cap_w, Lf, omega
+    use constants, only : pi, cap_w, Lf, omega, rho_w
     use climber_grid, only : lon, lat
     use ocn_grid, only : grid_class, ocn_grid_init, ocn_grid_update
     use ocn_grid, only : maxi, maxj, maxk, maxisles, c, dzz, zw, zro, dz, dza, mask_ocn, mask_c, k1, ocn_area, ocn_area_tot, ocn_vol
@@ -254,7 +254,7 @@ contains
       sal_before = sum(ocn%ts(:,:,:,2)*ocn_vol)
       where (mask_ocn.eq.1)
         ! change in surface salinity due to applied freshwater flux from ice sheet melt
-        ocn%ts(:,:,maxk,2) = ocn%ts(:,:,maxk,2) - ocn%melt_ice(:,:)*ocn%ts(:,:,maxk,2)/rho0/dz(maxk)*dt   ! kg/m2/s * psu * m3/kg / m * s = psu
+        ocn%ts(:,:,maxk,2) = ocn%ts(:,:,maxk,2) - ocn%melt_ice(:,:)*ocn%ts(:,:,maxk,2)/rho_w/dz(maxk)*dt   ! kg/m2/s * psu * m3/kg / m * s = psu (freshwater density)
       endwhere
       ! total salinity after
       sal_after = sum(ocn%ts(:,:,:,2)*ocn_vol)
@@ -273,7 +273,7 @@ contains
     if (i_hosing_comp.eq.2) then
       ! update salinity 
       where (mask_c.eq.1) 
-        ocn%ts(:,:,:,2) = ocn%ts(:,:,:,2) + sum(ocn%fw_hosing(:,:)*ocn%grid%ocn_area(:,:))*ocn%saln0/rho0 / ocn%grid%ocn_vol_tot * dt  ! kg/m2/s * m2 * psu * m3/kg /m3 *s = psu
+        ocn%ts(:,:,:,2) = ocn%ts(:,:,:,2) + sum(ocn%fw_hosing(:,:)*ocn%grid%ocn_area(:,:))*ocn%saln0/rho_w / ocn%grid%ocn_vol_tot * dt  ! kg/m2/s * m2 * psu * m3/kg /m3 *s = psu (freshwater density)
       endwhere
     endif
     ocn%fw_corr = ocn%fw_corr + ocn%fw_hosing + ocn%fw_hosing_comp
@@ -293,8 +293,8 @@ contains
     ocn%flx_bot = 0._wp  ! by default no input flux for tracers
 
     if (i_fw.eq.2) then
-      vsf_saln0 = sum(ocn%fw_corr(:,:)*ocn_area(:,:))*ocn%saln0/rho0 / ocn_area_tot  ! kg/m2/s * m2 * psu * m3/kg /m2
-      vsf_saloc = sum(ocn%fw_corr(:,:)*ocn%ts(:,:,maxk,2)*ocn_area(:,:))/rho0 / ocn_area_tot
+      vsf_saln0 = sum(ocn%fw_corr(:,:)*ocn_area(:,:))*ocn%saln0/rho_w / ocn_area_tot  ! kg/m2/s * m2 * psu * m3/kg /m2 (freshwater density)
+      vsf_saloc = sum(ocn%fw_corr(:,:)*ocn%ts(:,:,maxk,2)*ocn_area(:,:))/rho_w / ocn_area_tot
       ocn%dvsf = vsf_saln0-vsf_saloc        ! m/s*psu
     else
       ocn%dvsf = 0._wp
@@ -320,20 +320,20 @@ contains
             ! flux without brines
             if (i_fw.eq.1) then
               ! virtual salinity flux using reference saln0, could be bad (e.g. Yin 2010)
-              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)-frac_brines*ocn%fw_brines(i,j))*ocn%saln0/rho0   ! kg/m2/s -> m/s*psu
+              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)-frac_brines*ocn%fw_brines(i,j))*ocn%saln0/rho_w   ! kg/m2/s -> m/s*psu (freshwater density)
             else if (i_fw.eq.2) then
               ! virtual salinity flux using local salinity, compensate over the whole surface ocean to conserve salinity
-              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)-frac_brines*ocn%fw_brines(i,j)*ocn%saln0)/rho0 + ocn%dvsf  ! kg/m2/s -> m/s*psu 
+              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)-frac_brines*ocn%fw_brines(i,j)*ocn%saln0)/rho_w + ocn%dvsf  ! kg/m2/s -> m/s*psu (freshwater density)
             else if (i_fw.eq.3) then
               ! virtual salinity flux using local salinity
-              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)-frac_brines*ocn%fw_brines(i,j)*ocn%saln0)/rho0  ! kg/m2/s -> m/s*psu 
+              ocn%flx_sur(i,j,2) = (ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)-frac_brines*ocn%fw_brines(i,j)*ocn%saln0)/rho_w  ! kg/m2/s -> m/s*psu (freshwater density)
             endif
 
             ! distribute brines from the surface down to the neutral-buoyancy depth
 
             ! brine-loaded surface source parcel (T,S of surface layer with the full salt anomaly added)
             t_par = ocn%ts(i,j,maxk,1)
-            s_par = ocn%ts(i,j,maxk,2) - frac_brines*ocn%fw_brines(i,j)*ocn%saln0/rho0/dz(maxk)*dt  ! fw_brines<0 -> s_par increased
+            s_par = ocn%ts(i,j,maxk,2) - frac_brines*ocn%fw_brines(i,j)*ocn%saln0/rho_w/dz(maxk)*dt  ! fw_brines<0 -> s_par increased (freshwater density)
 
             ! find neutral-buoyancy level (parcel vs ambient density referenced to the interface, stop at first stable level)
             k_nb = maxk
@@ -359,7 +359,7 @@ contains
 
             ! distribute brines thickness-weighted from the neutral-buoyancy level to the surface
             do k=k_nb,maxk
-              ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*dz(k)/sum(dz(k_nb:maxk))*ocn%saln0/rho0/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu
+              ocn%ts(i,j,k,2) = ocn%ts(i,j,k,2) - frac_brines*ocn%fw_brines(i,j)*dz(k)/sum(dz(k_nb:maxk))*ocn%saln0/rho_w/dz(k)*dt  ! kg/m2/s * psu  * m3/kg / m * s -> psu (freshwater density)
             enddo
 
           else
@@ -367,13 +367,13 @@ contains
 
             if (i_fw.eq.1) then
               ! virtual salinity flux using reference saln0, could be bad (e.g. Yin 2010)
-              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%saln0/rho0   ! kg/m2/s -> m/s*psu
+              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%saln0/rho_w   ! kg/m2/s -> m/s*psu (freshwater density)
             else if (i_fw.eq.2) then
               ! virtual salinity flux using local salinity, compensate over the whole surface ocean to conserve salinity
-              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)/rho0 + ocn%dvsf  ! kg/m2/s -> m/s*psu 
+              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)/rho_w + ocn%dvsf  ! kg/m2/s -> m/s*psu (freshwater density)
             else if (i_fw.eq.3) then
               ! virtual salinity flux using local salinity
-              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)/rho0   ! kg/m2/s -> m/s*psu 
+              ocn%flx_sur(i,j,2) = ocn%fw_corr(i,j)*ocn%ts(i,j,maxk,2)/rho_w   ! kg/m2/s -> m/s*psu (freshwater density)
             endif
 
           endif

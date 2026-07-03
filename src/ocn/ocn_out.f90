@@ -34,7 +34,7 @@ module ocn_out
   use timer, only : nmon_year, nstep_mon_ocn, nstep_year_ocn, time_soy_ocn, time_eoy_ocn, &
   time_out_ocn, nyout_ocn, ny_out_ts, y_out_ts_clim, time_out_ts_clim
   use timer, only : n_accel, year, year_clim, year_now, mon, doy, nyears, sec_day, sec_year, nday_year
-  use constants, only : pi, cap_w, g
+  use constants, only : pi, cap_w, g, rho_w
   use control, only: out_dir
   use climber_grid, only : lon, lat, lonu, latv, basin_mask, basin_mask2, i_atlantic, i_pacific, i_indian, i_southern
   use ocn_grid, only: mask_c, mask_v, k1, k1_shelf, k1_1000, k1_3000, topo, bathy ,maxi, maxj, maxk
@@ -1230,15 +1230,15 @@ contains
           endif
           ! haline component
           if (i_fwf_buoy.eq.1) then
-            buoyS = buoyS + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
+            buoyS = buoyS + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho_w*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
             if (lat(j).gt.30._wp) then
-              buoyS_N = buoyS_N + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+              buoyS_N = buoyS_N + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho_w*ocn%grid%ocn_area(i,j)*dt
             endif
             if (lat(j).lt.-30._wp) then
-              buoyS_S = buoyS_S + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+              buoyS_S = buoyS_S + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho_w*ocn%grid%ocn_area(i,j)*dt
             endif
             if (lat(j).gt.-30._wp .and. lat(j).lt.30._wp) then
-              buoyS_tr = buoyS_tr + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt
+              buoyS_tr = buoyS_tr + g*ocn%fw_corr(i,j)*beta2d(i,j)*ocn%saln0/rho_w*ocn%grid%ocn_area(i,j)*dt
             endif
           else if (i_fwf_buoy.eq.2) then
             buoyS = buoyS + g*ocn%flx_sur(i,j,2)*beta2d(i,j)*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
@@ -1270,7 +1270,7 @@ contains
           bmelt(1) = bmelt(1) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
           icemelt(1) = icemelt(1) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
           fw_dhdt_ice(1) = fw_dhdt_ice(1) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-          vsf(1) = vsf(1) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+          vsf(1) = vsf(1) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
           flx(1) = flx(1) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))   ! W/m2 * m2 = W
           ! Atlantic basin cells
           if (bmask.eq.i_atlantic) then
@@ -1284,7 +1284,7 @@ contains
             bmelt(2) = bmelt(2) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(2) = icemelt(2) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(2) = fw_dhdt_ice(2) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(2) = vsf(2) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(2) = vsf(2) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
             flx(2) = flx(2) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).gt.0._wp) then
               ! North Atlantic north of 30N
@@ -1298,7 +1298,7 @@ contains
               bmelt(8) = bmelt(8) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(8) = icemelt(8) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(8) = fw_dhdt_ice(8) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(8) = vsf(8) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(8) = vsf(8) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
               flx(8) = flx(8) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.30._wp) then
@@ -1313,7 +1313,7 @@ contains
               bmelt(6) = bmelt(6) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(6) = icemelt(6) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(6) = fw_dhdt_ice(6) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(6) = vsf(6) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(6) = vsf(6) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
               flx(6) = flx(6) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.50._wp) then
@@ -1328,7 +1328,7 @@ contains
               bmelt(7) = bmelt(7) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(7) = icemelt(7) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(7) = fw_dhdt_ice(7) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(7) = vsf(7) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(7) = vsf(7) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
               flx(7) = flx(7) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.55._wp) then
@@ -1343,7 +1343,7 @@ contains
               bmelt(9) = bmelt(9) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(9) = icemelt(9) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(9) = fw_dhdt_ice(9) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(9) = vsf(9) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(9) = vsf(9) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
               flx(9) = flx(9) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             ! Pacific basin cells
@@ -1358,7 +1358,7 @@ contains
             bmelt(3) = bmelt(3) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(3) = icemelt(3) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(3) = fw_dhdt_ice(3) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(3) = vsf(3) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(3) = vsf(3) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
             flx(3) = flx(3) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Indian basin cells
           else if (bmask.eq.i_indian) then
@@ -1372,7 +1372,7 @@ contains
             bmelt(4) = bmelt(4) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(4) = icemelt(4) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(4) = fw_dhdt_ice(4) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(4) = vsf(4) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(4) = vsf(4) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
             flx(4) = flx(4) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Southern basin cells
           else if (bmask.eq.i_southern) then
@@ -1386,7 +1386,7 @@ contains
             bmelt(5) = bmelt(5) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(5) = icemelt(5) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(5) = fw_dhdt_ice(5) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(5) = vsf(5) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(5) = vsf(5) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
             flx(5) = flx(5) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).lt.-60._wp) then
               ! Southern Ocean south of 60S
@@ -1400,7 +1400,7 @@ contains
               bmelt(10) = bmelt(10) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(10) = icemelt(10) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(10) = fw_dhdt_ice(10) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(10) = vsf(10) + ocn%flx_sur(i,j,2)*rho0/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(10) = vsf(10) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
               flx(10) = flx(10) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
           endif
@@ -1782,7 +1782,7 @@ contains
             beta = beta2d(i,j)
             !print *,'beta,beta1',beta,rho2-rho1
             if (i_fwf_buoy.eq.1) then 
-              buoyS_NA(n) = buoyS_NA(n) + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
+              buoyS_NA(n) = buoyS_NA(n) + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho_w*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu * m2 *s = kg*m/s2 = N
             else if (i_fwf_buoy.eq.2) then
               buoyS_NA(n) = buoyS_NA(n) + g*ocn%flx_sur(i,j,2)*beta*ocn%grid%ocn_area(i,j)*dt  ! m/s2 * m/s*psu * kg/m3/psu * m2 *s = kg*m/s2 = N
             endif
@@ -2116,7 +2116,7 @@ contains
           pe_lab = pe_lab + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_lab = buoy_lab + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_lab = buoy_lab + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_lab = t_lab + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_lab = s_lab + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_lab = area_lab + ocn%grid%ocn_area(i,j)
@@ -2151,7 +2151,7 @@ contains
           pe_irm = pe_irm + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)   ! J/m2*m2=J
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_irm = buoy_irm + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_irm = buoy_irm + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_irm = t_irm + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_irm = s_irm + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_irm = area_irm + ocn%grid%ocn_area(i,j)
@@ -2186,7 +2186,7 @@ contains
           pe_gin = pe_gin + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_gin = buoy_gin + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_gin = buoy_gin + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_gin = t_gin + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_gin = s_gin + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_gin = area_gin + ocn%grid%ocn_area(i,j)
@@ -2221,7 +2221,7 @@ contains
           pe_bkn = pe_bkn + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_bkn = buoy_bkn + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_bkn = buoy_bkn + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_bkn = t_bkn + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_bkn = s_bkn + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_bkn = area_bkn + ocn%grid%ocn_area(i,j)
@@ -2256,7 +2256,7 @@ contains
           pe_wedd = pe_wedd + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_wedd = buoy_wedd + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_wedd = buoy_wedd + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_wedd = t_wedd + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_wedd = s_wedd + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_wedd = area_wedd + ocn%grid%ocn_area(i,j)
@@ -2291,7 +2291,7 @@ contains
           pe_ross = pe_ross + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_ross = buoy_ross + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_ross = buoy_ross + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           t_ross = t_ross + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_ross = s_ross + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
           area_ross = area_ross + ocn%grid%ocn_area(i,j)
@@ -2326,7 +2326,7 @@ contains
           pe_so = pe_so + ocn%conv_pe(i,j)*ocn%grid%ocn_area(i,j)
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_so = buoy_so + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_so = buoy_so + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
 
           t_sos = t_sos + ocn%ts(i,j,maxk,1)*ocn%grid%ocn_area(i,j)
           s_sos = s_sos + ocn%ts(i,j,maxk,2)*ocn%grid%ocn_area(i,j)
@@ -2346,9 +2346,9 @@ contains
         if (ocn%f_ocn(i,j).gt.0._wp) then
           alpha = alpha2d(i,j)
           beta = 0.8_wp   ! kg/m3/psu
-          buoy_soS60  = buoy_soS60  + (ocn%flx(i,j)*alpha/cap_w+ocn%fw_corr(i,j)*beta*ocn%saln0) * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoy_soS60  = buoy_soS60  + (ocn%flx(i,j)*alpha/cap_w*g/rho0 + ocn%fw_corr(i,j)*beta*ocn%saln0*g/rho_w)*ocn%grid%ocn_area(i,j)*dt  ! N 
           buoyT_soS60 = buoyT_soS60 + ocn%flx(i,j)*alpha/cap_w * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
-          buoyS_soS60 = buoyS_soS60 + ocn%fw_corr(i,j)*beta*ocn%saln0 * g/rho0*ocn%grid%ocn_area(i,j)*dt  ! N 
+          buoyS_soS60 = buoyS_soS60 + ocn%fw_corr(i,j)*beta*ocn%saln0 * g/rho_w*ocn%grid%ocn_area(i,j)*dt  ! N  (haline: freshwater density)
         endif
       enddo
     enddo
@@ -2533,21 +2533,21 @@ contains
     ann_ts(y)%ohc = ann_ts(y)%ohc + ohc        * ann_avg ! J
     ann_ts(y)%ohc700 = ann_ts(y)%ohc700 + ohc700        * ann_avg ! J
     ann_ts(y)%ohc2000 = ann_ts(y)%ohc2000 + ohc2000        * ann_avg ! J
-    ann_ts(y)%fw = ann_ts(y)%fw + fw/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%fw_corr = ann_ts(y)%fw_corr + fw_corr/rho0*1.e-6_wp       * ann_avg ! Sv
+    ann_ts(y)%fw = ann_ts(y)%fw + fw/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%fw_corr = ann_ts(y)%fw_corr + fw_corr/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
     ann_ts(y)%saln0 = ann_ts(y)%saln0 + ocn%saln0 * ann_avg ! psu
     ann_ts(y)%dvsf = ann_ts(y)%dvsf + ocn%dvsf/ocn%saln0*ocn_area_tot*1.e-6_wp * ann_avg ! Sv
-    ann_ts(y)%fw_noise = ann_ts(y)%fw_noise + fw_noise/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%p_e_sic = ann_ts(y)%p_e_sic + p_e_sic/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%runoff = ann_ts(y)%runoff + runoff/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%runoff_veg = ann_ts(y)%runoff_veg + runoff_veg/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%runoff_ice = ann_ts(y)%runoff_ice + runoff_ice/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%runoff_lake = ann_ts(y)%runoff_lake + runoff_lake/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%calving = ann_ts(y)%calving + calving/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%bmelt = ann_ts(y)%bmelt + bmelt/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%icemelt = ann_ts(y)%icemelt + icemelt/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%fw_dhdt_ice = ann_ts(y)%fw_dhdt_ice + fw_dhdt_ice/rho0*1.e-6_wp       * ann_avg ! Sv
-    ann_ts(y)%vsf = ann_ts(y)%vsf + vsf/rho0*1.e-6_wp       * ann_avg ! Sv
+    ann_ts(y)%fw_noise = ann_ts(y)%fw_noise + fw_noise/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%p_e_sic = ann_ts(y)%p_e_sic + p_e_sic/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%runoff = ann_ts(y)%runoff + runoff/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%runoff_veg = ann_ts(y)%runoff_veg + runoff_veg/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%runoff_ice = ann_ts(y)%runoff_ice + runoff_ice/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%runoff_lake = ann_ts(y)%runoff_lake + runoff_lake/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%calving = ann_ts(y)%calving + calving/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%bmelt = ann_ts(y)%bmelt + bmelt/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%icemelt = ann_ts(y)%icemelt + icemelt/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%fw_dhdt_ice = ann_ts(y)%fw_dhdt_ice + fw_dhdt_ice/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
+    ann_ts(y)%vsf = ann_ts(y)%vsf + vsf/rho_w*1.e-6_wp       * ann_avg ! Sv (freshwater density)
     ann_ts(y)%flx = ann_ts(y)%flx + flx*1.e-15_wp   * ann_avg ! PW
     ann_ts(y)%drake = ann_ts(y)%drake + tf_drake    * ann_avg ! Sv
     ann_ts(y)%bering = ann_ts(y)%bering + tf_bering    * ann_avg ! Sv
@@ -2600,7 +2600,7 @@ contains
     ann_ts(y)%rsl_steric = ann_ts(y)%rsl_steric + (rsl_steric-rsl_steric0)    * ann_avg ! m
     if (time_soy_ocn) then
       ! contribution of freshwater hosing to sea level
-      rsl_hosing = rsl_hosing + sum((ocn%fw_hosing+ocn%fw_hosing_comp)*ocn%grid%ocn_area) / rho0 * sec_year / ocn_area_tot0  ! m
+      rsl_hosing = rsl_hosing + sum((ocn%fw_hosing+ocn%fw_hosing_comp)*ocn%grid%ocn_area) / rho_w * sec_year / ocn_area_tot0  ! m (freshwater density)
     endif
     ann_ts(y)%rsl_mass   = ann_ts(y)%rsl_mass   + (rsl_mass-rsl_mass0 + rsl_hosing)    * ann_avg  ! m
     ann_ts(y)%rsl = ann_ts(y)%rsl_steric + ann_ts(y)%rsl_mass                       
@@ -2733,7 +2733,7 @@ contains
        ann_ts(y)%fmaxa = maxval(ann_o%fwa(1,jsf:))
 
        ! freshwater hosing 
-       ann_ts(y)%fw_hosing = sum(ocn%fw_hosing(:,:) * ocn%grid%ocn_area(:,:)) / rho0 * 1.e-6_wp ! kg/m2/s * m2 * m3/kg * 1e-6 = Sv
+       ann_ts(y)%fw_hosing = sum(ocn%fw_hosing(:,:) * ocn%grid%ocn_area(:,:)) / rho_w * 1.e-6_wp ! kg/m2/s * m2 * m3/kg * 1e-6 = Sv (freshwater density)
 
        ! noise
        ann_ts(y)%noise_fw = ocn%noise_fw*sec_day    ! kg/m2/day
@@ -3230,11 +3230,11 @@ contains
       mon_o(mon)%ds_dt_flxsur = mon_o(mon)%ds_dt_flxsur - ocn%flx_sur(:,:,2)/dz(maxk) * sec_year * mon_avg ! psu/year
       mon_o(mon)%flx   = mon_o(mon)%flx   + ocn%flx                              * mon_avg ! W/m2
       mon_o(mon)%fw    = mon_o(mon)%fw    + (ocn%p_e_sic+ocn%runoff+ocn%calving+ocn%bmelt+ocn%fw_hosing+ocn%fw_hosing_comp+ocn%fw_flux_adj)*sec_day         * mon_avg ! kg/m2/day
-      mon_o(mon)%vsf   = mon_o(mon)%vsf   + ocn%flx_sur(:,:,2)*rho0/ocn%saln0*sec_day                   * mon_avg ! kg/m2/day
+      mon_o(mon)%vsf   = mon_o(mon)%vsf   + ocn%flx_sur(:,:,2)*rho_w/ocn%saln0*sec_day                   * mon_avg ! kg/m2/day
       mon_o(mon)%p_e_sic   = mon_o(mon)%p_e_sic   + ocn%p_e_sic*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%runoff= mon_o(mon)%runoff+ ocn%runoff*sec_day         * mon_avg ! kg/m2/day
-      mon_o(mon)%runoffSv= mon_o(mon)%runoffSv+ ocn%runoff*ocn%grid%ocn_area/rho0*1.e-6_wp         * mon_avg ! Sv
-      mon_o(mon)%runoffSv_ice= mon_o(mon)%runoffSv_ice+ ocn%runoff_ice*ocn%grid%ocn_area/rho0*1.e-6_wp         * mon_avg ! Sv
+      mon_o(mon)%runoffSv= mon_o(mon)%runoffSv+ ocn%runoff*ocn%grid%ocn_area/rho_w*1.e-6_wp         * mon_avg ! Sv
+      mon_o(mon)%runoffSv_ice= mon_o(mon)%runoffSv_ice+ ocn%runoff_ice*ocn%grid%ocn_area/rho_w*1.e-6_wp         * mon_avg ! Sv
       mon_o(mon)%calving= mon_o(mon)%calving+ ocn%calving*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%bmelt = mon_o(mon)%bmelt + ocn%bmelt*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%fw_hosing = mon_o(mon)%fw_hosing + (ocn%fw_hosing+ocn%fw_hosing_comp)*sec_day        * mon_avg ! kg/m2/day
@@ -3315,7 +3315,7 @@ contains
             beta = 0.8_wp   ! kg/m3/psu
           endif
           if (i_fwf_buoy.eq.1) then 
-            mon_o(mon)%buoyS(i,j) = mon_o(mon)%buoyS(i,j) + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho0 * mon_avg  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu = kg*m/s2 = N/m2/s
+            mon_o(mon)%buoyS(i,j) = mon_o(mon)%buoyS(i,j) + g*ocn%fw_corr(i,j)*beta*ocn%saln0/rho_w * mon_avg  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu = kg*m/s2 = N/m2/s
           else if (i_fwf_buoy.eq.2) then 
             mon_o(mon)%buoyS(i,j) = mon_o(mon)%buoyS(i,j) + g*ocn%flx_sur(i,j,2)*beta * mon_avg  ! m/s2 * kg/m2/s kg/m3/psu * m3/kg * psu = kg*m/s2 = N/m2/s
           endif

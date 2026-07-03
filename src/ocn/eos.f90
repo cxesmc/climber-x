@@ -30,7 +30,8 @@ module eos_mod
 
   use precision, only : wp
   use ocn_grid
-  use ocn_params, only : i_eos, rho0
+  use ocn_params, only : i_eos
+  use constants, only : rho_w
 
   implicit none
 
@@ -69,14 +70,14 @@ contains
     if (i_eos.eq.0) then
 
       ! state equation following WS 1993	
-      rho = rho0 + ec(1)*t + ec(2)*s + ec(3)*t**2 + ec(4)*t**3  ! t in degC and s in psu
+      rho = rho_w + ec(1)*t + ec(2)*s + ec(3)*t**2 + ec(4)*t**3  ! t in degC and s in psu; rho_w = pure-water baseline (NOT Boussinesq rho0)
 
     elseif (i_eos.eq.1) then
 
       ! Thermobaricity term (T*z) added as option. Optimised for -1<deep T<6, S=34.9
       ! but is an order of magnitude improvement even in other parts of parameter space. It does not
       ! change surface densities which are fine anyway.
-      rho = rho0 + ec(1)*t + ec(2)*s + ec(3)*t**2 + ec(4)*t**3 + ec(5)*t*z
+      rho = rho_w + ec(1)*t + ec(2)*s + ec(3)*t**2 + ec(4)*t**3 + ec(5)*t*z  ! rho_w = pure-water baseline (NOT Boussinesq rho0)
 
     elseif (i_eos.eq.2) then
 

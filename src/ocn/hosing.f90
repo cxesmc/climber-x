@@ -1,12 +1,12 @@
 module hosing_mod
 
   use precision, only : wp, sp
-  use constants, only : pi
+  use constants, only : pi, rho_w
   use control, only : out_Dir
   use timer, only: sec_year, time_soy_ocn, year_ini
   use climber_grid, only : lat, lon, basin_mask, i_atlantic, i_pacific, i_southern
   use ocn_grid, only : maxi, maxj, dx, dy
-  use ocn_params, only: dt, rho0
+  use ocn_params, only: dt
   use ocn_params, only : n_hosing_domain, n_hosing_domain_max, hosing_domain_name, i_hosing_comp, hosing_comp_basin
   use ncio
   use nml
@@ -84,7 +84,7 @@ contains
 
       ! apply freshwater flux
       where (f_ocn.gt.0._wp .and. hosing(n)%mask.gt.0._wp)
-        fw_hosing(:,:) = fw_hosing(:,:) + hosing(n)%mask(:,:)*fwf_now*1.e6_wp * rho0 / hosing(n)%area ! m3/s * kg/m3 / m2 = kg/m2/s
+        fw_hosing(:,:) = fw_hosing(:,:) + hosing(n)%mask(:,:)*fwf_now*1.e6_wp * rho_w / hosing(n)%area ! m3/s * kg/m3 / m2 = kg/m2/s (freshwater density)
       endwhere
 
       fw_hosing_tot = fw_hosing_tot + fwf_now   ! Sv
@@ -99,7 +99,7 @@ contains
       call hosing_domain_area(f_ocn, hosing_comp_mask, hosing_comp_area)
 
       where (f_ocn.gt.0._wp .and. hosing_comp_mask.gt.0._wp)
-        fw_hosing_comp(:,:) = fw_hosing_comp(:,:) - fw_hosing_tot*1.e6_wp * rho0 / hosing_comp_area ! m3/s * kg/m3 / m2 = kg/m2/s
+        fw_hosing_comp(:,:) = fw_hosing_comp(:,:) - fw_hosing_tot*1.e6_wp * rho_w / hosing_comp_area ! m3/s * kg/m3 / m2 = kg/m2/s (freshwater density)
       endwhere
 
     endif
