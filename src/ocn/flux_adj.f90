@@ -28,7 +28,7 @@ module flux_adj_mod
   use precision, only : wp
   use climber_grid, only : lat, lon, basin_mask, i_atlantic, i_pacific, i_southern
   use ocn_grid, only : maxi, maxj, dx, dy
-  use ocn_params, only: rho0
+  use constants, only: rho_w
   use ocn_params, only: flux_adj_atl, lat_min_flux_adj_atl, lat_max_flux_adj_atl
   use ocn_params, only: flux_adj_ant, nj_flux_adj_ant
   use ocn_params, only: flux_adj_pac, lat_min_flux_adj_pac, lat_max_flux_adj_pac
@@ -195,7 +195,7 @@ contains
     enddo
 
     ! flux adjustment freshwater forcing
-    fw_flux_adj = (flux_adj_atl*rflux_adj_atl + flux_adj_pac*rflux_adj_pac + flux_adj_ant*rflux_adj_ant) * rho0  ! Sv * m/s/Sv * kg/m3 = kg/m2/s
+    fw_flux_adj = (flux_adj_atl*rflux_adj_atl + flux_adj_pac*rflux_adj_pac + flux_adj_ant*rflux_adj_ant) * rho_w  ! Sv * m/s/Sv * kg/m3 = kg/m2/s (freshwater density)
 
 
    return
