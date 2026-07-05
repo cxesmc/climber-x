@@ -2,7 +2,6 @@
 package = "climber-x"
 deps = [
     "fesm-utils:dev",
-    "fesm-utils/utils",
     "yelmo:dev",
     "FastEarth3D",
     "bgc",
