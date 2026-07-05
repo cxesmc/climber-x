@@ -40,7 +40,7 @@ defaulttarget: usage
 ## SHARED DEPENDENCY WIRING ##
 # Pulled in after the compiler/machine fragment so it can reference FFLAGS_BASE,
 # FFLAGS_OPENMP, CPPFLAGS_PP, INC_NC, LIB_NC, and LFLAGS_EXTRA set there.
-# Defines the COORD, FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
+# Defines the FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
 # the openmp= build switch, and the final FFLAGS_CLIM/FFLAGS_FULL and
 # LFLAGS_CLIM/LFLAGS_FULL flag sets.
 
