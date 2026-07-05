@@ -28,7 +28,7 @@ module constants
   use precision, only : wp, sp, dp
   implicit none
 
-  character(len=*), parameter :: map_gen = "coords"   !! mapping weight generator: "coords" (in-package) or "cdo" (external)
+  character(len=*), parameter :: map_gen = "cdo"   !! mapping weight generator: "coords" (in-package) or "cdo" (external)
 
   real(wp), parameter :: pi = 3.141592653589793_wp
 
