@@ -21,16 +21,16 @@
 # (see the blanket rule at the end of Makefile_climber.mk) so a rebuilt fesm-utils
 # with a changed module interface forces a recompile against the new .mod, rather
 # than silently relinking a stale object (ABI mismatch -> segfault).
-FESMUTILSROOT = fesm-utils/utils
+FESMUTILSROOT = fesm-utils
 INC_FESMUTILS = -I${FESMUTILSROOT}/include-serial
 LIB_FESMUTILS = -L${FESMUTILSROOT}/include-serial -lfesmutils
 FESMUTILS_LIB = ${FESMUTILSROOT}/include-serial/libfesmutils.a
 
-FFTWROOT = fesm-utils/fftw-serial
+FFTWROOT = fesm-utils/fftw/fftw-serial
 INC_FFTW = -I${FFTWROOT}/include
 LIB_FFTW = -L${FFTWROOT}/lib -lfftw3 -lm
 
-LISROOT = fesm-utils/lis-serial
+LISROOT = fesm-utils/lis/lis-serial
 INC_LIS = -I${LISROOT}/include
 LIB_LIS = -L${LISROOT}/lib/ -llis
 
@@ -65,7 +65,7 @@ LIB_FASTEARTH = ${FASTEARTHROOT}/obj/libfastearth.a
 # FastEarth3D). FFTW (wired above) is linked after it (SHTns calls FFTW). Serial
 # by default; the OpenMP variant (shtns-omp, -lshtns_omp) is swapped in below for
 # openmp=1 to match FastEarth3D's own openmp= dependency swap.
-SHTNSROOT = fesm-utils/shtns-serial
+SHTNSROOT = fesm-utils/SHTns/shtns-serial
 INC_SHTNS = -I${SHTNSROOT}/include
 LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns
 
@@ -77,15 +77,15 @@ ifeq ($(openmp), 1)
     LIB_FESMUTILS = -L${FESMUTILSROOT}/include-omp -lfesmutils
     FESMUTILS_LIB = ${FESMUTILSROOT}/include-omp/libfesmutils.a
 
-    FFTWROOT = fesm-utils/fftw-omp
+    FFTWROOT = fesm-utils/fftw/fftw-omp
     INC_FFTW = -I${FFTWROOT}/include
     LIB_FFTW = -L${FFTWROOT}/lib -lfftw3_omp -lfftw3 -lm
 
-    LISROOT = fesm-utils/lis-omp
+    LISROOT = fesm-utils/lis/lis-omp
     INC_LIS = -I${LISROOT}/include
     LIB_LIS = -L${LISROOT}/lib/ -llis
 
-    SHTNSROOT = fesm-utils/shtns-omp
+    SHTNSROOT = fesm-utils/SHTns/shtns-omp
     INC_SHTNS = -I${SHTNSROOT}/include
     LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns_omp
 endif
