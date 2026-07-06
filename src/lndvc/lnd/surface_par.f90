@@ -26,16 +26,17 @@
 module lndvc_surface_par_lnd
 
   use precision, only : wp
-  use constants, only : karman, g, T0, frac_vu
+  use constants, only : karman, g, pi, T0, frac_vu
   use lnd_grid, only : i_ice, i_lake, i_bare
-  use lnd_grid, only : npft
-  use lnd_params, only : l_neutral, z_sfl
-  use lnd_params, only : snow_par, surf_par, veg_par
+  use lnd_grid, only : npft, nveg, ntrees, ngrass, nshrub, i_trees, i_grass, i_shrub, flag_pft, dz
+  use lnd_params, only : l_neutral, z_sfl, i_racan, p_cdense
+  use lnd_params, only : snow_par, surf_par, veg_par, pft_par, hydro_par
 
   implicit none
 
   private
   public :: surface_frac_up, snow_albedo_lake, surface_albedo_lake, resist_aer_lake, resist_sur_lake
+  public :: resist_aer_veg, resist_sur_veg, surface_albedo_veg
 
 contains
 
@@ -523,5 +524,358 @@ contains
     return
 
   end subroutine resist_sur_lake
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  r e s i s t _ a e r _ v e g
+  !   Purpose    :  aerodynamic resistance over the vegetated tiles (bare +
+  !                 PFTs) of a land virtual cell. De-scoped from the reference
+  !                 multi-class resist_aer: the ice/lake special cases are
+  !                 dropped (siblings are separate vcs), and the single land
+  !                 snowpack replaces the nsoil-indexed h_snow(is_veg). The
+  !                 bare->canopy coupling (r_a_can = r_a(i_bare)) stays inside
+  !                 the vc since bare is a sub-tile here.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine resist_aer_veg(frac_surf,veg_h,lai,sai,h_snow,tatm,t_skin,wind, &
+                       z0m,rough_m,rough_h,Ch,r_a,r_a_can,Ri)
+
+    implicit none
+
+    real(wp), dimension(:), intent(in) :: veg_h, lai, sai
+    real(wp), dimension(:), intent(in) :: frac_surf, tatm, t_skin
+    real(wp), intent(in) :: h_snow
+    real(wp), dimension(:), intent(in) :: wind
+    real(wp), dimension(:), intent(inout) :: z0m, rough_m, rough_h
+    real(wp), dimension(:), intent(out) :: Ch, r_a, Ri
+    real(wp), dimension(:), intent(out) :: r_a_can
+
+    integer :: n
+    real(wp) :: fsnow, hsnow
+    real(wp) :: u_star, Re
+    real(wp) :: log_m, log_h, Ch_neutral
+
+    real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
+
+
+    do n=1,nveg
+
+      if( frac_surf(n) .gt. 0._wp ) then
+
+        hsnow = h_snow
+
+        ! roughness for momentum
+        if( flag_pft(n) .eq. 1 ) then
+          z0m(n) = pft_par%hveg_z0_scale(n) * veg_h(n)  ! roughness for snow free
+        endif
+        ! account for snow cover
+        fsnow = hsnow/(hsnow+10._wp*z0m(n))
+        rough_m(n) = fsnow * surf_par%z0m_snow + (1._wp-fsnow) * z0m(n) ! roughness including snow
+
+        log_m = karman/log(z_sfl/rough_m(n))
+
+        ! roughness_for heat and water
+        if (surf_par%i_z0h.eq.1) then
+          rough_h(n) = surf_par%zm_to_zh_const * rough_m(n)
+        else if (surf_par%i_z0h.eq.2) then
+          ! formulation following Brutsaert 1982, Kanda 2007
+          u_star = log_m*wind(n)
+          Re = u_star*rough_m(n)/nu
+          rough_h(n) = rough_m(n)*exp(-(1.29*Re**0.25_wp-2._wp))
+        else if (surf_par%i_z0h.eq.3) then
+          ! Zilitinkevich 1995
+          u_star = log_m*wind(n)
+          Re = u_star*rough_m(n)/nu
+          rough_h(n) = rough_m(n)*exp(-karman*0.1_wp*sqrt(Re))
+        else if (surf_par%i_z0h.eq.4) then
+          if( flag_pft(n) .eq. 1 ) then
+            ! Zilitinkevich 1995
+            u_star = log_m*wind(n)
+            Re = u_star*rough_m(n)/nu
+            rough_h(n) = rough_m(n)*exp(-karman*0.1_wp*sqrt(Re))
+          else
+            ! Yang 2008, kB^-1~2 for bare soil and other non-vegetated surfaces
+            rough_h(n) = rough_m(n)*exp(-2._wp)
+          endif
+        endif
+
+        log_h = karman/log(z_sfl/rough_h(n))
+
+        ! neutral heat exchange coefficient
+        Ch_neutral = log_m * log_h
+
+        ! Richardson number
+        Ri(n) = g * 100._wp * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2
+
+        if( l_neutral ) then
+          Ch(n) = Ch_neutral
+        else
+          ! account for atmospheric stability through a Ri number dependence following BATS
+          if( Ri(n) .lt. 0._wp ) then ! "unstable" stratification
+            Ch(n) = Ch_neutral * (1._wp - surf_par%f_Ri_unstab * Ri(n))
+          else ! "stable" stratification
+            Ch(n) = Ch_neutral / (1._wp + surf_par%f_Ri_stab * Ri(n))
+          endif
+        endif
+
+        ! aerodynamic resistance
+        r_a(n) = 1._wp / (Ch(n) * wind(n))
+
+        ! aerodynamic resistance for ground below canopy
+        if( flag_pft(n) .eq. 1 ) then
+          if (i_racan.eq.1) then
+            r_a_can(n) = 1._wp/(p_cdense*wind(n))
+          else if (i_racan.eq.2) then
+            r_a_can(n) = (1._wp-exp(-(lai(n)+10._wp*sai(n))))/(p_cdense*wind(n))
+          endif
+        endif
+
+      endif
+    enddo
+
+    if (i_racan.eq.3) then
+      do n=1,npft
+        r_a_can(n) = r_a(i_bare)
+      enddo
+    endif
+
+    return
+
+  end subroutine resist_aer_veg
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  r e s i s t _ s u r _ v e g
+  !   Purpose    :  surface resistance to evapotranspiration over the
+  !                 vegetated tiles of a land vc. De-scoped from the reference
+  !                 resist_sur (ice/lake branches dropped, single snowpack).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine resist_sur_veg(frac_surf,mask_snow,theta_w,g_can,beta_s,r_s,beta_s_can,r_s_can)
+
+    implicit none
+
+    integer,  intent(in) :: mask_snow
+    real(wp), dimension(:), intent(in) :: frac_surf
+    real(wp), dimension(:), intent(in) :: theta_w
+    real(wp), dimension(:), intent(in) :: g_can
+    real(wp), dimension(:), intent(out) :: beta_s, r_s
+    real(wp), dimension(:), intent(out) :: beta_s_can, r_s_can
+
+    integer :: n
+    real(wp) :: beta_soil, beta_snow
+
+
+    ! bare soil, use resistance OR beta factor
+    r_s(i_bare) = 0._wp
+    beta_snow = 1._wp
+    if (hydro_par%i_evp_soil.eq.1) then
+      ! CLM, Lee and Pielke 1992
+      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
+        beta_soil = 0.25_wp * (1._wp - cos(pi * theta_w(1) / hydro_par%theta_crit_evp))**2
+      else
+        beta_soil = 1._wp
+      endif
+    else if (hydro_par%i_evp_soil.eq.2) then
+      ! CLIMBER-2
+      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
+        beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
+      else
+        beta_soil = 1._wp
+      endif
+    endif
+    if (mask_snow.eq.0) then
+      beta_s(i_bare) = beta_soil
+    else
+      beta_s(i_bare) = beta_snow
+    endif
+    ! scale to account for fraction of top layer from which evaporation can occur
+    beta_s(i_bare) = hydro_par%dz_evp/dz(1) * beta_s(i_bare)
+
+    ! vegetation
+    do n=1,npft
+      if( frac_surf(n) .gt. 0._wp ) then
+        r_s(n) = 1._wp / max(1.e-30_wp, 1.6_wp*g_can(n)) ! s/m, factor 1.6 converts CO2->H2O conductance
+        beta_s(n) = 1._wp
+        ! for evaporation from soil below canopy use bare soil resistance
+        r_s_can(n) = r_s(i_bare)
+        beta_s_can(n) = beta_s(i_bare)
+      endif
+    enddo
+
+    return
+
+  end subroutine resist_sur_veg
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s u r f a c e _ a l b e d o _ v e g
+  !   Purpose    :  surface albedo over the vegetated tiles of a land vc.
+  !                 De-scoped from the reference surface_albedo: ice/lake
+  !                 blocks dropped, the single land snowpack replaces the
+  !                 nsoil-indexed snow-albedo/h_snow arrays. Physics of the
+  !                 bare + tree/grass/shrub tiles is unchanged.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine surface_albedo_veg(frac_surf,z_veg_std,h_snow,coszm,lai,sai,z0m,f_snow_can, &
+                           alb_snow_vis_dir,alb_snow_vis_dif,alb_snow_nir_dir,alb_snow_nir_dif, &
+                           alb_bare_vis,alb_bare_nir, &
+                           f_snow, &
+                           alb_vis_dir,alb_vis_dif,alb_nir_dir,alb_nir_dif,albedo)
+
+    implicit none
+
+    real(wp), intent(in) :: h_snow
+    real(wp), intent(in) :: z_veg_std
+    real(wp), intent(in) :: coszm
+    real(wp), dimension(:), intent(in) :: z0m, frac_surf, f_snow_can
+    real(wp), dimension(:), intent(in) :: lai, sai
+    real(wp), intent(in) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
+    real(wp), intent(in) :: alb_bare_vis, alb_bare_nir
+    real(wp), dimension(:), intent(out) :: f_snow
+    real(wp), dimension(:), intent(out) :: alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif, albedo
+
+    integer :: n, n_s
+    real(wp) :: lsai_eff, svf, svf_dir, svf_dif, f_snow_b, f_snow_t
+    real(wp) :: alb_vis_bcan, alb_nir_bcan
+    real(wp) :: alb_vis_dir_can, alb_nir_dir_can, alb_vis_dif_can, alb_nir_dif_can
+    real(wp) :: f_snow_fac_orog
+    real(wp), parameter :: sai_svf_scale = 2._wp  ! scale factor of stem area index for albedo
+    real(wp), parameter :: z0m_bcan = 0.02_wp     ! m, roughness length below canopy
+    real(wp), parameter :: eps = 1.e-10_wp
+
+
+    ! bare soil
+    if( frac_surf(i_bare) .gt. 0._wp ) then
+      ! orography factor for snow cover fraction
+      if (snow_par%l_fsnow_orog) then
+        ! reduce snow cover fraction over rough topography following Roesch 2001, eq. 7
+        f_snow_fac_orog = h_snow/(h_snow+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
+      else
+        f_snow_fac_orog = 1._wp
+      endif
+      ! snow fraction after Niu and Yang 2007, Roesch 2001
+      f_snow(i_bare) = tanh(h_snow/(snow_par%c_fsnow*z0m(i_bare))) * f_snow_fac_orog
+      alb_vis_dir(i_bare) = f_snow(i_bare) * alb_snow_vis_dir + (1._wp-f_snow(i_bare)) * alb_bare_vis
+      alb_vis_dif(i_bare) = f_snow(i_bare) * alb_snow_vis_dif + (1._wp-f_snow(i_bare)) * alb_bare_vis
+      alb_nir_dir(i_bare) = f_snow(i_bare) * alb_snow_nir_dir + (1._wp-f_snow(i_bare)) * alb_bare_nir
+      alb_nir_dif(i_bare) = f_snow(i_bare) * alb_snow_nir_dif + (1._wp-f_snow(i_bare)) * alb_bare_nir
+    endif
+
+    ! vegetation, Otto 2011
+    ! trees
+    do n=1,ntrees
+     n_s = i_trees(n) ! surface type index (also equal to PFT index)
+     if( frac_surf(n_s) .gt. 0._wp ) then
+
+      ! sky view factor, including zenith angle dependence
+      svf_dif = exp( - (lai(n_s)+sai_svf_scale*sai(n_s)) * veg_par%ext_coef/0.7071_wp )
+      svf_dir = exp( - (lai(n_s)+sai_svf_scale*sai(n_s)) * veg_par%ext_coef/max(0.01_wp,coszm) )
+
+      ! albedo of snow covered ground below the canopy, use always diffuse snow albedo!
+      if (snow_par%l_fsnow_orog) then
+        f_snow_fac_orog = h_snow/(h_snow+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
+      else
+        f_snow_fac_orog = 1._wp
+      endif
+      f_snow_b = tanh(h_snow/(snow_par%c_fsnow*z0m_bcan)) * f_snow_fac_orog
+      alb_vis_bcan = f_snow_b * alb_snow_vis_dif + (1._wp-f_snow_b) * pft_par%alb_bg_vis(n_s)
+      alb_nir_bcan = f_snow_b * alb_snow_nir_dif + (1._wp-f_snow_b) * pft_par%alb_bg_nir(n_s)
+
+      ! albedo of snow covered canopy
+      f_snow_t = f_snow_can(n_s)
+      alb_vis_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dir(n_s) + f_snow_t * pft_par%alb_can_vis_dir_snow(n_s)
+      alb_vis_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dif(n_s) + f_snow_t * pft_par%alb_can_vis_dif_snow(n_s)
+      alb_nir_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dir(n_s) + f_snow_t * pft_par%alb_can_nir_dir_snow(n_s)
+      alb_nir_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dif(n_s) + f_snow_t * pft_par%alb_can_nir_dif_snow(n_s)
+
+      f_snow(n_s) = svf_dir*f_snow_b + (1._wp-svf_dir)*f_snow_t
+
+      ! tile albedo, weighted mean
+      alb_vis_dir(n_s) = svf_dir * alb_vis_bcan + (1._wp-svf_dir) * alb_vis_dir_can
+      alb_vis_dif(n_s) = svf_dif * alb_vis_bcan + (1._wp-svf_dif) * alb_vis_dif_can
+      alb_nir_dir(n_s) = svf_dir * alb_nir_bcan + (1._wp-svf_dir) * alb_nir_dir_can
+      alb_nir_dif(n_s) = svf_dif * alb_nir_bcan + (1._wp-svf_dif) * alb_nir_dif_can
+
+     else
+       f_snow(n_s) = 0._wp
+     endif
+    enddo
+
+    ! grass
+    do n=1,ngrass
+     n_s = i_grass(n)
+     if( frac_surf(n_s) .gt. 0._wp ) then
+      ! sky view factor, no zenith angle dependence
+      svf = exp( - (lai(n_s)+sai(n_s)) * veg_par%ext_coef)
+      if (snow_par%l_fsnow_orog) then
+        f_snow_fac_orog = h_snow/(h_snow+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
+      else
+        f_snow_fac_orog = 1._wp
+      endif
+      f_snow(n_s) = tanh(h_snow/(snow_par%c_fsnow*z0m(n_s))) * f_snow_fac_orog
+      alb_vis_dir(n_s) = &
+                   f_snow(n_s)                       * alb_snow_vis_dir             &  ! snow
+                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_vis_dir(n_s) &  ! snowfree canopy
+                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_vis(n_s)
+      alb_vis_dif(n_s) = &
+                   f_snow(n_s)                       * alb_snow_vis_dif             &
+                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_vis_dif(n_s) &
+                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_vis(n_s)
+      alb_nir_dir(n_s) = &
+                   f_snow(n_s)                       * alb_snow_nir_dir             &
+                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_nir_dir(n_s) &
+                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_nir(n_s)
+      alb_nir_dif(n_s) = &
+                   f_snow(n_s)                       * alb_snow_nir_dif             &
+                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_nir_dif(n_s) &
+                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_nir(n_s)
+     endif
+    enddo
+
+    ! shrubs
+    do n=1,nshrub
+     n_s = i_shrub(n) ! surface type index (also equal to PFT index)
+     if( frac_surf(n_s) .gt. 0._wp ) then
+
+      ! effective LAI+SAI index, accounting for snow thickness
+      lsai_eff = (lai(n_s)+sai_svf_scale*sai(n_s)) * (1._wp-tanh(h_snow/(snow_par%c_fsnow*z0m(n_s))))
+      svf_dif = exp( -lsai_eff * veg_par%ext_coef/0.7071_wp )
+      svf_dir = exp( -lsai_eff * veg_par%ext_coef/max(0.01_wp,coszm) )
+
+      if (snow_par%l_fsnow_orog) then
+        f_snow_fac_orog = h_snow/(h_snow+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
+      else
+        f_snow_fac_orog = 1._wp
+      endif
+      f_snow_b = tanh(h_snow/(snow_par%c_fsnow*z0m_bcan)) * f_snow_fac_orog
+      alb_vis_bcan = f_snow_b * alb_snow_vis_dif + (1._wp-f_snow_b) * pft_par%alb_bg_vis(n_s)
+      alb_nir_bcan = f_snow_b * alb_snow_nir_dif + (1._wp-f_snow_b) * pft_par%alb_bg_nir(n_s)
+
+      f_snow_t = f_snow_can(n_s)
+      alb_vis_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dir(n_s) + f_snow_t * pft_par%alb_can_vis_dir_snow(n_s)
+      alb_vis_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dif(n_s) + f_snow_t * pft_par%alb_can_vis_dif_snow(n_s)
+      alb_nir_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dir(n_s) + f_snow_t * pft_par%alb_can_nir_dir_snow(n_s)
+      alb_nir_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dif(n_s) + f_snow_t * pft_par%alb_can_nir_dif_snow(n_s)
+
+      f_snow(n_s) = svf_dir*f_snow_b + (1._wp-svf_dir)*f_snow_t
+
+      alb_vis_dir(n_s) = svf_dir * alb_vis_bcan + (1._wp-svf_dir) * alb_vis_dir_can
+      alb_vis_dif(n_s) = svf_dif * alb_vis_bcan + (1._wp-svf_dif) * alb_vis_dif_can
+      alb_nir_dir(n_s) = svf_dir * alb_nir_bcan + (1._wp-svf_dir) * alb_nir_dir_can
+      alb_nir_dif(n_s) = svf_dif * alb_nir_bcan + (1._wp-svf_dif) * alb_nir_dif_can
+
+     endif
+    enddo
+
+    ! composite albedo, assuming half cloud cover, diagnostic only
+    do n=1,nveg
+      if( frac_surf(n) .gt. 0._wp ) then
+        albedo(n) = frac_vu * 0.5_wp*(alb_vis_dir(n) + alb_vis_dif(n)) &
+          + (1._wp-frac_vu) * 0.5_wp*(alb_nir_dir(n) + alb_nir_dif(n))
+      else
+        albedo(n) = 0._wp
+      endif
+    enddo
+
+    return
+
+  end subroutine surface_albedo_veg
 
 end module lndvc_surface_par_lnd
