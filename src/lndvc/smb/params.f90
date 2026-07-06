@@ -43,6 +43,10 @@ module smb_par_m
     logical  :: l_diurnal_cycle
     real(wp) :: tstd_scale
     logical  :: l_dew
+    logical  :: l_neutral
+    logical  :: l_regional_climate_forcing
+    integer  :: i_gamma = 1
+    real(wp) :: gamma
 
     type surf_par_type
         integer  :: i_f_ice
@@ -147,6 +151,10 @@ contains
         call nml_read(filename,"smb_par","l_diurnal_cycle",   l_diurnal_cycle)
         call nml_read(filename,"smb_par","tstd_scale",        tstd_scale)
         call nml_read(filename,"smb_par","l_dew",             l_dew)
+        call nml_read(filename,"smb_par","l_neutral",         l_neutral)
+        call nml_read(filename,"smb_par","l_regional_climate_forcing", l_regional_climate_forcing)
+        call nml_read(filename,"smb_par","i_gamma",           i_gamma)
+        call nml_read(filename,"smb_par","gamma",             gamma)
 
         ! downscaling scalars
         call nml_read(filename,"smb_par","dLW_dT_fac",        dLW_dT_fac)

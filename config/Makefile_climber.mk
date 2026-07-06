@@ -158,7 +158,8 @@ tmp_lndvc = $(patsubst %.f90, %.o, $(files_lndvc) )
 obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndvc_smb_params.o \
                  $(objdir)/lndvc_smb_grid.o $(objdir)/lndvc_smb_snow.o \
                  $(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_temp.o \
-                 $(objdir)/lndvc_smb_ebal.o
+                 $(objdir)/lndvc_smb_ebal.o $(objdir)/lndvc_smb_surface_par.o \
+                 $(objdir)/lndvc_smb_semi.o
 obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) ) $(obj_lndvc_phys)
 ########################################################################
 
@@ -707,6 +708,16 @@ $(objdir)/lndvc_smb_temp.o : $(dir_lndvc)/smb/temp.f90 $(objdir)/lndvc_const.o \
 
 $(objdir)/lndvc_smb_ebal.o : $(dir_lndvc)/smb/ebal.f90 $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o \
 						$(objdir)/lndvc_smb_params.o $(objdir)/lndvc_smb_grid.o \
+						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_smb_surface_par.o : $(dir_lndvc)/smb/surface_par.f90 $(objdir)/lndvc_const.o \
+						$(objdir)/lndvc_smb_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_smb_semi.o : $(dir_lndvc)/smb/semi.f90 $(objdir)/lndvc_thermo.o $(objdir)/lndvc_smb_params.o \
+						$(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_surface_par.o \
+						$(objdir)/lndvc_smb_ebal.o $(objdir)/lndvc_smb_temp.o $(objdir)/lndvc_smb_snow.o \
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 

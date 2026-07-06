@@ -11,12 +11,17 @@ module thermo_m
     implicit none
 
     private
-    public :: q_sat_i, dqsat_dT_i, rho_a
+    public :: q_sat_i, dqsat_dT_i, rho_a, fqsat
 
     interface q_sat_i
         module procedure q_sat_i_sp
         module procedure q_sat_i_dp
     end interface q_sat_i
+
+    interface fqsat
+        module procedure fqsat_sp
+        module procedure fqsat_dp
+    end interface fqsat
 
 contains
 
@@ -58,5 +63,45 @@ contains
         real(wp) :: rho_a
         rho_a = p / (Rd*temp)
     end function rho_a
+
+    pure function fqsat_sp(T,p)
+        implicit none
+        real(sp), intent(in) :: T, p
+        real(sp) :: fqsat_sp
+        real(sp), parameter :: Ti=248.
+        real(sp) :: r_w, qsatw, qsati
+        if (T.ge.T0)  then
+          qsatw = 380.0047_wp * exp( 17.625_wp * (T-T0) / (T-30.11_wp)) / p  ! Pa, water
+          fqsat_sp=qsatw
+        elseif((T.gt.Ti).and.(T.lt.T0)) then
+          r_w = 1.-((T0-T)/(T0-Ti))
+          qsatw = 380.0047_wp * exp( 17.625_wp * (T-T0) / (T-30.11_wp)) / p  ! Pa, water
+          qsati = 380.1726_wp * exp( 22.587_wp * (T-T0) / (T+0.71_wp)) / p  ! Pa, ice
+          fqsat_sp=r_w*qsatw+(1.-r_w)*qsati
+        else
+          qsati = 380.1726_wp * exp( 22.587_wp * (T-T0) / (T+0.71_wp)) / p  ! Pa, ice
+          fqsat_sp=qsati
+        endif
+    end function fqsat_sp
+
+    pure function fqsat_dp(T,p)
+        implicit none
+        real(dp), intent(in) :: T, p
+        real(dp) :: fqsat_dp
+        real(dp), parameter :: Ti=248.
+        real(dp) :: r_w, qsatw, qsati
+        if (T.ge.T0)  then
+          qsatw = 380.0047_wp * exp( 17.625_wp * (T-T0) / (T-30.11_wp)) / p  ! Pa, water
+          fqsat_dp=qsatw
+        elseif((T.gt.Ti).and.(T.lt.T0)) then
+          r_w = 1.-((T0-T)/(T0-Ti))
+          qsatw = 380.0047_wp * exp( 17.625_wp * (T-T0) / (T-30.11_wp)) / p  ! Pa, water
+          qsati = 380.1726_wp * exp( 22.587_wp * (T-T0) / (T+0.71_wp)) / p  ! Pa, ice
+          fqsat_dp=r_w*qsatw+(1.-r_w)*qsati
+        else
+          qsati = 380.1726_wp * exp( 22.587_wp * (T-T0) / (T+0.71_wp)) / p  ! Pa, ice
+          fqsat_dp=qsati
+        endif
+    end function fqsat_dp
 
 end module thermo_m
