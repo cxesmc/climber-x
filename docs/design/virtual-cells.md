@@ -199,3 +199,21 @@ The framework is built out in `src/lndvc/`, continuing the skeleton.
 1. **Whether to fully unify the snowpack** in Phase 5/6 (retire the land ice-tile snow path) or leave both during a transition.
 2. **Mid-res default** target resolution and per-region `(mid-res, n_vc)` budgets.
 3. **Aggregation currency:** confirm the exact set of coarse-cell fields the coupler requires so `vc_cell_t` is a drop-in for `lnd_to_cmn` / `smb_to_cmn`.
+
+---
+
+## 12. Implementation status (branch `lndvc-framework`)
+
+**Done:**
+- **Phase 1 scaffold + integration** — `flag_lndvc` (control + `nml/control.nml`, default off) wired into `climber.f90` (init/update/end); `obj_lndvc` linked into all four executable variants; `make climber-clim` builds and links. Data model rebuilt as per-class blocks in `lndvc_def.f90` (`vc_desc`, `forcing`, `surface_flux`, `snowpack`, `soil_col` incl. permafrost, `veg`, `soil_carbon`, `ice_col` incl. SMB diagnostic, `lake_col`; thin `vc_cell_t`; `veg_glob`), isotopes included. Services: `lndvc_decomp` (identity-baseline `decompose`: one leaf per present class at cell-mean elevation, fed from the land model's own tiling), `lndvc_aggregate` (fraction roundtrip + sanity check), `lndvc_downscale`, `lndvc_model` driver (alloc/update/dispatch).
+- **SMB single-column physics ported** (pattern A = bodies unchanged, B = params brought in, so `lndvc` is standalone; only shared utils `precision`/`tridiag`/`nml` reused). Files under `src/lndvc/`: `constants.f90` (`const_m`), `thermo.f90` (`thermo_m`), `smb/params.f90` (`smb_par_m`), `smb/grid.f90`, `smb/snow.f90`, `smb/downscaling.f90`, `smb/temp.f90`, `smb/ebal.f90`, `smb/surface_par.f90`, `smb/semi.f90`. The full SEMI chain (downscaling → albedo → resistance → ebal → temp → update_tskin → snow) compiles and links. Distinct object names (`lndvc_smb_*.o`) avoid the flat-`obj/` clash with `src/smb`.
+
+**Next step — (a) make the ice/SMB path live:**
+1. **Expand `forcing_t`** to carry the reference-level (`_i`) forcing SEMI needs (~`tam_i`, `t2m_bias_i`, `gam_i`, `tstd_i`, `ram_i`, `pressure`, `u700_i/v700_i/wind_i`, `prc_i`, `prc_bias_i`, the SW component fields + `dswd_*` sensitivities, `swd_toa_i/min`, `cld_i`, `lwdown_i`, `gam_lw_i`, `dust_i`, `coszm_i`) plus the vc slope/`f_ele`/`z_sur_std` geometry.
+2. **`cmn → vc` forcing plumbing** — a coupler step populating each ice vc's `forcing_t` from the coarse cell (analogue of `cmn_to_smb`), reusing the ported downscaling.
+3. **Call `semi` in `lndvc_update_ice`** by unpacking `vc%snow`/`vc%ice`/`vc%forc`/`vc%flx` (pattern A), and **write the SMB mass-budget diagnostic** into `ice_col` (`smb = snow + refreezing − melt − sublimation − runoff`).
+4. **`aggregate_cell`** reduces real SMB/fluxes (area-weighted, conserving) — not just fractions.
+
+**Notes / blockers:**
+- Local runs cannot currently reach the time loop: a geo/map-generation **segfault** during init (reproduces with `flag_lndvc=F` and in `--gen-maps`), independent of `lndvc` — likely a local **memory limit** on macOS. Validate on the cluster (PI config: `run_bench.sh`, `runme -r ... -o output/... -p ctl.nyears=... ctl.flag_lndvc=T`).
+- The reference `lnd`/`smb` code is untouched; consolidation (retiring duplicated paths) is the later Phase 6.
