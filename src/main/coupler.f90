@@ -2416,11 +2416,12 @@ contains
   !                 no artificial interannual variability. See
   !                 docs/design/virtual-cells.md sec 12.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine cmn_to_lndvc(cmn,lndvc)
+  subroutine cmn_to_lndvc(cmn,lnd,lndvc)
 
     implicit none
 
     type(cmn_class)                  :: cmn
+    type(lnd_class)                  :: lnd    ! reference land (cross-class fractions for veg dynamics)
     type(lndvc_class), intent(inout) :: lndvc
 
     integer :: i, j, k, n, ns, nc
@@ -2611,6 +2612,11 @@ contains
         endif
 
         lndvc%vc(i,j,k)%veg%t2m_min_mon = cmn%t2m_min_mon(i,j)
+        ! land-use fractions for vegetation dynamics (copied from reference lnd%l2d)
+        lndvc%vc(i,j,k)%veg%f_crop     = lnd%l2d(i,j)%f_crop
+        lndvc%vc(i,j,k)%veg%f_pasture  = lnd%l2d(i,j)%f_pasture
+        lndvc%vc(i,j,k)%veg%df_crop    = lnd%l2d(i,j)%df_crop
+        lndvc%vc(i,j,k)%veg%df_pasture = lnd%l2d(i,j)%df_pasture
         associate(f => lndvc%vc(i,j,k)%forc)
 
           f%pressure  = cmn%ps(i,j,i_surf_lnd(i_bare))
@@ -2632,6 +2638,18 @@ contains
           f%c14_c_atm   = lndvc%glob%c14_c_atm
           f%alb_bare_vis = lnd_surf_par%alb_bare_vis(i,j)
           f%alb_bare_nir = lnd_surf_par%alb_bare_nir(i,j)
+
+          ! cross-class cell fractions for vegetation dynamics (copied from the
+          ! reference lnd%l2d, computed earlier this coupling step)
+          f%f_veg_cell         = lnd%l2d(i,j)%f_veg
+          f%f_veg_old_cell     = lnd%l2d(i,j)%f_veg_old
+          f%f_ice_grd_cell     = lnd%l2d(i,j)%f_ice_grd
+          f%f_ice_grd_old_cell = lnd%l2d(i,j)%f_ice_grd_old
+          f%f_ice_nbr_cell     = lnd%l2d(i,j)%f_ice_nbr
+          f%f_lake_cell        = lnd%l2d(i,j)%f_lake
+          f%f_lake_old_cell    = lnd%l2d(i,j)%f_lake_old
+          f%f_shelf_cell       = lnd%l2d(i,j)%f_shelf
+          f%f_shelf_old_cell   = lnd%l2d(i,j)%f_shelf_old
 
           ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
           if (flag_atm) then

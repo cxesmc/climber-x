@@ -52,6 +52,12 @@ module lndvc_def
         ! vegetated-land forcing (port C): atmospheric CO2 + bare-soil albedo
         real(wp) :: co2, c13_c12_atm, c14_c_atm ! atmospheric CO2 for photosynthesis
         real(wp) :: alb_bare_vis, alb_bare_nir  ! per-cell bare-soil background albedo
+        ! cross-class cell fractions for vegetation dynamics (port C.3), copied
+        ! from the reference lnd%l2d each step (dyn_veg / surface_frac_up context)
+        real(wp) :: f_veg_cell, f_veg_old_cell
+        real(wp) :: f_ice_grd_cell, f_ice_grd_old_cell, f_ice_nbr_cell
+        real(wp) :: f_lake_cell, f_lake_old_cell
+        real(wp) :: f_shelf_cell, f_shelf_old_cell
         ! reference elevation the _i forcing below is valid at [m]
         ! (coarse-cell mean; SEMI downscales from here to vc%desc%z)
         real(wp) :: z_sur_i
@@ -174,6 +180,9 @@ module lndvc_def
         real(wp) :: theta_fire_cum, fuel, f_fire_fuel, f_fire_cwd
         real(wp) :: t2m_min_mon, t2m_ann_mean
         real(wp) :: f_crop, f_pasture, df_crop, df_pasture
+        ! dyn_veg outputs (port C.3): cell fire-CO2 flux + carbon-balance residuals
+        real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux
+        real(wp) :: carbon_bal_veg, carbon13_bal_veg, carbon14_bal_veg
     end type
 
 ! ============================================================================

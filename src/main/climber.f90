@@ -563,7 +563,7 @@ program climber
                                lnd%l2d%f_veg, lnd%l2d%f_ice, lnd%l2d%f_lake, &
                                lnd%l2d%z_veg, cmn%z_ice)
           ! populate each ice vc's reference (_i) forcing from the coarse cell
-          call cmn_to_lndvc(cmn, lndvc)
+          call cmn_to_lndvc(cmn, lnd, lndvc)
           call lndvc_update(lndvc)
         endif
 #endif

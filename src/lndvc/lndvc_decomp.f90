@@ -436,6 +436,8 @@ contains
         vc%veg%gdd5=0._wp; vc%veg%gdd5_temp=0._wp
         vc%veg%t2m_min_mon=0._wp; vc%veg%t2m_ann_mean=0._wp
         vc%veg%f_crop=0._wp; vc%veg%f_pasture=0._wp; vc%veg%df_crop=0._wp; vc%veg%df_pasture=0._wp
+        vc%veg%fire_c_flux=0._wp; vc%veg%fire_c13_flux=0._wp; vc%veg%fire_c14_flux=0._wp
+        vc%veg%carbon_bal_veg=0._wp; vc%veg%carbon13_bal_veg=0._wp; vc%veg%carbon14_bal_veg=0._wp
 
         ! --- soil carbon fields the thermal chain / init read ----------------
         allocate(vc%carb%soil_resp_l(nl,ncarb), vc%carb%litter_in_frac(nl))
