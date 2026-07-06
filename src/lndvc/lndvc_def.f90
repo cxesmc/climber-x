@@ -259,6 +259,8 @@ module lndvc_def
         type(lake_col_t),   allocatable :: lake
         ! per-vc conservation residuals
         real(wp) :: energy_cons_surf1, energy_cons_surf2, energy_cons_soil
+        ! one-time physical-init guard (set true after the class init runs)
+        logical  :: phys_init = .false.
     end type
 
 ! ============================================================================

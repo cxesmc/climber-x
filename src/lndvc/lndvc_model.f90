@@ -30,7 +30,9 @@ module lndvc_model
     use lndvc_ebal_lake_mod,   only : ebal_lake, update_tskin_lake
     use lndvc_lake_temp_mod,   only : lake_temp
     use lndvc_hydrology_mod,   only : surface_hydrology_lake
+    use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
     use lnd_params,            only : lnd_surf_par => surf_par
+    use lnd_params,            only : soil_par, hydro_par
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
     implicit none
@@ -38,6 +40,7 @@ module lndvc_model
     private
     public :: lndvc_init
     public :: lndvc_update
+    public :: lndvc_init_land
     public :: lndvc_end
 
 contains
@@ -161,6 +164,66 @@ contains
         return
 
     end subroutine lndvc_update_vc
+
+    subroutine lndvc_init_land(vc, m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry, &
+                               c13_c12_atm, c14_c_atm)
+        ! One-time physical init of a vegetated land vc (port C decision B):
+        ! seed the soil parameters from the coarse-cell mineral texture (the
+        ! reference lnd-init block, src/lnd/lnd_model.f90 ~1206) then run the
+        ! ported init_cell_veg state init. frac_surf is set from pft_frac (bare
+        ! is the remainder) since the multi-class surface_frac_up does not apply
+        ! to a single-class veg vc. Called once per land vc from cmn_to_lndvc.
+
+        implicit none
+
+        type(vc_t), intent(inout) :: vc
+        real(wp), intent(in) :: m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry
+        real(wp), intent(in) :: c13_c12_atm, c14_c_atm
+
+        integer  :: k
+        real(wp) :: sum_pft
+
+        ! --- soil parameters from mineral texture -----------------------------
+        do k = 1, nl
+            vc%soil%theta_sat(k) = m_theta_sat
+            vc%soil%psi_sat(k)   = m_psi_sat
+            vc%soil%k_sat(k)     = m_k_sat
+            vc%soil%k_exp(k)     = 2*nint(m_Bi)+3
+            vc%soil%psi_exp(k)   = -nint(m_Bi)
+            vc%soil%theta_field(k) = vc%soil%theta_sat(k) * (0.1_wp / (86400._wp * vc%soil%k_sat(k)))**(1._wp/vc%soil%k_exp(k))
+            vc%soil%theta_wilt(k)  = vc%soil%theta_sat(k) * (hydro_par%p_psi_min / vc%soil%psi_sat(k))**(1._wp/vc%soil%psi_exp(k))
+            vc%soil%lambda_s(k)   = m_lambda_s
+            vc%soil%lambda_dry(k) = m_lambda_dry
+        enddo
+        if (soil_par%uniform_porosity) vc%soil%theta_sat(:) = soil_par%theta_sat_u
+        if (soil_par%uniform_soil_par_therm) then
+            vc%soil%lambda_s(:)   = soil_par%lambda_s_u
+            vc%soil%lambda_dry(:) = soil_par%lambda_dry_u
+        endif
+
+        ! --- physical veg/soil state (ported init_cell_veg) -------------------
+        call lndvc_init_cell_veg(c13_c12_atm, c14_c_atm, vc%desc%w, &
+            vc%veg%pft_frac, vc%flx%t_skin, vc%soil%t_soil, vc%flx%w_can, vc%flx%s_can, &
+            vc%snow%w_snow, vc%snow%w_snow_max, vc%snow%h_snow, vc%snow%mask_snow, &
+            vc%soil%theta, vc%soil%theta_w, vc%soil%theta_i, vc%soil%w_w, vc%soil%w_i, vc%soil%theta_sat, &
+            vc%soil%alt, vc%veg%gdd5, vc%veg%gdd, vc%veg%phen, vc%veg%phen_acc, vc%veg%lai_bal, &
+            vc%veg%lai, vc%veg%sai, vc%soil%root_frac, vc%carb%litter_in_frac, &
+            vc%veg%gamma_dist, vc%veg%gamma_fire, vc%veg%npp_ann, vc%veg%npp13_ann, vc%veg%npp14_ann, &
+            vc%veg%leaf_c, vc%veg%root_c, vc%veg%stem_c, vc%veg%veg_h, vc%veg%veg_c, vc%veg%veg_c13, vc%veg%veg_c14, &
+            vc%carb%f_peat, vc%carb%f_peat_pot, vc%soil%w_table_min, vc%soil%w_table_peat, vc%carb%dCpeat_dt, &
+            vc%flx%z0m)
+
+        ! --- sub-tile fractions within the vc (bare = remainder) --------------
+        sum_pft = 0._wp
+        do k = 1, npft
+            vc%flx%frac_surf(k) = vc%veg%pft_frac(k)
+            sum_pft = sum_pft + vc%veg%pft_frac(k)
+        enddo
+        vc%flx%frac_surf(i_bare) = max(0._wp, 1._wp - sum_pft)
+
+        return
+
+    end subroutine lndvc_init_land
 
     subroutine lndvc_update_land(vc)
         implicit none

@@ -66,6 +66,7 @@ module coupler
     use smb_def, only : smb_in_class, smb_class
 #ifdef LNDVC
     use lndvc_def, only : lndvc_class
+    use lndvc_model, only : lndvc_init_land
 #endif
     use bmb_def, only : bmb_class
     use bnd_mod, only : bnd_class
@@ -80,7 +81,8 @@ module coupler
     use ocn_params, only : i_scale_dhdt_ice, scale_dhdt_ice, scale_dhdt_ice_time, scale_dhdt_ice_data
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
-    use lnd_grid, only : is_veg, is_ice, is_lake, nl
+    use lnd_params, only : mineral
+    use lnd_grid, only : is_veg, is_ice, is_lake, nl, i_bare
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
     use geo_params, only : h_ice_min
@@ -2425,6 +2427,22 @@ contains
     real(wp) :: alb_vd, alb_nd, alb_vf, alb_nf
     real(wp) :: z(nsurf_macro), lw(nsurf_macro)
     real(wp), parameter :: gam_lw = -2.5e-2_wp
+    real(wp), parameter :: co2_ref = 280._wp
+
+    ! global 0-D atmospheric state for the land vcs (photosynthesis co2),
+    ! mirroring cmn_to_lnd's lnd%l0d seeding (incl. optional co2 fertilization
+    ! limitation). Shared scalar, set once per coupling step.
+    if (l_co2_fert_lim) then
+      if (cmn%co2.ge.co2_ref) then
+        lndvc%glob%co2 = co2_ref + (co2_fert_lim_max-co2_ref) * tanh((cmn%co2-co2_ref)/max(0.1_wp,co2_fert_lim_max-co2_ref))
+      else
+        lndvc%glob%co2 = co2_ref + (co2_fert_lim_min-co2_ref) * tanh((cmn%co2-co2_ref)/min(-0.1_wp,co2_fert_lim_min-co2_ref))
+      endif
+    else
+      lndvc%glob%co2 = cmn%co2
+    endif
+    lndvc%glob%c13_c12_atm = cmn%c13_c12_atm
+    lndvc%glob%c14_c_atm   = cmn%c14_c_atm
 
     !$omp parallel do private(i,j,k,n,ns,nc,z,lw,w1,w2,wind_cell,lwdown_cell,gam_lw_cell,alb_vd,alb_nd,alb_vf,alb_nf)
     do n = 1, lndvc%ncells
@@ -2567,6 +2585,54 @@ contains
             endif
           else
             lndvc%vc(i,j,k)%lake%h_lake = 100._wp
+          endif
+
+        end associate
+      enddo
+
+      ! distribute the coarse-cell land-surface forcing to every land vc of this
+      ! cell + run its one-time physical init (soil params from the mineral
+      ! texture, then init_cell_veg state). The land vc holds a single scalar
+      ! forcing broadcast to its bare+PFT sub-tiles; at identity it is the
+      ! coarse-cell land tile (bare-soil representative index, mirror cmn_to_lnd).
+      do k = 1, lndvc%n_vc
+        if (lndvc%vc(i,j,k)%desc%class /= 1) cycle
+
+        ! one-time physical init (soil params + veg/soil state)
+        if (.not. lndvc%vc(i,j,k)%phys_init) then
+          call lndvc_init_land(lndvc%vc(i,j,k), &
+            mineral(i,j)%theta_sat, mineral(i,j)%k_sat, mineral(i,j)%psi_sat, &
+            mineral(i,j)%Bi, mineral(i,j)%lambda_s, mineral(i,j)%lambda_dry, &
+            lndvc%glob%c13_c12_atm, lndvc%glob%c14_c_atm)
+          lndvc%vc(i,j,k)%phys_init = .true.
+        endif
+
+        lndvc%vc(i,j,k)%veg%t2m_min_mon = cmn%t2m_min_mon(i,j)
+        associate(f => lndvc%vc(i,j,k)%forc)
+
+          f%pressure  = cmn%ps(i,j,i_surf_lnd(i_bare))
+          f%tatm      = cmn%t2m(i,j,i_surf_lnd(i_bare))
+          f%t2m       = cmn%t2m(i,j,i_surf_lnd(i_bare))
+          f%qatm      = cmn%q2m(i,j,i_surf_lnd(i_bare))
+          f%q2m       = cmn%q2m(i,j,i_surf_lnd(i_bare))
+          f%wind      = cmn%wind(i,j,i_surf_lnd(i_bare))
+          f%rain      = cmn%rain(i,j,i_surf_lnd(i_bare))
+          f%snow      = cmn%snow(i,j,i_surf_lnd(i_bare))
+          f%lwdown    = cmn%lwd(i,j,i_surf_lnd(i_bare))
+          f%coszm     = cmn%coszm(doy,j)
+          f%daylength = cmn%daylength(doy,j)
+          f%dust      = cmn%dust_dep(i,j)
+
+          ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
+          if (flag_atm) then
+            f%swnet = cmn%swnet(i,j,i_surf_lnd(i_bare))
+          else
+            f%swnet = cmn%swd(i,j)*(1._wp - lndvc%vc(i,j,k)%flx%albedo(i_bare))
+          endif
+          if (cmn%solarmin(doy,j).gt.0._wp) then
+            f%swnet_min = f%swnet * cmn%solarmin(doy,j)/cmn%solarm(doy,j)
+          else
+            f%swnet_min = 0._wp
           endif
 
         end associate

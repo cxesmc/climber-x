@@ -421,10 +421,13 @@ contains
         vc%veg%t2m_min_mon=0._wp; vc%veg%t2m_ann_mean=0._wp
         vc%veg%f_crop=0._wp; vc%veg%f_pasture=0._wp; vc%veg%df_crop=0._wp; vc%veg%df_pasture=0._wp
 
-        ! --- soil carbon fields the thermal chain reads ----------------------
-        allocate(vc%carb%soil_resp_l(nl))
-        vc%carb%soil_resp_l(:) = 0._wp
-        vc%carb%f_peat = 0._wp
+        ! --- soil carbon fields the thermal chain / init read ----------------
+        allocate(vc%carb%soil_resp_l(nl), vc%carb%litter_in_frac(nl))
+        vc%carb%soil_resp_l(:)    = 0._wp
+        vc%carb%litter_in_frac(:) = 0._wp
+        vc%carb%f_peat     = 0._wp
+        vc%carb%f_peat_pot = 0._wp
+        vc%carb%dCpeat_dt  = 0._wp
 
         ! --- shared snowpack (single land snow model) ------------------------
         vc%snow%mask_snow      = 0
