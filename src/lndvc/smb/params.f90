@@ -15,8 +15,9 @@ module smb_par_m
     real(wp) :: dt  = 86400._wp
     real(wp) :: rdt = 1._wp/86400._wp
 
-    ! water-budget debug switch (mirrors control::check_water)
-    logical  :: check_water = .false.
+    ! debug switches (mirror control::check_water / check_energy)
+    logical  :: check_water  = .false.
+    logical  :: check_energy = .false.
 
     ! downscaling scalars (smb_par group)
     real(wp) :: dLW_dT_fac
