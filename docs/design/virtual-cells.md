@@ -80,6 +80,10 @@ smb = snowfall + refreezing − melt − sublimation − runoff
 
 The shared `surface_flux` block is the coupling currency that aggregation reduces.
 
+**Class blocks are allocated per class** (Fortran allocatable derived-type components), so a vc carries only what it needs. This makes reduced configurations fall out for free: an **SMB-only / no-vegetation** run instantiates only ice (and snow-bearing) vcs — the `veg`/`soil_carbon` blocks are never allocated and the veg path never dispatched; a **land-only** run omits the ice blocks.
+
+**Permafrost.** Permafrost is not a separate model — it is emergent from the soil thermal column (`t_soil`, `theta_w/theta_i` freezing/phase) plus soil-carbon thaw dynamics (`frozen_years`, `thaw_timer`, `k_slow_to_fast`, active-layer thickness `alt`). It lives entirely in a land vc's `soil_col` + `soil_carbon` blocks (thermal and permafrost state kept together; `alt` is diagnosed from the profile). The key structural point: **depth is never a virtual dimension — only the surface (elevation × class) is.** Each vc owns a full-depth soil column with the standard shared depth grid; what varies per vc is the *surface boundary condition* (elevation-downscaled temperature and snow cover). So active-layer thickness, thaw, and permafrost carbon become **elevation-resolved within a coarse cell**. The deep column state is necessarily per-vc (thermal history integrates the per-vc surface BC); resolving only the active layer per-vc and sharing deep thermal is a possible future optimization, not the base design. On a land→ice class change the soil column becomes subglacial and is handed over by the conservative `remap_state`.
+
 ### 4.3 Decomposition pipeline
 
 ```
@@ -183,10 +187,15 @@ The framework is built out in `src/lndvc/`, continuing the skeleton.
 
 ---
 
-## 11. Open decisions
+## 11. Decisions
 
-1. **Band scheme:** fixed elevation edges (e.g. 250 m) with masked unused bands, vs. fixed band count with adaptive edges per cell.
-2. **Naming:** keep `lndvc` (land-virtual-cell) for a framework that also owns SMB, or rename to a neutral `vcell`/`vc` framework.
-3. **Whether to fully unify the snowpack** in Phase 5/6 (retire the land ice-tile snow path) or leave both during a transition.
-4. **Mid-res default** target resolution and per-region `(mid-res, n_vc)` budgets.
-5. **Aggregation currency:** confirm the exact set of coarse-cell fields the coupler requires so the aggregated state is a drop-in for `lnd_to_cmn` / `smb_to_cmn`.
+**Settled:**
+- **Band scheme:** fixed elevation edges. A band always means the same elevation everywhere and forever, so a vc's prognostic column stays bound to its band — no continuous vertical remapping. Only the band *area weight* changes over time (cheap; used in aggregation), and discrete occupied↔empty / class-change events fire the conservative `remap_state`. Fixed edges also make cross-cell comparison and NetCDF output trivial.
+- **Type layout:** per-class blocks, built fresh in `lndvc_def.f90`, functionality kept as close as possible to the reference `lnd`/`smb`. Permafrost thermal+state kept together in `soil_col`. Single shared `snowpack` block across land/ice/lake.
+- **Naming:** keep `lndvc` for now; a neutral `vcell`/`vc` rename is a mechanical module-prefix pass later if warranted.
+- **Reduced configs:** SMB-only (no vegetation) and land-only are supported via class-allocated blocks.
+
+**Open:**
+1. **Whether to fully unify the snowpack** in Phase 5/6 (retire the land ice-tile snow path) or leave both during a transition.
+2. **Mid-res default** target resolution and per-region `(mid-res, n_vc)` budgets.
+3. **Aggregation currency:** confirm the exact set of coarse-cell fields the coupler requires so `vc_cell_t` is a drop-in for `lnd_to_cmn` / `smb_to_cmn`.
