@@ -222,9 +222,9 @@ The framework is built out in `src/lndvc/`, continuing the skeleton.
 
 **Later:** cluster-validate the identity ice + lake paths; **port C = the veg path** (roadmap below); wire the deferred sublake column alongside lake carbon (reusing the port-C soil-param home); Phase 3 multiple land bands (populate the currently-zeroed `z_sur_std`/`dz_sur`/slopes/`f_ele`).
 
-### Port C — vegetated land path (roadmap, confirmed design)
+### Port C — vegetated land path (roadmap; architecture locked)
 
-The vegetated path is the large one (~35 routines across surface energy balance → soil thermal/permafrost → hydrology → vegetation dynamics → soil carbon → emissions). Reconnaissance of the reference `lnd_model.f90` veg branch (lines ~380–1061) fixed three foundational design decisions:
+The vegetated path is the large one (~35 routines across surface energy balance → soil thermal/permafrost → hydrology → vegetation dynamics → soil carbon → emissions). Reconnaissance of the reference `lnd_model.f90` veg branch (lines ~380–1061) fixed three foundational design decisions, **all user-confirmed** — these are settled; do not re-litigate them:
 
 1. **The land vc is *multi-tile*** — it holds `bare + npft` as internal sub-tiles over **one shared soil column** (unlike the single-tile ice/lake vcs). This mirrors the reference, where `ebal_veg`/`soil_temp`/`soil_hydro`/`update_tskin_veg` loop over `nveg` (bare+PFTs) on a single soil column, and it resolves the central cross-tile hazard for free: the canopy resistances read the **bare** tile (`r_a_can=r_a(i_bare)`, `r_s_can=r_s(i_bare)`), so making bare the mandatory first sub-tile keeps that coupling inside the vc. Consequence: port C re-introduces the **`nveg`-loop** versions of `resist_aer`/`resist_sur`/`snow_albedo`/`surface_albedo` into `src/lndvc` (still intact in `src/lnd/surface_par_lnd.f90`), scoped to the veg tiles — this is why B.1 was deliberately lake-only. The existing `veg_t`/`soil_col_t` data model already assumes this shape.
 2. **Soil parameters live on the land vc's `soil_col` block** — seeded from the per-cell `mineral(i,j)` texture map (plumbed in `cmn_to_lndvc`) and made dynamic by `soil_par_update` from the vc's own soil carbon. The deferred **sublake column reuses this same soil-param source** once the land soil block exists (which is why the sublake was deferred out of port B).
@@ -236,6 +236,8 @@ The vegetated path is the large one (~35 routines across surface energy balance 
 - **C.3 — vegetation dynamics:** `dyn_veg` (reads other-class fractions `f_ice_grd`/`f_lake`/`f_shelf` — passed from cell context) → `soil_par_update` carbon feedback → `pft_frac → frac_surf`.
 - **C.4 — soil carbon:** `soil_carbon_par` → `soil_carbon` → `peat_carbon`; then the deferred sublake column + lake carbon.
 - **C.5 — emissions:** `dust_emission` (reads bare-tile wind — inside the vc), `n2o_emission`; keep `weathering`/`carbon_export` cell-level.
+
+**Status:** architecture (decisions 1–3) confirmed; not yet coded. Next action is **C.1** — confirm its per-step signatures/sub-commit shape with the user, then implement (build after each step with both `LNDVC=1` and default; small per-step commits, as in ports A/B).
 
 **Notes / blockers:**
 - Local runs cannot currently reach the time loop: a geo/map-generation **segfault** during init (reproduces with `flag_lndvc=F` and in `--gen-maps`), independent of `lndvc` — likely a local **memory limit** on macOS. Validate on the cluster (PI config: `run_bench.sh`, `runme -r ... -o output/... -p ctl.nyears=... ctl.flag_lndvc=T`).
