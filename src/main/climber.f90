@@ -51,7 +51,9 @@ program climber
     &                lnd_to_cmn, cmn_to_lnd, &
     &                ocn_to_cmn, cmn_to_ocn, &
     &                smb_to_cmn, cmn_to_smb, &
+#ifdef LNDVC
     &                cmn_to_lndvc, &
+#endif
     &                ice_to_smb, ice_to_cmn, smb_to_ice, &
     &                bmb_to_cmn, cmn_to_bmb, &
     &                ice_to_bmb, bmb_to_ice, &
@@ -87,9 +89,11 @@ program climber
 
   use lnd_model, only: lnd_init, lnd_update_wrapper, lnd_end, lnd_write_restart
   use lnd_def, only: lnd_class
+#ifdef LNDVC
   use lndvc_model, only: lndvc_init, lndvc_update, lndvc_end
   use lndvc_decomp, only: lndvc_decompose
   use lndvc_def, only: lndvc_class
+#endif
   use lnd_out, only: lnd_diag, lnd_diag_init
 
   use ice_model, only : ice_init_domains, ice_init, ice_update, ice_write_restart
@@ -134,7 +138,9 @@ program climber
   type(bgc_class) :: bgc
   type(sic_class) :: sic
   type(lnd_class) :: lnd
+#ifdef LNDVC
   type(lndvc_class) :: lndvc
+#endif
   type(ice_class), allocatable :: ice(:)
   type(smb_in_class) :: smb_in
   type(smb_class), allocatable :: smb(:) 
@@ -296,7 +302,15 @@ program climber
     ! Initialise land model
     if (flag_lnd) then
        call lnd_init(lnd,geo%f_lnd,geo%f_ocn,geo%f_ice,geo%f_ice_grd,geo%f_lake)
+#ifdef LNDVC
        if (flag_lndvc) call lndvc_init(lndvc, ni, nj)
+#else
+       if (flag_lndvc) then
+         print *,'ERROR: flag_lndvc=T but this executable was built without the'
+         print *,'       virtual-cell framework. Rebuild with: make LNDVC=1 ...'
+         stop
+       endif
+#endif
        call lnd_diag_init
     endif
 
@@ -541,6 +555,7 @@ program climber
         endif
         call lnd_diag(lnd%l2d,lnd%l0d)
         call lnd_to_cmn(lnd,cmn)
+#ifdef LNDVC
         if (flag_lndvc) then
           ! Identity baseline: decompose from the land model's own per-cell
           ! tiling (veg/lake/ice fractions + elevations), z_ice from the coupler.
@@ -551,6 +566,7 @@ program climber
           call cmn_to_lndvc(cmn, lndvc)
           call lndvc_update(lndvc)
         endif
+#endif
         !$ time_end = omp_get_wtime()
         !$ time_lnd = time_lnd + (time_end-time_ini)
       endif
@@ -683,7 +699,9 @@ program climber
 
       ! End land model
       if (flag_lnd) call lnd_end(lnd%l2d)
+#ifdef LNDVC
       if (flag_lndvc) call lndvc_end(lndvc)
+#endif
 
       ! End ocean biogeochemistry model
       if (flag_bgc) call bgc_end(bgc)

@@ -49,8 +49,19 @@ include config/common.mk
 ## gitversion
 # generate a Git version string
 GIT_VERSION := $(shell git describe --abbrev=4 --dirty --always --tags)
-CPPFLAGS_FULL := $(CPPFLAGS_FULL) -DVERSION=\"$(GIT_VERSION)\" 
-CPPFLAGS_CLIM := $(CPPFLAGS_CLIM) -DVERSION=\"$(GIT_VERSION)\" 
+CPPFLAGS_FULL := $(CPPFLAGS_FULL) -DVERSION=\"$(GIT_VERSION)\"
+CPPFLAGS_CLIM := $(CPPFLAGS_CLIM) -DVERSION=\"$(GIT_VERSION)\"
+
+# Optional land virtual-cell (lndvc) framework (docs/design/virtual-cells.md).
+# Off by default so it never forces into standard builds; enable with LNDVC=1
+# (e.g. make LNDVC=1 climber-clim). Controls both the -DLNDVC compile guard in
+# the main sources and whether the lndvc objects are built + linked (obj_lndvc,
+# set in config/Makefile_climber.mk).
+LNDVC ?= 0
+ifeq ($(LNDVC),1)
+	CPPFLAGS_FULL := $(CPPFLAGS_FULL) -DLNDVC
+	CPPFLAGS_CLIM := $(CPPFLAGS_CLIM) -DLNDVC
+endif
 
 # Determine whether to use normal flags (default), 
 # debugging flags (debug=1) or profiling flags (debug=2)

@@ -64,7 +64,9 @@ module coupler
     use ch4_def, only : ch4_class
     use n2o_def, only : n2o_class
     use smb_def, only : smb_in_class, smb_class
+#ifdef LNDVC
     use lndvc_def, only : lndvc_class
+#endif
     use bmb_def, only : bmb_class
     use bnd_mod, only : bnd_class
     use geo_def, only : geo_class
@@ -97,7 +99,9 @@ module coupler
     public :: cmn_to_sic, sic_to_cmn
     public :: cmn_to_lnd, lnd_to_cmn
     public :: cmn_to_smb, smb_to_cmn
+#ifdef LNDVC
     public :: cmn_to_lndvc
+#endif
     public :: ice_to_smb, smb_to_ice 
     public :: cmn_to_bmb, bmb_to_cmn
     public :: ice_to_bmb, bmb_to_ice 
@@ -2397,6 +2401,7 @@ contains
   end subroutine cmn_to_smb
 
 
+#ifdef LNDVC
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  c m n _ t o _ l n d v c
   !   Purpose    :  populate each ice virtual cell's reference (_i) forcing
@@ -2523,6 +2528,7 @@ contains
     return
 
   end subroutine cmn_to_lndvc
+#endif
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
