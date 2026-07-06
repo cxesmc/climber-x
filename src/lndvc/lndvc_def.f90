@@ -46,6 +46,7 @@ module lndvc_def
         real(wp) :: lwdown, swnet, swnet_min
         real(wp) :: rain, snow
         real(wp) :: wind, pressure
+        real(wp) :: dust                        ! dust deposition [kg/m2/s] (lake snow albedo)
         real(wp) :: disturbance
         ! reference elevation the _i forcing below is valid at [m]
         ! (coarse-cell mean; SEMI downscales from here to vc%desc%z)

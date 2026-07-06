@@ -2522,6 +2522,55 @@ contains
         end associate
       enddo
 
+      ! distribute the coarse-cell lake-surface forcing to every lake vc of this
+      ! cell. Lake uses the land model's forcing directly (no SEMI/_i downscaling);
+      ! at identity it is a straight copy of the coarse-cell lake tile (mirror
+      ! cmn_to_lnd). Per-elevation lake downscaling is deferred.
+      do k = 1, lndvc%n_vc
+        if (lndvc%vc(i,j,k)%desc%class /= 2) cycle
+        associate(f => lndvc%vc(i,j,k)%forc)
+
+          f%pressure  = cmn%ps(i,j,i_surf_lake)
+          f%tatm      = cmn%t2m(i,j,i_surf_lake)
+          f%t2m       = cmn%t2m(i,j,i_surf_lake)
+          f%qatm      = cmn%q2m(i,j,i_surf_lake)
+          f%q2m       = cmn%q2m(i,j,i_surf_lake)
+          f%wind      = cmn%wind(i,j,i_surf_lake)
+          f%rain      = cmn%rain(i,j,i_surf_lake)
+          f%snow      = cmn%snow(i,j,i_surf_lake)
+          f%lwdown    = cmn%lwd(i,j,i_surf_lake)
+          f%coszm     = cmn%coszm(doy,j)
+          f%daylength = cmn%daylength(doy,j)
+          f%dust      = cmn%dust_dep(i,j)
+
+          ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
+          if (flag_atm) then
+            f%swnet = cmn%swnet(i,j,i_surf_lake)
+          else
+            f%swnet = cmn%swd(i,j)*(1._wp - lndvc%vc(i,j,k)%flx%albedo(1))
+          endif
+          if (cmn%solarmin(doy,j).gt.0._wp) then
+            f%swnet_min = f%swnet * cmn%solarmin(doy,j)/cmn%solarm(doy,j)
+          else
+            f%swnet_min = 0._wp
+          endif
+
+          ! lake depth (mirror cmn_to_lnd): cell-mean lake depth, or 100 m default
+          if (flag_lakes) then
+            lndvc%vc(i,j,k)%lake%h_lake = 0._wp
+            if (cmn%f_lake(i,j).gt.0._wp) then
+              do nc=1,cmn%n_lakes
+                lndvc%vc(i,j,k)%lake%h_lake = lndvc%vc(i,j,k)%lake%h_lake &
+                  + cmn%lake(nc)%depth*cmn%f_lake_n(nc,i,j)/cmn%f_lake(i,j)
+              enddo
+            endif
+          else
+            lndvc%vc(i,j,k)%lake%h_lake = 100._wp
+          endif
+
+        end associate
+      enddo
+
     enddo
     !$omp end parallel do
 

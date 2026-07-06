@@ -22,6 +22,7 @@ module lndvc_decomp
     use lndvc_grid
     use const_m,    only : T0
     use smb_grid_m, only : nl_smb => nl   ! snow+ice/firn layer count (=4; distinct from land nl=5)
+    use wiso_params, only : nwiso         ! water-isotope tracer count (lake iso arrays)
 
     implicit none
 
@@ -115,6 +116,7 @@ contains
             case(2)   ! lake
                 if (.not. allocated(vc(k)%lake)) allocate(vc(k)%lake)
                 if (.not. allocated(vc(k)%snow)) allocate(vc(k)%snow)
+                call alloc_lake_blocks(vc(k))
             case(3)   ! ice
                 if (.not. allocated(vc(k)%ice))  allocate(vc(k)%ice)
                 if (.not. allocated(vc(k)%snow)) allocate(vc(k)%snow)
@@ -183,6 +185,148 @@ contains
         return
 
     end subroutine alloc_ice_blocks
+
+    subroutine alloc_lake_blocks(vc)
+        ! Size + initialize the inner arrays a lake virtual cell needs for the
+        ! single-column lake surface+thermal chain (pattern A). Array bounds
+        ! mirror the reference lnd allocation (src/lnd/lnd_model.f90). Lean
+        ! identity init (thermal profiles = T0, everything else 0); the physical
+        ! lake spin-up (init_cell_lake: t_lake ramp, sublake theta from soil,
+        ! cross-tile skin mean) is a follow-up. Done once, guarded by allocation.
+
+        implicit none
+
+        type(vc_t), intent(inout) :: vc
+
+        ! t_lake allocation doubles as the once-guard
+        if (allocated(vc%lake%t_lake)) return
+
+        ! lake thermal column (0:nl_l)
+        allocate(vc%lake%t_lake(0:nl_l), vc%lake%t_lake_old(0:nl_l))
+        allocate(vc%lake%lambda_lake(0:nl_l), vc%lake%lambda_int_lake(0:nl_l), vc%lake%cap_lake(0:nl_l))
+        allocate(vc%lake%w_w_lake(nl_l), vc%lake%w_i_lake(nl_l), vc%lake%f_i_lake(nl_l))
+        allocate(vc%lake%w_w_lake_iso(nl_l,nwiso), vc%lake%w_i_lake_iso(nl_l,nwiso))
+        vc%lake%t_lake(:)          = T0
+        vc%lake%t_lake_old(:)      = T0
+        vc%lake%lambda_lake(:)     = 0._wp
+        vc%lake%lambda_int_lake(:) = 0._wp
+        vc%lake%cap_lake(:)        = 0._wp
+        vc%lake%w_w_lake(:)        = 0._wp
+        vc%lake%w_i_lake(:)        = 0._wp
+        vc%lake%f_i_lake(:)        = 0._wp
+        vc%lake%w_w_lake_iso(:,:)  = 0._wp
+        vc%lake%w_i_lake_iso(:,:)  = 0._wp
+
+        ! sublake soil column (t_sublake 0:nl, rest 1:nl)
+        allocate(vc%lake%t_sublake(0:nl))
+        allocate(vc%lake%lambda_int_sublake(0:nl), vc%lake%cap_sublake(nl))
+        allocate(vc%lake%theta_w_sublake(nl), vc%lake%theta_i_sublake(nl))
+        allocate(vc%lake%w_w_sublake(nl), vc%lake%w_i_sublake(nl))
+        allocate(vc%lake%t_sublake_cum(nl), vc%lake%theta_w_sublake_cum(nl), vc%lake%theta_i_sublake_cum(nl))
+        vc%lake%t_sublake(:)           = T0
+        vc%lake%lambda_int_sublake(:)  = 0._wp
+        vc%lake%cap_sublake(:)         = 0._wp
+        vc%lake%theta_w_sublake(:)     = 0._wp
+        vc%lake%theta_i_sublake(:)     = 0._wp
+        vc%lake%w_w_sublake(:)         = 0._wp
+        vc%lake%w_i_sublake(:)         = 0._wp
+        vc%lake%t_sublake_cum(:)       = 0._wp
+        vc%lake%theta_w_sublake_cum(:) = 0._wp
+        vc%lake%theta_i_sublake_cum(:) = 0._wp
+
+        ! lake scalars
+        vc%lake%h_lake              = 0._wp
+        vc%lake%h_lake_conv         = 0._wp
+        vc%lake%h_lake_mix          = 0._wp
+        vc%lake%f_lake_ice          = 0._wp
+        vc%lake%lake_water_tendency = 0._wp
+        vc%lake%energy_cons_lake    = 0._wp
+
+        ! full surface-flux block (single lake tile)
+        call alloc_surface_flux(vc%flx, 1)
+
+        ! snowpack carry-over scalars + iso arrays
+        vc%snow%mask_snow      = 0
+        vc%snow%f_snow         = 0._wp
+        vc%snow%h_snow         = 0._wp
+        vc%snow%w_snow         = 0._wp
+        vc%snow%w_snow_old     = 0._wp
+        vc%snow%w_snow_max     = 0._wp
+        vc%snow%snowmelt       = 0._wp
+        vc%snow%icemelt        = 0._wp
+        vc%snow%icesub         = 0._wp
+        vc%snow%refreezing     = 0._wp
+        vc%snow%refreezing_sum = 0._wp
+        vc%snow%dt_snowfree    = 0._wp
+        vc%snow%snow_grain     = 0._wp
+        vc%snow%dust_con       = 0._wp
+        vc%snow%alb_snow_vis_dir = 0._wp
+        vc%snow%alb_snow_nir_dir = 0._wp
+        vc%snow%alb_snow_vis_dif = 0._wp
+        vc%snow%alb_snow_nir_dif = 0._wp
+        allocate(vc%snow%w_snow_iso(nwiso), vc%snow%w_snow_iso_old(nwiso))
+        allocate(vc%snow%snowmelt_iso(nwiso), vc%snow%icemelt_iso(nwiso), vc%snow%icesub_iso(nwiso))
+        vc%snow%w_snow_iso(:)     = 0._wp
+        vc%snow%w_snow_iso_old(:) = 0._wp
+        vc%snow%snowmelt_iso(:)   = 0._wp
+        vc%snow%icemelt_iso(:)    = 0._wp
+        vc%snow%icesub_iso(:)     = 0._wp
+
+        return
+
+    end subroutine alloc_lake_blocks
+
+    subroutine alloc_surface_flux(flx, n)
+        ! Allocate the full shared surface-flux block for n sub-tiles
+        ! (init 0, skin temperatures T0). Lake uses n=1.
+
+        implicit none
+
+        type(surface_flux_t), intent(inout) :: flx
+        integer, intent(in) :: n
+
+        allocate(flx%rough_m(n), flx%rough_h(n), flx%Ch(n), flx%z0m(n), flx%Ri(n))
+        allocate(flx%r_a(n), flx%r_s(n), flx%beta_s(n))
+        allocate(flx%r_a_can(n), flx%r_s_can(n), flx%beta_s_can(n))
+        allocate(flx%albedo(n), flx%alb_vis_dir(n), flx%alb_vis_dif(n), flx%alb_nir_dir(n), flx%alb_nir_dif(n))
+        allocate(flx%flx_sh(n), flx%flx_lh(n), flx%flx_g(n), flx%dflxg_dT(n), flx%flx_melt(n), flx%flx_lwu(n), flx%lwnet(n))
+        allocate(flx%t_skin(n), flx%t_skin_old(n), flx%t_skin_amp(n))
+        allocate(flx%num_lh(n), flx%num_sh(n), flx%num_sw(n), flx%num_lw(n), flx%denom_lh(n), flx%denom_sh(n), flx%denom_lw(n))
+        allocate(flx%f_sh(n), flx%f_e(n), flx%f_t(n), flx%f_le(n), flx%f_lt(n), flx%f_lw(n), flx%lh_ecan(n))
+        allocate(flx%qsat_e(n), flx%dqsatdT_e(n), flx%qsat_t(n), flx%dqsatdT_t(n))
+        allocate(flx%transpiration(n), flx%evap_surface(n), flx%et(n))
+        allocate(flx%rain_ground(n), flx%evap_can(n), flx%snow_ground(n), flx%subl_can(n))
+        allocate(flx%w_can(n), flx%w_can_old(n), flx%s_can(n), flx%s_can_old(n), flx%f_wat_can(n), flx%f_snow_can(n))
+        allocate(flx%frac_surf(n))
+        ! water isotopes (n,nwiso)
+        allocate(flx%rain_iso(n,nwiso), flx%snow_iso(n,nwiso))
+        allocate(flx%rain_ground_iso(n,nwiso), flx%snow_ground_iso(n,nwiso))
+        allocate(flx%evap_can_iso(n,nwiso), flx%subl_can_iso(n,nwiso))
+        allocate(flx%transpiration_iso(n,nwiso), flx%evap_surface_iso(n,nwiso), flx%et_iso(n,nwiso))
+        allocate(flx%w_can_iso(n,nwiso), flx%w_can_iso_old(n,nwiso), flx%s_can_iso(n,nwiso), flx%s_can_iso_old(n,nwiso))
+
+        flx%rough_m=0._wp; flx%rough_h=0._wp; flx%Ch=0._wp; flx%z0m=0._wp; flx%Ri=0._wp
+        flx%r_a=0._wp; flx%r_s=0._wp; flx%beta_s=0._wp
+        flx%r_a_can=0._wp; flx%r_s_can=0._wp; flx%beta_s_can=0._wp
+        flx%albedo=0._wp; flx%alb_vis_dir=0._wp; flx%alb_vis_dif=0._wp; flx%alb_nir_dir=0._wp; flx%alb_nir_dif=0._wp
+        flx%flx_sh=0._wp; flx%flx_lh=0._wp; flx%flx_g=0._wp; flx%dflxg_dT=0._wp; flx%flx_melt=0._wp; flx%flx_lwu=0._wp; flx%lwnet=0._wp
+        flx%t_skin=T0; flx%t_skin_old=T0; flx%t_skin_amp=0._wp
+        flx%num_lh=0._wp; flx%num_sh=0._wp; flx%num_sw=0._wp; flx%num_lw=0._wp; flx%denom_lh=0._wp; flx%denom_sh=0._wp; flx%denom_lw=0._wp
+        flx%f_sh=0._wp; flx%f_e=0._wp; flx%f_t=0._wp; flx%f_le=0._wp; flx%f_lt=0._wp; flx%f_lw=0._wp; flx%lh_ecan=0._wp
+        flx%qsat_e=0._wp; flx%dqsatdT_e=0._wp; flx%qsat_t=0._wp; flx%dqsatdT_t=0._wp
+        flx%transpiration=0._wp; flx%evap_surface=0._wp; flx%et=0._wp
+        flx%rain_ground=0._wp; flx%evap_can=0._wp; flx%snow_ground=0._wp; flx%subl_can=0._wp
+        flx%w_can=0._wp; flx%w_can_old=0._wp; flx%s_can=0._wp; flx%s_can_old=0._wp; flx%f_wat_can=0._wp; flx%f_snow_can=0._wp
+        flx%frac_surf=0._wp
+        flx%rain_iso=0._wp; flx%snow_iso=0._wp
+        flx%rain_ground_iso=0._wp; flx%snow_ground_iso=0._wp
+        flx%evap_can_iso=0._wp; flx%subl_can_iso=0._wp
+        flx%transpiration_iso=0._wp; flx%evap_surface_iso=0._wp; flx%et_iso=0._wp
+        flx%w_can_iso=0._wp; flx%w_can_iso_old=0._wp; flx%s_can_iso=0._wp; flx%s_can_iso_old=0._wp
+
+        return
+
+    end subroutine alloc_surface_flux
 
     subroutine lndvc_remap_state(lnd)
         ! Conservatively transfer prognostic state (carbon, heat, snow, water)
