@@ -51,6 +51,7 @@ program climber
     &                lnd_to_cmn, cmn_to_lnd, &
     &                ocn_to_cmn, cmn_to_ocn, &
     &                smb_to_cmn, cmn_to_smb, &
+    &                cmn_to_lndvc, &
     &                ice_to_smb, ice_to_cmn, smb_to_ice, &
     &                bmb_to_cmn, cmn_to_bmb, &
     &                ice_to_bmb, bmb_to_ice, &
@@ -546,6 +547,8 @@ program climber
           call lndvc_decompose(lndvc, lnd%l2d%mask_lnd, &
                                lnd%l2d%f_veg, lnd%l2d%f_ice, lnd%l2d%f_lake, &
                                lnd%l2d%z_veg, cmn%z_ice)
+          ! populate each ice vc's reference (_i) forcing from the coarse cell
+          call cmn_to_lndvc(cmn, lndvc)
           call lndvc_update(lndvc)
         endif
         !$ time_end = omp_get_wtime()

@@ -64,6 +64,7 @@ module coupler
     use ch4_def, only : ch4_class
     use n2o_def, only : n2o_class
     use smb_def, only : smb_in_class, smb_class
+    use lndvc_def, only : lndvc_class
     use bmb_def, only : bmb_class
     use bnd_mod, only : bnd_class
     use geo_def, only : geo_class
@@ -96,6 +97,7 @@ module coupler
     public :: cmn_to_sic, sic_to_cmn
     public :: cmn_to_lnd, lnd_to_cmn
     public :: cmn_to_smb, smb_to_cmn
+    public :: cmn_to_lndvc
     public :: ice_to_smb, smb_to_ice 
     public :: cmn_to_bmb, bmb_to_cmn
     public :: ice_to_bmb, bmb_to_ice 
@@ -2393,6 +2395,134 @@ contains
     return
 
   end subroutine cmn_to_smb
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  c m n _ t o _ l n d v c
+  !   Purpose    :  populate each ice virtual cell's reference (_i) forcing
+  !                 from the coarse coupler cell (analogue of cmn_to_smb's
+  !                 coarse block). The reference elevation the forcing is valid
+  !                 at is the coarse-cell mean z_sur; SEMI downscales from there
+  !                 to the vc band elevation internally (pattern A).
+  !                 Identity baseline: no spatial filtering, no bias correction,
+  !                 no artificial interannual variability. See
+  !                 docs/design/virtual-cells.md sec 12.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine cmn_to_lndvc(cmn,lndvc)
+
+    implicit none
+
+    type(cmn_class)                  :: cmn
+    type(lndvc_class), intent(inout) :: lndvc
+
+    integer :: i, j, k, n, ns, nc
+    real(wp) :: w1, w2, wind_cell, lwdown_cell, gam_lw_cell
+    real(wp) :: alb_vd, alb_nd, alb_vf, alb_nf
+    real(wp) :: z(nsurf_macro), lw(nsurf_macro)
+    real(wp), parameter :: gam_lw = -2.5e-2_wp
+
+    !$omp parallel do private(i,j,k,n,ns,nc,z,lw,w1,w2,wind_cell,lwdown_cell,gam_lw_cell,alb_vd,alb_nd,alb_vf,alb_nf)
+    do n = 1, lndvc%ncells
+
+      i = lndvc%ij_1d(1,n)
+      j = lndvc%ij_1d(2,n)
+
+      ! grid-cell mean surface wind
+      wind_cell = sum(cmn%wind(i,j,:)*cmn%f_stp(i,j,:))
+
+      ! downward longwave radiation + 'lapse rate' at grid-cell mean elevation
+      ! (interpolated across surface-type elevations; mirrors cmn_to_smb)
+      ns = 0
+      do k=1,nsurf_macro
+        if (k.eq.i_surf_macro_ocn .or. (k.ne.i_surf_macro_sic .and. cmn%f_astp(i,j,k).gt.0._wp)) then
+          ns = ns+1
+          z(ns)  = cmn%z_sur_n(i,j,k)
+          lw(ns) = cmn%cld(i,j)*cmn%lwd_cld(i,j,k) + (1._wp-cmn%cld(i,j))*cmn%lwd_cs(i,j,k)
+        endif
+      enddo
+      if (ns.eq.1) then
+        lwdown_cell = lw(ns)
+        gam_lw_cell = gam_lw
+      else
+        nc = 0
+        do k=1,ns-1
+          if (z(k).lt.cmn%z_sur(i,j) .and. z(k+1).ge.(cmn%z_sur(i,j)-epsilon(1.))) then
+            nc = k
+            exit
+          endif
+        enddo
+        if (nc.eq.0) then
+          lwdown_cell = lw(1)
+          gam_lw_cell = gam_lw
+        else
+          w1 = (z(nc+1)-cmn%z_sur(i,j))/(z(nc+1)-z(nc))
+          w2 = 1._wp-w1
+          lwdown_cell = w1*lw(nc) + w2*lw(nc+1)
+          gam_lw_cell = (lw(nc+1)-lw(nc))/(z(nc+1)-z(nc))
+        endif
+      endif
+
+      ! grid-cell mean surface albedoes
+      alb_vd = sum(cmn%alb_vis_dir(i,j,:)*cmn%f_stp(i,j,:))
+      alb_nd = sum(cmn%alb_nir_dir(i,j,:)*cmn%f_stp(i,j,:))
+      alb_vf = sum(cmn%alb_vis_dif(i,j,:)*cmn%f_stp(i,j,:))
+      alb_nf = sum(cmn%alb_nir_dif(i,j,:)*cmn%f_stp(i,j,:))
+
+      ! distribute the coarse-cell reference forcing to every ice vc of this cell
+      do k = 1, lndvc%n_vc
+        if (lndvc%vc(i,j,k)%desc%class /= 3) cycle
+        associate(f => lndvc%vc(i,j,k)%forc)
+
+          ! reference elevation the forcing is valid at
+          f%z_sur_i = cmn%z_sur(i,j)
+
+          ! atmospheric reference forcing
+          f%tam_i   = cmn%tam(i,j)
+          f%ram_i   = cmn%ram(i,j)
+          f%gam_i   = cmn%gams(i,j)
+          f%tstd_i  = 2._wp                 ! identity baseline (cf. cmn_to_smb TODO)
+          f%prc_i   = cmn%prc(i,j)
+          f%u700_i  = cmn%u700(i,j)
+          f%v700_i  = cmn%v700(i,j)
+          f%wind_i  = wind_cell
+          f%cld_i   = cmn%cld(i,j)
+          f%dust_i  = cmn%dust_dep(i,j)
+          f%lwdown_i = lwdown_cell
+          f%gam_lw_i = gam_lw_cell
+
+          ! surface albedo + shortwave components and sensitivities
+          f%alb_vis_dir_i = alb_vd
+          f%alb_nir_dir_i = alb_nd
+          f%alb_vis_dif_i = alb_vf
+          f%alb_nir_dif_i = alb_nf
+          f%swd_sur_vis_dir_i = cmn%swd_vis_dir(i,j)
+          f%swd_sur_nir_dir_i = cmn%swd_nir_dir(i,j)
+          f%swd_sur_vis_dif_i = cmn%swd_vis_dif(i,j)
+          f%swd_sur_nir_dif_i = cmn%swd_nir_dif(i,j)
+          f%dswd_dalb_vis_dir_i = cmn%dswd_dalb_vis_dir(i,j)
+          f%dswd_dalb_nir_dir_i = cmn%dswd_dalb_nir_dir(i,j)
+          f%dswd_dalb_vis_dif_i = cmn%dswd_dalb_vis_dif(i,j)
+          f%dswd_dalb_nir_dif_i = cmn%dswd_dalb_nir_dif(i,j)
+          f%dswd_dz_nir_dir_i   = cmn%dswd_dz_nir_dir(i,j)
+          f%dswd_dz_nir_dif_i   = cmn%dswd_dz_nir_dif(i,j)
+          f%coszm_i       = cmn%coszm(doy,j)
+          f%swd_toa_i     = cmn%solarm(doy,j)
+          f%swd_toa_min_i = cmn%solarmin(doy,j)
+
+          ! identity baseline: no bias correction, no interannual variability
+          f%t2m_bias_i = 0._wp
+          f%prc_bias_i = 0._wp
+          f%dTvar      = 0._wp
+
+        end associate
+      enddo
+
+    enddo
+    !$omp end parallel do
+
+    return
+
+  end subroutine cmn_to_lndvc
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

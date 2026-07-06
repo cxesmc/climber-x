@@ -97,6 +97,14 @@ contains
         vc(k)%desc%z     = z
         vc(k)%desc%dz    = 0._wp
         vc(k)%desc%w     = w
+        ! identity baseline: single band at cell-mean elevation, no sub-grid
+        ! slope/variance/orography (populated once hypsometry + slopes are added)
+        vc(k)%desc%dz_dx     = 0._wp
+        vc(k)%desc%dz_dy     = 0._wp
+        vc(k)%desc%grad      = 0._wp
+        vc(k)%desc%z_sur_std = 0._wp
+        vc(k)%desc%dz_sur    = 0._wp
+        vc(k)%desc%f_ele     = 1._wp
 
         select case(class)
             case(1)   ! land

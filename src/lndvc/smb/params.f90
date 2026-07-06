@@ -15,6 +15,11 @@ module smb_par_m
     real(wp) :: dt  = 86400._wp
     real(wp) :: rdt = 1._wp/86400._wp
 
+    ! reference atmosphere for the barometric surface-pressure downscaling
+    ! (mirror src/smb/smb_params; used to derive vc pressure from elevation)
+    real(wp), parameter :: p0    = 1010.e2_wp   !! reference sea-level pressure [Pa]
+    real(wp), parameter :: h_atm = 8600._wp     !! atmosphere scale height [m]
+
     ! debug switches (mirror control::check_water / check_energy)
     logical  :: check_water  = .false.
     logical  :: check_energy = .false.
