@@ -58,7 +58,8 @@ contains
         type(vc_t),      intent(in)  :: vc(:)
         real(wp),        intent(in)  :: wt(:)
 
-        integer :: k
+        integer  :: k
+        real(wp) :: w, wsum
 
         cell%f_veg  = 0._wp
         cell%f_lake = 0._wp
@@ -75,8 +76,49 @@ contains
         cell%f_land    = cell%f_veg + cell%f_lake + cell%f_ice
         cell%mask_lnd  = merge(1, 0, cell%f_land > 0._wp)
 
-        ! TODO: reduce coupling currency (fluxes, t_skin, albedo, runoff) and
-        !       SMB once single-column physics is ported (Phase 2).
+        ! Reduce the coupling currency from the leaf virtual cells whose surface
+        ! physics is live. Only the ice/SMB path is ported so far, so surface
+        ! fluxes are the ice-surface area-weighted mean and the mass budget is
+        ! the conserving cell-area-weighted sum. Extends to land/lake vcs as
+        ! those single-column paths come online.
+        cell%t_skin = 0._wp
+        cell%albedo = 0._wp
+        cell%flx_sh = 0._wp
+        cell%flx_lh = 0._wp
+        cell%flx_g  = 0._wp
+        cell%evap   = 0._wp
+        cell%runoff = 0._wp
+        cell%smb    = 0._wp
+        cell%melt   = 0._wp
+        cell%et     = 0._wp
+        wsum = 0._wp
+
+        do k = 1, size(vc)
+            if (vc(k)%desc%class == 3 .and. allocated(vc(k)%ice)) then
+                w = vc(k)%desc%w
+                ! extensive mass budget (per unit cell area, conserving sum)
+                cell%smb    = cell%smb    + w * vc(k)%ice%smb
+                cell%melt   = cell%melt   + w * vc(k)%ice%melt
+                cell%runoff = cell%runoff + w * vc(k)%ice%runoff
+                ! intensive surface fluxes (accumulate weighted; normalized below)
+                cell%t_skin = cell%t_skin + w * vc(k)%flx%t_skin(1)
+                cell%albedo = cell%albedo + w * vc(k)%flx%albedo(1)
+                cell%flx_sh = cell%flx_sh + w * vc(k)%flx%flx_sh(1)
+                cell%flx_lh = cell%flx_lh + w * vc(k)%flx%flx_lh(1)
+                cell%flx_g  = cell%flx_g  + w * vc(k)%flx%flx_g(1)
+                cell%evap   = cell%evap   + w * vc(k)%flx%evap_surface(1)
+                wsum = wsum + w
+            end if
+        end do
+
+        if (wsum > 0._wp) then
+            cell%t_skin = cell%t_skin / wsum
+            cell%albedo = cell%albedo / wsum
+            cell%flx_sh = cell%flx_sh / wsum
+            cell%flx_lh = cell%flx_lh / wsum
+            cell%flx_g  = cell%flx_g  / wsum
+            cell%evap   = cell%evap   / wsum
+        end if
 
         return
 

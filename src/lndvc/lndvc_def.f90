@@ -271,6 +271,8 @@ module lndvc_def
         real(wp) :: z_veg, z_veg_std, z_veg_min, z_veg_max
         ! aggregated coupling currency (area-weighted means of surface_flux_t)
         real(wp) :: t_skin, albedo, flx_sh, flx_lh, flx_g, runoff, evap, et
+        ! aggregated ice-surface mass budget (area-weighted cell-mean fluxes)
+        real(wp) :: smb, melt
         ! cell-level carbon fluxes / emissions
         real(wp) :: Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd
         real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux
