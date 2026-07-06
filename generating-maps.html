@@ -292,24 +292,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="generating-maps" class="level1">
 <h1>Generating maps</h1>
-<p><strong>CLIMBER-X</strong> couples several components that live on different grids (atmosphere, ocean, land, ice sheets, solid Earth). To transfer fields between them, the model uses precomputed <strong>maps</strong> — the interpolation weights that transform a field from one coordinate grid to another. These maps are built with <a href="https://code.mpimet.mpg.de/projects/cdo/">CDO</a> and stored in the <code>maps/</code> directory.</p>
+<p><strong>CLIMBER-X</strong> couples several components that live on different grids (atmosphere, ocean, land, ice sheets, solid Earth). To transfer fields between them, the model uses precomputed <strong>maps</strong> — the interpolation weights that transform a field from one coordinate grid to another. These maps are generated internally by the model and stored in the <code>maps/</code> directory.</p>
 <section id="first-run-of-a-configuration-is-slower" class="level2">
 <h2 class="anchored" data-anchor-id="first-run-of-a-configuration-is-slower">First run of a configuration is slower</h2>
 <p>The maps a simulation needs depend on its grid configuration. The first time you run a given configuration, the model checks <code>maps/</code> for the maps it requires and <strong>generates any that are missing</strong>. This makes that first run noticeably slower while the maps are built.</p>
 <p>The generated maps are written to <code>maps/</code> and reused on every subsequent run. Once they exist, the model finds them there and skips generation entirely, so all later runs of the same configuration start at full speed. You do not need to regenerate them unless the grid configuration changes.</p>
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill">
-Note
-</div>
-</div>
-<div class="callout-body-container callout-body">
-<p>Map generation requires <strong>CDO</strong> to be available on your <code>PATH</code>. See <a href="./dependencies.html">Dependencies</a> for installation notes.</p>
-</div>
-</div>
 </section>
 <section id="ensembles-generate-maps-once-first" class="level2">
 <h2 class="anchored" data-anchor-id="ensembles-generate-maps-once-first">Ensembles: generate maps once, first</h2>
@@ -324,16 +311,16 @@ Note
 <li>For an <strong>ensemble</strong>, it runs ensemble <strong>member 0</strong> only.</li>
 </ul>
 <p>The map-generating run is placed in a <code>mapgen/</code> subdirectory of the output directory (<code>&lt;OUTDIR&gt;/mapgen/</code>), so it stays out of the way of the real run directories. Its only purpose is to populate the shared <code>maps/</code> directory.</p>
-<p>The intended workflow is to issue the <em>same command twice</em> — once with <code>--gen-maps</code> to build the maps, then again without it for the real run:</p>
+<p>The intended workflow is to issue the <em>same command twice</em> — first with <code>--gen-maps</code> appended to build the maps, then again without it for the real run. Keep the command exactly the same and only add or drop the flag:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Generate the maps (runs one simulation into OUTDIR/mapgen/)</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--gen-maps</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10 <span class="at">--gen-maps</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Run the real ensemble (maps now already exist and are reused)</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>The <code>--gen-maps</code> step honours the run flags you pass (<code>-r</code>, <code>-s</code>, etc.), so it is literally your real command with the flag added. Once it has finished and the maps are in <code>maps/</code>, drop the flag and launch the full ensemble.</p>
+<p>Because it is your real command with the flag simply appended, the run flags (<code>-r</code>, <code>-s</code>, etc.) must still be present — <code>--gen-maps</code> reuses them to actually run the map-generating simulation. Once it has finished and the maps are in <code>maps/</code>, drop the flag and launch the full ensemble.</p>
 <p>For a single simulation the same two-step pattern works, though it is only needed the first time a new configuration is run:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--gen-maps</span> <span class="at">-o</span> RUNDIR    <span class="co"># build maps into RUNDIR/mapgen/</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR           <span class="co"># real run, reusing the maps</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR <span class="at">--gen-maps</span>    <span class="co"># build maps into RUNDIR/mapgen/</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR               <span class="co"># real run, reusing the maps</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>See <a href="./runme-notes.html">Running with <code>runme</code></a> for the full set of <code>runme</code> options.</p>
 
 
