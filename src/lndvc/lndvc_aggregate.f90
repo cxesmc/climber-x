@@ -49,6 +49,8 @@ contains
         ! Class fractions from Sum of weights by class; coupling currency
         ! (t_skin, albedo, fluxes, runoff, evap) as area-weighted means; SMB as
         ! a conserving sum of ice-vc mass budgets.
+        !
+        ! Phase 1: class fractions only (identity roundtrip of the geometry).
 
         implicit none
 
@@ -56,7 +58,25 @@ contains
         type(vc_t),      intent(in)  :: vc(:)
         real(wp),        intent(in)  :: wt(:)
 
-        ! TODO: per-field reduction rule (mean/sum/flux-conserving).
+        integer :: k
+
+        cell%f_veg  = 0._wp
+        cell%f_lake = 0._wp
+        cell%f_ice  = 0._wp
+
+        do k = 1, size(vc)
+            select case(vc(k)%desc%class)
+                case(1); cell%f_veg  = cell%f_veg  + vc(k)%desc%w
+                case(2); cell%f_lake = cell%f_lake + vc(k)%desc%w
+                case(3); cell%f_ice  = cell%f_ice  + vc(k)%desc%w
+            end select
+        end do
+
+        cell%f_land    = cell%f_veg + cell%f_lake + cell%f_ice
+        cell%mask_lnd  = merge(1, 0, cell%f_land > 0._wp)
+
+        ! TODO: reduce coupling currency (fluxes, t_skin, albedo, runoff) and
+        !       SMB once single-column physics is ported (Phase 2).
 
         return
 

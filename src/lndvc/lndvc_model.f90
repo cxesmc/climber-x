@@ -6,6 +6,11 @@ module lndvc_model
     ! reduction back to coarse-cell state for coupling. Physics is ported from
     ! lnd/smb as single-column, single-class modules and called from here.
     ! See docs/design/virtual-cells.md.
+    !
+    ! Phase 1: allocation + decomposition + aggregation plumbing, wired into
+    ! climber.x behind flag_lndvc (default off). Physics dispatch is a no-op
+    ! until the port (Phase 2); numerical identity with the reference land model
+    ! is therefore gated on Phase 2.
 
     use ncio
     use precision, only : sp, dp, wp
@@ -27,17 +32,21 @@ contains
 
     ! === Whole-domain control =================================================
 
-    subroutine lndvc_init(lnd)
+    subroutine lndvc_init(lnd, nx, ny)
         implicit none
         type(lndvc_class), intent(inout) :: lnd
-        ! TODO: allocate container, build fixed band edges, initial decomposition.
-        call lndvc_decompose(lnd)
+        integer,           intent(in)    :: nx, ny
+
+        call lndvc_grid_init()
+        call lndvc_alloc(lnd, nx, ny)
+
         return
     end subroutine lndvc_init
 
     subroutine lndvc_update(lnd)
-        ! One coupling step: refresh decomposition weights, update every leaf
-        ! virtual cell, then aggregate to coarse-cell state for coupling.
+        ! One coupling step: update every leaf virtual cell, then aggregate to
+        ! coarse-cell state for coupling. The decomposition is assumed current
+        ! (refreshed by the coupler via lndvc_decompose before this call).
 
         implicit none
 
@@ -46,18 +55,21 @@ contains
         integer :: n, i, j, k
         real(wp), allocatable :: wt(:)
 
+        allocate(wt(lnd%n_vc))
+
         ! TODO: OMP over the compressed active-leaf list (lnd%leaf_1d).
         do n = 1, lnd%ncells
             i = lnd%ij_1d(1,n)
             j = lnd%ij_1d(2,n)
             do k = 1, lnd%n_vc
+                if (lnd%vc(i,j,k)%desc%class == 0) cycle
                 call lndvc_update_vc(lnd%vc(i,j,k))
             end do
-            allocate(wt(lnd%n_vc))
             call lndvc_aggregate_weights(lnd%vc(i,j,:), wt)
             call lndvc_aggregate_cell(lnd%cell(i,j), lnd%vc(i,j,:), wt)
-            deallocate(wt)
         end do
+
+        deallocate(wt)
 
         call lndvc_conservation_check(lnd)
 
@@ -68,9 +80,50 @@ contains
     subroutine lndvc_end(lnd)
         implicit none
         type(lndvc_class), intent(inout) :: lnd
-        ! TODO: deallocate container.
+        call lndvc_dealloc(lnd)
         return
     end subroutine lndvc_end
+
+    ! === Allocation ===========================================================
+
+    subroutine lndvc_alloc(lnd, nx, ny)
+        implicit none
+        type(lndvc_class), intent(inout) :: lnd
+        integer,           intent(in)    :: nx, ny
+
+        lnd%n_vc   = 4          ! identity baseline: land, lake, ice (+shelf)
+        lnd%ncells = 0
+
+        if (allocated(lnd%vc))     deallocate(lnd%vc)
+        if (allocated(lnd%cell))   deallocate(lnd%cell)
+        if (allocated(lnd%id_map)) deallocate(lnd%id_map)
+        if (allocated(lnd%ij_1d))  deallocate(lnd%ij_1d)
+
+        allocate(lnd%vc(nx,ny,lnd%n_vc))
+        allocate(lnd%cell(nx,ny))
+        allocate(lnd%id_map(nx,ny))
+        allocate(lnd%ij_1d(2,nx*ny))
+
+        lnd%id_map = 0
+        lnd%ij_1d  = 0
+
+        return
+    end subroutine lndvc_alloc
+
+    subroutine lndvc_dealloc(lnd)
+        implicit none
+        type(lndvc_class), intent(inout) :: lnd
+
+        if (allocated(lnd%vc))      deallocate(lnd%vc)
+        if (allocated(lnd%cell))    deallocate(lnd%cell)
+        if (allocated(lnd%id_map))  deallocate(lnd%id_map)
+        if (allocated(lnd%ij_1d))   deallocate(lnd%ij_1d)
+        if (allocated(lnd%z_edges)) deallocate(lnd%z_edges)
+        if (allocated(lnd%leaf_1d)) deallocate(lnd%leaf_1d)
+        if (allocated(lnd%z_lake))  deallocate(lnd%z_lake)
+
+        return
+    end subroutine lndvc_dealloc
 
     ! === Per-vc dispatch ======================================================
 
