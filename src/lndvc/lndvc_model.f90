@@ -22,7 +22,8 @@ module lndvc_model
     use lndvc_aggregate, only : lndvc_aggregate_weights, lndvc_aggregate_cell, lndvc_conservation_check
 
     ! ported single-column physics
-    use smb_snow_m,      only : snow_update
+    use semi_m,          only : semi
+    use smb_par_m,       only : p0, h_atm, gamma, prc_par, surf_par
 
     implicit none
 
@@ -169,26 +170,78 @@ contains
     end subroutine lndvc_update_lake
 
     subroutine lndvc_update_ice(vc)
-        ! Single-column ice-surface update. Blocks are unpacked into the ported
-        ! scalar-signature physics routines (pattern A). Being filled in as the
-        ! ice/SMB path is ported file-by-file.
+        ! Single-column ice-surface update via the ported SEMI driver (pattern A):
+        ! the vc's per-class blocks are unpacked into SEMI's scalar signature.
+        ! Genuine carry-over state binds to block fields (snow/ice/flx); pure
+        ! per-call diagnostics are call-local (kept lean, see design sec 12).
+        ! SEMI does its own elevation downscaling from forc%z_sur_i to desc%z.
 
         implicit none
 
         type(vc_t), intent(inout) :: vc
 
-        real(wp) :: evp
+        integer  :: ii, jj
+        real(wp) :: dz, dT
+        real(wp) :: f_ele, pressure
 
-        ! TODO: evp (sublimation) from the ported ice-surface energy balance
-        evp = 0._wp
+        ! downscaled/diagnostic scalars SEMI writes but we do not persist
+        real(wp) :: tam, t2m, q2m, qsat, dqsatdT, r_a
+        real(wp) :: u700, v700, wind, snow_rate, rain_rate, prc, f_wind
+        real(wp) :: alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif
+        real(wp) :: alb_bg, cld, swnet, swnet_min, swdown, lwdown
+        real(wp) :: dflxg_dT, flx_melt, flx_lwu
+        real(wp) :: num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw
+        real(wp) :: f_sh, f_e, f_lh, f_lw
 
-        if (allocated(vc%snow)) then
-            call snow_update(vc%snow%mask_snow, evp, &
-                             vc%snow%w_snow, vc%snow%w_snow_old, vc%snow%w_snow_max, &
-                             vc%snow%h_snow)
+        ii = 0; jj = 0   ! SEMI uses these only for debug prints
+
+        ! --- geometry-derived forcing (framework side) ------------------------
+        ! barometric surface pressure at the vc elevation
+        pressure = p0 * exp(-vc%desc%z / h_atm)
+        vc%forc%pressure = pressure
+        ! precipitation elevation-correction factor (Clausius-Clapeyron), cf. topo_factors
+        if (prc_par%l_elevation_corr .and. vc%desc%z >= prc_par%z_sur_crit_fele) then
+            dz = vc%desc%z - vc%forc%z_sur_i
+            dT = -gamma*dz
+            f_ele = exp(prc_par%dP_dT*dT)
+        else
+            f_ele = 1._wp
         end if
+        if (vc%desc%z >= prc_par%z_sur_high_fele) f_ele = 0.1_wp*f_ele
+        vc%desc%f_ele = f_ele
+        ! pure ice vc: fully ice-covered patch, firn background albedo
+        vc%forc%f_ice   = 1._wp
+        vc%forc%alb_ice = surf_par%alb_firn
 
-        ! TODO: ice/firn temperature, surface energy balance, SMB mass-budget diagnostic.
+        ! --- surface energy + mass balance (ported SEMI, pattern A) ------------
+        call semi(ii, jj, vc%forc%f_ice, vc%forc%alb_ice, &
+            vc%desc%z, vc%forc%z_sur_i, vc%desc%z_sur_std, &
+            vc%desc%dz_dx, vc%desc%dz_dy, vc%desc%dz_sur, vc%desc%f_ele, &
+            vc%forc%tam_i, vc%forc%t2m_bias_i, vc%forc%dTvar, vc%forc%gam_i, vc%forc%tstd_i, vc%forc%ram_i, &
+            pressure, vc%forc%u700_i, vc%forc%v700_i, vc%forc%wind_i, vc%forc%prc_i, vc%forc%prc_bias_i, &
+            vc%forc%alb_vis_dir_i, vc%forc%alb_nir_dir_i, vc%forc%alb_vis_dif_i, vc%forc%alb_nir_dif_i, &
+            vc%forc%swd_sur_vis_dir_i, vc%forc%swd_sur_nir_dir_i, vc%forc%swd_sur_vis_dif_i, vc%forc%swd_sur_nir_dif_i, &
+            vc%forc%dswd_dalb_vis_dir_i, vc%forc%dswd_dalb_nir_dir_i, vc%forc%dswd_dalb_vis_dif_i, vc%forc%dswd_dalb_nir_dif_i, &
+            vc%forc%dswd_dz_nir_dir_i, vc%forc%dswd_dz_nir_dif_i, vc%forc%dust_i, vc%forc%coszm_i, &
+            vc%forc%swd_toa_i, vc%forc%swd_toa_min_i, vc%forc%cld_i, vc%forc%lwdown_i, vc%forc%gam_lw_i, &
+            tam, t2m, vc%flx%t_skin(1), vc%flx%t_skin_old(1), vc%flx%t_skin_amp(1), &
+            vc%ice%t_prof, vc%ice%t_prof_old, &
+            q2m, qsat, dqsatdT, r_a, &
+            u700, v700, wind, snow_rate, rain_rate, prc, f_wind, &
+            vc%snow%mask_snow, vc%snow%f_snow, vc%snow%h_snow, vc%snow%w_snow, vc%snow%w_snow_old, vc%snow%w_snow_max, &
+            vc%snow%snow_grain, vc%snow%dust_con, &
+            alb_vis_dir, alb_nir_dir, alb_vis_dif, alb_nir_dif, &
+            vc%snow%alb_snow_vis_dir, vc%snow%alb_snow_nir_dir, vc%snow%alb_snow_vis_dif, vc%snow%alb_snow_nir_dif, &
+            vc%snow%dt_snowfree, alb_bg, vc%flx%albedo(1), cld, swnet, swnet_min, swdown, lwdown, &
+            vc%flx%flx_g(1), dflxg_dT, flx_melt, vc%flx%flx_sh(1), flx_lwu, vc%flx%flx_lh(1), vc%flx%evap_surface(1), &
+            num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw, &
+            f_sh, f_e, f_lh, f_lw, &
+            vc%snow%snowmelt, vc%snow%icemelt, vc%snow%refreezing, vc%snow%refreezing_sum, vc%ice%f_rfz_to_snow)
+
+        ! --- SMB mass-budget diagnostic (kg/m2/s) -----------------------------
+        vc%ice%melt   = vc%snow%snowmelt + vc%snow%icemelt
+        vc%ice%runoff = vc%snow%snowmelt + vc%snow%icemelt + rain_rate - vc%snow%refreezing
+        vc%ice%smb    = snow_rate - vc%flx%evap_surface(1) - vc%snow%snowmelt - vc%snow%icemelt + vc%snow%refreezing
 
         return
     end subroutine lndvc_update_ice
