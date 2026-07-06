@@ -32,18 +32,20 @@ module lndvc_model
     use lndvc_hydrology_mod,   only : surface_hydrology_lake
     ! ported vegetated-land physics (port C)
     use lndvc_surface_par_lnd, only : resist_aer_veg, resist_sur_veg, surface_albedo_veg
-    use lndvc_veg_par_mod,     only : phenology
+    use lndvc_veg_par_mod,     only : phenology, root_frac_update, litter_in_frac_update, dynveg_par
     use lndvc_photosynthesis_mod, only : photosynthesis
     use lndvc_hydrology_mod,   only : canopy_water, surface_hydrology_veg
-    use lndvc_soil_par_mod,    only : soil_par_thermal, soil_par_hydro
+    use lndvc_soil_par_mod,    only : soil_par_thermal, soil_par_hydro, soil_par_update
     use lndvc_soil_hydro_mod,  only : soil_hydro
     use lndvc_water_deficit_mod, only : calculate_pet, calculate_cwd
+    use lndvc_dyn_veg_mod,     only : dyn_veg
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
     use lnd_params,            only : lnd_surf_par => surf_par
-    use lnd_params,            only : soil_par, hydro_par
-    use timer,                 only : time_soy_lnd, time_eoy_lnd
+    use lnd_params,            only : soil_par, hydro_par, veg_par
+    use lnd_params,            only : time_call_veg
+    use timer,                 only : time_soy_lnd, time_eoy_lnd, time_eom_lnd
     use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
@@ -216,6 +218,14 @@ contains
             vc%soil%lambda_dry(:) = soil_par%lambda_dry_u
         endif
 
+        ! --- persist mineral-soil baseline for soil_par_update carbon feedback -
+        vc%soil%mineral_theta_sat  = m_theta_sat
+        vc%soil%mineral_k_sat      = m_k_sat
+        vc%soil%mineral_psi_sat    = m_psi_sat
+        vc%soil%mineral_Bi         = m_Bi
+        vc%soil%mineral_lambda_s   = m_lambda_s
+        vc%soil%mineral_lambda_dry = m_lambda_dry
+
         ! --- static wetland parameters (TOPMODEL cti + DYPTOP) ----------------
         vc%soil%cti_mean    = cti_mean
         vc%soil%cti_cdf(:)  = cti_cdf(:)
@@ -237,16 +247,30 @@ contains
             vc%flx%z0m)
 
         ! --- sub-tile fractions within the vc (bare = remainder) --------------
+        call set_frac_surf_veg(vc)
+
+        return
+
+    end subroutine lndvc_init_land
+
+    subroutine set_frac_surf_veg(vc)
+        ! Within-vc sub-tile fractions from the PFT fractions: each PFT tile takes
+        ! its pft_frac directly, bare soil is the remainder (frac_surf sums to 1
+        ! inside the veg vc). This is the vc-local analogue of the reference
+        ! surface_frac_up, which instead builds a cell-global frac_surf folding in
+        ! the ice/lake tiles that separate vcs own (decision 2). Used at init and
+        ! after every pft_frac update (start of year + post dyn_veg).
+        implicit none
+        type(vc_t), intent(inout) :: vc
+        integer  :: k
+        real(wp) :: sum_pft
         sum_pft = 0._wp
         do k = 1, npft
             vc%flx%frac_surf(k) = vc%veg%pft_frac(k)
             sum_pft = sum_pft + vc%veg%pft_frac(k)
         enddo
         vc%flx%frac_surf(i_bare) = max(0._wp, 1._wp - sum_pft)
-
-        return
-
-    end subroutine lndvc_init_land
+    end subroutine set_frac_surf_veg
 
     subroutine lndvc_update_land(vc)
         ! Single-column vegetated-land surface update (port C.1): pattern-A
@@ -290,6 +314,28 @@ contains
         lwdown(:)    = vc%forc%lwdown
         rain(:)      = vc%forc%rain
         snow(:)      = vc%forc%snow
+
+        ! ===== start-of-year vegetation update (port C.3) =====================
+        ! sync sub-tile fractions to the PFT distribution (updated by last year's
+        ! dyn_veg), then refresh soil parameters / root + litter profiles. Guarded
+        ! on the cell veg fraction, mirroring the reference lnd start-of-year block.
+        if (time_soy_lnd) then
+            call set_frac_surf_veg(vc)
+            if (vc%forc%f_veg_cell .gt. 0._wp) then
+                if (.not.soil_par%constant_porosity .or. .not.soil_par%constant_soil_par_therm &
+                    .or. .not.soil_par%constant_soil_par_hydro) then
+                    call soil_par_update(vc%carb%f_peat, vc%carb%litter_c, vc%carb%fast_c, vc%carb%slow_c, &
+                        vc%carb%litter_c_peat, vc%carb%acro_c, vc%carb%cato_c, &
+                        vc%soil%mineral_theta_sat, vc%soil%mineral_k_sat, vc%soil%mineral_psi_sat, &
+                        vc%soil%mineral_Bi, vc%soil%mineral_lambda_s, vc%soil%mineral_lambda_dry, &
+                        vc%carb%frac_soc, vc%soil%theta_sat, vc%soil%psi_sat, vc%soil%k_sat, &
+                        vc%soil%k_exp, vc%soil%psi_exp, vc%soil%theta_field, vc%soil%theta_wilt, &
+                        vc%soil%lambda_s, vc%soil%lambda_dry)
+                endif
+                if (veg_par%lroot_frac) call root_frac_update(vc%soil%alt, vc%soil%root_frac)
+                call litter_in_frac_update(vc%soil%alt, vc%carb%litter_in_frac)
+            endif
+        endif
 
         ! vegetated fraction within the vc (=1 for the identity baseline) and
         ! the veg-mean skin temperature from the previous step (for snow albedo)
@@ -453,6 +499,39 @@ contains
         ! --- total surface + subsurface runoff over the veg column ------------
         vc%soil%runoff(1) = vc%soil%runoff_sur(1) + vc%soil%drainage(1)
         if (l_wiso) vc%soil%runoff_iso(:) = vc%soil%runoff_sur_iso(:) + vc%soil%drainage_iso(:)
+
+        ! ===== end-of-month disturbance / fire parameters (port C.3) ==========
+        if (time_eom_lnd) then
+            call dynveg_par(vc%veg%disturbance, vc%veg%t2m_min_mon, vc%veg%gdd5, vc%veg%veg_c_above, &
+                vc%forc%f_veg_cell, vc%carb%f_peat, vc%veg%pft_frac, &
+                vc%carb%litter_c(1), vc%carb%litter_c_peat, vc%veg%lai_bal, vc%soil%mcwd, vc%soil%mcwd_clim, &
+                vc%veg%theta_fire_cum, vc%veg%gamma_dist_cum, vc%veg%gamma_fire_cum, &
+                vc%veg%fuel, vc%veg%f_fire_fuel, vc%veg%f_fire_cwd)
+        endif
+
+        ! ===== vegetation carbon + distribution (port C.3) ====================
+        if (time_call_veg) then
+            call dyn_veg(vc%forc%co2, vc%forc%f_veg_cell, vc%forc%f_veg_old_cell, &
+                vc%forc%f_ice_grd_cell, vc%forc%f_ice_grd_old_cell, vc%forc%f_ice_nbr_cell, &
+                vc%forc%f_lake_cell, vc%forc%f_lake_old_cell, vc%forc%f_shelf_cell, vc%forc%f_shelf_old_cell, &
+                vc%veg%f_crop, vc%veg%f_pasture, vc%veg%gamma_luc, &
+                vc%desc%z_sur_std, vc%veg%gamma_ice, &
+                vc%veg%gamma_dist, vc%veg%gamma_dist_cum, vc%veg%gamma_fire, vc%veg%gamma_fire_cum, &
+                vc%veg%npp_ann, vc%veg%npp13_ann, vc%veg%npp14_ann, &
+                vc%veg%gamma_leaf, vc%veg%lambda, vc%veg%lai_bal, vc%veg%sai, &
+                vc%soil%root_frac, vc%carb%litter_in_frac, &
+                vc%veg%veg_c, vc%veg%veg_c13, vc%veg%veg_c14, vc%veg%leaf_c, vc%veg%stem_c, vc%veg%root_c, &
+                vc%veg%seed_frac, vc%veg%pft_frac, &
+                vc%veg%veg_c_above, vc%veg%veg_c13_above, vc%veg%veg_c14_above, &
+                vc%veg%veg_c_below, vc%veg%veg_c13_below, vc%veg%veg_c14_below, &
+                vc%veg%veg_h, vc%carb%litterfall, vc%carb%litterfall13, vc%carb%litterfall14, &
+                vc%veg%npp_real, vc%veg%npp13_real, vc%veg%npp14_real, &
+                vc%veg%fire_c_flux, vc%veg%fire_c13_flux, vc%veg%fire_c14_flux, &
+                vc%veg%fire_c_flux_pft, vc%veg%fire_c13_flux_pft, vc%veg%fire_c14_flux_pft, &
+                vc%veg%carbon_bal_veg, vc%veg%carbon13_bal_veg, vc%veg%carbon14_bal_veg, ii, jj)
+            ! sync sub-tile fractions to the updated PFT fractions
+            call set_frac_surf_veg(vc)
+        endif
 
         return
 

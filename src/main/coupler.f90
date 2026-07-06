@@ -2617,6 +2617,7 @@ contains
         lndvc%vc(i,j,k)%veg%f_pasture  = lnd%l2d(i,j)%f_pasture
         lndvc%vc(i,j,k)%veg%df_crop    = lnd%l2d(i,j)%df_crop
         lndvc%vc(i,j,k)%veg%df_pasture = lnd%l2d(i,j)%df_pasture
+        lndvc%vc(i,j,k)%veg%disturbance(:) = lnd%l2d(i,j)%disturbance(:)
         associate(f => lndvc%vc(i,j,k)%forc)
 
           f%pressure  = cmn%ps(i,j,i_surf_lnd(i_bare))

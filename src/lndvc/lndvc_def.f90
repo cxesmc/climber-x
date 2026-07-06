@@ -48,7 +48,6 @@ module lndvc_def
         real(wp) :: rain, snow
         real(wp) :: wind, pressure
         real(wp) :: dust                        ! dust deposition [kg/m2/s] (lake snow albedo)
-        real(wp) :: disturbance
         ! vegetated-land forcing (port C): atmospheric CO2 + bare-soil albedo
         real(wp) :: co2, c13_c12_atm, c14_c_atm ! atmospheric CO2 for photosynthesis
         real(wp) :: alb_bare_vis, alb_bare_nir  ! per-cell bare-soil background albedo
@@ -136,6 +135,9 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: t_soil_cum, theta_w_cum, theta_i_cum
         real(wp), allocatable, dimension(:) :: psi
         integer,  allocatable, dimension(:) :: k_exp, psi_exp
+        ! mineral-soil baseline (from cell texture); soil_par_update re-blends with carbon
+        real(wp) :: mineral_theta_sat, mineral_k_sat, mineral_psi_sat
+        real(wp) :: mineral_Bi, mineral_lambda_s, mineral_lambda_dry
         ! permafrost state
         real(wp) :: alt                                        ! active layer thickness [m]
         real(wp), allocatable, dimension(:) :: frozen_years, thaw_timer
@@ -175,6 +177,7 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: leaf_c, stem_c, root_c, veg_c13, veg_c14
         real(wp), allocatable, dimension(:) :: fire_c_flux_pft, fire_c13_flux_pft, fire_c14_flux_pft
         real(wp), allocatable, dimension(:) :: gamma_fire, gamma_fire_cum, gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum
+        real(wp), allocatable, dimension(:) :: disturbance        ! (npft) prescribed disturbance rate (forcing)
         real(wp) :: gdd5, gdd5_temp, npp_real, npp13_real, npp14_real
         real(wp) :: veg_c_above, veg_c13_above, veg_c14_above
         real(wp) :: theta_fire_cum, fuel, f_fire_fuel, f_fire_cwd
@@ -200,7 +203,7 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: litter_c, fast_c, slow_c, litter_c13, fast_c13, slow_c13, litter_c14, fast_c14, slow_c14
         real(wp), allocatable, dimension(:) :: cato_c, cato_c13, cato_c14
         real(wp), allocatable, dimension(:) :: soil_c_tot, soil_resp, soil_c13_tot, soil_resp13, soil_c14_tot, soil_resp14
-        real(wp), allocatable, dimension(:) :: litterfall, litterfall13, litterfall14
+        real(wp), allocatable, dimension(:,:) :: litterfall, litterfall13, litterfall14   ! (nlc,ncarb)
         real(wp), allocatable, dimension(:) :: litter_in_frac
         real(wp), allocatable, dimension(:,:) :: soil_resp_l   ! (nl,ncarb), mirror reference
         ! peat

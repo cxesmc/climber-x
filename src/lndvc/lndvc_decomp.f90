@@ -438,6 +438,7 @@ contains
         vc%veg%f_crop=0._wp; vc%veg%f_pasture=0._wp; vc%veg%df_crop=0._wp; vc%veg%df_pasture=0._wp
         vc%veg%fire_c_flux=0._wp; vc%veg%fire_c13_flux=0._wp; vc%veg%fire_c14_flux=0._wp
         vc%veg%carbon_bal_veg=0._wp; vc%veg%carbon13_bal_veg=0._wp; vc%veg%carbon14_bal_veg=0._wp
+        allocate(vc%veg%disturbance(npft)); vc%veg%disturbance=0._wp
 
         ! --- soil carbon fields the thermal chain / init read ----------------
         allocate(vc%carb%soil_resp_l(nl,ncarb), vc%carb%litter_in_frac(nl))
@@ -446,6 +447,16 @@ contains
         vc%carb%f_peat     = 0._wp
         vc%carb%f_peat_pot = 0._wp
         vc%carb%dCpeat_dt  = 0._wp
+        ! carbon pools read/written by the veg-dynamics chain (soil_par_update,
+        ! dynveg_par, dyn_veg). Lean zero-init (port C.3, option A); physical
+        ! carbon cold-start + soil_carbon updates are port C.4.
+        allocate(vc%carb%litter_c(nl), vc%carb%fast_c(nl), vc%carb%slow_c(nl))
+        allocate(vc%carb%cato_c(nl), vc%carb%frac_soc(nl))
+        allocate(vc%carb%litterfall(nlc,ncarb), vc%carb%litterfall13(nlc,ncarb), vc%carb%litterfall14(nlc,ncarb))
+        vc%carb%litter_c(:) = 0._wp; vc%carb%fast_c(:) = 0._wp; vc%carb%slow_c(:) = 0._wp
+        vc%carb%cato_c(:)   = 0._wp; vc%carb%frac_soc(:) = 0._wp
+        vc%carb%litterfall(:,:) = 0._wp; vc%carb%litterfall13(:,:) = 0._wp; vc%carb%litterfall14(:,:) = 0._wp
+        vc%carb%litter_c_peat = 0._wp; vc%carb%acro_c = 0._wp
 
         ! --- shared snowpack (single land snow model) ------------------------
         vc%snow%mask_snow      = 0
