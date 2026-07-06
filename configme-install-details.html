@@ -194,6 +194,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./generating-maps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Generating maps</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./repositories.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">CLIMBER-X repository overview</span></a>
   </div>
@@ -282,7 +288,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>This page is for context only. The recommended way to install CLIMBER-X is to run <code>configme install climber-x</code> (see the <a href="./installation.html#quick-start">Quick start</a>); you do <strong>not</strong> need to run any of the commands below by hand. They are reproduced here so you can see exactly what <code>configme</code> clones, configures, links, and builds on your behalf.</p>
 <p><code>configme install</code> performs the following phases:</p>
 <ol type="1">
-<li><strong>Clone</strong> the CLIMBER-X checkout and each component repository it needs. The open components (<code>fesm-utils</code>, <code>coordinates</code>, <code>yelmo</code>) are cloned at the CLIMBER-X root; <code>yelmo</code> is pinned to its <code>climber-x</code> branch. The private components (<code>bgc</code>, <code>vilma</code>) are attempted too, but a clone failure (no access) is a soft skip recorded as “unavailable” — never a hard failure. They live inside CLIMBER-X’s own <code>src/</code> tree.</li>
+<li><strong>Clone</strong> the CLIMBER-X checkout and each component repository it needs. The open components (<code>fesm-utils</code>, <code>yelmo</code>) are cloned at the CLIMBER-X root; <code>yelmo</code> is pinned to its <code>climber-x</code> branch. The private components (<code>bgc</code>, <code>vilma</code>) are attempted too, but a clone failure (no access) is a soft skip recorded as “unavailable” — never a hard failure. They live inside CLIMBER-X’s own <code>src/</code> tree.</li>
 <li><strong>Manifest</strong> — write <code>.configme/manifest.toml</code> so the checkout is self-describing regardless of its directory name.</li>
 <li><strong>Link</strong> each component into the directories where the build expects it (e.g.&nbsp;<code>yelmo/fesm-utils -&gt; ../fesm-utils</code>).</li>
 <li><strong>Configure</strong> — generate a system-specific <code>Makefile</code> for every package from shared machine/compiler fragments, with the netCDF paths detected automatically.</li>
@@ -299,37 +305,35 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/climber-x.git <span class="va">$CLIMBERXROOT</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/fesm-utils.git <span class="va">$CLIMBERXROOT</span>/fesm-utils</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils/utils: component of fesm-utils (not cloned)</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/coordinates.git <span class="va">$CLIMBERXROOT</span>/coordinates</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/yelmo.git <span class="va">$CLIMBERXROOT</span>/yelmo</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="fu">git</span> checkout climber-x<span class="kw">)</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/bgc.git <span class="va">$CLIMBERXROOT</span>/src/bgc          <span class="co"># private (soft skip without access)</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/src/bgc <span class="kw">&amp;&amp;</span> <span class="fu">git</span> submodule update <span class="at">--init</span> <span class="at">--recursive</span><span class="kw">)</span>  <span class="co"># M4AGO submodule</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/vilma.git <span class="va">$CLIMBERXROOT</span>/src/vilma      <span class="co"># private (soft skip without access)</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co"># --- manifest ---</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> <span class="va">$CLIMBERXROOT</span>/.configme  <span class="co"># write .configme/manifest.toml</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># --- links ---</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">ln</span> <span class="at">-s</span> ../fesm-utils <span class="va">$CLIMBERXROOT</span>/yelmo/fesm-utils</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co"># --- configure (per package) ---</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils: build with autotools (slow, ~10-30 min):</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils <span class="kw">&amp;&amp;</span> <span class="va">NC_FROOT</span><span class="op">=&lt;</span>auto-detected<span class="op">&gt;</span> NC_CROOT=<span class="op">&lt;</span>auto-detected<span class="op">&gt;</span> ./build.py <span class="ex">--variant</span> both <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config fesm-utils/utils <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils/utils: build (serial, omp):</span></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=0 fesmutils-static<span class="kw">)</span></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=1 fesmutils-static<span class="kw">)</span></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/coordinates <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config coordinates <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config yelmo <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="co"># bgc: clone-only (configme does not configure it)</span></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="co"># vilma: clone-only (configme does not configure it)</span></span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span> <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config climber-x <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
-<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="co"># --- extras ---</span></span>
-<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="bu">command</span> <span class="at">-v</span> runme <span class="op">&gt;</span>/dev/null <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">||</span> <span class="ex">pip</span> install git+https://github.com/fesmc/runme</span>
-<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="co"># runme_config: create .runme_config and set hpc/account</span></span>
-<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--config</span>  <span class="co"># or: cp .runme/runme_config .runme_config</span></span>
-<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://gitlab.pik-potsdam.de/cxesmc/climber-x-input.git <span class="va">$CLIMBERXROOT</span>/input</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:fesmc/yelmo.git <span class="va">$CLIMBERXROOT</span>/yelmo</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="fu">git</span> checkout climber-x<span class="kw">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/bgc.git <span class="va">$CLIMBERXROOT</span>/src/bgc          <span class="co"># private (soft skip without access)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/src/bgc <span class="kw">&amp;&amp;</span> <span class="fu">git</span> submodule update <span class="at">--init</span> <span class="at">--recursive</span><span class="kw">)</span>  <span class="co"># M4AGO submodule</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone git@github.com:cxesmc/vilma.git <span class="va">$CLIMBERXROOT</span>/src/vilma      <span class="co"># private (soft skip without access)</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="co"># --- manifest ---</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="fu">mkdir</span> <span class="at">-p</span> <span class="va">$CLIMBERXROOT</span>/.configme  <span class="co"># write .configme/manifest.toml</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="co"># --- links ---</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">ln</span> <span class="at">-s</span> ../fesm-utils <span class="va">$CLIMBERXROOT</span>/yelmo/fesm-utils</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co"># --- configure (per package) ---</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils: build with autotools (slow, ~10-30 min):</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils <span class="kw">&amp;&amp;</span> <span class="va">NC_FROOT</span><span class="op">=&lt;</span>auto-detected<span class="op">&gt;</span> NC_CROOT=<span class="op">&lt;</span>auto-detected<span class="op">&gt;</span> ./build.py <span class="ex">--variant</span> both <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config fesm-utils/utils <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="co"># fesm-utils/utils: build (serial, omp):</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=0 fesmutils-static<span class="kw">)</span></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/fesm-utils/utils <span class="kw">&amp;&amp;</span> <span class="fu">make</span> openmp=1 fesmutils-static<span class="kw">)</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span>/yelmo <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config yelmo <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="co"># bgc: clone-only (configme does not configure it)</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="co"># vilma: clone-only (configme does not configure it)</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="kw">(</span><span class="bu">cd</span> <span class="va">$CLIMBERXROOT</span> <span class="kw">&amp;&amp;</span> <span class="ex">configme</span> config climber-x <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx<span class="kw">)</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="co"># --- extras ---</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="bu">command</span> <span class="at">-v</span> runme <span class="op">&gt;</span>/dev/null <span class="dv">2</span><span class="op">&gt;&amp;</span><span class="dv">1</span> <span class="kw">||</span> <span class="ex">pip</span> install git+https://github.com/fesmc/runme</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="co"># runme_config: create .runme_config and set hpc/account</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--config</span>  <span class="co"># or: cp .runme/runme_config .runme_config</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://gitlab.pik-potsdam.de/cxesmc/climber-x-input.git <span class="va">$CLIMBERXROOT</span>/input</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Once <code>configme install</code> finishes, choose a model flavor and build it as shown in <a href="./installation.html#compile-and-run">Compile and run</a>.</p>
 
 

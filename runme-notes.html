@@ -68,7 +68,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./repositories.html" rel="next">
+<link href="./generating-maps.html" rel="next">
 <link href="./dependencies.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js" type="module"></script>
 <script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
@@ -192,6 +192,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <div class="sidebar-item-container"> 
   <a href="./runme-notes.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Running CLIMBER-X with <code>runme</code></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./generating-maps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Generating maps</span></a>
   </div>
 </li>
           <li class="sidebar-item">
@@ -324,6 +330,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="running-ensembles-with-runme">Running ensembles with <code>runme</code></h2>
 <p><code>runme</code> switches to ensemble mode automatically whenever a <code>-p</code> value is <em>ensemble-shaped</em> — a comma list (<code>a=1,2,3</code>), a range (<code>a=0:10:5</code>), or a distribution (<code>a=U?0,1</code>) — or whenever an ensemble parameter file is supplied with <code>-i FILE</code>. A single-valued <code>-p</code> entry is instead a <em>fixed override</em> applied to every member.</p>
 <p>When running an ensemble, the <code>-o</code> argument no longer names a single <code>RUNDIR</code> but an encapsulating experiment directory <code>OUTDIR</code> that will contain one run directory per member.</p>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Important
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Before launching an ensemble for a new configuration, generate the shared maps once with <code>runme --gen-maps ...</code>. Otherwise every member tries to build the same map files at the same time and they crash. See <a href="./generating-maps.html">Generating maps</a>.</p>
+</div>
+</div>
 <p>The simplest ensemble varies one parameter over a comma list:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This ensemble of simulations will appear in <code>OUTDIR/0</code>, <code>OUTDIR/1</code> and <code>OUTDIR/2</code>, respectively.</p>
@@ -769,8 +788,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       </a>          
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./repositories.html" class="pagination-link" aria-label="CLIMBER-X repository overview">
-        <span class="nav-page-text">CLIMBER-X repository overview</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./generating-maps.html" class="pagination-link" aria-label="Generating maps">
+        <span class="nav-page-text">Generating maps</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

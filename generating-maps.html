@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>ice_yelmo_ts – CLIMBER-X</title>
+<title>generating-maps – CLIMBER-X</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -23,26 +23,63 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../">
-<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../site_libs/quarto-html/popper.min.js"></script>
-<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
-<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-f10a1527f7bd505c1346410c89cb625b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./repositories.html" rel="next">
+<link href="./runme-notes.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-f10a1527f7bd505c1346410c89cb625b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -81,7 +118,7 @@ ul.task-list li input[type="checkbox"] {
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../index.html">
+    <a class="navbar-brand" href="./index.html">
     <span class="navbar-title">CLIMBER-X</span>
     </a>
   </div>
@@ -92,19 +129,19 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="../installation.html" aria-current="page"> 
+    <a class="nav-link active" href="./installation.html" aria-current="page"> 
 <span class="menu-text">Getting started</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../use-cases/01-pi_spinup/index.html"> 
+    <a class="nav-link" href="./use-cases/01-pi_spinup/index.html"> 
 <span class="menu-text">Use cases</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../var_lists/index.html"> 
+    <a class="nav-link" href="./var_lists/index.html"> 
 <span class="menu-text">Output</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../workshops/2025/index.html"> 
+    <a class="nav-link" href="./workshops/2025/index.html"> 
 <span class="menu-text">Workshops</span></a>
   </li>  
 </ul>
@@ -118,7 +155,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./installation.html">Getting started</a></li><li class="breadcrumb-item"><a href="./generating-maps.html">Generating maps</a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
     </div>
@@ -132,13 +169,13 @@ ul.task-list li input[type="checkbox"] {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../index.html" class="sidebar-item-text sidebar-link">
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Home</span></a>
   </div>
 </li>
         <li class="sidebar-item sidebar-item-section">
       <div class="sidebar-item-container"> 
-            <a href="../installation.html" class="sidebar-item-text sidebar-link">
+            <a href="./installation.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Getting started</span></a>
           <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
             <i class="bi bi-chevron-right ms-2"></i>
@@ -147,25 +184,25 @@ ul.task-list li input[type="checkbox"] {
       <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../dependencies.html" class="sidebar-item-text sidebar-link">
+  <a href="./dependencies.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Dependencies</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../runme-notes.html" class="sidebar-item-text sidebar-link">
+  <a href="./runme-notes.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Running CLIMBER-X with <code>runme</code></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../generating-maps.html" class="sidebar-item-text sidebar-link">
+  <a href="./generating-maps.html" class="sidebar-item-text sidebar-link active">
  <span class="menu-text">Generating maps</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../repositories.html" class="sidebar-item-text sidebar-link">
+  <a href="./repositories.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">CLIMBER-X repository overview</span></a>
   </div>
 </li>
@@ -182,13 +219,13 @@ ul.task-list li input[type="checkbox"] {
       <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../use-cases/01-pi_spinup/index.html" class="sidebar-item-text sidebar-link">
+  <a href="./use-cases/01-pi_spinup/index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Pre-industrial spinup</span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../use-cases/03-lgm/index.html" class="sidebar-item-text sidebar-link">
+  <a href="./use-cases/03-lgm/index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Last glacial maximum</span></a>
   </div>
 </li>
@@ -205,7 +242,7 @@ ul.task-list li input[type="checkbox"] {
       <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../var_lists/index.html" class="sidebar-item-text sidebar-link">
+  <a href="./var_lists/index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Output files</span></a>
   </div>
 </li>
@@ -222,7 +259,7 @@ ul.task-list li input[type="checkbox"] {
       <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../workshops/2025/index.html" class="sidebar-item-text sidebar-link">
+  <a href="./workshops/2025/index.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">Workshop 2025</span></a>
   </div>
 </li>
@@ -233,311 +270,75 @@ ul.task-list li input[type="checkbox"] {
 </nav>
 <div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
 <!-- margin-sidebar -->
-    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
-        
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#generating-maps" id="toc-generating-maps" class="nav-link active" data-scroll-target="#generating-maps">Generating maps</a>
+  <ul class="collapse">
+  <li><a href="#first-run-of-a-configuration-is-slower" id="toc-first-run-of-a-configuration-is-slower" class="nav-link" data-scroll-target="#first-run-of-a-configuration-is-slower">First run of a configuration is slower</a></li>
+  <li><a href="#ensembles-generate-maps-once-first" id="toc-ensembles-generate-maps-once-first" class="nav-link" data-scroll-target="#ensembles-generate-maps-once-first">Ensembles: generate maps once, first</a></li>
+  <li><a href="#runme---gen-maps" id="toc-runme---gen-maps" class="nav-link" data-scroll-target="#runme---gen-maps"><code>runme --gen-maps</code></a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/generating-maps.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
     </div>
 <!-- main -->
-<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"></header>
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./installation.html">Getting started</a></li><li class="breadcrumb-item"><a href="./generating-maps.html">Generating maps</a></li></ol></nav></header>
 
 
 
 
-<table class="caption-top table">
-<colgroup>
-<col style="width: 18%">
-<col style="width: 49%">
-<col style="width: 13%">
-<col style="width: 19%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Variable</th>
-<th>Dimensions</th>
-<th>Units</th>
-<th>Long Name</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td>time</td>
-<td>time</td>
-<td>years</td>
-<td>N/A</td>
-</tr>
-<tr class="even">
-<td>xc</td>
-<td>xc</td>
-<td>kilometers</td>
-<td>N/A</td>
-</tr>
-<tr class="odd">
-<td>yc</td>
-<td>yc</td>
-<td>kilometers</td>
-<td>N/A</td>
-</tr>
-<tr class="even">
-<td>zeta</td>
-<td>zeta</td>
-<td>1</td>
-<td>N/A</td>
-</tr>
-<tr class="odd">
-<td>A_ice</td>
-<td>time</td>
-<td>1e6 km^2</td>
-<td>Ice area</td>
-</tr>
-<tr class="even">
-<td>A_ice_f</td>
-<td>time</td>
-<td>1e6 km^2</td>
-<td>Ice area (floating)</td>
-</tr>
-<tr class="odd">
-<td>A_ice_g</td>
-<td>time</td>
-<td>1e6 km^2</td>
-<td>Ice area (grounded)</td>
-</tr>
-<tr class="even">
-<td>bmb</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean total basal mass balance</td>
-</tr>
-<tr class="odd">
-<td>bmb_g</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean basal mass balance (grounded)</td>
-</tr>
-<tr class="even">
-<td>bmb_shlf</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean basal mass balance (floating)</td>
-</tr>
-<tr class="odd">
-<td>cmb</td>
-<td>time</td>
-<td>m^3/yr</td>
-<td>Calving mass balance rate</td>
-</tr>
-<tr class="even">
-<td>cmb_flt</td>
-<td>time</td>
-<td>m^3/yr</td>
-<td>Potential calving mass balance rate (floating)</td>
-</tr>
-<tr class="odd">
-<td>cmb_grnd</td>
-<td>time</td>
-<td>m^3/yr</td>
-<td>Potential calving mass balance rate (grounded)</td>
-</tr>
-<tr class="even">
-<td>dHidt</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean rate ice thickness change</td>
-</tr>
-<tr class="odd">
-<td>dmb</td>
-<td>time</td>
-<td>m^3/yr</td>
-<td>Discharge mass balance rate</td>
-</tr>
-<tr class="even">
-<td>dVidt</td>
-<td>time</td>
-<td>km^3/a</td>
-<td>Rate volume change</td>
-</tr>
-<tr class="odd">
-<td>dzsdt</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean rate surface elevation change</td>
-</tr>
-<tr class="even">
-<td>f_pmp</td>
-<td>time</td>
-<td>1</td>
-<td>Temperate fraction (grounded)</td>
-</tr>
-<tr class="odd">
-<td>fwf</td>
-<td>time</td>
-<td>Sv</td>
-<td>Rate volume change</td>
-</tr>
-<tr class="even">
-<td>H_ice</td>
-<td>time</td>
-<td>m</td>
-<td>Mean ice thickness</td>
-</tr>
-<tr class="odd">
-<td>H_ice_f</td>
-<td>time</td>
-<td>m</td>
-<td>Mean ice thickness (floating)</td>
-</tr>
-<tr class="even">
-<td>H_ice_g</td>
-<td>time</td>
-<td>m</td>
-<td>Mean ice thickness (grounded)</td>
-</tr>
-<tr class="odd">
-<td>H_ice_max</td>
-<td>time</td>
-<td>m/a</td>
-<td>Max ice thickness</td>
-</tr>
-<tr class="even">
-<td>H_w</td>
-<td>time</td>
-<td>m</td>
-<td>Mean basal water thickness (grounded)</td>
-</tr>
-<tr class="odd">
-<td>mask</td>
-<td>xc, yc</td>
-<td>1</td>
-<td>Region mask</td>
-</tr>
-<tr class="even">
-<td>smb</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean surface mass balance</td>
-</tr>
-<tr class="odd">
-<td>T_shlf</td>
-<td>time</td>
-<td>K</td>
-<td>Mean marine shelf temperature (floating)</td>
-</tr>
-<tr class="even">
-<td>T_srf</td>
-<td>time</td>
-<td>K</td>
-<td>Mean surface temperature</td>
-</tr>
-<tr class="odd">
-<td>uxy_b</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean basal velocity</td>
-</tr>
-<tr class="even">
-<td>uxy_b_f</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean basal velocity (floating)</td>
-</tr>
-<tr class="odd">
-<td>uxy_b_g</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean basal velocity (grounded)</td>
-</tr>
-<tr class="even">
-<td>uxy_bar</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean depth-ave velocity</td>
-</tr>
-<tr class="odd">
-<td>uxy_bar_f</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean depth-ave velocity (floating)</td>
-</tr>
-<tr class="even">
-<td>uxy_bar_g</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean depth-ave velocity (grounded)</td>
-</tr>
-<tr class="odd">
-<td>uxy_s</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean surface velocity</td>
-</tr>
-<tr class="even">
-<td>uxy_s_f</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean surface velocity (floating)</td>
-</tr>
-<tr class="odd">
-<td>uxy_s_g</td>
-<td>time</td>
-<td>m/a</td>
-<td>Mean surface velocity (grounded)</td>
-</tr>
-<tr class="even">
-<td>V_ice</td>
-<td>time</td>
-<td>1e6 km^3</td>
-<td>Ice volume</td>
-</tr>
-<tr class="odd">
-<td>V_ice_f</td>
-<td>time</td>
-<td>1e6 km^3</td>
-<td>Ice volume (floating)</td>
-</tr>
-<tr class="even">
-<td>V_ice_g</td>
-<td>time</td>
-<td>1e6 km^3</td>
-<td>Ice volume (grounded)</td>
-</tr>
-<tr class="odd">
-<td>V_sl</td>
-<td>time</td>
-<td>1e6 km^3</td>
-<td>Ice volume above flotation</td>
-</tr>
-<tr class="even">
-<td>V_sle</td>
-<td>time</td>
-<td>m sle</td>
-<td>Sea-level equivalent volume</td>
-</tr>
-<tr class="odd">
-<td>z_bed</td>
-<td>time</td>
-<td>m</td>
-<td>Mean bedrock elevation</td>
-</tr>
-<tr class="even">
-<td>z_sl</td>
-<td>time</td>
-<td>m</td>
-<td>Mean sea level (floating)</td>
-</tr>
-<tr class="odd">
-<td>z_srf</td>
-<td>time</td>
-<td>m</td>
-<td>Mean surface elevation</td>
-</tr>
-<tr class="even">
-<td>z_srf_g</td>
-<td>time</td>
-<td>m</td>
-<td>Mean surface elevation (grounded)</td>
-</tr>
-</tbody>
-</table>
+<section id="generating-maps" class="level1">
+<h1>Generating maps</h1>
+<p><strong>CLIMBER-X</strong> couples several components that live on different grids (atmosphere, ocean, land, ice sheets, solid Earth). To transfer fields between them, the model uses precomputed <strong>maps</strong> — the interpolation weights that transform a field from one coordinate grid to another. These maps are built with <a href="https://code.mpimet.mpg.de/projects/cdo/">CDO</a> and stored in the <code>maps/</code> directory.</p>
+<section id="first-run-of-a-configuration-is-slower" class="level2">
+<h2 class="anchored" data-anchor-id="first-run-of-a-configuration-is-slower">First run of a configuration is slower</h2>
+<p>The maps a simulation needs depend on its grid configuration. The first time you run a given configuration, the model checks <code>maps/</code> for the maps it requires and <strong>generates any that are missing</strong>. This makes that first run noticeably slower while the maps are built.</p>
+<p>The generated maps are written to <code>maps/</code> and reused on every subsequent run. Once they exist, the model finds them there and skips generation entirely, so all later runs of the same configuration start at full speed. You do not need to regenerate them unless the grid configuration changes.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Map generation requires <strong>CDO</strong> to be available on your <code>PATH</code>. See <a href="./dependencies.html">Dependencies</a> for installation notes.</p>
+</div>
+</div>
+</section>
+<section id="ensembles-generate-maps-once-first" class="level2">
+<h2 class="anchored" data-anchor-id="ensembles-generate-maps-once-first">Ensembles: generate maps once, first</h2>
+<p>Every member of an ensemble writes into the <strong>same shared <code>maps/</code> directory</strong>. If the maps do not yet exist and you launch the whole ensemble at once, all members start generating the same map files simultaneously, write over each other, and crash.</p>
+<p>The rule is therefore simple: <strong>make sure the maps exist before launching an ensemble.</strong> Do one map-generating run first, let it populate <code>maps/</code>, and only then launch the ensemble — every member will then find the maps already in place and run normally.</p>
+</section>
+<section id="runme---gen-maps" class="level2">
+<h2 class="anchored" data-anchor-id="runme---gen-maps"><code>runme --gen-maps</code></h2>
+<p>To make this easy, <code>runme</code> provides the <code>--gen-maps</code> option. It runs exactly one map-generating simulation and then stops, without launching the real run or ensemble.</p>
+<ul>
+<li>For a <strong>single simulation</strong>, it runs that one simulation.</li>
+<li>For an <strong>ensemble</strong>, it runs ensemble <strong>member 0</strong> only.</li>
+</ul>
+<p>The map-generating run is placed in a <code>mapgen/</code> subdirectory of the output directory (<code>&lt;OUTDIR&gt;/mapgen/</code>), so it stays out of the way of the real run directories. Its only purpose is to populate the shared <code>maps/</code> directory.</p>
+<p>The intended workflow is to issue the <em>same command twice</em> — once with <code>--gen-maps</code> to build the maps, then again without it for the real run:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1. Generate the maps (runs one simulation into OUTDIR/mapgen/)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--gen-maps</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2. Run the real ensemble (maps now already exist and are reused)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> OUTDIR <span class="at">-p</span> ctl.n_accel=1,5,10</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The <code>--gen-maps</code> step honours the run flags you pass (<code>-r</code>, <code>-s</code>, etc.), so it is literally your real command with the flag added. Once it has finished and the maps are in <code>maps/</code>, drop the flag and launch the full ensemble.</p>
+<p>For a single simulation the same two-step pattern works, though it is only needed the first time a new configuration is run:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">--gen-maps</span> <span class="at">-o</span> RUNDIR    <span class="co"># build maps into RUNDIR/mapgen/</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR           <span class="co"># real run, reusing the maps</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>See <a href="./runme-notes.html">Running with <code>runme</code></a> for the full set of <code>runme</code> options.</p>
 
 
+</section>
+</section>
 
 </main> <!-- /main -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -945,9 +746,21 @@ ul.task-list li input[type="checkbox"] {
     }
   });
   </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./runme-notes.html" class="pagination-link" aria-label="Running CLIMBER-X with `runme`">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Running CLIMBER-X with <code>runme</code></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./repositories.html" class="pagination-link" aria-label="CLIMBER-X repository overview">
+        <span class="nav-page-text">CLIMBER-X repository overview</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
 </div> <!-- /content -->
 
 
 
 
-<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/var_lists/ice_yelmo_ts.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/generating-maps.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

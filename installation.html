@@ -196,6 +196,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./generating-maps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Generating maps</span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./repositories.html" class="sidebar-item-text sidebar-link">
  <span class="menu-text">CLIMBER-X repository overview</span></a>
   </div>
@@ -315,7 +321,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>netCDF</strong> (C and Fortran libraries) — see <a href="./dependencies.html#installing-netcdf-preferably-version-4.0-or-higher">Dependencies</a> for installation tips.</li>
 <li><strong>CDO</strong> (<a href="https://code.mpimet.mpg.de/projects/cdo/">Climate Data Operators</a>) — only needed to (re)generate maps that transform between coordinate grids.</li>
 </ul>
-<p>Everything else — <code>coordinates</code>, the <code>fesm-utils</code> libraries (LIS + FFTW + utils), <code>yelmo</code>, and <code>runme</code> — is managed by <code>configme</code>. For the full dependency list see <a href="./dependencies.html">Dependencies</a>.</p>
+<p>Everything else — the <code>fesm-utils</code> libraries (LIS + FFTW + utils), <code>yelmo</code>, and <code>runme</code> — is managed by <code>configme</code>. For the full dependency list see <a href="./dependencies.html">Dependencies</a>.</p>
 </section>
 <section id="install-configme-one-time" class="level2">
 <h2 class="anchored" data-anchor-id="install-configme-one-time">Install configme (one time)</h2>
@@ -328,7 +334,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 class="anchored" data-anchor-id="quick-start">Quick start</h2>
 <p>With <code>configme</code> installed, build the whole CLIMBER-X stack with a single command from the directory where you want the checkout to live:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>This clones CLIMBER-X and its component repositories (<code>fesm-utils</code>, <code>coordinates</code>, and <code>yelmo</code> on its <code>climber-x</code> branch), configures each for your machine and compiler, links them into the CLIMBER-X directory, builds <code>fesm-utils</code> (LIS + FFTW + utils, which can take 10-30 min), installs <code>runme</code>, creates a <code>.runme_config</code>, and clones the large input-data repository into <code>input/</code>. If <code>configme</code> can detect your machine from the hostname it does so, otherwise it prompts you.</p>
+<p>This clones CLIMBER-X and its component repositories (<code>fesm-utils</code> and <code>yelmo</code> on its <code>climber-x</code> branch), configures each for your machine and compiler, links them into the CLIMBER-X directory, builds <code>fesm-utils</code> (LIS + FFTW + utils, which can take 10-30 min), installs <code>runme</code>, creates a <code>.runme_config</code>, and clones the large input-data repository into <code>input/</code>. If <code>configme</code> can detect your machine from the hostname it does so, otherwise it prompts you.</p>
 <p>It also <em>attempts</em> to clone the private <code>bgc</code> and <code>vilma</code> components (needed for the <code>bgc</code> and <code>ice</code> flavors). If you do not have access these are skipped with a note rather than failing the install — see <a href="#private-components-bgc-and-vilma">Private components</a>.</p>
 <p>Common options:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">configme</span> install climber-x <span class="at">-m</span> pik_hpc2024 <span class="at">-c</span> ifx   <span class="co"># pick the machine + compiler explicitly</span></span>
