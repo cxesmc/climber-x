@@ -163,7 +163,8 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_lnd_surface_par.o $(objdir)/lndvc_lnd_lake_par.o \
                  $(objdir)/lndvc_lnd_lake_convection.o $(objdir)/lndvc_lnd_ebal_lake.o \
                  $(objdir)/lndvc_lnd_lake_temp.o $(objdir)/lndvc_lnd_sublake_temp.o \
-                 $(objdir)/lndvc_lnd_surface_hydro.o \
+                 $(objdir)/lndvc_lnd_surface_hydro.o $(objdir)/lndvc_lnd_soil_hydro.o \
+                 $(objdir)/lndvc_lnd_water_deficit.o \
                  $(objdir)/lndvc_lnd_veg_par.o $(objdir)/lndvc_lnd_photosynthesis.o \
                  $(objdir)/lndvc_lnd_soil_par.o $(objdir)/lndvc_lnd_ebal_veg.o \
                  $(objdir)/lndvc_lnd_soil_temp.o $(objdir)/lndvc_lnd_init_cell.o
@@ -770,6 +771,14 @@ $(objdir)/lndvc_lnd_sublake_temp.o : $(dir_lndvc)/lnd/sublake_temp.f90 $(objdir)
 
 $(objdir)/lndvc_lnd_surface_hydro.o : $(dir_lndvc)/lnd/surface_hydro.f90 $(objdir)/constants.o $(objdir)/control.o \
 						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/wiso_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_soil_hydro.o : $(dir_lndvc)/lnd/soil_hydro.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/tridiag.o $(objdir)/wiso_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_water_deficit.o : $(dir_lndvc)/lnd/water_deficit.f90 $(objdir)/constants.o \
+						$(objdir)/lnd_grid.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 # ported vegetated-land physics (src/lndvc/lnd, port C): pattern A whole-file
