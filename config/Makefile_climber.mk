@@ -151,7 +151,7 @@ obj_lnd = $(patsubst %, $(objdir)/%, $(tmp_lnd) )
 ########################################################################
 # land virtual cell (lndvc) model related source files
 dir_lndvc = $(srcdir)/lndvc
-files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_model.f90 
+files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_decomp.f90 lndvc_downscale.f90 lndvc_aggregate.f90 lndvc_model.f90
 tmp_lndvc = $(patsubst %.f90, %.o, $(files_lndvc) )
 obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) )
 ########################################################################
@@ -680,7 +680,20 @@ $(objdir)/lndvc_def.o : $(dir_lndvc)/lndvc_def.f90 $(objdir)/precision.o
 $(objdir)/lndvc_grid.o : $(dir_lndvc)/lndvc_grid.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
+$(objdir)/lndvc_decomp.o : $(dir_lndvc)/lndvc_decomp.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
+						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_downscale.o : $(dir_lndvc)/lndvc_downscale.f90 $(objdir)/lndvc_def.o \
+						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_aggregate.o : $(dir_lndvc)/lndvc_aggregate.f90 $(objdir)/lndvc_def.o \
+						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
 $(objdir)/lndvc_model.o : $(dir_lndvc)/lndvc_model.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
+						$(objdir)/lndvc_decomp.o $(objdir)/lndvc_downscale.o $(objdir)/lndvc_aggregate.o \
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
