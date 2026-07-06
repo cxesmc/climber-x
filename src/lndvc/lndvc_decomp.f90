@@ -294,8 +294,12 @@ contains
         ! t_soil allocation doubles as the once-guard
         if (allocated(vc%soil%t_soil)) return
 
-        ! --- shared surface-flux block over the nveg sub-tiles ----------------
-        call alloc_surface_flux(vc%flx, nveg)
+        ! --- shared surface-flux block over the nsurf tiles -------------------
+        ! Sized nsurf (not nveg): the pattern-A veg routines (ebal_veg,
+        ! update_tskin_veg, canopy_water) use whole-array flag_veg/flag_pft
+        ! masks of length nsurf, so the flux arrays must conform. The veg tiles
+        ! (1..nveg) are active; the lake/ice slots (i_lake,i_ice) stay zero.
+        call alloc_surface_flux(vc%flx, nsurf)
 
         ! --- soil column (thermal) -------------------------------------------
         allocate(vc%soil%t_soil(0:nl), vc%soil%t_soil_old(0:nl), vc%soil%t_soil_max(0:nl))
@@ -422,8 +426,8 @@ contains
         vc%veg%f_crop=0._wp; vc%veg%f_pasture=0._wp; vc%veg%df_crop=0._wp; vc%veg%df_pasture=0._wp
 
         ! --- soil carbon fields the thermal chain / init read ----------------
-        allocate(vc%carb%soil_resp_l(nl), vc%carb%litter_in_frac(nl))
-        vc%carb%soil_resp_l(:)    = 0._wp
+        allocate(vc%carb%soil_resp_l(nl,ncarb), vc%carb%litter_in_frac(nl))
+        vc%carb%soil_resp_l(:,:)  = 0._wp
         vc%carb%litter_in_frac(:) = 0._wp
         vc%carb%f_peat     = 0._wp
         vc%carb%f_peat_pot = 0._wp
@@ -481,6 +485,7 @@ contains
         allocate(flx%transpiration(n), flx%evap_surface(n), flx%et(n))
         allocate(flx%rain_ground(n), flx%evap_can(n), flx%snow_ground(n), flx%subl_can(n))
         allocate(flx%w_can(n), flx%w_can_old(n), flx%s_can(n), flx%s_can_old(n), flx%f_wat_can(n), flx%f_snow_can(n))
+        allocate(flx%f_snow(n))
         allocate(flx%frac_surf(n))
         ! water isotopes (n,nwiso)
         allocate(flx%rain_iso(n,nwiso), flx%snow_iso(n,nwiso))
@@ -501,6 +506,7 @@ contains
         flx%transpiration=0._wp; flx%evap_surface=0._wp; flx%et=0._wp
         flx%rain_ground=0._wp; flx%evap_can=0._wp; flx%snow_ground=0._wp; flx%subl_can=0._wp
         flx%w_can=0._wp; flx%w_can_old=0._wp; flx%s_can=0._wp; flx%s_can_old=0._wp; flx%f_wat_can=0._wp; flx%f_snow_can=0._wp
+        flx%f_snow=0._wp
         flx%frac_surf=0._wp
         flx%rain_iso=0._wp; flx%snow_iso=0._wp
         flx%rain_ground_iso=0._wp; flx%snow_ground_iso=0._wp

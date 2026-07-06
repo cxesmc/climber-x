@@ -30,9 +30,18 @@ module lndvc_model
     use lndvc_ebal_lake_mod,   only : ebal_lake, update_tskin_lake
     use lndvc_lake_temp_mod,   only : lake_temp
     use lndvc_hydrology_mod,   only : surface_hydrology_lake
+    ! ported vegetated-land physics (port C)
+    use lndvc_surface_par_lnd, only : resist_aer_veg, resist_sur_veg, surface_albedo_veg
+    use lndvc_veg_par_mod,     only : phenology
+    use lndvc_photosynthesis_mod, only : photosynthesis
+    use lndvc_hydrology_mod,   only : canopy_water
+    use lndvc_soil_par_mod,    only : soil_par_thermal
+    use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
+    use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
     use lnd_params,            only : lnd_surf_par => surf_par
     use lnd_params,            only : soil_par, hydro_par
+    use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
     implicit none
@@ -226,11 +235,160 @@ contains
     end subroutine lndvc_init_land
 
     subroutine lndvc_update_land(vc)
+        ! Single-column vegetated-land surface update (port C.1): pattern-A
+        ! unpack of the vc blocks into the ported veg chain, mirroring the
+        ! reference lnd veg path (phenology -> aerodynamic/surface resistance ->
+        ! albedo -> photosynthesis -> canopy water -> soil thermal params ->
+        ! surface energy balance -> soil temperature -> skin update). The vc
+        ! holds a single scalar forcing; the pattern-A routines expect nsurf-tile
+        ! forcing arrays, so the scalar is broadcast to local nsurf arrays here
+        ! (identity baseline: one elevation, uniform forcing across sub-tiles).
+        ! Soil hydrology (C.2), veg dynamics (C.3) and soil carbon (C.4) are
+        ! separate stages; the water-isotope freeze/thaw redistribution after
+        ! soil_temp is deferred (like the SMB/lake iso deferrals).
+
         implicit none
+
         type(vc_t), intent(inout) :: vc
-        ! TODO: ported single-column land physics (veg energy balance, soil
-        !       thermal+permafrost, hydrology, snow, soil carbon).
+
+        integer, parameter :: ii = 0, jj = 0   ! debug-print indices only
+        integer  :: n
+        real(wp) :: f_veg, t_skin_veg
+        real(wp) :: flx_g_veg, dflxg_dT_veg, flx_melt_veg
+        ! scalar forcing broadcast to the nsurf sub-tiles
+        real(wp) :: tatm(nsurf), qatm(nsurf), t2m(nsurf), q2m(nsurf), wind(nsurf)
+        real(wp) :: pressure(nsurf), swnet(nsurf), swnet_min(nsurf), lwdown(nsurf)
+        real(wp) :: rain(nsurf), snow(nsurf)
+        ! per-tile conservation diagnostics (vc keeps only scalar residuals)
+        real(wp) :: encons1(nsurf), encons2(nsurf)
+
+        ! --- broadcast the vc's scalar forcing to the sub-tiles ---------------
+        tatm(:)      = vc%forc%tatm
+        qatm(:)      = vc%forc%qatm
+        t2m(:)       = vc%forc%t2m
+        q2m(:)       = vc%forc%q2m
+        wind(:)      = vc%forc%wind
+        pressure(:)  = vc%forc%pressure
+        swnet(:)     = vc%forc%swnet
+        swnet_min(:) = vc%forc%swnet_min
+        lwdown(:)    = vc%forc%lwdown
+        rain(:)      = vc%forc%rain
+        snow(:)      = vc%forc%snow
+
+        ! vegetated fraction within the vc (=1 for the identity baseline) and
+        ! the veg-mean skin temperature from the previous step (for snow albedo)
+        f_veg = sum(vc%flx%frac_surf, mask=flag_veg.eq.1)
+        t_skin_veg = 0._wp
+        if (f_veg .gt. 0._wp) then
+            do n = 1, nsurf
+                if (flag_veg(n).eq.1) t_skin_veg = t_skin_veg + vc%flx%t_skin(n)*vc%flx%frac_surf(n)/f_veg
+            end do
+        else
+            t_skin_veg = T0
+        end if
+
+        ! carry-over snapshots for the step
+        vc%flx%t_skin_old  = vc%flx%t_skin
+        vc%snow%w_snow_old = vc%snow%w_snow
+
+        ! isotope tagging of throughfall input (VSMOW) when isotopes are active
+        if (l_wiso) then
+            vc%flx%rain_iso(:,i_o18) = Rstd(i_o18) * rain(:)
+            vc%flx%snow_iso(:,i_o18) = Rstd(i_o18) * snow(:)
+        endif
+
+        ! --- phenology --------------------------------------------------------
+        call phenology(vc%flx%frac_surf, f_veg, t2m, vc%veg%t2m_min_mon, vc%veg%gdd5_temp, vc%veg%gdd5, &
+            vc%veg%gdd, vc%veg%phen_acc, vc%veg%phen, vc%veg%gamma_leaf, vc%veg%lai, vc%veg%lai_bal)
+
+        ! --- aerodynamic resistance -------------------------------------------
+        call resist_aer_veg(vc%flx%frac_surf, vc%veg%veg_h, vc%veg%lai, vc%veg%sai, vc%snow%h_snow, &
+            tatm, vc%flx%t_skin, wind, &
+            vc%flx%z0m, vc%flx%rough_m, vc%flx%rough_h, vc%flx%Ch, vc%flx%r_a, vc%flx%r_a_can, vc%flx%Ri)
+
+        ! --- snow + surface albedo --------------------------------------------
+        call snow_albedo_lake(t_skin_veg, vc%forc%snow, vc%snow%w_snow, vc%snow%w_snow_max, &
+            vc%forc%dust, vc%forc%coszm, &
+            vc%snow%alb_snow_vis_dir, vc%snow%alb_snow_vis_dif, vc%snow%alb_snow_nir_dir, vc%snow%alb_snow_nir_dif, &
+            vc%snow%snow_grain, vc%snow%dust_con)
+
+        call surface_albedo_veg(vc%flx%frac_surf, vc%desc%z_sur_std, vc%snow%h_snow, vc%forc%coszm, &
+            vc%veg%lai, vc%veg%sai, vc%flx%z0m, vc%flx%f_snow_can, &
+            vc%snow%alb_snow_vis_dir, vc%snow%alb_snow_vis_dif, vc%snow%alb_snow_nir_dir, vc%snow%alb_snow_nir_dif, &
+            vc%forc%alb_bare_vis, vc%forc%alb_bare_nir, vc%flx%f_snow, &
+            vc%flx%alb_vis_dir, vc%flx%alb_vis_dif, vc%flx%alb_nir_dir, vc%flx%alb_nir_dif, vc%flx%albedo)
+
+        ! --- photosynthesis (canopy conductance) ------------------------------
+        call photosynthesis(vc%forc%co2, vc%forc%c13_c12_atm, vc%forc%c14_c_atm, &
+            vc%flx%frac_surf, t2m, vc%veg%t2m_min_mon, vc%veg%gdd5, vc%soil%t_soil(1:nl), &
+            q2m, pressure, swnet, vc%flx%albedo, vc%forc%daylength, &
+            vc%soil%theta_w, vc%soil%theta_field, vc%soil%theta_wilt, vc%soil%wilt, vc%soil%root_frac, &
+            vc%veg%lai, vc%veg%phen, vc%veg%leaf_c, vc%veg%stem_c, vc%veg%root_c, &
+            vc%veg%discrimination, vc%veg%ci, vc%veg%g_can, vc%veg%gpp, vc%veg%npp, vc%veg%npp13, vc%veg%npp14, &
+            vc%veg%npp_cum, vc%veg%npp13_cum, vc%veg%npp14_cum, vc%veg%npp_ann, vc%veg%npp13_ann, vc%veg%npp14_ann, &
+            vc%veg%aresp)
+
+        ! --- surface resistance for evapotranspiration ------------------------
+        call resist_sur_veg(vc%flx%frac_surf, vc%snow%mask_snow, vc%soil%theta_w, vc%veg%g_can, &
+            vc%flx%beta_s, vc%flx%r_s, vc%flx%beta_s_can, vc%flx%r_s_can)
+
+        ! --- canopy interception (throughfall + canopy evap) ------------------
+        call canopy_water(vc%flx%frac_surf, vc%veg%lai, vc%veg%sai, vc%flx%r_a, vc%flx%t_skin, &
+            pressure, qatm, rain, snow, &
+            vc%flx%w_can, vc%flx%w_can_old, vc%flx%s_can, vc%flx%s_can_old, &
+            vc%flx%rain_ground, vc%flx%snow_ground, vc%flx%evap_can, vc%flx%subl_can, vc%flx%f_wat_can, vc%flx%f_snow_can, &
+            vc%flx%rain_iso, vc%flx%snow_iso, &
+            vc%flx%w_can_iso, vc%flx%w_can_iso_old, vc%flx%s_can_iso, vc%flx%s_can_iso_old, &
+            vc%flx%rain_ground_iso, vc%flx%snow_ground_iso, vc%flx%evap_can_iso, vc%flx%subl_can_iso)
+
+        ! --- soil thermal properties ------------------------------------------
+        call soil_par_thermal(vc%soil%t_soil, vc%soil%theta_w, vc%soil%theta_i, vc%soil%theta, vc%soil%theta_sat, &
+            vc%soil%lambda_s, vc%soil%lambda_dry, vc%snow%h_snow, &
+            vc%soil%cap_soil, vc%soil%lambda_soil, vc%soil%lambda_int_soil)
+
+        ! --- surface energy balance -------------------------------------------
+        call ebal_veg(vc%flx%frac_surf, vc%snow%mask_snow, vc%snow%h_snow, vc%snow%w_snow, vc%soil%lambda_soil, &
+            vc%flx%evap_can, vc%flx%subl_can, vc%flx%t_skin, vc%flx%t_skin_old, vc%soil%t_soil, &
+            tatm, qatm, pressure, swnet, swnet_min, lwdown, &
+            vc%flx%beta_s, vc%flx%r_s, vc%flx%beta_s_can, vc%flx%r_s_can, vc%flx%r_a, vc%flx%r_a_can, &
+            vc%flx%flx_g, vc%flx%dflxg_dT, vc%flx%flx_melt, flx_g_veg, dflxg_dT_veg, flx_melt_veg, vc%flx%t_skin_amp, &
+            vc%flx%num_lh, vc%flx%num_sh, vc%flx%num_sw, vc%flx%num_lw, vc%flx%denom_lh, vc%flx%denom_sh, vc%flx%denom_lw, &
+            vc%flx%f_sh, vc%flx%f_e, vc%flx%f_t, vc%flx%f_le, vc%flx%f_lt, vc%flx%f_lw, vc%flx%lh_ecan, &
+            vc%flx%qsat_e, vc%flx%dqsatdT_e, vc%flx%qsat_t, vc%flx%dqsatdT_t, &
+            encons1, ii, jj)
+
+        ! isotope snapshot before the phase-change step
+        if (l_wiso) then
+            vc%soil%w_w_iso_old = vc%soil%w_w_iso
+            vc%soil%w_i_iso_old = vc%soil%w_i_iso
+            vc%snow%w_snow_iso_old = vc%snow%w_snow_iso
+        endif
+
+        ! --- soil temperature (phase change, snowmelt) ------------------------
+        call soil_temp(vc%snow%mask_snow, vc%snow%h_snow, vc%soil%cap_soil, vc%soil%lambda_int_soil, &
+            vc%soil%psi_sat, vc%soil%psi_exp, vc%soil%theta_sat, vc%carb%soil_resp_l, vc%carb%f_peat, &
+            flx_g_veg, dflxg_dT_veg, flx_melt_veg, &
+            vc%soil%t_soil, vc%soil%t_soil_cum, vc%snow%w_snow, vc%soil%w_w, vc%soil%w_i, &
+            vc%soil%theta_w, vc%soil%theta_i, &
+            vc%snow%snowmelt, vc%soil%t_soil_old, vc%snow%w_snow_old, &
+            vc%soil%w_w_old, vc%soil%w_i_old, vc%soil%w_w_phase, vc%soil%w_i_phase, &
+            vc%energy_cons_soil, ii, jj)
+
+        ! --- skin temperature + surface fluxes --------------------------------
+        call update_tskin_veg(vc%flx%frac_surf, vc%snow%mask_snow, vc%flx%t_skin_old, vc%flx%dflxg_dT, &
+            tatm, qatm, swnet, lwdown, vc%soil%t_soil, vc%soil%t_soil_old, vc%flx%evap_can, vc%flx%subl_can, &
+            vc%flx%flx_g, vc%flx%flx_melt, vc%flx%t_skin, t_skin_veg, &
+            vc%flx%flx_sh, vc%flx%flx_lwu, vc%flx%lwnet, vc%flx%flx_lh, &
+            vc%flx%evap_surface, vc%flx%transpiration, vc%flx%et, &
+            vc%flx%num_lh, vc%flx%num_sh, vc%flx%num_sw, vc%flx%num_lw, vc%flx%denom_lh, vc%flx%denom_sh, vc%flx%denom_lw, &
+            vc%flx%f_sh, vc%flx%f_e, vc%flx%f_t, vc%flx%f_le, vc%flx%f_lt, vc%flx%f_lw, vc%flx%lh_ecan, &
+            vc%flx%qsat_e, vc%flx%dqsatdT_e, vc%flx%qsat_t, vc%flx%dqsatdT_t, &
+            encons2, &
+            vc%soil%w_w, vc%soil%w_w_iso, vc%soil%wilt, vc%flx%evap_can_iso, vc%flx%subl_can_iso, &
+            vc%flx%evap_surface_iso, vc%flx%transpiration_iso, vc%flx%et_iso)
+
         return
+
     end subroutine lndvc_update_land
 
     subroutine lndvc_update_lake(vc)

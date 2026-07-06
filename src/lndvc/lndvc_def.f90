@@ -49,6 +49,9 @@ module lndvc_def
         real(wp) :: wind, pressure
         real(wp) :: dust                        ! dust deposition [kg/m2/s] (lake snow albedo)
         real(wp) :: disturbance
+        ! vegetated-land forcing (port C): atmospheric CO2 + bare-soil albedo
+        real(wp) :: co2, c13_c12_atm, c14_c_atm ! atmospheric CO2 for photosynthesis
+        real(wp) :: alb_bare_vis, alb_bare_nir  ! per-cell bare-soil background albedo
         ! reference elevation the _i forcing below is valid at [m]
         ! (coarse-cell mean; SEMI downscales from here to vc%desc%z)
         real(wp) :: z_sur_i
@@ -83,6 +86,7 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: transpiration, evap_surface, et
         real(wp), allocatable, dimension(:) :: rain_ground, evap_can, snow_ground, subl_can
         real(wp), allocatable, dimension(:) :: w_can, w_can_old, s_can, s_can_old, f_wat_can, f_snow_can
+        real(wp), allocatable, dimension(:) :: f_snow        ! snow-covered fraction per sub-tile
         real(wp), allocatable, dimension(:) :: frac_surf     ! sub-tile fractions within this vc
         ! water isotopes (sub-tile, nwiso)
         real(wp), allocatable, dimension(:,:) :: rain_iso, snow_iso
@@ -184,7 +188,7 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: soil_c_tot, soil_resp, soil_c13_tot, soil_resp13, soil_c14_tot, soil_resp14
         real(wp), allocatable, dimension(:) :: litterfall, litterfall13, litterfall14
         real(wp), allocatable, dimension(:) :: litter_in_frac
-        real(wp), allocatable, dimension(:) :: soil_resp_l
+        real(wp), allocatable, dimension(:,:) :: soil_resp_l   ! (nl,ncarb), mirror reference
         ! peat
         real(wp) :: k_litter_peat, k_acro, k_litter_peat_anox, k_acro_anox, f_oxic_peat
         real(wp) :: litter_c_peat, acro_c, litter_c13_peat, acro_c13, litter_c14_peat, acro_c14

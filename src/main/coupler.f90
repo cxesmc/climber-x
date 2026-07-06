@@ -81,7 +81,7 @@ module coupler
     use ocn_params, only : i_scale_dhdt_ice, scale_dhdt_ice, scale_dhdt_ice_time, scale_dhdt_ice_data
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
-    use lnd_params, only : mineral
+    use lnd_params, only : mineral, lnd_surf_par => surf_par
     use lnd_grid, only : is_veg, is_ice, is_lake, nl, i_bare
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
@@ -2622,6 +2622,13 @@ contains
           f%coszm     = cmn%coszm(doy,j)
           f%daylength = cmn%daylength(doy,j)
           f%dust      = cmn%dust_dep(i,j)
+
+          ! atmospheric CO2 (photosynthesis) + bare-soil background albedo
+          f%co2         = lndvc%glob%co2
+          f%c13_c12_atm = lndvc%glob%c13_c12_atm
+          f%c14_c_atm   = lndvc%glob%c14_c_atm
+          f%alb_bare_vis = lnd_surf_par%alb_bare_vis(i,j)
+          f%alb_bare_nir = lnd_surf_par%alb_bare_nir(i,j)
 
           ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
           if (flag_atm) then
