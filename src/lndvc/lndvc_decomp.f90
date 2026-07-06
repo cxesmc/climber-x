@@ -113,6 +113,7 @@ contains
                 if (.not. allocated(vc(k)%soil)) allocate(vc(k)%soil)
                 if (.not. allocated(vc(k)%carb)) allocate(vc(k)%carb)
                 if (.not. allocated(vc(k)%snow)) allocate(vc(k)%snow)
+                call alloc_land_blocks(vc(k))
             case(2)   ! lake
                 if (.not. allocated(vc(k)%lake)) allocate(vc(k)%lake)
                 if (.not. allocated(vc(k)%snow)) allocate(vc(k)%snow)
@@ -275,6 +276,186 @@ contains
         return
 
     end subroutine alloc_lake_blocks
+
+    subroutine alloc_land_blocks(vc)
+        ! Size + neutral-initialize the inner arrays a vegetated land virtual
+        ! cell needs for the port-C surface energy-balance chain. Array bounds
+        ! mirror the reference lnd allocation (src/lnd/lnd_model.f90 ~1760):
+        ! surface_flux over the nveg (bare+PFT) sub-tiles, soil column over nl,
+        ! veg tiles over npft, one shared snowpack. Values are neutral here
+        ! (T0/0); the physical state is seeded from the coarse cell in
+        ! cmn_to_lndvc (port C decision: seed veg+soil state, decision B).
+        ! Done once, guarded by allocation.
+
+        implicit none
+
+        type(vc_t), intent(inout) :: vc
+
+        ! t_soil allocation doubles as the once-guard
+        if (allocated(vc%soil%t_soil)) return
+
+        ! --- shared surface-flux block over the nveg sub-tiles ----------------
+        call alloc_surface_flux(vc%flx, nveg)
+
+        ! --- soil column (thermal) -------------------------------------------
+        allocate(vc%soil%t_soil(0:nl), vc%soil%t_soil_old(0:nl), vc%soil%t_soil_max(0:nl))
+        allocate(vc%soil%lambda_soil(0:nl), vc%soil%lambda_int_soil(0:nl), vc%soil%cap_soil(0:nl))
+        allocate(vc%soil%theta_w(nl), vc%soil%theta_i(nl), vc%soil%theta(nl))
+        allocate(vc%soil%w_w(nl), vc%soil%w_i(nl), vc%soil%w_w_old(nl), vc%soil%w_i_old(nl))
+        allocate(vc%soil%w_w_phase(nl), vc%soil%w_i_phase(nl))
+        allocate(vc%soil%lambda_s(nl), vc%soil%lambda_dry(nl), vc%soil%kappa_int(nl))
+        allocate(vc%soil%theta_sat(nl), vc%soil%k_sat(nl), vc%soil%psi_sat(nl))
+        allocate(vc%soil%theta_field(nl), vc%soil%theta_wilt(nl), vc%soil%psi(nl))
+        allocate(vc%soil%k_exp(nl), vc%soil%psi_exp(nl))
+        allocate(vc%soil%t_soil_cum(nl), vc%soil%theta_w_cum(nl), vc%soil%theta_i_cum(nl))
+        ! permafrost
+        allocate(vc%soil%frozen_years(nl), vc%soil%thaw_timer(nl))
+        ! hydrology / water balance (single land tile)
+        allocate(vc%soil%runoff(1), vc%soil%runoff_sur(1), vc%soil%calving(1))
+        allocate(vc%soil%drainage(1), vc%soil%water_cons(1))
+        ! rooting / wilting (nl,npft)
+        allocate(vc%soil%wilt(nl,npft), vc%soil%root_frac(nl,npft))
+        ! soil water isotopes
+        allocate(vc%soil%w_w_iso(nl,nwiso), vc%soil%w_i_iso(nl,nwiso))
+        allocate(vc%soil%w_w_iso_old(nl,nwiso), vc%soil%w_i_iso_old(nl,nwiso))
+        allocate(vc%soil%infiltration_iso(nwiso))
+        allocate(vc%soil%runoff_iso(nwiso), vc%soil%runoff_sur_iso(nwiso))
+        allocate(vc%soil%drainage_iso(nwiso), vc%soil%calving_iso(nwiso))
+        allocate(vc%soil%water_iso_cons(nwiso))
+
+        vc%soil%t_soil(:)        = T0
+        vc%soil%t_soil_old(:)    = T0
+        vc%soil%t_soil_max(:)    = T0
+        vc%soil%lambda_soil(:)   = 0._wp
+        vc%soil%lambda_int_soil(:) = 0._wp
+        vc%soil%cap_soil(:)      = 0._wp
+        vc%soil%theta_w(:)       = 0._wp
+        vc%soil%theta_i(:)       = 0._wp
+        vc%soil%theta(:)         = 0._wp
+        vc%soil%w_w(:)           = 0._wp
+        vc%soil%w_i(:)           = 0._wp
+        vc%soil%w_w_old(:)       = 0._wp
+        vc%soil%w_i_old(:)       = 0._wp
+        vc%soil%w_w_phase(:)     = 0._wp
+        vc%soil%w_i_phase(:)     = 0._wp
+        vc%soil%lambda_s(:)      = 0._wp
+        vc%soil%lambda_dry(:)    = 0._wp
+        vc%soil%kappa_int(:)     = 0._wp
+        vc%soil%theta_sat(:)     = 0._wp
+        vc%soil%k_sat(:)         = 0._wp
+        vc%soil%psi_sat(:)       = 0._wp
+        vc%soil%theta_field(:)   = 0._wp
+        vc%soil%theta_wilt(:)    = 0._wp
+        vc%soil%psi(:)           = 0._wp
+        vc%soil%k_exp(:)         = 0
+        vc%soil%psi_exp(:)       = 0
+        vc%soil%t_soil_cum(:)    = 0._wp
+        vc%soil%theta_w_cum(:)   = 0._wp
+        vc%soil%theta_i_cum(:)   = 0._wp
+        vc%soil%frozen_years(:)  = 0._wp
+        vc%soil%thaw_timer(:)    = 0._wp
+        vc%soil%runoff(:)        = 0._wp
+        vc%soil%runoff_sur(:)    = 0._wp
+        vc%soil%calving(:)       = 0._wp
+        vc%soil%drainage(:)      = 0._wp
+        vc%soil%water_cons(:)    = 0._wp
+        vc%soil%wilt(:,:)        = 0._wp
+        vc%soil%root_frac(:,:)   = 0._wp
+        vc%soil%w_w_iso(:,:)     = 0._wp
+        vc%soil%w_i_iso(:,:)     = 0._wp
+        vc%soil%w_w_iso_old(:,:) = 0._wp
+        vc%soil%w_i_iso_old(:,:) = 0._wp
+        vc%soil%infiltration_iso(:) = 0._wp
+        vc%soil%runoff_iso(:)    = 0._wp
+        vc%soil%runoff_sur_iso(:) = 0._wp
+        vc%soil%drainage_iso(:)  = 0._wp
+        vc%soil%calving_iso(:)   = 0._wp
+        vc%soil%water_iso_cons(:) = 0._wp
+        ! soil scalars
+        vc%soil%alt          = 0._wp
+        vc%soil%infiltration = 0._wp
+        vc%soil%w_table      = 0._wp
+        vc%soil%w_table_peat = 0._wp
+        vc%soil%w_table_cum  = 0._wp
+        vc%soil%w_table_min  = 0._wp
+        vc%soil%f_wet        = 0._wp
+        vc%soil%f_wet_cum    = 0._wp
+        vc%soil%f_wet_max    = 0._wp
+        vc%soil%f_wetland    = 0._wp
+        vc%soil%cti_lim      = 0._wp
+        vc%soil%f_wet_mon    = 0._wp
+        vc%soil%w_table_mon  = 0._wp
+        vc%soil%f_wet_long   = 0._wp
+        vc%soil%runoff_ann   = 0._wp
+        vc%soil%pet          = 0._wp
+        vc%soil%mcwd         = 0._wp
+        vc%soil%mcwd_clim    = 0._wp
+
+        ! --- vegetation tiles (npft) -----------------------------------------
+        allocate(vc%veg%ci(npft), vc%veg%g_can(npft), vc%veg%gpp(npft), vc%veg%npp(npft))
+        allocate(vc%veg%npp13(npft), vc%veg%npp14(npft), vc%veg%aresp(npft), vc%veg%discrimination(npft))
+        allocate(vc%veg%lai(npft), vc%veg%sai(npft), vc%veg%phen(npft), vc%veg%phen_acc(npft))
+        allocate(vc%veg%gdd(npft), vc%veg%gamma_leaf(npft), vc%veg%lambda(npft), vc%veg%lai_bal(npft))
+        allocate(vc%veg%npp_cum(npft), vc%veg%npp13_cum(npft), vc%veg%npp14_cum(npft))
+        allocate(vc%veg%npp_ann(npft), vc%veg%npp13_ann(npft), vc%veg%npp14_ann(npft))
+        allocate(vc%veg%veg_c(npft), vc%veg%veg_h(npft), vc%veg%pft_frac(npft), vc%veg%seed_frac(npft))
+        allocate(vc%veg%veg_c_below(nl), vc%veg%veg_c13_below(nl), vc%veg%veg_c14_below(nl))
+        allocate(vc%veg%leaf_c(npft), vc%veg%stem_c(npft), vc%veg%root_c(npft), vc%veg%veg_c13(npft), vc%veg%veg_c14(npft))
+        allocate(vc%veg%fire_c_flux_pft(npft), vc%veg%fire_c13_flux_pft(npft), vc%veg%fire_c14_flux_pft(npft))
+        allocate(vc%veg%gamma_fire(npft), vc%veg%gamma_fire_cum(npft), vc%veg%gamma_luc(npft))
+        allocate(vc%veg%gamma_ice(npft), vc%veg%gamma_dist(npft), vc%veg%gamma_dist_cum(npft))
+
+        vc%veg%ci=0._wp; vc%veg%g_can=0._wp; vc%veg%gpp=0._wp; vc%veg%npp=0._wp
+        vc%veg%npp13=0._wp; vc%veg%npp14=0._wp; vc%veg%aresp=0._wp; vc%veg%discrimination=0._wp
+        vc%veg%lai=0._wp; vc%veg%sai=0._wp; vc%veg%phen=0._wp; vc%veg%phen_acc=0._wp
+        vc%veg%gdd=0._wp; vc%veg%gamma_leaf=0._wp; vc%veg%lambda=0._wp; vc%veg%lai_bal=0._wp
+        vc%veg%npp_cum=0._wp; vc%veg%npp13_cum=0._wp; vc%veg%npp14_cum=0._wp
+        vc%veg%npp_ann=0._wp; vc%veg%npp13_ann=0._wp; vc%veg%npp14_ann=0._wp
+        vc%veg%veg_c=0._wp; vc%veg%veg_h=0._wp; vc%veg%pft_frac=0._wp; vc%veg%seed_frac=0._wp
+        vc%veg%veg_c_below=0._wp; vc%veg%veg_c13_below=0._wp; vc%veg%veg_c14_below=0._wp
+        vc%veg%leaf_c=0._wp; vc%veg%stem_c=0._wp; vc%veg%root_c=0._wp; vc%veg%veg_c13=0._wp; vc%veg%veg_c14=0._wp
+        vc%veg%fire_c_flux_pft=0._wp; vc%veg%fire_c13_flux_pft=0._wp; vc%veg%fire_c14_flux_pft=0._wp
+        vc%veg%gamma_fire=0._wp; vc%veg%gamma_fire_cum=0._wp; vc%veg%gamma_luc=0._wp
+        vc%veg%gamma_ice=0._wp; vc%veg%gamma_dist=0._wp; vc%veg%gamma_dist_cum=0._wp
+        vc%veg%gdd5=0._wp; vc%veg%gdd5_temp=0._wp
+        vc%veg%t2m_min_mon=0._wp; vc%veg%t2m_ann_mean=0._wp
+        vc%veg%f_crop=0._wp; vc%veg%f_pasture=0._wp; vc%veg%df_crop=0._wp; vc%veg%df_pasture=0._wp
+
+        ! --- soil carbon fields the thermal chain reads ----------------------
+        allocate(vc%carb%soil_resp_l(nl))
+        vc%carb%soil_resp_l(:) = 0._wp
+        vc%carb%f_peat = 0._wp
+
+        ! --- shared snowpack (single land snow model) ------------------------
+        vc%snow%mask_snow      = 0
+        vc%snow%f_snow         = 0._wp
+        vc%snow%h_snow         = 0._wp
+        vc%snow%w_snow         = 0._wp
+        vc%snow%w_snow_old     = 0._wp
+        vc%snow%w_snow_max     = 0._wp
+        vc%snow%snowmelt       = 0._wp
+        vc%snow%icemelt        = 0._wp
+        vc%snow%icesub         = 0._wp
+        vc%snow%refreezing     = 0._wp
+        vc%snow%refreezing_sum = 0._wp
+        vc%snow%dt_snowfree    = 0._wp
+        vc%snow%snow_grain     = 0._wp
+        vc%snow%dust_con       = 0._wp
+        vc%snow%alb_snow_vis_dir = 0._wp
+        vc%snow%alb_snow_nir_dir = 0._wp
+        vc%snow%alb_snow_vis_dif = 0._wp
+        vc%snow%alb_snow_nir_dif = 0._wp
+        allocate(vc%snow%w_snow_iso(nwiso), vc%snow%w_snow_iso_old(nwiso))
+        allocate(vc%snow%snowmelt_iso(nwiso), vc%snow%icemelt_iso(nwiso), vc%snow%icesub_iso(nwiso))
+        vc%snow%w_snow_iso(:)     = 0._wp
+        vc%snow%w_snow_iso_old(:) = 0._wp
+        vc%snow%snowmelt_iso(:)   = 0._wp
+        vc%snow%icemelt_iso(:)    = 0._wp
+        vc%snow%icesub_iso(:)     = 0._wp
+
+        return
+
+    end subroutine alloc_land_blocks
 
     subroutine alloc_surface_flux(flx, n)
         ! Allocate the full shared surface-flux block for n sub-tiles

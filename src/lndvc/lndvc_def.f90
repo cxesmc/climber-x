@@ -137,7 +137,7 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: runoff, runoff_sur, calving, drainage, water_cons
         real(wp) :: runoff_ann
         real(wp) :: pet, mcwd, mcwd_clim
-        real(wp), allocatable, dimension(:) :: wilt, root_frac
+        real(wp), allocatable, dimension(:,:) :: wilt, root_frac   ! (nl,npft), mirror reference
         ! water isotopes
         real(wp), allocatable, dimension(:,:) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old   ! (nl,nwiso)
         real(wp), allocatable, dimension(:)   :: infiltration_iso                              ! (nwiso)
