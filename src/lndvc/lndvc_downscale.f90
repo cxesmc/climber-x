@@ -12,6 +12,9 @@ module lndvc_downscale
     use precision, only : wp
     use lndvc_def, only : forcing_t, vc_desc_t
 
+    ! ported single-column downscaling kernels
+    use smb_downscaling_m, only : wind_downscaling, prc_downscaling, rad_downscaling
+
     implicit none
 
     private
@@ -30,8 +33,10 @@ contains
         type(forcing_t), intent(inout) :: forc
         type(vc_desc_t), intent(in)    :: desc
 
-        ! TODO: port temp/wind/prc/rad downscaling from smb/downscaling.f90 as
-        !       single-column operations keyed on (desc%z - z_ref).
+        ! The ported kernels (wind_downscaling, prc_downscaling, rad_downscaling)
+        ! are now available. Orchestrating them requires forcing_t to carry the
+        ! reference-level (_i) forcing + sensitivities and the cmn->vc forcing
+        ! plumbing (next step); until then this is a pass-through.
 
         return
 

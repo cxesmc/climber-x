@@ -18,6 +18,26 @@ module smb_par_m
     ! water-budget debug switch (mirrors control::check_water)
     logical  :: check_water = .false.
 
+    ! downscaling scalars (smb_par group)
+    real(wp) :: dLW_dT_fac
+    real(wp) :: d_cld
+    real(wp) :: wind_ele_fac
+
+    type prc_par_type
+        logical  :: l_elevation_corr
+        real(wp) :: z_sur_crit_fele
+        real(wp) :: z_sur_high_fele
+        real(wp) :: dT_rain_snow
+        real(wp) :: dP_dT
+        logical  :: l_slope_effect
+        integer  :: iwind_synoptic
+        real(wp) :: topo_filter_width
+        real(wp) :: wind_factor
+        real(wp) :: wind_mod_factor
+        real(wp) :: f_wind_max
+    end type
+    type(prc_par_type) :: prc_par
+
     type snow_par_type
         logical  :: lsnow_dust
         logical  :: lsnow_aging
@@ -88,6 +108,24 @@ contains
         call nml_read(filename,"smb_par","f_rfz_max",         snow_par%f_rfz_max)
         call nml_read(filename,"smb_par","f_rfz_to_snow_max", snow_par%f_rfz_to_snow_max)
         call nml_read(filename,"smb_par","wsnow_crit_rfz",    snow_par%wsnow_crit_rfz)
+
+        ! downscaling scalars
+        call nml_read(filename,"smb_par","dLW_dT_fac",        dLW_dT_fac)
+        call nml_read(filename,"smb_par","d_cld",             d_cld)
+        call nml_read(filename,"smb_par","wind_ele_fac",      wind_ele_fac)
+
+        ! precipitation / slope downscaling
+        call nml_read(filename,"smb_par","l_slope_effect",    prc_par%l_slope_effect)
+        call nml_read(filename,"smb_par","l_elevation_corr",  prc_par%l_elevation_corr)
+        call nml_read(filename,"smb_par","z_sur_crit_fele",   prc_par%z_sur_crit_fele)
+        call nml_read(filename,"smb_par","z_sur_high_fele",   prc_par%z_sur_high_fele)
+        call nml_read(filename,"smb_par","dT_rain_snow",      prc_par%dT_rain_snow)
+        call nml_read(filename,"smb_par","dP_dT",             prc_par%dP_dT)
+        call nml_read(filename,"smb_par","iwind_synoptic",    prc_par%iwind_synoptic)
+        call nml_read(filename,"smb_par","topo_filter_width", prc_par%topo_filter_width)
+        call nml_read(filename,"smb_par","wind_factor",       prc_par%wind_factor)
+        call nml_read(filename,"smb_par","wind_mod_factor",   prc_par%wind_mod_factor)
+        call nml_read(filename,"smb_par","f_wind_max",        prc_par%f_wind_max)
 
         return
 
