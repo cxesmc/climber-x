@@ -278,7 +278,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#dependencies" id="toc-dependencies" class="nav-link active" data-scroll-target="#dependencies">Dependencies</a>
   <ul class="collapse">
   <li><a href="#installing-netcdf-preferably-version-4.0-or-higher" id="toc-installing-netcdf-preferably-version-4.0-or-higher" class="nav-link" data-scroll-target="#installing-netcdf-preferably-version-4.0-or-higher">Installing NetCDF (preferably version 4.0 or higher)</a></li>
-  <li><a href="#installing-cdo" id="toc-installing-cdo" class="nav-link" data-scroll-target="#installing-cdo">Installing CDO</a></li>
   <li><a href="#install-lis-fftw-and-utils" id="toc-install-lis-fftw-and-utils" class="nav-link" data-scroll-target="#install-lis-fftw-and-utils">Install LIS, FFTW and utils</a></li>
   <li><a href="#installing-runme" id="toc-installing-runme" class="nav-link" data-scroll-target="#installing-runme">Installing runme</a></li>
   </ul></li>
@@ -299,7 +298,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><p>FFTW (ver. 3.9+)</p></li>
 <li><p>Python 3.x, which is only needed for automatic configuration of the Makefile and the use of the <code>runme</code> script for job preparation and submission.</p></li>
 <li><p>runme: <a href="https://github.com/fesmc/runme">‘runme’ Python library (fesmc version)</a>, used to stage, run, and submit single simulations and ensembles.</p></li>
-<li><p>CDO: <a href="https://code.mpimet.mpg.de/projects/cdo/">Climate Data Operators</a>, used for more efficient creation of maps to transform between different coordinate grids.</p></li>
 </ul>
 <p>Needed only if running with coupled ice sheets:</p>
 <ul>
@@ -312,10 +310,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>The NetCDF library is typically available with different distributions (Linux, Mac, etc). Along with installing <code>libnetcdf</code>, it will be necessary to install the package <code>libnetcdf-dev</code>. Installing the NetCDF viewing program <code>ncview</code> is also recommended.</p>
 <p>If you want to install NetCDF from source, then you must install both the <code>netcdf-c</code> and subsequently <code>netcdf-fortran</code> libraries. The source code and installation instructions are available from the Unidata website:</p>
 <p><a href="https://www.unidata.ucar.edu/software/netcdf/docs/getting_and_building_netcdf.html">https://www.unidata.ucar.edu/software/netcdf/docs/getting_and_building_netcdf.html</a></p>
-</section>
-<section id="installing-cdo" class="level2">
-<h2 class="anchored" data-anchor-id="installing-cdo">Installing CDO</h2>
-<p>The Climate Data Operators can be installed following the instructions here: <a href="https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-30001.1">https://code.mpimet.mpg.de/projects/cdo/</a></p>
 </section>
 <section id="install-lis-fftw-and-utils" class="level2">
 <h2 class="anchored" data-anchor-id="install-lis-fftw-and-utils">Install LIS, FFTW and utils</h2>
