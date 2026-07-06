@@ -2528,6 +2528,7 @@ contains
       ! cmn_to_lnd). Per-elevation lake downscaling is deferred.
       do k = 1, lndvc%n_vc
         if (lndvc%vc(i,j,k)%desc%class /= 2) cycle
+        lndvc%vc(i,j,k)%desc%lat = lat(j)   ! for lake wind eddy diffusivity
         associate(f => lndvc%vc(i,j,k)%forc)
 
           f%pressure  = cmn%ps(i,j,i_surf_lake)

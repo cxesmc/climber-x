@@ -24,6 +24,14 @@ module lndvc_model
     ! ported single-column physics
     use semi_m,          only : semi
     use smb_par_m,       only : p0, h_atm, gamma, prc_par, surf_par
+    ! ported single-column lake physics
+    use lndvc_surface_par_lnd, only : resist_aer_lake, snow_albedo_lake, surface_albedo_lake, resist_sur_lake
+    use lndvc_lake_par_mod,    only : lake_par_thermal
+    use lndvc_ebal_lake_mod,   only : ebal_lake, update_tskin_lake
+    use lndvc_lake_temp_mod,   only : lake_temp
+    use lndvc_hydrology_mod,   only : surface_hydrology_lake
+    use lnd_params,            only : lnd_surf_par => surf_par
+    use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
     implicit none
 
@@ -163,9 +171,99 @@ contains
     end subroutine lndvc_update_land
 
     subroutine lndvc_update_lake(vc)
+        ! Single-column lake-surface update (pattern A): unpack the vc's lake /
+        ! snow / flux blocks into the ported single-tile lake chain, mirroring the
+        ! reference lnd lake path (surface params -> lake thermal params -> energy
+        ! balance -> lake temperature -> skin update -> surface hydrology). The
+        ! downstream sublake soil column (sublake_par_thermal/sublake_temp) is
+        ! deferred: it needs soil params not on the lake block and feeds only
+        ! sublake-soil / lake-carbon state, not the surface coupling currency.
+        ! t_skin_old is snapshotted inside ebal_lake; the melt-iso redistribution
+        ! that lives in the reference lnd_model wrapper is deferred (like SMB iso).
+
         implicit none
+
         type(vc_t), intent(inout) :: vc
-        ! TODO: ported single-column lake physics.
+
+        integer, parameter :: ii = 0, jj = 0   ! debug-print indices only
+        real(wp) :: z0m_lake
+        real(wp) :: calving, runoff_sur              ! lake calving/runoff not yet aggregated
+        real(wp) :: calving_iso(nwiso), runoff_sur_iso(nwiso)
+
+        ! carry-over snapshot for the step
+        vc%snow%w_snow_old = vc%snow%w_snow
+
+        ! no canopy over lake: throughfall = precipitation (tag iso at VSMOW)
+        vc%flx%rain_ground(1) = vc%forc%rain
+        vc%flx%snow_ground(1) = vc%forc%snow
+        if (l_wiso) then
+            vc%flx%rain_ground_iso(1,i_o18) = Rstd(i_o18) * vc%forc%rain
+            vc%flx%snow_ground_iso(1,i_o18) = Rstd(i_o18) * vc%forc%snow
+        endif
+
+        ! lake surface momentum roughness (fixed lake/ice value)
+        z0m_lake = lnd_surf_par%z0m_lake_ice
+        vc%flx%z0m(1) = z0m_lake
+
+        ! --- surface parameters -----------------------------------------------
+        call resist_aer_lake(vc%snow%h_snow, vc%forc%tatm, vc%flx%t_skin(1), vc%forc%wind, &
+            z0m_lake, vc%flx%rough_m(1), vc%flx%rough_h(1), vc%flx%Ch(1), vc%flx%r_a(1), vc%flx%Ri(1))
+
+        call snow_albedo_lake(vc%flx%t_skin(1), vc%forc%snow, vc%snow%w_snow, vc%snow%w_snow_max, &
+            vc%forc%dust, vc%forc%coszm, &
+            vc%snow%alb_snow_vis_dir, vc%snow%alb_snow_vis_dif, vc%snow%alb_snow_nir_dir, vc%snow%alb_snow_nir_dif, &
+            vc%snow%snow_grain, vc%snow%dust_con)
+
+        call surface_albedo_lake(vc%snow%h_snow, vc%forc%coszm, vc%lake%f_lake_ice, &
+            vc%snow%alb_snow_vis_dir, vc%snow%alb_snow_vis_dif, vc%snow%alb_snow_nir_dir, vc%snow%alb_snow_nir_dif, &
+            vc%snow%f_snow, vc%flx%alb_vis_dir(1), vc%flx%alb_vis_dif(1), vc%flx%alb_nir_dir(1), vc%flx%alb_nir_dif(1), &
+            vc%flx%albedo(1))
+
+        call resist_sur_lake(vc%flx%beta_s(1), vc%flx%r_s(1))
+
+        ! --- lake thermal parameters ------------------------------------------
+        call lake_par_thermal(vc%snow%h_snow, vc%lake%h_lake, vc%lake%t_lake(1:nl_l), vc%lake%f_i_lake, &
+            vc%forc%wind, vc%desc%lat, &
+            vc%lake%cap_lake, vc%lake%lambda_lake, vc%lake%lambda_int_lake)
+
+        ! --- surface energy balance -------------------------------------------
+        call ebal_lake(vc%snow%mask_snow, vc%snow%h_snow, vc%lake%lambda_lake, &
+            vc%flx%t_skin(1), vc%flx%t_skin_old(1), vc%lake%t_lake, vc%forc%tatm, vc%forc%qatm, vc%forc%pressure, &
+            vc%forc%swnet, vc%forc%lwdown, &
+            vc%flx%beta_s(1), vc%flx%r_s(1), vc%flx%r_a(1), &
+            vc%flx%flx_g(1), vc%flx%dflxg_dT(1), vc%flx%flx_melt(1), vc%flx%t_skin_amp(1), &
+            vc%flx%num_lh(1), vc%flx%num_sh(1), vc%flx%num_sw(1), vc%flx%num_lw(1), &
+            vc%flx%denom_lh(1), vc%flx%denom_sh(1), vc%flx%denom_lw(1), &
+            vc%flx%f_sh(1), vc%flx%f_e(1), vc%flx%f_le(1), vc%flx%f_lw(1), vc%flx%qsat_e(1), vc%flx%dqsatdT_e(1), &
+            vc%energy_cons_surf1, ii, jj)
+
+        ! --- lake temperature (convection handled inside lake_temp) ------------
+        call lake_temp(vc%snow%mask_snow, vc%snow%h_snow, vc%lake%h_lake, vc%lake%cap_lake, vc%lake%lambda_int_lake, &
+            vc%flx%flx_g(1), vc%flx%dflxg_dT(1), vc%flx%flx_melt(1), &
+            vc%lake%t_lake, vc%snow%w_snow, vc%lake%w_w_lake, vc%lake%w_i_lake, vc%lake%f_i_lake, vc%lake%f_lake_ice, &
+            vc%snow%snowmelt, vc%lake%t_lake_old, vc%snow%w_snow_old, &
+            vc%lake%h_lake_conv, vc%lake%h_lake_mix, &
+            vc%lake%energy_cons_lake, ii, jj)
+
+        ! --- skin temperature + surface fluxes --------------------------------
+        call update_tskin_lake(vc%snow%mask_snow, vc%flx%t_skin_old(1), vc%flx%dflxg_dT(1), &
+            vc%forc%tatm, vc%forc%qatm, vc%forc%swnet, vc%forc%lwdown, &
+            vc%lake%t_lake, vc%lake%t_lake_old, vc%flx%flx_g(1), vc%flx%flx_melt(1), &
+            vc%flx%t_skin(1), vc%flx%flx_sh(1), vc%flx%flx_lwu(1), vc%flx%flx_lh(1), vc%flx%evap_surface(1), vc%flx%et(1), &
+            vc%flx%num_lh(1), vc%flx%num_sh(1), vc%flx%num_sw(1), vc%flx%num_lw(1), &
+            vc%flx%denom_lh(1), vc%flx%denom_sh(1), vc%flx%denom_lw(1), &
+            vc%flx%f_sh(1), vc%flx%f_e(1), vc%flx%f_le(1), vc%flx%f_lw(1), vc%flx%qsat_e(1), vc%flx%dqsatdT_e(1), &
+            vc%energy_cons_surf2, ii, jj, &
+            vc%snow%w_snow, vc%snow%w_snow_iso, vc%lake%w_w_lake(1), vc%lake%w_w_lake_iso(1,:), &
+            vc%flx%evap_surface_iso(1,:), vc%flx%et_iso(1,:))
+
+        ! --- surface hydrology (snow budget + lake water balance -> runoff) ----
+        call surface_hydrology_lake(vc%snow%mask_snow, vc%flx%evap_surface(1), vc%flx%snow_ground(1), vc%flx%rain_ground(1), &
+            vc%snow%snowmelt, vc%lake%cap_lake(1), vc%lake%t_lake(1), vc%snow%w_snow_old, vc%snow%w_snow, vc%snow%w_snow_max, &
+            vc%snow%h_snow, calving, runoff_sur, vc%lake%lake_water_tendency, &
+            vc%flx%evap_surface_iso(1,:), vc%flx%snow_ground_iso(1,:), vc%flx%rain_ground_iso(1,:), &
+            vc%snow%snowmelt_iso, vc%snow%w_snow_iso, calving_iso, runoff_sur_iso)
+
         return
     end subroutine lndvc_update_lake
 

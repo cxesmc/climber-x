@@ -28,6 +28,7 @@ module lndvc_def
         real(wp) :: z               ! band elevation [m] (fixed)
         real(wp) :: dz              ! band width [m]
         real(wp) :: w               ! area weight relative to coarse cell (Sum w = 1)
+        real(wp) :: lat             ! cell latitude [deg] (lake wind eddy diffusivity)
         real(wp) :: dz_dx, dz_dy    ! surface slope components (for orographic downscaling)
         real(wp) :: grad            ! |grad z|
         real(wp) :: z_sur_std       ! sub-grid surface elevation std [m] (snow/albedo/orog)

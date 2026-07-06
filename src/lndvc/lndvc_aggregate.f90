@@ -108,6 +108,19 @@ contains
                 cell%flx_g  = cell%flx_g  + w * vc(k)%flx%flx_g(1)
                 cell%evap   = cell%evap   + w * vc(k)%flx%evap_surface(1)
                 wsum = wsum + w
+            else if (vc(k)%desc%class == 2 .and. allocated(vc(k)%lake)) then
+                w = vc(k)%desc%w
+                ! extensive lake surface water balance (P + M - E), conserving sum
+                cell%runoff = cell%runoff + w * vc(k)%lake%lake_water_tendency
+                ! intensive surface fluxes (accumulate weighted; normalized below)
+                cell%t_skin = cell%t_skin + w * vc(k)%flx%t_skin(1)
+                cell%albedo = cell%albedo + w * vc(k)%flx%albedo(1)
+                cell%flx_sh = cell%flx_sh + w * vc(k)%flx%flx_sh(1)
+                cell%flx_lh = cell%flx_lh + w * vc(k)%flx%flx_lh(1)
+                cell%flx_g  = cell%flx_g  + w * vc(k)%flx%flx_g(1)
+                cell%evap   = cell%evap   + w * vc(k)%flx%evap_surface(1)
+                cell%et     = cell%et     + w * vc(k)%flx%et(1)
+                wsum = wsum + w
             end if
         end do
 
@@ -118,6 +131,7 @@ contains
             cell%flx_lh = cell%flx_lh / wsum
             cell%flx_g  = cell%flx_g  / wsum
             cell%evap   = cell%evap   / wsum
+            cell%et     = cell%et     / wsum
         end if
 
         return
