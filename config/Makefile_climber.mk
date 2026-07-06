@@ -159,7 +159,11 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_smb_grid.o $(objdir)/lndvc_smb_snow.o \
                  $(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_temp.o \
                  $(objdir)/lndvc_smb_ebal.o $(objdir)/lndvc_smb_surface_par.o \
-                 $(objdir)/lndvc_smb_semi.o
+                 $(objdir)/lndvc_smb_semi.o \
+                 $(objdir)/lndvc_lnd_surface_par.o $(objdir)/lndvc_lnd_lake_par.o \
+                 $(objdir)/lndvc_lnd_lake_convection.o $(objdir)/lndvc_lnd_ebal_lake.o \
+                 $(objdir)/lndvc_lnd_lake_temp.o $(objdir)/lndvc_lnd_sublake_temp.o \
+                 $(objdir)/lndvc_lnd_surface_hydro.o
 # linked into the clim executables only when LNDVC=1 (see Makefile); empty
 # otherwise so a default build neither compiles nor links the framework.
 # dep_lndvc_* are the prerequisites the main sources (climber/coupler) carry so
@@ -732,6 +736,37 @@ $(objdir)/lndvc_smb_semi.o : $(dir_lndvc)/smb/semi.f90 $(objdir)/lndvc_thermo.o 
 						$(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_surface_par.o \
 						$(objdir)/lndvc_smb_ebal.o $(objdir)/lndvc_smb_temp.o $(objdir)/lndvc_smb_snow.o \
 						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+# ported land/lake physics (src/lndvc/lnd): pattern A, reuse the real land
+# infrastructure (lnd_grid/lnd_params/wiso_params/lake_rho); distinct objects.
+$(objdir)/lndvc_lnd_surface_par.o : $(dir_lndvc)/lnd/surface_par.f90 $(objdir)/constants.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_lake_par.o : $(dir_lndvc)/lnd/lake_par.f90 $(objdir)/constants.o \
+						$(objdir)/lake_rho.o $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_lake_convection.o : $(dir_lndvc)/lnd/lake_convection.f90 $(objdir)/lake_rho.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_ebal_lake.o : $(dir_lndvc)/lnd/ebal_lake.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_lake_temp.o : $(dir_lndvc)/lnd/lake_temp.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lndvc_lnd_lake_convection.o \
+						$(objdir)/tridiag.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_sublake_temp.o : $(dir_lndvc)/lnd/sublake_temp.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/tridiag.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_surface_hydro.o : $(dir_lndvc)/lnd/surface_hydro.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/wiso_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_def.o : $(dir_lndvc)/lndvc_def.f90 $(objdir)/precision.o
