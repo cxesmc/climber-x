@@ -167,7 +167,8 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_lnd_water_deficit.o \
                  $(objdir)/lndvc_lnd_veg_par.o $(objdir)/lndvc_lnd_photosynthesis.o \
                  $(objdir)/lndvc_lnd_soil_par.o $(objdir)/lndvc_lnd_ebal_veg.o \
-                 $(objdir)/lndvc_lnd_soil_temp.o $(objdir)/lndvc_lnd_init_cell.o
+                 $(objdir)/lndvc_lnd_soil_temp.o $(objdir)/lndvc_lnd_dyn_veg.o \
+                 $(objdir)/lndvc_lnd_init_cell.o
 # linked into the clim executables only when LNDVC=1 (see Makefile); empty
 # otherwise so a default build neither compiles nor links the framework.
 # dep_lndvc_* are the prerequisites the main sources (climber/coupler) carry so
@@ -801,6 +802,10 @@ $(objdir)/lndvc_lnd_ebal_veg.o : $(dir_lndvc)/lnd/ebal_veg.f90 $(objdir)/constan
 
 $(objdir)/lndvc_lnd_soil_temp.o : $(dir_lndvc)/lnd/soil_temp.f90 $(objdir)/constants.o $(objdir)/control.o \
 						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/tridiag.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_dyn_veg.o : $(dir_lndvc)/lnd/dyn_veg.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_lnd_init_cell.o : $(dir_lndvc)/lnd/init_cell.f90 $(objdir)/constants.o \
