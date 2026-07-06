@@ -280,6 +280,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#first-run-of-a-configuration-is-slower" id="toc-first-run-of-a-configuration-is-slower" class="nav-link" data-scroll-target="#first-run-of-a-configuration-is-slower">First run of a configuration is slower</a></li>
   <li><a href="#ensembles-generate-maps-once-first" id="toc-ensembles-generate-maps-once-first" class="nav-link" data-scroll-target="#ensembles-generate-maps-once-first">Ensembles: generate maps once, first</a></li>
   <li><a href="#runme---gen-maps" id="toc-runme---gen-maps" class="nav-link" data-scroll-target="#runme---gen-maps"><code>runme --gen-maps</code></a></li>
+  <li><a href="#map-format-and-generating-maps-offline" id="toc-map-format-and-generating-maps-offline" class="nav-link" data-scroll-target="#map-format-and-generating-maps-offline">Map format and generating maps offline</a></li>
   </ul></li>
   </ul>
 <div class="toc-actions"><ul><li><a href="https://github.com/cxesmc/climber-x/edit/main/generating-maps.md" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/cxesmc/climber-x/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
@@ -322,6 +323,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR <span class="at">--gen-maps</span>    <span class="co"># build maps into RUNDIR/mapgen/</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">runme</span> <span class="at">-rs</span> <span class="at">-o</span> RUNDIR               <span class="co"># real run, reusing the maps</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>See <a href="./runme-notes.html">Running with <code>runme</code></a> for the full set of <code>runme</code> options.</p>
+</section>
+<section id="map-format-and-generating-maps-offline" class="level2">
+<h2 class="anchored" data-anchor-id="map-format-and-generating-maps-offline">Map format and generating maps offline</h2>
+<p><strong>CLIMBER-X</strong> maps use the <strong>SCRIP</strong> format — a widely used, self-describing NetCDF convention for interpolation weights between two grids. Because it is a standard format, the maps the model generates internally are interchangeable with weights produced by other SCRIP-aware tools, most notably <a href="https://code.mpimet.mpg.de/projects/cdo/">CDO</a>.</p>
+<p>This means you can also <strong>generate maps offline</strong> and drop them into <code>maps/</code>. As long as a weights file is correct (built between the right source and target grids) and written in SCRIP format, <strong>CLIMBER-X</strong> will use it directly instead of regenerating it. The model only builds a map when the corresponding file is missing from <code>maps/</code>.</p>
+<p>For example, CDO can produce first-order conservative remapping weights in SCRIP format with <code>gencon</code>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Conservative weights from a source grid to a target grid, in SCRIP format</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">cdo</span> gencon,target_grid.nc source_grid.nc weights_src_to_tgt.nc</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Here <code>source_grid.nc</code> is a file on (or describing) the source grid, <code>target_grid.nc</code> describes the target grid, and <code>weights_src_to_tgt.nc</code> is the resulting SCRIP weights file. Place it in <code>maps/</code> under the filename the model expects for that grid pair, and it will be picked up in place of an internally-generated map.</p>
 
 
 </section>
