@@ -20,6 +20,8 @@ module lndvc_decomp
     use precision, only : wp
     use lndvc_def
     use lndvc_grid
+    use const_m,    only : T0
+    use smb_grid_m, only : nl_smb => nl   ! snow+ice/firn layer count (=4; distinct from land nl=5)
 
     implicit none
 
@@ -108,11 +110,71 @@ contains
             case(3)   ! ice
                 if (.not. allocated(vc(k)%ice))  allocate(vc(k)%ice)
                 if (.not. allocated(vc(k)%snow)) allocate(vc(k)%snow)
+                call alloc_ice_blocks(vc(k))
         end select
 
         return
 
     end subroutine set_leaf
+
+    subroutine alloc_ice_blocks(vc)
+        ! Size + initialize the inner arrays an ice virtual cell needs for the
+        ! SEMI single-column SMB physics (pattern A). Only the fields SEMI reads
+        ! or writes as carry-over state are allocated (kept lean, see
+        ! docs/design/virtual-cells.md sec 12). Done once, guarded by allocation.
+
+        implicit none
+
+        type(vc_t), intent(inout) :: vc
+
+        ! First-time setup only: t_prof allocation doubles as the once-guard, so
+        ! prognostic carry-over state is not reset on every decompose.
+        if (allocated(vc%ice%t_prof)) return
+
+        ! snow+ice/firn thermal profile (0:nl, index 0 = skin layer)
+        allocate(vc%ice%t_prof(0:nl_smb))
+        allocate(vc%ice%t_prof_old(0:nl_smb))
+        vc%ice%t_prof(:)     = T0
+        vc%ice%t_prof_old(:) = T0
+        vc%ice%smb    = 0._wp
+        vc%ice%melt   = 0._wp
+        vc%ice%runoff = 0._wp
+        vc%ice%f_rfz_to_snow = 0._wp
+
+        ! surface fluxes consumed by aggregation + t_skin carry-over (size 1)
+        allocate(vc%flx%t_skin(1), vc%flx%t_skin_old(1), vc%flx%t_skin_amp(1))
+        allocate(vc%flx%albedo(1))
+        allocate(vc%flx%flx_sh(1), vc%flx%flx_lh(1), vc%flx%flx_g(1))
+        allocate(vc%flx%evap_surface(1))
+        vc%flx%t_skin(1)       = T0
+        vc%flx%t_skin_old(1)   = T0
+        vc%flx%t_skin_amp(1)   = 0._wp
+        vc%flx%albedo(1)       = 0._wp
+        vc%flx%flx_sh(1)       = 0._wp
+        vc%flx%flx_lh(1)       = 0._wp
+        vc%flx%flx_g(1)        = 0._wp
+        vc%flx%evap_surface(1) = 0._wp
+
+        ! snowpack carry-over scalars
+        vc%snow%mask_snow      = 0
+        vc%snow%f_snow         = 0._wp
+        vc%snow%h_snow         = 0._wp
+        vc%snow%w_snow         = 0._wp
+        vc%snow%w_snow_old     = 0._wp
+        vc%snow%w_snow_max     = 0._wp
+        vc%snow%snow_grain     = 0._wp
+        vc%snow%dust_con       = 0._wp
+        vc%snow%refreezing     = 0._wp
+        vc%snow%refreezing_sum = 0._wp
+        vc%snow%dt_snowfree    = 0._wp
+        vc%snow%alb_snow_vis_dir = 0._wp
+        vc%snow%alb_snow_nir_dir = 0._wp
+        vc%snow%alb_snow_vis_dif = 0._wp
+        vc%snow%alb_snow_nir_dif = 0._wp
+
+        return
+
+    end subroutine alloc_ice_blocks
 
     subroutine lndvc_remap_state(lnd)
         ! Conservatively transfer prognostic state (carbon, heat, snow, water)

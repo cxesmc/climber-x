@@ -30,6 +30,9 @@ module lndvc_def
         real(wp) :: w               ! area weight relative to coarse cell (Sum w = 1)
         real(wp) :: dz_dx, dz_dy    ! surface slope components (for orographic downscaling)
         real(wp) :: grad            ! |grad z|
+        real(wp) :: z_sur_std       ! sub-grid surface elevation std [m] (snow/albedo/orog)
+        real(wp) :: dz_sur          ! sub-grid elevation range for precip downscaling [m]
+        real(wp) :: f_ele           ! elevation-desertification factor for precip [/]
     end type
 
 ! ============================================================================
@@ -37,14 +40,28 @@ module lndvc_def
 ! ============================================================================
 
     type forcing_t
+        ! downscaled per-vc forcing (SEMI computes these internally, pattern A)
         real(wp) :: coszm, daylength
         real(wp) :: tatm, t2m, qatm, q2m
         real(wp) :: lwdown, swnet, swnet_min
         real(wp) :: rain, snow
         real(wp) :: wind, pressure
         real(wp) :: disturbance
-        ! smb-side forcing (fold in during port): tam, ram, gam, tstd, prc,
-        ! u700, v700, cld, dust, swd_* components + sensitivities
+        ! reference elevation the _i forcing below is valid at [m]
+        ! (coarse-cell mean; SEMI downscales from here to vc%desc%z)
+        real(wp) :: z_sur_i
+        ! reference-level (_i) forcing SEMI needs (populated by cmn_to_lndvc).
+        ! Ported 1:1 from the reference smb% *_i fields (see src/smb/semi.f90).
+        real(wp) :: tam_i, t2m_bias_i, gam_i, tstd_i, ram_i
+        real(wp) :: u700_i, v700_i, wind_i, prc_i, prc_bias_i
+        real(wp) :: alb_vis_dir_i, alb_nir_dir_i, alb_vis_dif_i, alb_nir_dif_i
+        real(wp) :: swd_sur_vis_dir_i, swd_sur_nir_dir_i, swd_sur_vis_dif_i, swd_sur_nir_dif_i
+        real(wp) :: dswd_dalb_vis_dir_i, dswd_dalb_nir_dir_i, dswd_dalb_vis_dif_i, dswd_dalb_nir_dif_i
+        real(wp) :: dswd_dz_nir_dir_i, dswd_dz_nir_dif_i
+        real(wp) :: dust_i, coszm_i, swd_toa_i, swd_toa_min_i, cld_i
+        real(wp) :: lwdown_i, gam_lw_i
+        real(wp) :: dTvar                       ! artificial interannual T variability [K] (0 at identity)
+        real(wp) :: f_ice, alb_ice              ! sub-grid ice fraction + ice background albedo
     end type
 
 ! ============================================================================
@@ -83,6 +100,8 @@ module lndvc_def
         real(wp) :: w_snow, w_snow_max, w_snow_old
         real(wp) :: snowmelt, icemelt, icesub
         real(wp) :: refreezing
+        real(wp) :: refreezing_sum      ! refreezing-capacity accumulator (carry-over)
+        real(wp) :: dt_snowfree         ! time since snow-free [s] (carry-over)
         real(wp) :: snow_grain, dust_con
         real(wp) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
         ! water isotopes (nwiso) — one snowpack per vc
@@ -186,6 +205,8 @@ module lndvc_def
 ! ============================================================================
 
     type ice_col_t
+        ! snow+ice/firn thermal profile SEMI integrates (0:nl; index 0 = skin layer)
+        real(wp), allocatable, dimension(:) :: t_prof, t_prof_old
         real(wp), allocatable, dimension(:) :: t_ice, t_ice_old
         real(wp), allocatable, dimension(:) :: lambda_ice, lambda_int_ice, cap_ice
         ! subglacial carbon pools (mirror lnd ice/shelf carbon)
@@ -195,8 +216,9 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: t_shelf, t_shelf_old, t_shelf_max
         real(wp), allocatable, dimension(:) :: theta_w_shelf, theta_i_shelf, w_w_shelf, w_i_shelf
         ! SMB diagnostic (mass budget of the shared snow+ice column)
-        real(wp) :: smb                 ! surface mass balance [kg/m2/s or /yr]
-        real(wp) :: melt                ! snow+ice melt
+        real(wp) :: smb                 ! surface mass balance [kg/m2/s]
+        real(wp) :: melt                ! snow+ice melt [kg/m2/s]
+        real(wp) :: runoff              ! snowmelt + icemelt + rain - refreezing [kg/m2/s]
         real(wp) :: f_rfz_to_snow
         real(wp) :: energy_cons_ice, energy_cons_shelf
     end type
