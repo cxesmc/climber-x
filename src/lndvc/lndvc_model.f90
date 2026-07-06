@@ -175,6 +175,7 @@ contains
     end subroutine lndvc_update_vc
 
     subroutine lndvc_init_land(vc, m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry, &
+                               cti_mean, cti_cdf, dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax, &
                                c13_c12_atm, c14_c_atm)
         ! One-time physical init of a vegetated land vc (port C decision B):
         ! seed the soil parameters from the coarse-cell mineral texture (the
@@ -187,6 +188,8 @@ contains
 
         type(vc_t), intent(inout) :: vc
         real(wp), intent(in) :: m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry
+        real(wp), intent(in) :: cti_mean, cti_cdf(:)
+        real(wp), intent(in) :: dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax
         real(wp), intent(in) :: c13_c12_atm, c14_c_atm
 
         integer  :: k
@@ -209,6 +212,14 @@ contains
             vc%soil%lambda_s(:)   = soil_par%lambda_s_u
             vc%soil%lambda_dry(:) = soil_par%lambda_dry_u
         endif
+
+        ! --- static wetland parameters (TOPMODEL cti + DYPTOP) ----------------
+        vc%soil%cti_mean    = cti_mean
+        vc%soil%cti_cdf(:)  = cti_cdf(:)
+        vc%soil%dyptop_k    = dyptop_k
+        vc%soil%dyptop_v    = dyptop_v
+        vc%soil%dyptop_xm   = dyptop_xm
+        vc%soil%dyptop_fmax = dyptop_fmax
 
         ! --- physical veg/soil state (ported init_cell_veg) -------------------
         call lndvc_init_cell_veg(c13_c12_atm, c14_c_atm, vc%desc%w, &

@@ -21,6 +21,7 @@ module lndvc_decomp
     use lndvc_def
     use lndvc_grid
     use const_m,    only : T0
+    use timer,      only : nmon_year      ! months per year (cwd_mon accumulator size)
     use smb_grid_m, only : nl_smb => nl   ! snow+ice/firn layer count (=4; distinct from land nl=5)
     use wiso_params, only : nwiso         ! water-isotope tracer count (lake iso arrays)
 
@@ -317,6 +318,9 @@ contains
         ! hydrology / water balance (single land tile)
         allocate(vc%soil%runoff(1), vc%soil%runoff_sur(1), vc%soil%calving(1))
         allocate(vc%soil%drainage(1), vc%soil%water_cons(1))
+        ! water deficit + static wetland parameters
+        allocate(vc%soil%cwd_mon(nmon_year))
+        allocate(vc%soil%cti_cdf(15))
         ! rooting / wilting (nl,npft)
         allocate(vc%soil%wilt(nl,npft), vc%soil%root_frac(nl,npft))
         ! soil water isotopes
@@ -394,6 +398,14 @@ contains
         vc%soil%pet          = 0._wp
         vc%soil%mcwd         = 0._wp
         vc%soil%mcwd_clim    = 0._wp
+        vc%soil%cwd_mon(:)   = 0._wp
+        ! static wetland parameters (seeded from topmodel/dyptop in lndvc_init_land)
+        vc%soil%cti_mean     = 0._wp
+        vc%soil%cti_cdf(:)   = 0._wp
+        vc%soil%dyptop_k     = 0._wp
+        vc%soil%dyptop_v     = 0._wp
+        vc%soil%dyptop_xm    = 0._wp
+        vc%soil%dyptop_fmax  = 0._wp
 
         ! --- vegetation tiles (npft) -----------------------------------------
         allocate(vc%veg%ci(npft), vc%veg%g_can(npft), vc%veg%gpp(npft), vc%veg%npp(npft))

@@ -141,6 +141,11 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: runoff, runoff_sur, calving, drainage, water_cons
         real(wp) :: runoff_ann
         real(wp) :: pet, mcwd, mcwd_clim
+        real(wp), allocatable, dimension(:) :: cwd_mon             ! (nmon_year) monthly cumulative water deficit
+        ! static wetland parameters (TOPMODEL cti + DYPTOP), seeded once per cell
+        real(wp) :: cti_mean
+        real(wp), allocatable, dimension(:) :: cti_cdf            ! (15) CTI cumulative distribution
+        real(wp) :: dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax
         real(wp), allocatable, dimension(:,:) :: wilt, root_frac   ! (nl,npft), mirror reference
         ! water isotopes
         real(wp), allocatable, dimension(:,:) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old   ! (nl,nwiso)

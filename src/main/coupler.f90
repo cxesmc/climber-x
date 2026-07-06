@@ -82,6 +82,7 @@ module coupler
     use ocn_grid, only : maxi, maxj, maxk, k1_shelf, ocn_area_tot
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
     use lnd_params, only : mineral, lnd_surf_par => surf_par
+    use lnd_params, only : topmodel, dyptop
     use lnd_grid, only : is_veg, is_ice, is_lake, nl, i_bare
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
@@ -2603,6 +2604,8 @@ contains
           call lndvc_init_land(lndvc%vc(i,j,k), &
             mineral(i,j)%theta_sat, mineral(i,j)%k_sat, mineral(i,j)%psi_sat, &
             mineral(i,j)%Bi, mineral(i,j)%lambda_s, mineral(i,j)%lambda_dry, &
+            topmodel(i,j)%cti_mean, topmodel(i,j)%cti_cdf, &
+            dyptop(i,j)%k, dyptop(i,j)%v, dyptop(i,j)%xm, dyptop(i,j)%fmax, &
             lndvc%glob%c13_c12_atm, lndvc%glob%c14_c_atm)
           lndvc%vc(i,j,k)%phys_init = .true.
         endif

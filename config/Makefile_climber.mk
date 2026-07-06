@@ -814,7 +814,7 @@ $(objdir)/lndvc_grid.o : $(dir_lndvc)/lndvc_grid.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_decomp.o : $(dir_lndvc)/lndvc_decomp.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
-						$(objdir)/precision.o
+						$(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_downscale.o : $(dir_lndvc)/lndvc_downscale.f90 $(objdir)/lndvc_def.o \
