@@ -21,6 +21,9 @@ module lndvc_model
     use lndvc_downscale, only : lndvc_downscale_forcing
     use lndvc_aggregate, only : lndvc_aggregate_weights, lndvc_aggregate_cell, lndvc_conservation_check
 
+    ! ported single-column physics
+    use smb_snow_m,      only : snow_update
+
     implicit none
 
     private
@@ -166,9 +169,27 @@ contains
     end subroutine lndvc_update_lake
 
     subroutine lndvc_update_ice(vc)
+        ! Single-column ice-surface update. Blocks are unpacked into the ported
+        ! scalar-signature physics routines (pattern A). Being filled in as the
+        ! ice/SMB path is ported file-by-file.
+
         implicit none
+
         type(vc_t), intent(inout) :: vc
-        ! TODO: ported single-column ice-surface physics; SMB as mass-budget diagnostic.
+
+        real(wp) :: evp
+
+        ! TODO: evp (sublimation) from the ported ice-surface energy balance
+        evp = 0._wp
+
+        if (allocated(vc%snow)) then
+            call snow_update(vc%snow%mask_snow, evp, &
+                             vc%snow%w_snow, vc%snow%w_snow_old, vc%snow%w_snow_max, &
+                             vc%snow%h_snow)
+        end if
+
+        ! TODO: ice/firn temperature, surface energy balance, SMB mass-budget diagnostic.
+
         return
     end subroutine lndvc_update_ice
 

@@ -153,7 +153,10 @@ obj_lnd = $(patsubst %, $(objdir)/%, $(tmp_lnd) )
 dir_lndvc = $(srcdir)/lndvc
 files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_decomp.f90 lndvc_downscale.f90 lndvc_aggregate.f90 lndvc_model.f90
 tmp_lndvc = $(patsubst %.f90, %.o, $(files_lndvc) )
-obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) )
+# ported physics live in subdirs (src/lndvc/smb, ...) with clean filenames;
+# objects are given distinct names to avoid clashing with src/smb, src/lnd in obj/.
+obj_lndvc_phys = $(objdir)/lndvc_smb_params.o $(objdir)/lndvc_smb_snow.o
+obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) ) $(obj_lndvc_phys)
 ########################################################################
 
 ########################################################################
@@ -674,6 +677,13 @@ $(objdir)/carbon_flx_atm_lnd.o : $(dir_lnd)carbon_flx_atm_lnd.f90 $(objdir)/lnd_
 #######################
 # lndvc rules #########
 
+# ported physics (src/lndvc/smb, ...): clean source names, distinct object names
+$(objdir)/lndvc_smb_params.o : $(dir_lndvc)/smb/params.f90 $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_smb_snow.o : $(dir_lndvc)/smb/snow.f90 $(objdir)/lndvc_smb_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
 $(objdir)/lndvc_def.o : $(dir_lndvc)/lndvc_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
@@ -694,6 +704,7 @@ $(objdir)/lndvc_aggregate.o : $(dir_lndvc)/lndvc_aggregate.f90 $(objdir)/lndvc_d
 
 $(objdir)/lndvc_model.o : $(dir_lndvc)/lndvc_model.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
 						$(objdir)/lndvc_decomp.o $(objdir)/lndvc_downscale.o $(objdir)/lndvc_aggregate.o \
+						$(objdir)/lndvc_smb_snow.o \
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
