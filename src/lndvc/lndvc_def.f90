@@ -65,6 +65,12 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: rain_ground, evap_can, snow_ground, subl_can
         real(wp), allocatable, dimension(:) :: w_can, w_can_old, s_can, s_can_old, f_wat_can, f_snow_can
         real(wp), allocatable, dimension(:) :: frac_surf     ! sub-tile fractions within this vc
+        ! water isotopes (sub-tile, nwiso)
+        real(wp), allocatable, dimension(:,:) :: rain_iso, snow_iso
+        real(wp), allocatable, dimension(:,:) :: rain_ground_iso, snow_ground_iso
+        real(wp), allocatable, dimension(:,:) :: evap_can_iso, subl_can_iso
+        real(wp), allocatable, dimension(:,:) :: transpiration_iso, evap_surface_iso, et_iso
+        real(wp), allocatable, dimension(:,:) :: w_can_iso, w_can_iso_old, s_can_iso, s_can_iso_old
     end type
 
 ! ============================================================================
@@ -79,6 +85,9 @@ module lndvc_def
         real(wp) :: refreezing
         real(wp) :: snow_grain, dust_con
         real(wp) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
+        ! water isotopes (nwiso) — one snowpack per vc
+        real(wp), allocatable, dimension(:) :: w_snow_iso, w_snow_iso_old
+        real(wp), allocatable, dimension(:) :: snowmelt_iso, icemelt_iso, icesub_iso
     end type
 
 ! ============================================================================
@@ -108,6 +117,11 @@ module lndvc_def
         real(wp) :: runoff_ann
         real(wp) :: pet, mcwd, mcwd_clim
         real(wp), allocatable, dimension(:) :: wilt, root_frac
+        ! water isotopes
+        real(wp), allocatable, dimension(:,:) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old   ! (nl,nwiso)
+        real(wp), allocatable, dimension(:)   :: infiltration_iso                              ! (nwiso)
+        real(wp), allocatable, dimension(:)   :: runoff_iso, runoff_sur_iso, drainage_iso, calving_iso  ! (nwiso)
+        real(wp), allocatable, dimension(:)   :: water_iso_cons                                ! (nwiso)
     end type
 
 ! ============================================================================
@@ -201,6 +215,8 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: t_shelf_cum, theta_w_shelf_cum, theta_i_shelf_cum
         real(wp) :: h_lake, h_lake_conv, h_lake_mix, f_lake_ice, lake_water_tendency
         real(wp) :: energy_cons_lake
+        ! water isotopes (nl_l,nwiso)
+        real(wp), allocatable, dimension(:,:) :: w_w_lake_iso, w_i_lake_iso
     end type
 
 ! ============================================================================
