@@ -39,6 +39,39 @@ module smb_par_m
     end type
     type(prc_par_type) :: prc_par
 
+    ! surface energy balance scalars (smb_par group)
+    logical  :: l_diurnal_cycle
+    real(wp) :: tstd_scale
+    logical  :: l_dew
+
+    type surf_par_type
+        integer  :: i_f_ice
+        real(wp) :: h_ice_crit
+        real(wp) :: c_fice
+        real(wp) :: z_sur_std_crit
+        integer  :: i_alb_ice
+        integer  :: i_alb_ice_margin
+        real(wp) :: alb_soil
+        real(wp) :: alb_firn
+        real(wp) :: alb_ice_const
+        real(wp) :: alb_ice_margin_const
+        real(wp) :: alb_ice_clean
+        real(wp) :: alb_ice_dirty
+        real(wp) :: tau_alb_ice_dirty
+        real(wp) :: w_firn
+        real(wp) :: alb_vis_dif_snow_new = 0.99
+        real(wp) :: alb_nir_dif_snow_new = 0.65
+        real(wp) :: d_alb_age_vis = 0.05_wp
+        real(wp) :: d_alb_age_nir = 0.25_wp
+        real(wp) :: z0m_ice
+        real(wp) :: z0m_snow = 0.0024_wp
+        real(wp) :: zm_to_zh = exp(-2._wp)  ! LandLad, Garratt 1992
+        real(wp) :: emissivity_ice  = 0.99_wp
+        real(wp) :: emissivity_snow = 0.99_wp
+        real(wp) :: emissivity_bare = 0.95_wp
+    end type
+    type(surf_par_type) :: surf_par
+
     type snow_par_type
         logical  :: lsnow_dust
         logical  :: lsnow_aging
@@ -109,6 +142,11 @@ contains
         call nml_read(filename,"smb_par","f_rfz_max",         snow_par%f_rfz_max)
         call nml_read(filename,"smb_par","f_rfz_to_snow_max", snow_par%f_rfz_to_snow_max)
         call nml_read(filename,"smb_par","wsnow_crit_rfz",    snow_par%wsnow_crit_rfz)
+
+        ! surface energy balance scalars
+        call nml_read(filename,"smb_par","l_diurnal_cycle",   l_diurnal_cycle)
+        call nml_read(filename,"smb_par","tstd_scale",        tstd_scale)
+        call nml_read(filename,"smb_par","l_dew",             l_dew)
 
         ! downscaling scalars
         call nml_read(filename,"smb_par","dLW_dT_fac",        dLW_dT_fac)

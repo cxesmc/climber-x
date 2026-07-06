@@ -155,9 +155,10 @@ files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_decomp.f90 lndvc_downscale.f90 
 tmp_lndvc = $(patsubst %.f90, %.o, $(files_lndvc) )
 # ported physics live in subdirs (src/lndvc/smb, ...) with clean filenames;
 # objects are given distinct names to avoid clashing with src/smb, src/lnd in obj/.
-obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_smb_params.o \
+obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndvc_smb_params.o \
                  $(objdir)/lndvc_smb_grid.o $(objdir)/lndvc_smb_snow.o \
-                 $(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_temp.o
+                 $(objdir)/lndvc_smb_downscaling.o $(objdir)/lndvc_smb_temp.o \
+                 $(objdir)/lndvc_smb_ebal.o
 obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) ) $(obj_lndvc_phys)
 ########################################################################
 
@@ -683,6 +684,9 @@ $(objdir)/carbon_flx_atm_lnd.o : $(dir_lnd)carbon_flx_atm_lnd.f90 $(objdir)/lnd_
 $(objdir)/lndvc_const.o : $(dir_lndvc)/constants.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
+$(objdir)/lndvc_thermo.o : $(dir_lndvc)/thermo.f90 $(objdir)/lndvc_const.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
 $(objdir)/lndvc_smb_params.o : $(dir_lndvc)/smb/params.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
@@ -698,6 +702,11 @@ $(objdir)/lndvc_smb_grid.o : $(dir_lndvc)/smb/grid.f90 $(objdir)/precision.o
 
 $(objdir)/lndvc_smb_temp.o : $(dir_lndvc)/smb/temp.f90 $(objdir)/lndvc_const.o \
 						$(objdir)/lndvc_smb_params.o $(objdir)/lndvc_smb_grid.o $(objdir)/tridiag.o \
+						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_smb_ebal.o : $(dir_lndvc)/smb/ebal.f90 $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o \
+						$(objdir)/lndvc_smb_params.o $(objdir)/lndvc_smb_grid.o \
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 

@@ -13,7 +13,13 @@ module const_m
     real(wp), parameter :: frac_vu  = 0.45_wp            !! fraction of solar spectrum in visible+UV
     real(wp), parameter :: rho_i    = 910._wp            !! kg/m3, density of ice
     real(wp), parameter :: cap_i    = 2110._wp           !! J/kg/K, specific heat capacity of ice
+    real(wp), parameter :: cap_a    = 1000._wp           !! J/kg/K, specific heat capacity of air
     real(wp), parameter :: lambda_i = 2.2_wp             !! W/m/K, thermal conductivity of ice
     real(wp), parameter :: Lf       = 334.e3_wp          !! J/kg, latent heat of fusion
+    real(wp), parameter :: Le       = 2501.e3_wp         !! J/kg, latent heat of evaporation
+    real(wp), parameter :: Ls       = Le + Lf            !! J/kg, latent heat of sublimation
+    real(wp), parameter :: Rd       = 287.058_wp         !! J/kg/K, gas constant of dry air
+    real(wp), parameter :: Rv       = 461.5_wp           !! J/kg/K, gas constant of water vapor
+    real(wp), parameter :: sigma    = 5.670373e-8_wp     !! W/m2/K4, Stefan-Boltzmann constant
 
 end module const_m
