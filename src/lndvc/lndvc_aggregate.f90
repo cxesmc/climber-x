@@ -126,8 +126,8 @@ contains
             else if (vc(k)%desc%class == 1 .and. allocated(vc(k)%veg)) then
                 ! land vc: collapse the veg sub-tiles (frac-weighted mean over
                 ! the bare+PFT tiles) to a vc-level intensive value, then
-                ! area-weight by the vc weight. Land runoff is soil hydrology
-                ! (C.2), not aggregated here.
+                ! area-weight by the vc weight. Land runoff (surface + drainage,
+                ! C.2) is an extensive flux and is added as a conserving sum.
                 f_veg_vc = sum(vc(k)%flx%frac_surf, mask=flag_veg.eq.1)
                 if (f_veg_vc > 0._wp) then
                     tskin_vc = 0._wp; alb_vc = 0._wp; sh_vc = 0._wp; lh_vc = 0._wp
@@ -152,6 +152,8 @@ contains
                     cell%flx_g  = cell%flx_g  + w * g_vc
                     cell%evap   = cell%evap   + w * ev_vc
                     cell%et     = cell%et     + w * et_vc
+                    ! extensive land runoff (surface + subsurface drainage)
+                    cell%runoff = cell%runoff + w * vc(k)%soil%runoff(1)
                     wsum = wsum + w
                 end if
             end if
