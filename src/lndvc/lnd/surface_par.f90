@@ -26,17 +26,16 @@
 module lndvc_surface_par_lnd
 
   use precision, only : wp
-  !use constants, only : karman, g, pi, T0, z_sfl, frac_vu
-  use constants, only : karman, g, pi, T0, frac_vu
-  use lnd_grid, only : i_ice, i_lake, i_bare, i_trees, i_grass, i_shrub, is_veg, is_ice, is_lake, flag_pft, flag_veg
-  use lnd_grid, only : npft, nsurf, nsoil, ngrass, ntrees, nshrub, nl, dz
-  use lnd_params, only : l_neutral, i_racan, p_cdense, z_sfl
-  use lnd_params, only : pft_par, snow_par, hydro_par, surf_par, veg_par 
+  use constants, only : karman, g, T0, frac_vu
+  use lnd_grid, only : i_ice, i_lake, i_bare
+  use lnd_grid, only : npft
+  use lnd_params, only : l_neutral, z_sfl
+  use lnd_params, only : snow_par, surf_par, veg_par
 
   implicit none
 
   private
-  public :: surface_frac_up, snow_albedo, surface_albedo, resist_aer, resist_sur
+  public :: surface_frac_up, snow_albedo_lake, surface_albedo_lake, resist_aer_lake, resist_sur_lake
 
 contains
 
@@ -106,148 +105,49 @@ contains
   !   Subroutine :  s n o w _ a l b e d o
   !   Purpose    :  albedo of snow for each surface type
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine snow_albedo(f_veg, f_ice, f_lake, w_snow, w_snow_max, &
-                        t_skin_veg, t_skin_ice, t_skin_lake, snow, dust_dep, coszm, &
+  subroutine snow_albedo_lake(t_skin, snow, w_snow, w_snow_max, dust_dep, coszm, &
                         alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif, &
                         snow_grain, dust_con)
 
     implicit none
 
-    real(wp), dimension(:), intent(in) :: w_snow, w_snow_max
-    real(wp), intent(in) :: f_veg, f_ice, f_lake
-    real(wp), intent(in) :: t_skin_veg, t_skin_ice, t_skin_lake
-    real(wp), dimension(:), intent(in) :: snow
+    real(wp), intent(in) :: t_skin, snow, w_snow, w_snow_max
     real(wp), intent(in) :: dust_dep, coszm
-    real(wp), dimension(:), intent(inout) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
-    real(wp), dimension(:), intent(inout) :: snow_grain
-    real(wp), dimension(:), intent(inout) :: dust_con
+    real(wp), intent(inout) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
+    real(wp), intent(inout) :: snow_grain
+    real(wp), intent(inout) :: dust_con
 
 
-    ! for vegetated grid cell portion
-    if (f_veg.gt.0._wp) then
-
-      ! snow grain size
-      if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_veg, snow(i_bare), &
-                             snow_grain(is_veg))
-      else
-        snow_grain(is_veg) = snow_par%snow_grain_fresh
-      endif
-
-      ! dust effect on snow albedo
-      if (snow_par%l_snow_dust) then
-        ! dust concentration in top snow layer
-        call dust_in_snow(dust_dep, snow(i_bare), w_snow(is_veg), w_snow_max(is_veg), &
-                          dust_con(is_veg))
-      else
-        dust_con(is_veg) = 0._wp
-      endif
-
-      ! compute snow albedo
-      if (snow_par%i_snow_albedo.eq.1) then
-        ! climber-2 snow albedo parameterisation, following Warren & Wiscombe 1980
-        call snow_albedo_ww(snow_grain(is_veg), dust_con(is_veg), coszm, &
-                            alb_snow_vis_dir(is_veg), alb_snow_nir_dir(is_veg), alb_snow_vis_dif(is_veg), alb_snow_nir_dif(is_veg))
-      else if (snow_par%i_snow_albedo.eq.2) then
-        ! snow albedo parameterisation following Dang et al 2015
-        call snow_albedo_dang(snow_grain(is_veg), dust_con(is_veg), coszm, &
-                              alb_snow_vis_dir(is_veg), alb_snow_nir_dir(is_veg), alb_snow_vis_dif(is_veg), alb_snow_nir_dif(is_veg))
-      endif
-
+    ! snow grain size
+    if (snow_par%l_snow_aging) then
+      call snow_grain_size(t_skin, snow, snow_grain)
     else
-
-      alb_snow_vis_dif(is_veg) = 0._wp 
-      alb_snow_nir_dif(is_veg) = 0._wp 
-      alb_snow_vis_dir(is_veg) = 0._wp 
-      alb_snow_nir_dir(is_veg) = 0._wp 
-
+      snow_grain = snow_par%snow_grain_fresh
     endif
 
-    ! for ice grid cell portion
-    if (f_ice.gt.0._wp) then
-
-      ! snow grain size
-      if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_ice, snow(i_ice), &
-                             snow_grain(is_ice))
-      else
-        snow_grain(is_ice) = snow_par%snow_grain_fresh
-      endif
-
-      ! dust effect on snow albedo
-      if (snow_par%l_snow_dust) then
-        ! dust concentration in top snow layer
-        call dust_in_snow(dust_dep, snow(i_ice), w_snow(is_ice), w_snow_max(is_ice), &
-                          dust_con(is_ice))
-      else
-        dust_con(is_ice) = 0._wp
-      endif
-
-      ! compute snow albedo
-      if (snow_par%i_snow_albedo.eq.1) then
-        ! climber-2 snow albedo parameterisation, following Warren & Wiscombe 1980
-        call snow_albedo_ww(snow_grain(is_ice), dust_con(is_ice), coszm, &
-                            alb_snow_vis_dir(is_ice), alb_snow_nir_dir(is_ice), alb_snow_vis_dif(is_ice), alb_snow_nir_dif(is_ice))
-      else if (snow_par%i_snow_albedo.eq.2) then
-        ! snow albedo parameterisation following Dang et al 2015
-        call snow_albedo_dang(snow_grain(is_ice), dust_con(is_ice), coszm, &
-                              alb_snow_vis_dir(is_ice), alb_snow_nir_dir(is_ice), alb_snow_vis_dif(is_ice), alb_snow_nir_dif(is_ice))
-      endif
-
+    ! dust effect on snow albedo
+    if (snow_par%l_snow_dust) then
+      ! dust concentration in top snow layer
+      call dust_in_snow(dust_dep, snow, w_snow, w_snow_max, dust_con)
     else
-
-      alb_snow_vis_dif(is_ice) = 0._wp 
-      alb_snow_nir_dif(is_ice) = 0._wp 
-      alb_snow_vis_dir(is_ice) = 0._wp 
-      alb_snow_nir_dir(is_ice) = 0._wp 
-
+      dust_con = 0._wp
     endif
 
-
-    ! lake
-    if (f_lake.gt.0._wp) then
-
-      ! snow grain size
-      if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_lake, snow(i_lake), &
-                             snow_grain(is_lake))
-      else
-        snow_grain(is_lake) = snow_par%snow_grain_fresh
-      endif
-
-      ! dust effect on snow albedo
-      if (snow_par%l_snow_dust) then
-        ! dust concentration in top snow layer
-        call dust_in_snow(dust_dep, snow(i_lake), w_snow(is_lake), w_snow_max(is_lake), &
-                          dust_con(is_lake))
-      else
-        dust_con(is_lake) = 0._wp
-      endif
-
-      ! compute snow albedo
-      if (snow_par%i_snow_albedo.eq.1) then
-        ! climber-2 snow albedo parameterisation, following Warren & Wiscombe 1980
-        call snow_albedo_ww(snow_grain(is_lake), dust_con(is_lake), coszm, &
-                            alb_snow_vis_dir(is_lake), alb_snow_nir_dir(is_lake), alb_snow_vis_dif(is_lake), alb_snow_nir_dif(is_lake))
-      else if (snow_par%i_snow_albedo.eq.2) then
-        ! snow albedo parameterisation following Dang et al 2015
-        call snow_albedo_dang(snow_grain(is_lake), dust_con(is_lake), coszm, &
-                              alb_snow_vis_dir(is_lake), alb_snow_nir_dir(is_lake), alb_snow_vis_dif(is_lake), alb_snow_nir_dif(is_lake))
-      endif
-
-    else
-
-      alb_snow_vis_dif(is_lake) = 0._wp 
-      alb_snow_nir_dif(is_lake) = 0._wp 
-      alb_snow_vis_dir(is_lake) = 0._wp 
-      alb_snow_nir_dir(is_lake) = 0._wp 
-
+    ! compute snow albedo
+    if (snow_par%i_snow_albedo.eq.1) then
+      ! climber-2 snow albedo parameterisation, following Warren & Wiscombe 1980
+      call snow_albedo_ww(snow_grain, dust_con, coszm, &
+                          alb_snow_vis_dir, alb_snow_nir_dir, alb_snow_vis_dif, alb_snow_nir_dif)
+    else if (snow_par%i_snow_albedo.eq.2) then
+      ! snow albedo parameterisation following Dang et al 2015
+      call snow_albedo_dang(snow_grain, dust_con, coszm, &
+                            alb_snow_vis_dir, alb_snow_nir_dir, alb_snow_vis_dif, alb_snow_nir_dif)
     endif
 
 
     return
 
-    end subroutine snow_albedo
+    end subroutine snow_albedo_lake
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -493,445 +393,135 @@ contains
   !   Subroutine :  s u r f a c e _ a l b e d o
   !   Purpose    :  albedo for each surface type
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine surface_albedo(frac_surf,z_veg_std,h_snow,coszm,lai,sai,z0m,f_snow_can,f_lake_ice, &
+  subroutine surface_albedo_lake(h_snow,coszm,f_lake_ice, &
                            alb_snow_vis_dir,alb_snow_vis_dif,alb_snow_nir_dir,alb_snow_nir_dif, &
-                           alb_bare_vis,alb_bare_nir, &
                            f_snow, &
                            alb_vis_dir,alb_vis_dif,alb_nir_dir,alb_nir_dif,albedo)
 
     implicit none
 
-    real(wp), dimension(:), intent(in) :: h_snow
-    real(wp), intent(in) :: z_veg_std
+    real(wp), intent(in) :: h_snow
     real(wp), intent(in) :: coszm
-    real(wp), dimension(:), intent(in) :: z0m, frac_surf, f_snow_can
-    real(wp), intent(in) :: f_lake_ice 
-    real(wp), dimension(:), intent(in) :: lai, sai
-    real(wp), dimension(:), intent(in) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
-    real(wp), intent(in) :: alb_bare_vis, alb_bare_nir
-    real(wp), dimension(:), intent(out) :: f_snow
-    real(wp), dimension(:), intent(out) :: alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif, albedo
+    real(wp), intent(in) :: f_lake_ice
+    real(wp), intent(in) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
+    real(wp), intent(out) :: f_snow
+    real(wp), intent(out) :: alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif, albedo
 
-    integer :: n, n_s
-    real(wp) :: lsai_eff, svf, svf_dir, svf_dif, f_ice, f_snow_b, f_snow_t
-    real(wp) :: alb_dir_water
-    real(wp) :: alb_vis_bcan, alb_nir_bcan
-    real(wp) :: alb_vis_dir_can, alb_nir_dir_can, alb_vis_dif_can, alb_nir_dif_can
-    real(wp) :: f_snow_fac_orog
-    real(wp), parameter :: sai_svf_scale = 2._wp  ! scale factor of stem area index for albedo 
-    real(wp), parameter :: z0m_bcan = 0.02_wp   ! m, roughness length below canopy
-    real(wp), parameter :: eps = 1.e-10_wp
-    
+    real(wp) :: f_ice, alb_dir_water
 
 
-    ! ice
-    if( frac_surf(i_ice) .gt. 0._wp ) then
-      ! snow fraction after Niu and Yang 2007, Roesch 2001
-      f_snow(i_ice) = tanh(h_snow(is_ice)/(snow_par%c_fsnow*z0m(i_ice))) 
-      alb_vis_dir(i_ice) = f_snow(i_ice) * alb_snow_vis_dir(is_ice) + (1._wp-f_snow(i_ice)) * surf_par%alb_vis_dir_ice
-      alb_vis_dif(i_ice) = f_snow(i_ice) * alb_snow_vis_dif(is_ice) + (1._wp-f_snow(i_ice)) * surf_par%alb_vis_dif_ice
-      alb_nir_dir(i_ice) = f_snow(i_ice) * alb_snow_nir_dir(is_ice) + (1._wp-f_snow(i_ice)) * surf_par%alb_nir_dir_ice
-      alb_nir_dif(i_ice) = f_snow(i_ice) * alb_snow_nir_dif(is_ice) + (1._wp-f_snow(i_ice)) * surf_par%alb_nir_dif_ice
-    else
-      f_snow(i_ice) = 0._wp
-    endif
+    ! snow fraction after Niu and Yang 2007, Roesch 2001
+    f_snow = tanh(h_snow/(snow_par%c_fsnow*surf_par%z0m_lake_ice))
+    f_ice  = f_lake_ice
+    alb_dir_water = 0.05_wp/(max(0.01,coszm)+0.15_wp)     ! CLM4.5, eq. 9.1, Pivoravov 1972
+    alb_vis_dir = (1._wp-f_ice) * alb_dir_water &
+      + f_ice * (f_snow * alb_snow_vis_dir + (1._wp-f_snow) * surf_par%alb_vis_dir_ice)
+    alb_vis_dif = (1._wp-f_ice) * surf_par%alb_vis_dif_water &
+      + f_ice * (f_snow * alb_snow_vis_dif + (1._wp-f_snow) * surf_par%alb_vis_dif_ice)
+    alb_nir_dir = (1._wp-f_ice) * alb_dir_water &
+      + f_ice * (f_snow * alb_snow_nir_dir + (1._wp-f_snow) * surf_par%alb_nir_dir_ice)
+    alb_nir_dif = (1._wp-f_ice) * surf_par%alb_nir_dif_water &
+      + f_ice * (f_snow * alb_snow_nir_dif + (1._wp-f_snow) * surf_par%alb_nir_dif_ice)
 
-    ! lake
-    if( frac_surf(i_lake) .gt. 0._wp ) then
-       ! snow fraction after Niu and Yang 2007, Roesch 2001
-       f_snow(i_lake) = tanh(h_snow(is_lake)/(snow_par%c_fsnow*surf_par%z0m_lake_ice)) 
-       f_ice  = f_lake_ice
-       alb_dir_water = 0.05_wp/(max(0.01,coszm)+0.15_wp)     ! CLM4.5, eq. 9.1, Pivoravov 1972
-       alb_vis_dir(i_lake) = (1._wp-f_ice) * alb_dir_water &
-         + f_ice * (f_snow(i_lake) * alb_snow_vis_dir(is_lake) + (1._wp-f_snow(i_lake)) * surf_par%alb_vis_dir_ice)
-       alb_vis_dif(i_lake) = (1._wp-f_ice) * surf_par%alb_vis_dif_water &
-         + f_ice * (f_snow(i_lake) * alb_snow_vis_dif(is_lake) + (1._wp-f_snow(i_lake)) * surf_par%alb_vis_dif_ice)
-       alb_nir_dir(i_lake) = (1._wp-f_ice) * alb_dir_water &
-         + f_ice * (f_snow(i_lake) * alb_snow_nir_dir(is_lake) + (1._wp-f_snow(i_lake)) * surf_par%alb_nir_dir_ice)
-       alb_nir_dif(i_lake) = (1._wp-f_ice) * surf_par%alb_nir_dif_water &
-         + f_ice * (f_snow(i_lake) * alb_snow_nir_dif(is_lake) + (1._wp-f_snow(i_lake)) * surf_par%alb_nir_dif_ice)
-    else
-      f_snow(i_lake) = 0._wp
-    endif
-
-    ! bare soil
-    if( frac_surf(i_bare) .gt. 0._wp ) then
-      ! orography factor for snow cover fraction 
-      if (snow_par%l_fsnow_orog) then
-        ! reduce snow cover fraction over rough topography following Roesch 2001, eq. 7
-        f_snow_fac_orog = h_snow(is_veg)/(h_snow(is_veg)+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
-      else
-        f_snow_fac_orog = 1._wp
-      endif
-      ! snow fraction after Niu and Yang 2007, Roesch 2001
-      f_snow(i_bare) = tanh(h_snow(is_veg)/(snow_par%c_fsnow*z0m(i_bare))) * f_snow_fac_orog
-      alb_vis_dir(i_bare) = f_snow(i_bare) * alb_snow_vis_dir(is_veg) + (1._wp-f_snow(i_bare)) * alb_bare_vis
-      alb_vis_dif(i_bare) = f_snow(i_bare) * alb_snow_vis_dif(is_veg) + (1._wp-f_snow(i_bare)) * alb_bare_vis
-      alb_nir_dir(i_bare) = f_snow(i_bare) * alb_snow_nir_dir(is_veg) + (1._wp-f_snow(i_bare)) * alb_bare_nir
-      alb_nir_dif(i_bare) = f_snow(i_bare) * alb_snow_nir_dif(is_veg) + (1._wp-f_snow(i_bare)) * alb_bare_nir
-    endif
-
-    ! vegetation, Otto 2011
-    ! trees
-    do n=1,ntrees
-     n_s = i_trees(n) ! surface type index (also equal to PFT index)
-     if( frac_surf(n_s) .gt. 0._wp ) then
-
-      ! sky view factor, including zenith angle dependence
-      ! for diffuse radiation, fitted relation from Verseghy 1993 based on 3 zenith angles
-      ! use zenith angle=45° -> cos(45._wp*pi/180._wp) = 0.7071
-      svf_dif = exp( - (lai(n_s)+sai_svf_scale*sai(n_s)) * veg_par%ext_coef/0.7071_wp )
-      ! for direct radiation
-      svf_dir = exp( - (lai(n_s)+sai_svf_scale*sai(n_s)) * veg_par%ext_coef/max(0.01_wp,coszm) )
-
-      ! albedo of snow covered ground below the canopy, use always diffuse snow albedo!
-      ! orography factor for snow cover fraction 
-      if (snow_par%l_fsnow_orog) then
-        ! reduce snow cover fraction over rough topography following Roesch 2001, eq. 7
-        f_snow_fac_orog = h_snow(is_veg)/(h_snow(is_veg)+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
-      else
-        f_snow_fac_orog = 1._wp
-      endif
-      ! snow fraction after Niu and Yang 2007
-      f_snow_b = tanh(h_snow(is_veg)/(snow_par%c_fsnow*z0m_bcan)) * f_snow_fac_orog
-      alb_vis_bcan = f_snow_b * alb_snow_vis_dif(is_veg) + (1._wp-f_snow_b) * pft_par%alb_bg_vis(n_s) 
-      alb_nir_bcan = f_snow_b * alb_snow_nir_dif(is_veg) + (1._wp-f_snow_b) * pft_par%alb_bg_nir(n_s)
-
-      ! albedo of snow covered canopy
-      f_snow_t = f_snow_can(n_s)
-      alb_vis_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dir(n_s) + f_snow_t * pft_par%alb_can_vis_dir_snow(n_s) 
-      alb_vis_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dif(n_s) + f_snow_t * pft_par%alb_can_vis_dif_snow(n_s)
-      alb_nir_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dir(n_s) + f_snow_t * pft_par%alb_can_nir_dir_snow(n_s)
-      alb_nir_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dif(n_s) + f_snow_t * pft_par%alb_can_nir_dif_snow(n_s)
-
-      f_snow(n_s) = svf_dir*f_snow_b + (1._wp-svf_dir)*f_snow_t
-
-      ! tile albedo, weighted mean
-      alb_vis_dir(n_s) = &
-                   svf_dir        * alb_vis_bcan          &  ! ground below canopy
-                 + (1._wp-svf_dir) * alb_vis_dir_can         ! canopy
-      alb_vis_dif(n_s) = &
-                   svf_dif        * alb_vis_bcan          &  ! ground below canopy
-                 + (1._wp-svf_dif) * alb_vis_dif_can         ! canopy
-      alb_nir_dir(n_s) = &
-                   svf_dir        * alb_nir_bcan          &  ! ground below canopy
-                 + (1._wp-svf_dir) * alb_nir_dir_can         ! canopy
-      alb_nir_dif(n_s) = &
-                   svf_dif        * alb_nir_bcan          &  ! ground below canopy
-                 + (1._wp-svf_dif) * alb_nir_dif_can         ! canopy
-
-     else
-       f_snow(n_s) = 0._wp 
-     endif
-    enddo
-
-    ! grass 
-    do n=1,ngrass
-     n_s = i_grass(n)
-     if( frac_surf(n_s) .gt. 0._wp ) then
-      ! sky view factor, no zenith angle dependence
-      svf = exp( - (lai(n_s)+sai(n_s)) * veg_par%ext_coef)
-      ! orography factor for snow cover fraction 
-      if (snow_par%l_fsnow_orog) then
-        ! reduce snow cover fraction over rough topography following Roesch 2001, eq. 7
-        f_snow_fac_orog = h_snow(is_veg)/(h_snow(is_veg)+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
-      else
-        f_snow_fac_orog = 1._wp
-      endif
-      ! snow fraction after Niu and Yang 2007
-      f_snow(n_s) = tanh(h_snow(is_veg)/(snow_par%c_fsnow*z0m(n_s))) * f_snow_fac_orog
-      alb_vis_dir(n_s) = &
-                   f_snow(n_s)                       * alb_snow_vis_dir(is_veg)      &  ! snow
-                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_vis_dir(n_s)  &  ! snowfree canopy
-                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_vis(n_s)
-      alb_vis_dif(n_s) = &
-                   f_snow(n_s)                       * alb_snow_vis_dif(is_veg)      &  ! snow
-                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_vis_dif(n_s)  &  ! snowfree canopy
-                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_vis(n_s)
-      alb_nir_dir(n_s) = &
-                   f_snow(n_s)                       * alb_snow_nir_dir(is_veg)      &  ! snow
-                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_nir_dir(n_s)  &  ! snowfree canopy
-                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_nir(n_s)
-      alb_nir_dif(n_s) = &
-                   f_snow(n_s)                       * alb_snow_nir_dif(is_veg)      &  ! snow
-                 + (1._wp-f_snow(n_s)) * (1._wp-svf) * pft_par%alb_can_nir_dif(n_s)  &  ! snowfree canopy
-                 + (1._wp-f_snow(n_s)) * svf         * pft_par%alb_bg_nir(n_s)
-
-     endif
-    enddo
-
-    ! shrubs
-    do n=1,nshrub
-     n_s = i_shrub(n) ! surface type index (also equal to PFT index)
-     if( frac_surf(n_s) .gt. 0._wp ) then
-
-      ! sky view factor, including zenith angle dependence
-      ! effective LAI+SAI index, accounting for snow thickness
-      lsai_eff = (lai(n_s)+sai_svf_scale*sai(n_s)) * (1._wp-tanh(h_snow(is_veg)/(snow_par%c_fsnow*z0m(n_s))))
-      ! for diffuse radiation, fitted relation from Verseghy 1993 based on 3 zenith angles
-      ! use zenith angle=45° -> cos(45._wp*pi/180._wp) = 0.7071
-      svf_dif = exp( -lsai_eff * veg_par%ext_coef/0.7071_wp )
-      ! for direct radiation
-      svf_dir = exp( -lsai_eff * veg_par%ext_coef/max(0.01_wp,coszm) )
-
-      ! albedo of snow covered ground below the canopy, use always diffuse snow albedo!
-      ! orography factor for snow cover fraction 
-      if (snow_par%l_fsnow_orog) then
-        ! reduce snow cover fraction over rough topography following Roesch 2001, eq. 7
-        f_snow_fac_orog = h_snow(is_veg)/(h_snow(is_veg)+snow_par%c_fsnow_orog*max(snow_par%z_veg_std_min,z_veg_std)+eps)
-      else
-        f_snow_fac_orog = 1._wp
-      endif
-      ! snow fraction after Niu and Yang 2007
-      f_snow_b = tanh(h_snow(is_veg)/(snow_par%c_fsnow*z0m_bcan)) * f_snow_fac_orog
-      alb_vis_bcan = f_snow_b * alb_snow_vis_dif(is_veg) + (1._wp-f_snow_b) * pft_par%alb_bg_vis(n_s) 
-      alb_nir_bcan = f_snow_b * alb_snow_nir_dif(is_veg) + (1._wp-f_snow_b) * pft_par%alb_bg_nir(n_s)
-
-      ! albedo of snow covered canopy
-      f_snow_t = f_snow_can(n_s)
-      alb_vis_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dir(n_s) + f_snow_t * pft_par%alb_can_vis_dir_snow(n_s) 
-      alb_vis_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_vis_dif(n_s) + f_snow_t * pft_par%alb_can_vis_dif_snow(n_s)
-      alb_nir_dir_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dir(n_s) + f_snow_t * pft_par%alb_can_nir_dir_snow(n_s)
-      alb_nir_dif_can = (1._wp-f_snow_t) * pft_par%alb_can_nir_dif(n_s) + f_snow_t * pft_par%alb_can_nir_dif_snow(n_s)
-
-      f_snow(n_s) = svf_dir*f_snow_b + (1._wp-svf_dir)*f_snow_t
-
-      ! tile albedo, weighted mean
-      alb_vis_dir(n_s) = &
-                   svf_dir        * alb_vis_bcan          &  ! ground below canopy
-                 + (1._wp-svf_dir) * alb_vis_dir_can         ! canopy
-      alb_vis_dif(n_s) = &
-                   svf_dif        * alb_vis_bcan      &  ! ground below canopy
-                 + (1._wp-svf_dif) * alb_vis_dif_can         ! canopy
-      alb_nir_dir(n_s) = &
-                   svf_dir        * alb_nir_bcan      &  ! ground below canopy
-                 + (1._wp-svf_dir) * alb_nir_dir_can         ! canopy
-      alb_nir_dif(n_s) = &
-                   svf_dif        * alb_nir_bcan      &  ! ground below canopy
-                 + (1._wp-svf_dif) * alb_nir_dif_can         ! canopy
-
-     else
-       f_snow(n_s) = 0._wp 
-     endif
-    enddo
-
-
-    ! composite albedo, assuming half cloud cover, diagnostic only (except for offline simulations?)
-    do n=1,nsurf
-      if( frac_surf(n) .gt. 0._wp ) then
-        albedo(n) = frac_vu * 0.5_wp*(alb_vis_dir(n) + alb_vis_dif(n)) &
-          + (1._wp-frac_vu) * 0.5_wp*(alb_nir_dir(n) + alb_nir_dif(n))
-      else
-        albedo(n) = 0._wp
-      endif
-    enddo
+    ! composite albedo, assuming half cloud cover, diagnostic only
+    albedo = frac_vu * 0.5_wp*(alb_vis_dir + alb_vis_dif) &
+      + (1._wp-frac_vu) * 0.5_wp*(alb_nir_dir + alb_nir_dif)
 
     return
 
-  end subroutine surface_albedo
+  end subroutine surface_albedo_lake
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  r e s i s t _ a e r 
   !   Purpose    :  compute drag coefficients and aerodynamic resistance given snow depth
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine resist_aer(frac_surf,veg_h,lai,sai,h_snow,tatm,t_skin,wind, &
-                       z0m,rough_m,rough_h,Ch,r_a,r_a_can,Ri)
+  subroutine resist_aer_lake(h_snow,tatm,t_skin,wind, &
+                       z0m,rough_m,rough_h,Ch,r_a,Ri)
 
     implicit none
 
-    real(wp), dimension(:), intent(in) :: veg_h, lai, sai
-    real(wp), dimension(:), intent(in) :: frac_surf, tatm, t_skin
-    real(wp), dimension(:), intent(in) :: h_snow
-    real(wp), dimension(:), intent(in) :: wind
-    real(wp), dimension(:), intent(inout) :: z0m, rough_m, rough_h
-    real(wp), dimension(:), intent(out) :: Ch, r_a, Ri
-    real(wp), dimension(:), intent(out) :: r_a_can
+    real(wp), intent(in) :: h_snow
+    real(wp), intent(in) :: tatm, t_skin
+    real(wp), intent(in) :: wind
+    real(wp), intent(in) :: z0m
+    real(wp), intent(out) :: rough_m, rough_h
+    real(wp), intent(out) :: Ch, r_a, Ri
 
-    integer :: n
-    real(wp) :: fsnow, hsnow
+    real(wp) :: fsnow
     real(wp) :: u_star, Re
     real(wp) :: log_m, log_h, Ch_neutral
-    
+
     real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
 
 
-    do n=1,nsurf
+    ! account for snow cover (lake is non-vegetated: flag_pft=0, z0m fixed)
+    fsnow = h_snow/(h_snow+10._wp*z0m)
+    rough_m = fsnow * surf_par%z0m_snow + (1._wp-fsnow) * z0m ! roughness including snow
 
-      if( frac_surf(n) .gt. 0._wp ) then
+    log_m = karman/log(z_sfl/rough_m)
 
-        if( n .eq. i_ice ) then
-          hsnow = h_snow(is_ice)
-        elseif( n .eq. i_lake ) then
-          hsnow = h_snow(is_lake)
-        else
-          hsnow = h_snow(is_veg)
-        endif
-
-        ! roughness for momentum
-        if( flag_pft(n) .eq. 1 ) then
-          z0m(n) = pft_par%hveg_z0_scale(n) * veg_h(n)  ! roughness for snow free
-        endif
-        ! account for snow cover
-        fsnow = hsnow/(hsnow+10._wp*z0m(n))
-        rough_m(n) = fsnow * surf_par%z0m_snow + (1._wp-fsnow) * z0m(n) ! roughness including snow
-
-        log_m = karman/log(z_sfl/rough_m(n))
-
-        ! roughness_for heat and water
-        if (surf_par%i_z0h.eq.1) then
-          rough_h(n) = surf_par%zm_to_zh_const * rough_m(n)
-        else if (surf_par%i_z0h.eq.2) then
-          ! formulation following Brutsaert 1982, Kanda 2007
-          ! surface friction velocity
-          u_star = log_m*wind(n)
-          ! roughness Reynolds number
-          Re = u_star*rough_m(n)/nu
-          rough_h(n) = rough_m(n)*exp(-(1.29*Re**0.25_wp-2._wp))
-        else if (surf_par%i_z0h.eq.3) then
-          ! Zilitinkevich 1995
-          ! surface friction velocity
-          u_star = log_m*wind(n)
-          ! roughness Reynolds number
-          Re = u_star*rough_m(n)/nu
-          rough_h(n) = rough_m(n)*exp(-karman*0.1_wp*sqrt(Re))
-        else if (surf_par%i_z0h.eq.4) then
-          if( flag_pft(n) .eq. 1 ) then
-            ! Zilitinkevich 1995
-            ! surface friction velocity
-            u_star = log_m*wind(n)
-            ! roughness Reynolds number
-            Re = u_star*rough_m(n)/nu
-            rough_h(n) = rough_m(n)*exp(-karman*0.1_wp*sqrt(Re))
-          else
-            ! Yang 2008, kB^-1~2 for bare soil and other non-vegetated surfaces
-            rough_h(n) = rough_m(n)*exp(-2._wp)
-          endif
-        endif
-
-        log_h = karman/log(z_sfl/rough_h(n))
-
-        ! neutral heat exchange coefficient
-        Ch_neutral = log_m * log_h 
-
-        ! Richardson number
-        Ri(n) = g * 100._wp * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2 
-
-        if( l_neutral ) then
-          ! neutral stratification
-          Ch(n) = Ch_neutral
-        else
-          ! account for atmospheric stability through a Ri number dependence following BATS
-          if( Ri(n) .lt. 0._wp ) then ! "unstable" stratification
-            Ch(n) = Ch_neutral * (1._wp - surf_par%f_Ri_unstab * Ri(n))
-          else ! "stable" stratification
-            Ch(n) = Ch_neutral / (1._wp + surf_par%f_Ri_stab * Ri(n))
-          endif
-        endif
-
-        ! aerodynamic resistance
-        r_a(n) = 1._wp / (Ch(n) * wind(n))
-
-        ! aerodynamic resistance for ground below canopy
-        if( flag_pft(n) .eq. 1 ) then
-          if (i_racan.eq.1) then
-            r_a_can(n) = 1._wp/(p_cdense*wind(n)) 
-          else if (i_racan.eq.2) then
-            r_a_can(n) = (1._wp-exp(-(lai(n)+10._wp*sai(n))))/(p_cdense*wind(n)) 
-          endif
-        endif
-
-      endif
-    enddo
-
-    if (i_racan.eq.3) then
-      do n=1,npft
-        r_a_can(n) = r_a(i_bare)
-      enddo
+    ! roughness for heat and water
+    if (surf_par%i_z0h.eq.1) then
+      rough_h = surf_par%zm_to_zh_const * rough_m
+    else if (surf_par%i_z0h.eq.2) then
+      ! formulation following Brutsaert 1982, Kanda 2007
+      u_star = log_m*wind
+      Re = u_star*rough_m/nu
+      rough_h = rough_m*exp(-(1.29*Re**0.25_wp-2._wp))
+    else if (surf_par%i_z0h.eq.3) then
+      ! Zilitinkevich 1995
+      u_star = log_m*wind
+      Re = u_star*rough_m/nu
+      rough_h = rough_m*exp(-karman*0.1_wp*sqrt(Re))
+    else if (surf_par%i_z0h.eq.4) then
+      ! Yang 2008, kB^-1~2 for bare soil and other non-vegetated surfaces
+      rough_h = rough_m*exp(-2._wp)
     endif
+
+    log_h = karman/log(z_sfl/rough_h)
+
+    ! neutral heat exchange coefficient
+    Ch_neutral = log_m * log_h
+
+    ! Richardson number
+    Ri = g * 100._wp * (1._wp - t_skin / tatm) / wind**2
+
+    if( l_neutral ) then
+      ! neutral stratification
+      Ch = Ch_neutral
+    else
+      ! account for atmospheric stability through a Ri number dependence following BATS
+      if( Ri .lt. 0._wp ) then ! "unstable" stratification
+        Ch = Ch_neutral * (1._wp - surf_par%f_Ri_unstab * Ri)
+      else ! "stable" stratification
+        Ch = Ch_neutral / (1._wp + surf_par%f_Ri_stab * Ri)
+      endif
+    endif
+
+    ! aerodynamic resistance
+    r_a = 1._wp / (Ch * wind)
 
     return
 
-  end subroutine resist_aer
+  end subroutine resist_aer_lake
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  r e s i s t _ s u r 
-  !   Purpose    :  compute surface resistance to evapotranspiration
+  !   Subroutine :  r e s i s t _ s u r _ l a k e
+  !   Purpose    :  surface resistance to evapotranspiration, lake tile
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine resist_sur(frac_surf,mask_snow,w_snow,theta_w,g_can,beta_s,r_s,beta_s_can,r_s_can)
+  subroutine resist_sur_lake(beta_s,r_s)
 
     implicit none
 
-    integer,  dimension(:), intent(in) :: mask_snow
-    real(wp), dimension(:), intent(in) :: w_snow
-    real(wp), dimension(:), intent(in) :: frac_surf
-    real(wp), dimension(:), intent(in) :: theta_w
-    real(wp), dimension(:), intent(in) :: g_can
-    real(wp), dimension(:), intent(out) :: beta_s, r_s
-    real(wp), dimension(:), intent(out) :: beta_s_can, r_s_can
+    real(wp), intent(out) :: beta_s, r_s
 
-    integer :: n
-    real(wp) :: f_snow, beta_soil, beta_snow
-
-
-    ! bare soil, use resistance OR beta factor
-    r_s(i_bare) = 0._wp
-    beta_snow = 1._wp
-    if (hydro_par%i_evp_soil.eq.1) then
-      ! CLM, Lee and Pielke 1992 
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = 0.25_wp * (1._wp - cos(pi * theta_w(1) / hydro_par%theta_crit_evp))**2
-      else
-        beta_soil = 1._wp
-      endif
-    else if (hydro_par%i_evp_soil.eq.2) then
-      ! CLIMBER-2
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
-      else
-        beta_soil = 1._wp
-      endif
-    endif
-!    if (w_snow(is_veg).gt.snow_par%w_snow_crit) then
-!      beta_s(i_bare) = beta_snow
-!    else
-!      f_snow = w_snow(is_veg)/snow_par%w_snow_crit
-!      beta_s(i_bare) = f_snow*beta_snow + (1._wp-f_snow)*beta_soil
-!    endif
-    if (mask_snow(is_veg).eq.0) then
-      beta_s(i_bare) = beta_soil
-    else
-      beta_s(i_bare) = beta_snow
-    endif
-    ! scale to account for fraction of top layer from which evaporation can occur
-    beta_s(i_bare) = hydro_par%dz_evp/dz(1) * beta_s(i_bare)
-
-    ! lake
-    if( frac_surf(i_lake) .gt. 0._wp ) then
-      r_s(i_lake) = 0._wp
-      beta_s(i_lake) = 1._wp
-    endif
-
-    ! ice
-    if( frac_surf(i_ice) .gt. 0._wp ) then
-      r_s(i_ice) = 0._wp
-      beta_s(i_ice) = 1._wp
-    endif
-
-    ! vegetation
-    do n=1,npft
-      if( frac_surf(n) .gt. 0._wp ) then
-        r_s(n) = 1._wp / max(1.e-30_wp, 1.6_wp*g_can(n)) ! s/m   , factor 1.6 is to convert from CO2 to H2O conductance
-        beta_s(n) = 1._wp
-        ! for evaporation from soil below canopy use bare soil resistance
-        r_s_can(n) = r_s(i_bare)
-        beta_s_can(n) = beta_s(i_bare)
-      endif
-    enddo
+    r_s = 0._wp
+    beta_s = 1._wp
 
     return
 
-  end subroutine resist_sur
+  end subroutine resist_sur_lake
 
 end module lndvc_surface_par_lnd
