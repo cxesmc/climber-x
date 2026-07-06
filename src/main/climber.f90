@@ -36,13 +36,13 @@ program climber
   use timer, only : time_write_restart, timer_print
   use timer, only : n_year_ice
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
-  use control, only: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
+  use control, only: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_ocn, flag_lnd, flag_lndvc, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
   use control, only: l_aquaplanet
   use control, only : l_spinup_cc, l_daily_input_save_ocn, l_daily_input_save_bgc
   use coords, only : grid_class
 
-  use climber_grid, only: climber_grid_init, ice_grid_init
+  use climber_grid, only: climber_grid_init, ice_grid_init, ni, nj
 
   use coupler, only: cmn_class, cmn_init, &
     &                atm_to_cmn, cmn_to_atm, &
@@ -86,6 +86,8 @@ program climber
 
   use lnd_model, only: lnd_init, lnd_update_wrapper, lnd_end, lnd_write_restart
   use lnd_def, only: lnd_class
+  use lndvc_model, only: lndvc_init, lndvc_update, lndvc_end
+  use lndvc_def, only: lndvc_class
   use lnd_out, only: lnd_diag, lnd_diag_init
 
   use ice_model, only : ice_init_domains, ice_init, ice_update, ice_write_restart
@@ -130,6 +132,7 @@ program climber
   type(bgc_class) :: bgc
   type(sic_class) :: sic
   type(lnd_class) :: lnd
+  type(lndvc_class) :: lndvc
   type(ice_class), allocatable :: ice(:)
   type(smb_in_class) :: smb_in
   type(smb_class), allocatable :: smb(:) 
@@ -291,6 +294,7 @@ program climber
     ! Initialise land model
     if (flag_lnd) then
        call lnd_init(lnd,geo%f_lnd,geo%f_ocn,geo%f_ice,geo%f_ice_grd,geo%f_lake)
+       if (flag_lndvc) call lndvc_init(lndvc, ni, nj)
        call lnd_diag_init
     endif
 
@@ -535,6 +539,7 @@ program climber
         endif
         call lnd_diag(lnd%l2d,lnd%l0d)
         call lnd_to_cmn(lnd,cmn)
+        if (flag_lndvc) call lndvc_update(lndvc)
         !$ time_end = omp_get_wtime()
         !$ time_lnd = time_lnd + (time_end-time_ini)
       endif
@@ -667,6 +672,7 @@ program climber
 
       ! End land model
       if (flag_lnd) call lnd_end(lnd%l2d)
+      if (flag_lndvc) call lndvc_end(lndvc)
 
       ! End ocean biogeochemistry model
       if (flag_bgc) call bgc_end(bgc)

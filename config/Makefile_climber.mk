@@ -233,7 +233,7 @@ $(objdir)/gitversion.o : $(dir_version)gitversion.f90
 $(objdir)/climber.o : $(dir_main)climber.f90 \
 	$(objdir)/gitversion.o \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o $(objdir)/geo.o \
-	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o \
+	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o $(objdir)/lndvc_model.o \
 	$(objdir)/bgc_model.o $(objdir)/co2_model.o $(objdir)/ch4_model.o $(objdir)/n2o_model.o \
 	$(objdir)/ice_model.o $(objdir)/smb_model.o $(objdir)/bmb_model.o \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
@@ -245,7 +245,7 @@ $(objdir)/climber.o : $(dir_main)climber.f90 \
 $(objdir)/climber_clim.o : $(dir_main)climber.f90 \
 	$(objdir)/gitversion.o \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o $(objdir)/geo.o \
-	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o \
+	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o $(objdir)/lndvc_model.o \
 	$(objdir)/.bgc_model.o $(objdir)/co2_model.o $(objdir)/ch4_model.o $(objdir)/n2o_model.o \
 	$(objdir)/.ice_model_dummy.o $(objdir)/.smb_model_dummy.o $(objdir)/.bmb_model_dummy.o \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
@@ -257,7 +257,7 @@ $(objdir)/climber_clim.o : $(dir_main)climber.f90 \
 $(objdir)/climber_clim_bgc.o : $(dir_main)climber.f90 \
 	$(objdir)/gitversion.o \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o $(objdir)/geo.o \
-	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o \
+	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o $(objdir)/lndvc_model.o \
 	$(objdir)/bgc_model.o $(objdir)/co2_model.o $(objdir)/ch4_model.o $(objdir)/n2o_model.o \
 	$(objdir)/.ice_model_dummy.o $(objdir)/.smb_model_dummy.o $(objdir)/.bmb_model_dummy.o \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
@@ -269,7 +269,7 @@ $(objdir)/climber_clim_bgc.o : $(dir_main)climber.f90 \
 $(objdir)/climber_clim_ice.o : $(dir_main)climber.f90 \
 	$(objdir)/gitversion.o \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o $(objdir)/geo.o \
-	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o \
+	$(objdir)/atm_model.o $(objdir)/ocn_model.o $(objdir)/sic_model.o $(objdir)/lnd_model.o $(objdir)/lndvc_model.o \
 	$(objdir)/.bgc_model.o $(objdir)/co2_model.o $(objdir)/ch4_model.o $(objdir)/n2o_model.o \
 	$(objdir)/ice_model.o $(objdir)/smb_model.o $(objdir)/bmb_model.o \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
@@ -1214,28 +1214,28 @@ $(objdir)/fake_geo.o : $(dir_bnd)fake_geo.f90 $(objdir)/timer.o $(objdir)/climbe
 # climber-clim: minimal configuration with ocn,atm,lnd,sic #
 
 climber_clim_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
-			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
+			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) $(obj_lndvc) \
 				$(obj_bgc_dummy) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice_dummy) $(obj_smb_dummy) $(obj_bmb_dummy) $(obj_main_clim) 
 
 # climber-clim-bgc: clim plus with bgc #
 
 climber_clim_bgc_obj = $(obj_utils) $(obj_bnd) $(obj_geo)\
-			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
+			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) $(obj_lndvc) \
 				$(obj_bgc) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice_dummy) $(obj_smb_dummy) $(obj_bmb_dummy) $(obj_main_clim_bgc)
 
 # climber-clim-ice: clim plus with ice #
 
 climber_clim_ice_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
-			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
+			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) $(obj_lndvc) \
 				$(obj_bgc_dummy) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice) $(obj_ice_sico) $(obj_smb) $(obj_bmb) $(obj_main_clim_ice)
 
 # climber-clim-bgc-ice: clim plus with bgc and ice #
 
 climber_clim_bgc_ice_obj = $(obj_utils) $(obj_bnd) $(obj_geo) \
-			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) \
+			  $(obj_atm) $(obj_ocn) $(obj_sic) $(obj_lnd) $(obj_lndvc) \
 				$(obj_bgc) $(obj_co2) $(obj_ch4) $(obj_n2o) \
 			  $(obj_ice) $(obj_ice_sico) $(obj_smb) $(obj_bmb) $(obj_main)
 

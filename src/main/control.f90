@@ -36,7 +36,7 @@ module control
   integer :: n_year_write_restart 
   integer :: years_write_restart(10)
 
-  logical :: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
+  logical :: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_lnd, flag_lndvc, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
   logical :: ocn_restore_sal, ocn_restore_temp
   logical :: atm_fix_tau
   character (len=256) :: ice_model_name
@@ -209,6 +209,7 @@ contains
     call nml_read(filename,"control","flag_n2o",flag_n2o)
     call nml_read(filename,"control","flag_atm",flag_atm)
     call nml_read(filename,"control","flag_lnd",flag_lnd)
+    call nml_read(filename,"control","flag_lndvc",flag_lndvc)
     call nml_read(filename,"control","flag_dust",flag_dust)
     call nml_read(filename,"control","flag_lakes",flag_lakes)
     call nml_read(filename,"control","flag_ocn",flag_ocn)

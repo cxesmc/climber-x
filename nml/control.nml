@@ -11,6 +11,7 @@
  flag_bgc         = F        ! use ocean biogeochemistry model?
  flag_sic         = T        ! use sea ice model?
  flag_lnd         = T        ! use land model?
+ flag_lndvc       = F        ! use virtual-cell (lndvc) framework? (experimental, default off)
  flag_dust        = T        ! use dust model?
  flag_lakes       = F        ! use lake model?
  flag_geo         = F        ! use interactive geography/topography?
