@@ -39,7 +39,7 @@ module lndvc_hydrology_mod
   implicit none
 
   private
-  public :: canopy_water, surface_hydrology
+  public :: canopy_water, surface_hydrology_lake
 
 contains
 
@@ -286,602 +286,157 @@ contains
   end subroutine canopy_water
 
 
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  s u r f a c e _ h y d r o l o g y
-  !   Purpose    :  surface hydrology
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine surface_hydrology(frac_surf,mask_snow,evap_surface,rain_ground,snow_ground,snowmelt,icemelt,icesub,et, &
-                              theta,theta_sat,theta_field,k_sat,cap_soil,cap_lake, &
-                              cti_mean, cti_cdf, &
-                              dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax, &
-                              w_snow_old,w_snow,w_snow_max,w_w,w_i,w_table_cum,f_wet_cum,t_soil,t_lake, &
-                              h_snow,calving,runoff_sur,infiltration,w_table,f_wet,f_wet_max,cti_lim,lake_water_tendency, &
-                              evap_surface_iso,rain_ground_iso,snow_ground_iso,snowmelt_iso,icemelt_iso,icesub_iso,et_iso, &
-                              w_snow_iso_old,w_snow_iso,w_w_iso,w_i_iso, &
-                              calving_iso,runoff_sur_iso,infiltration_iso)
 
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s u r f a c e _ h y d r o l o g y _ l a k e
+  !   Purpose    :  surface hydrology for a single lake tile
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine surface_hydrology_lake(mask_snow,evap_surface,snow_ground,rain_ground,snowmelt, &
+                                   cap_lake,t_lake1,w_snow_old,w_snow,w_snow_max,h_snow, &
+                                   calving,runoff_sur,lake_water_tendency, &
+                                   evap_surface_iso,snow_ground_iso,rain_ground_iso, &
+                                   snowmelt_iso,w_snow_iso,calving_iso,runoff_sur_iso)
 
     implicit none
 
-    integer, dimension(:), intent(inout) :: mask_snow
-    real(wp), dimension(:), intent(inout) :: evap_surface
-    real(wp), dimension(:), intent(in) :: frac_surf, snow_ground
-    real(wp), dimension(:), intent(inout) :: rain_ground
-    real(wp), dimension(:), intent(in) :: theta, theta_sat, theta_field, k_sat
-    real(wp), intent(in) :: cap_soil, cap_lake
-    real(wp), intent(in) :: cti_mean, cti_cdf(:)
-    real(wp), intent(in) :: dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax
-    real(wp), dimension(:), intent(inout) :: w_snow_old, w_snow, w_snow_max, snowmelt, icemelt, icesub, et
-    real(wp), intent(inout) :: w_table_cum, f_wet_cum
-    real(wp), dimension(0:), intent(inout) :: t_soil, t_lake
-    real(wp), dimension(:), intent(inout) :: w_w, w_i
-    real(wp), dimension(:), intent(out) :: h_snow, calving, runoff_sur
-    real(wp), intent(out) :: lake_water_tendency
-    real(wp), intent(out) :: infiltration, w_table, f_wet, f_wet_max, cti_lim
+    integer,  intent(inout) :: mask_snow
+    real(wp), intent(in)    :: evap_surface, snow_ground, rain_ground
+    real(wp), intent(inout) :: snowmelt
+    real(wp), intent(in)    :: cap_lake
+    real(wp), intent(inout) :: t_lake1
+    real(wp), intent(in)    :: w_snow_old
+    real(wp), intent(inout) :: w_snow, w_snow_max
+    real(wp), intent(out)   :: h_snow
+    real(wp), intent(out)   :: calving, runoff_sur
+    real(wp), intent(out)   :: lake_water_tendency
     ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
-    real(wp), dimension(:,:), intent(inout) :: evap_surface_iso
-    real(wp), dimension(:,:), intent(in)    :: snow_ground_iso
-    real(wp), dimension(:,:), intent(inout) :: rain_ground_iso
-    real(wp), dimension(:,:), intent(inout) :: snowmelt_iso, icemelt_iso, icesub_iso, et_iso
-    real(wp), dimension(:,:), intent(inout) :: w_snow_iso_old, w_snow_iso
-    real(wp), dimension(:,:), intent(inout) :: w_w_iso, w_i_iso
-    real(wp), dimension(:,:), intent(out)   :: calving_iso, runoff_sur_iso
-    real(wp), dimension(:),   intent(out)   :: infiltration_iso
+    real(wp), dimension(:), intent(in)    :: evap_surface_iso, snow_ground_iso, rain_ground_iso
+    real(wp), dimension(:), intent(inout) :: snowmelt_iso, w_snow_iso
+    real(wp), dimension(:), intent(out)   :: calving_iso, runoff_sur_iso
 
-    integer :: n, i1, i2, iso
-    real(wp) :: f_sat, w1, w2, phi, rain_g, snow_g, H, H_m, H_star, wsnowold_m
-    real(wp) :: z, d_z, deficit, integral, psi
-    real(wp) :: f_ice_grd, f_veg, f_lake
-    real(wp) :: infiltration_max, q_liq, sublimation, evaporation, dws
-    real(wp) :: w_snow_pre, subl_max, subl_excess
-    real(wp) :: snow_g_iso(nwiso), rain_g_iso(nwiso), sublimation_iso(nwiso), evaporation_iso(nwiso)
-    real(wp) :: q_liq_iso(nwiso), ratio_snow(nwiso), wsnowold_iso(nwiso), dws_iso(nwiso)
-    real(wp) :: w_snow_iso_pre(nwiso), subl_excess_iso(nwiso)
+    integer :: iso
+    real(wp) :: sublimation, evaporation, w_snow_pre, wsnowold_m
+    real(wp) :: H, H_m, H_star
+    real(wp) :: sublimation_iso(nwiso), evaporation_iso(nwiso), w_snow_iso_pre(nwiso)
+    real(wp) :: wsnowold_iso(nwiso), ratio_snow(nwiso)
 
 
-    runoff_sur = 0._wp
     calving = 0._wp
-    infiltration = 0._wp
-    icesub = 0._wp
-    w_table = 0._wp
-    f_wet = 0._wp
-    f_wet_max = 0._wp
-    cti_lim = 0._wp
+    runoff_sur = 0._wp
     lake_water_tendency = 0._wp
     if (l_wiso) then
-      runoff_sur_iso   = 0._wp
-      calving_iso      = 0._wp
-      infiltration_iso = 0._wp
-      icesub_iso       = 0._wp
+      calving_iso    = 0._wp
+      runoff_sur_iso = 0._wp
     endif
 
-    f_ice_grd = frac_surf(i_ice)
-    f_veg = sum(frac_surf,mask=flag_veg.eq.1)
-    f_lake = frac_surf(i_lake)
-
-    !************************
-    ! vegetated grid part
-    !************************
-    if( f_veg .gt. 0._wp ) then
-
+    if( mask_snow .eq. 1 ) then
+      sublimation = evap_surface
+      evaporation = 0._wp
+      if (l_wiso) then
+        sublimation_iso(:) = evap_surface_iso(:)
+        evaporation_iso(:) = 0._wp
+      endif
+    else
       sublimation = 0._wp
-      if (l_wiso) sublimation_iso = 0._wp
-      if( mask_snow(is_veg) .eq. 1 ) then
-        do n=1,nveg
-          ! mean sublimation from snow
-          if (frac_surf(n).gt.0._wp) then
-            sublimation = sublimation + evap_surface(n)*frac_surf(n)/f_veg  ! kg/m2/s
-            if (l_wiso) then
-              do iso=1,nwiso
-                sublimation_iso(iso) = sublimation_iso(iso) + evap_surface_iso(n,iso)*frac_surf(n)/f_veg
-              enddo
-            endif
-          endif
-        enddo
+      evaporation = evap_surface
+      if (l_wiso) then
+        sublimation_iso(:) = 0._wp
+        evaporation_iso(:) = evap_surface_iso(:)
       endif
+    endif
 
-      ! mean snow on the ground over vegetated part
-      snow_g = 0._wp
-      if (l_wiso) snow_g_iso = 0._wp
-      do n=1,nsurf
-        if (flag_veg(n).eq.1 .and. frac_surf(n).gt.0._wp) then
-          snow_g = snow_g + snow_ground(n) * frac_surf(n)/f_veg
-          if (l_wiso) then
-            do iso=1,nwiso
-              snow_g_iso(iso) = snow_g_iso(iso) + snow_ground_iso(n,iso) * frac_surf(n)/f_veg
-            enddo
-          endif
-        endif
+    ! add snowfall to snow layer and remove sublimation, snowmelt already removed during lake temperature update
+    w_snow_pre = w_snow + snow_ground * dt - sublimation * dt  ! kg/m2
+    if (l_wiso) then
+      do iso=1,nwiso
+        w_snow_iso_pre(iso) = w_snow_iso(iso) &
+                            + snow_ground_iso(iso) * dt &
+                            - sublimation_iso(iso) * dt
       enddo
+    endif
 
-      ! add snowfall to snow layer and remove sublimation, snowmelt already removed during soil temperature update
-      w_snow(is_veg) = w_snow(is_veg) + snow_g * dt - sublimation * dt  ! kg/m2
+    ! if sublimation depleted the snowpack, redirect the deficit to lake-water evaporation
+    ! (lake water is treated as inexhaustible in this model)
+    if (w_snow_pre .lt. 0._wp) then
+      evaporation = evaporation + (-w_snow_pre * rdt)   ! kg/m2/s
       if (l_wiso) then
         do iso=1,nwiso
-          w_snow_iso(is_veg,iso) = w_snow_iso(is_veg,iso) + snow_g_iso(iso) * dt - sublimation_iso(iso) * dt
+          evaporation_iso(iso) = evaporation_iso(iso) + (-w_snow_iso_pre(iso) * rdt)
         enddo
       endif
+    endif
 
-      ! if snowmass below critical snow mass for explicit snow layer, use possible first soil layer excess energy to melt snow
-      ! and update snowmelt
-      if (w_snow(is_veg).gt.0._wp .and. w_snow(is_veg).lt.snow_par%w_snow_crit .and. t_soil(1).gt.T0) then
-        H = cap_soil*rdt*(t_soil(1) - T0)    ! W/m2, energy available to melt snow
-        wsnowold_m = w_snow(is_veg)
-        if (l_wiso) wsnowold_iso = w_snow_iso(is_veg,:)
-        H_m = H*dt/Lf ! kg/m2, snow that can be melted
-        ! update w_snow
-        w_snow(is_veg) = max( 0._wp, w_snow(is_veg)-H_m )  ! kg/m2
-        H_star = H - Lf*rdt * (wsnowold_m - w_snow(is_veg)) ! heat not used to melt snow
-        t_soil(1) = T0 + dt/cap_soil * H_star
-        ! update snowmelt
-        snowmelt(is_veg) = snowmelt(is_veg) + (wsnowold_m - w_snow(is_veg)) * rdt  ! kg/m2/s
-        if (l_wiso .and. wsnowold_m.gt.0._wp) then
-          do iso=1,nwiso
-            ! melted mass at current snowpack ratio
-            ratio_snow(iso) = wsnowold_iso(iso) / wsnowold_m
-            w_snow_iso(is_veg,iso) = ratio_snow(iso) * w_snow(is_veg)
-            snowmelt_iso(is_veg,iso) = snowmelt_iso(is_veg,iso) &
-                                      + ratio_snow(iso) * (wsnowold_m - w_snow(is_veg)) * rdt
-          enddo
-        endif
-      endif
-
-      ! if w_snow negative, reset to 0 and remove required ice from the top soil layer (sublimation)
-      if( w_snow(is_veg) .lt. 0._wp ) then
-        ! if not enough ice and water in first layer, remove also ice from second layer
-        if(-w_snow(is_veg) .gt. (w_i(1)+w_w(1))) then
-          if (check_water) print *,'WARNING: not enough ice or water to sublimate in top layer!', w_snow(is_veg),w_i(1),w_w(1)
-          dws = -(w_snow(is_veg)+w_i(1)+w_w(1))
-          if (l_wiso) then
-            do iso=1,nwiso
-              if (w_i(2).gt.0._wp) then
-                w_i_iso(2,iso) = w_i_iso(2,iso) - (w_i_iso(2,iso)/w_i(2)) * min(w_i(2),dws)
-              endif
-              w_i_iso(1,iso) = 0._wp
-              w_w_iso(1,iso) = 0._wp
-            enddo
-          endif
-          w_i(2) = w_i(2) - min(w_i(2),dws)
-          w_i(1) = 0._wp
-          w_w(1) = 0._wp
-          ! if not enough ice in first layer, remove liquid water instead to keep water balance
-        elseif(-w_snow(is_veg) .gt. w_i(1)) then
-          if (check_water) print *,'WARNING: not enough ice to sublimate in top layer, sublimate also liquid water!', w_snow(is_veg),w_i(1)
-          dws = -(w_snow(is_veg)+w_i(1))
-          if (l_wiso) then
-            do iso=1,nwiso
-              if (w_w(1).gt.0._wp) then
-                w_w_iso(1,iso) = w_w_iso(1,iso) - (w_w_iso(1,iso)/w_w(1)) * min(w_w(1),dws)
-              endif
-              w_i_iso(1,iso) = 0._wp
-            enddo
-          endif
-          w_w(1) = w_w(1) - min(w_w(1),dws)
-          w_i(1) = 0._wp
-        else
-          ! enough ice to sublimate in top layer
-          if (l_wiso .and. w_i(1).gt.0._wp) then
-            do iso=1,nwiso
-              w_i_iso(1,iso) = w_i_iso(1,iso) + (w_i_iso(1,iso)/w_i(1)) * w_snow(is_veg)
-            enddo
-          endif
-          w_i(1) = w_i(1) + w_snow(is_veg)
-        endif
-        w_snow(is_veg) = 0._wp
-        if (l_wiso) w_snow_iso(is_veg,:) = 0._wp
-      endif
-
-      ! limit w_snow and add to 'calving'
-      if( w_snow(is_veg) .gt. snow_par%w_snow_off ) then
-        calving(is_veg) = (w_snow(is_veg) - snow_par%w_snow_off) * rdt ! kg/m2/s
-        if (l_wiso .and. w_snow(is_veg).gt.0._wp) then
-          do iso=1,nwiso
-            ratio_snow(iso) = w_snow_iso(is_veg,iso) / w_snow(is_veg)
-            calving_iso(is_veg,iso) = ratio_snow(iso) * (w_snow(is_veg) - snow_par%w_snow_off) * rdt
-            w_snow_iso(is_veg,iso)  = ratio_snow(iso) * snow_par%w_snow_off
-          enddo
-        endif
-        w_snow(is_veg) = snow_par%w_snow_off
-      endif
-      ! update snow height
-      h_snow(is_veg) = w_snow(is_veg) / snow_par%rho_snow
-
-      ! save seasonal maximum snow swe
-      if (w_snow(is_veg).gt.w_snow_old(is_veg)) w_snow_max(is_veg) = w_snow(is_veg)
-
-      ! water table depth, from soil water content
-      if (hydro_par%i_wtab.eq.1) then
-
-        w_table = z_int(nl) - sum(theta / theta_sat * dz(1:nl))
-
-      else if (hydro_par%i_wtab.eq.2) then
-
-        ! water table after Niu et al 2005, section 2.4
-        ! column soil water deficit
-        deficit = sum((theta_sat-theta) * dz(1:nl))
-        d_z = 0.1_wp
-        w_table = 0._wp
-        do while (integral<deficit)
-          integral = 0._wp      
-          z = 0._wp
-          do while (z<w_table)
-            integral = integral + (theta_sat(1)-theta_sat(1)*((-0.2-(w_table-z))/-0.2)**(-1._wp/6.)) * d_z
-            z = z+d_z
-          enddo
-          w_table = w_table + d_z
-        enddo
-
-      else if (hydro_par%i_wtab.eq.3) then
-
-        w_table = hydro_par%wtab_scale * (1._wp-theta(1)/theta_sat(1))
-
-      elseif (hydro_par%i_wtab.eq.4) then
-
-        w_table = z_int(nl) - sum(theta(1:nl-1) / theta_sat(1:nl-1) * dz(1:nl-1)) * sum(dz(1:nl))/sum(dz(1:nl-1))
-
-      else if (hydro_par%i_wtab.eq.5) then
-
-        w_table = z_int(nl) - 0.5_wp * (sum(theta/theta_sat*dz(1:nl)) + theta(1)/theta_sat(1)*sum(dz(1:nl)))
-
-      else if (hydro_par%i_wtab.eq.6) then
-
-        w_table = z_int(nl) - 0.5_wp * (sum(theta/theta_field*dz(1:nl)) + theta(1)/theta_field(1)*sum(dz(1:nl)))
-
-      else if (hydro_par%i_wtab.eq.7) then
-
-        w_table = z_int(nl) - theta(1)/theta_sat(1)*sum(dz(1:nl))
-
-      else if (hydro_par%i_wtab.eq.8) then
-
-        ! Kleinen 2020
-        !k = nl
-        !do while (psi.lt.0.95_wp .and. k.le.1) 
-        !  psi = theta(k)/theta_field(k)
-        !  k = k-1
-        !enddo
-        !if (k.eq.0) then
-        !  w_table = 0._wp
-        !else
-        !  w_table = z_int(k) - psi*dz(k+1)
-        !endif
-
-      endif
-
-      w_table_cum = w_table_cum + w_table
-        
-      ! max possible wetland extent (w_table=0)
-      if (cti_mean.gt.14._wp) then
-        f_wet_max = 0._wp
-      else
-        i1 = max(cti_mean,hydro_par%cti_min)
-        i2 = i1+1
-        w2 = (max(cti_mean,hydro_par%cti_min)-i1)/(i2-i1)
-        w1 = 1._wp-w2
-        f_wet_max = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-      endif
-      ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
-      if (cti_mean.le.hydro_par%cti_mean_crit) f_wet_max = 0._wp 
-
-      ! saturated grid cell fraction
-      if( hydro_par%i_fwet .eq. 1 ) then
-
-        ! fraction of icefree surface at saturation, SIMTOP, Niu 2005
-        f_sat = f_wet_max * exp(-hydro_par%f_wtab * w_table)
-        ! wetland area, excluding snow
-        if( mask_snow(is_veg) .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 2 ) then
-
-        ! DYPTOP, Stocker 2014
-        phi = (1._wp+dyptop_v*exp(-dyptop_k*(-w_table-dyptop_xm)))**(-1._wp/dyptop_v)
-        f_sat = min(dyptop_fmax,phi)
-        ! wetland area, excluding snow
-        if( mask_snow(is_veg) .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          if( dyptop_fmax .gt. hydro_par%fmax_crit ) then
-            f_wet = f_sat
-          else
-            f_wet = 0._wp
-          endif
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 3 ) then
-
-        ! TOPMODEL following Kleinen et al 2020
-        cti_lim = cti_mean + hydro_par%f_wtab*w_table   ! NOTE: w_table is positive!
-        cti_lim = max(cti_lim,hydro_par%cti_min)
-        cti_lim = max(1._wp,cti_lim)
-        if (cti_lim.gt.14._wp) then
-          f_sat = 0._wp
-        else
-          i1 = cti_lim
-          i2 = i1+1
-          w2 = (cti_lim-i1)/(i2-i1)
-          w1 = 1._wp-w2
-          f_sat = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-        endif
-        ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
-        if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp 
-        if( mask_snow(is_veg) .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 4 ) then
-
-        ! TOPMODEL following Kleinen et al 2020
-        cti_lim = hydro_par%cti_min + hydro_par%f_wtab*w_table   ! NOTE: w_table is positive!
-        cti_lim = max(1._wp,cti_lim)
-        if (cti_lim.gt.14._wp) then
-          f_sat = 0._wp
-        else
-          i1 = cti_lim
-          i2 = i1+1
-          w2 = (cti_lim-i1)/(i2-i1)
-          w1 = 1._wp-w2
-          f_sat = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-        endif
-        ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
-        if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp 
-        if( mask_snow(is_veg) .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-        
-      endif
-
-      f_wet_cum = f_wet_cum + f_wet
-
-      infiltration_max = k_sat(1) * (1._wp-f_sat)
-
-      ! mean rain on the ground over vegetated part
-      rain_g = 0._wp
-      if (l_wiso) rain_g_iso = 0._wp
-      do n=1,nsurf
-        if (flag_veg(n).eq.1 .and. frac_surf(n).gt.0._wp) then
-          rain_g = rain_g + rain_ground(n) * frac_surf(n)/f_veg
-          if (l_wiso) then
-            do iso=1,nwiso
-              rain_g_iso(iso) = rain_g_iso(iso) + rain_ground_iso(n,iso) * frac_surf(n)/f_veg
-            enddo
-          endif
-        endif
+    w_snow = max(0._wp, w_snow_pre)
+    if (l_wiso) then
+      do iso=1,nwiso
+        w_snow_iso(iso) = max(0._wp, w_snow_iso_pre(iso))
       enddo
-      q_liq = rain_g + snowmelt(is_veg) ! kg/m2/s
-
-      ! surface runoff, kg/m2/s
-      runoff_sur(is_veg) = f_sat * q_liq &  ! all into runoff over saturated or frozen surface
-        + (1._wp - f_sat) * max(0._wp, q_liq - infiltration_max)    ! this condition is never met!
-      ! soil liquid water infiltration, kg/m2/s
-      infiltration = rain_g + snowmelt(is_veg) - runoff_sur(is_veg)  ! kg/m2/s
-
-      ! iso: same f_sat split applied to iso fluxes
-      if (l_wiso) then
-        do iso=1,nwiso
-          q_liq_iso(iso) = rain_g_iso(iso) + snowmelt_iso(is_veg,iso)
-          runoff_sur_iso(is_veg,iso) = f_sat * q_liq_iso(iso) &
-            + (1._wp - f_sat) * max(0._wp, q_liq_iso(iso) - infiltration_max*Rstd(iso))
-          infiltration_iso(iso) = rain_g_iso(iso) + snowmelt_iso(is_veg,iso) - runoff_sur_iso(is_veg,iso)
-        enddo
-      endif
-
     endif
 
-    !************************
-    ! ice
-    !************************
-    if( f_ice_grd .gt. 0._wp ) then
-
-      sublimation = evap_surface(i_ice)
-
-      ! add snowfall to snow layer and remove sublimation, snowmelt already removed during soil temperature update
-      w_snow_pre = w_snow(is_ice) + snow_ground(i_ice) * dt - sublimation * dt  ! kg/m2
-      if (l_wiso) then
+    ! if snowmass below critical snow mass for explicit snow layer, use possible first lake layer excess energy to melt snow
+    ! and update snowmelt
+    if (w_snow.gt.0._wp .and. w_snow.lt.snow_par%w_snow_crit .and. t_lake1.gt.T0) then
+      H = cap_lake*rdt*(t_lake1 - T0)    ! W/m2, energy available to melt snow
+      wsnowold_m = w_snow
+      if (l_wiso) wsnowold_iso = w_snow_iso(:)
+      H_m = H*dt/Lf ! kg/m2, snow that can be melted
+      ! update w_snow
+      w_snow = max( 0._wp, w_snow-H_m )  ! kg/m2
+      H_star = H - Lf*rdt * (wsnowold_m - w_snow) ! heat not used to melt snow
+      t_lake1 = T0 + dt/cap_lake * H_star
+      ! update snowmelt
+      snowmelt = snowmelt + (wsnowold_m - w_snow) * rdt  ! kg/m2/s
+      if (l_wiso .and. wsnowold_m.gt.0._wp) then
         do iso=1,nwiso
-          w_snow_iso_pre(iso) = w_snow_iso(is_ice,iso) &
-                              + snow_ground_iso(i_ice,iso) * dt &
-                              - evap_surface_iso(i_ice,iso) * dt
+          ratio_snow(iso) = wsnowold_iso(iso) / wsnowold_m
+          w_snow_iso(iso)   = ratio_snow(iso) * w_snow
+          snowmelt_iso(iso) = snowmelt_iso(iso) &
+                                     + ratio_snow(iso) * (wsnowold_m - w_snow) * rdt
         enddo
       endif
-
-      ! handle sublimation in excess of available snowpack
-      if (w_snow_pre .lt. 0._wp) then
-        subl_excess = -w_snow_pre * rdt   ! kg/m2/s
-        if (hydro_par%l_allow_icesub) then
-          ! deficit drawn from glacier ice (vapor flux from ice sheet)
-          icesub(is_ice) = subl_excess
-          if (l_wiso) then
-            do iso=1,nwiso
-              icesub_iso(is_ice,iso) = -w_snow_iso_pre(iso) * rdt
-            enddo
-          endif
-        else
-          ! cap actual sublimation at what the snowpack can deliver — reduce et and evap_surface
-          evap_surface(i_ice) = evap_surface(i_ice) - subl_excess
-          et(i_ice)           = et(i_ice)           - subl_excess
-          if (l_wiso) then
-            do iso=1,nwiso
-              subl_excess_iso(iso) = -w_snow_iso_pre(iso) * rdt
-              evap_surface_iso(i_ice,iso) = evap_surface_iso(i_ice,iso) - subl_excess_iso(iso)
-              et_iso(i_ice,iso)           = et_iso(i_ice,iso)           - subl_excess_iso(iso)
-            enddo
-          endif
-        endif
-      endif
-
-      w_snow(is_ice) = max(0._wp, w_snow_pre)
-      if (l_wiso) then
-        do iso=1,nwiso
-          w_snow_iso(is_ice,iso) = max(0._wp, w_snow_iso_pre(iso))
-        enddo
-      endif
-
-      ! limit w_snow and add to 'calving'
-      if( w_snow(is_ice) .gt. snow_par%w_snow_off ) then
-        calving(is_ice) = (w_snow(is_ice) - snow_par%w_snow_off) * rdt ! kg/m2/s
-        if (l_wiso .and. w_snow(is_ice).gt.0._wp) then
-          do iso=1,nwiso
-            ratio_snow(iso) = w_snow_iso(is_ice,iso) / w_snow(is_ice)
-            calving_iso(is_ice,iso) = ratio_snow(iso) * (w_snow(is_ice) - snow_par%w_snow_off) * rdt
-            w_snow_iso(is_ice,iso)  = ratio_snow(iso) * snow_par%w_snow_off
-          enddo
-        endif
-        w_snow(is_ice) = snow_par%w_snow_off
-      endif
-      ! update snow height
-      h_snow(is_ice) = w_snow(is_ice) / snow_par%rho_snow
-
-      ! save seasonal maximum snow swe
-      if (w_snow(is_ice).gt.w_snow_old(is_ice)) w_snow_max(is_ice) = w_snow(is_ice)
-
-      ! total liquid water runoff
-      if (hydro_par%l_runoff_icemelt) then
-        runoff_sur(is_ice) = rain_ground(i_ice) + snowmelt(is_ice) + icemelt(is_ice) ! kg/m2/s
-      else
-        runoff_sur(is_ice) = rain_ground(i_ice) + snowmelt(is_ice) ! kg/m2/s
-      endif
-      if (l_wiso) then
-        do iso=1,nwiso
-          if (hydro_par%l_runoff_icemelt) then
-            runoff_sur_iso(is_ice,iso) = rain_ground_iso(i_ice,iso) + snowmelt_iso(is_ice,iso) + icemelt_iso(is_ice,iso)
-          else
-            runoff_sur_iso(is_ice,iso) = rain_ground_iso(i_ice,iso) + snowmelt_iso(is_ice,iso)
-          endif
-        enddo
-      endif
-
-      ! update snow mask
-      if( w_snow(is_ice) .gt. snow_par%w_snow_crit ) then
-        mask_snow(is_ice) = 1
-      else
-        mask_snow(is_ice) = 0
-      endif
-
     endif
 
-    !************************
-    ! lake
-    !************************
-    if( f_lake .gt. 0._wp ) then
-
-      if( mask_snow(is_lake) .eq. 1 ) then
-        sublimation = evap_surface(i_lake)
-        evaporation = 0._wp
-        if (l_wiso) then
-          sublimation_iso(:) = evap_surface_iso(i_lake,:)
-          evaporation_iso(:) = 0._wp
-        endif
-      else
-        sublimation = 0._wp
-        evaporation = evap_surface(i_lake)
-        if (l_wiso) then
-          sublimation_iso(:) = 0._wp
-          evaporation_iso(:) = evap_surface_iso(i_lake,:)
-        endif
-      endif
-
-      ! add snowfall to snow layer and remove sublimation, snowmelt already removed during lake temperature update
-      w_snow_pre = w_snow(is_lake) + snow_ground(i_lake) * dt - sublimation * dt  ! kg/m2
-      if (l_wiso) then
+    ! limit w_snow and add to 'calving'
+    if( w_snow .gt. snow_par%w_snow_off ) then
+      calving = (w_snow - snow_par%w_snow_off) * rdt ! kg/m2/s
+      if (l_wiso .and. w_snow.gt.0._wp) then
         do iso=1,nwiso
-          w_snow_iso_pre(iso) = w_snow_iso(is_lake,iso) &
-                              + snow_ground_iso(i_lake,iso) * dt &
-                              - sublimation_iso(iso) * dt
+          ratio_snow(iso) = w_snow_iso(iso) / w_snow
+          calving_iso(iso) = ratio_snow(iso) * (w_snow - snow_par%w_snow_off) * rdt
+          w_snow_iso(iso)  = ratio_snow(iso) * snow_par%w_snow_off
         enddo
       endif
+      w_snow = snow_par%w_snow_off
+    endif
+    ! save seasonal maximum snow swe
+    if (w_snow.gt.w_snow_old) w_snow_max = w_snow
 
-      ! if sublimation depleted the snowpack, redirect the deficit to lake-water evaporation
-      ! (lake water is treated as inexhaustible in this model)
-      if (w_snow_pre .lt. 0._wp) then
-        evaporation = evaporation + (-w_snow_pre * rdt)   ! kg/m2/s
-        if (l_wiso) then
-          do iso=1,nwiso
-            evaporation_iso(iso) = evaporation_iso(iso) + (-w_snow_iso_pre(iso) * rdt)
-          enddo
-        endif
-      endif
+    ! update snow height
+    h_snow = w_snow / snow_par%rho_snow
 
-      w_snow(is_lake) = max(0._wp, w_snow_pre)
-      if (l_wiso) then
-        do iso=1,nwiso
-          w_snow_iso(is_lake,iso) = max(0._wp, w_snow_iso_pre(iso))
-        enddo
-      endif
+    ! net lake surface water balance
+    lake_water_tendency = rain_ground + snowmelt - evaporation ! kg/m2/s
 
-      ! if snowmass below critical snow mass for explicit snow layer, use possible first lake layer excess energy to melt snow
-      ! and update snowmelt
-      if (w_snow(is_lake).gt.0._wp .and. w_snow(is_lake).lt.snow_par%w_snow_crit .and. t_lake(1).gt.T0) then
-        H = cap_lake*rdt*(t_lake(1) - T0)    ! W/m2, energy available to melt snow
-        wsnowold_m = w_snow(is_lake)
-        if (l_wiso) wsnowold_iso = w_snow_iso(is_lake,:)
-        H_m = H*dt/Lf ! kg/m2, snow that can be melted
-        ! update w_snow
-        w_snow(is_lake) = max( 0._wp, w_snow(is_lake)-H_m )  ! kg/m2
-        H_star = H - Lf*rdt * (wsnowold_m - w_snow(is_lake)) ! heat not used to melt snow
-        t_lake(1) = T0 + dt/cap_lake * H_star
-        ! update snowmelt
-        snowmelt(is_lake) = snowmelt(is_lake) + (wsnowold_m - w_snow(is_lake)) * rdt  ! kg/m2/s
-        if (l_wiso .and. wsnowold_m.gt.0._wp) then
-          do iso=1,nwiso
-            ratio_snow(iso) = wsnowold_iso(iso) / wsnowold_m
-            w_snow_iso(is_lake,iso)   = ratio_snow(iso) * w_snow(is_lake)
-            snowmelt_iso(is_lake,iso) = snowmelt_iso(is_lake,iso) &
-                                       + ratio_snow(iso) * (wsnowold_m - w_snow(is_lake)) * rdt
-          enddo
-        endif
-      endif
-
-      ! limit w_snow and add to 'calving'
-      if( w_snow(is_lake) .gt. snow_par%w_snow_off ) then
-        calving(is_lake) = (w_snow(is_lake) - snow_par%w_snow_off) * rdt ! kg/m2/s
-        if (l_wiso .and. w_snow(is_lake).gt.0._wp) then
-          do iso=1,nwiso
-            ratio_snow(iso) = w_snow_iso(is_lake,iso) / w_snow(is_lake)
-            calving_iso(is_lake,iso) = ratio_snow(iso) * (w_snow(is_lake) - snow_par%w_snow_off) * rdt
-            w_snow_iso(is_lake,iso)  = ratio_snow(iso) * snow_par%w_snow_off
-          enddo
-        endif
-        w_snow(is_lake) = snow_par%w_snow_off
-      endif
-      ! save seasonal maximum snow swe
-      if (w_snow(is_lake).gt.w_snow_old(is_lake)) w_snow_max(is_lake) = w_snow(is_lake)
-
-      ! update snow height
-      h_snow(is_lake) = w_snow(is_lake) / snow_par%rho_snow
-
-      ! net lake surface water balance
-      lake_water_tendency = rain_ground(i_lake) + snowmelt(is_lake) - evaporation ! kg/m2/s
-
-      ! route the lake surface water balance (P + M - E) to runoff_sur(is_lake);
-      ! the coupler transfers it to the ocean (when interactive lakes are off)
-      ! evaporation is included as negative runoff in order to close the lake water budget
-      runoff_sur(is_lake) = lake_water_tendency
-      if (l_wiso) then
-        do iso=1,nwiso
-          runoff_sur_iso(is_lake,iso) = rain_ground_iso(i_lake,iso) + snowmelt_iso(is_lake,iso) - evaporation_iso(iso)
-        enddo
-      endif
-
-      ! update snow mask
-      if( w_snow(is_lake) .gt. snow_par%w_snow_crit ) then
-        mask_snow(is_lake) = 1
-      else
-        mask_snow(is_lake) = 0
-      endif
-
+    ! route the lake surface water balance (P + M - E) to runoff_sur;
+    ! the coupler transfers it to the ocean (when interactive lakes are off)
+    ! evaporation is included as negative runoff in order to close the lake water budget
+    runoff_sur = lake_water_tendency
+    if (l_wiso) then
+      do iso=1,nwiso
+        runoff_sur_iso(iso) = rain_ground_iso(iso) + snowmelt_iso(iso) - evaporation_iso(iso)
+      enddo
     endif
 
+    ! update snow mask
+    if( w_snow .gt. snow_par%w_snow_crit ) then
+      mask_snow = 1
+    else
+      mask_snow = 0
+    endif
 
     return
 
-  end subroutine surface_hydrology
+  end subroutine surface_hydrology_lake
 
 end module lndvc_hydrology_mod
 
