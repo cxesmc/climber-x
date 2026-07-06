@@ -15,6 +15,7 @@ module lndvc_aggregate
 
     use precision, only : wp
     use lndvc_def, only : vc_t, vc_cell_t, lndvc_class
+    use lndvc_grid, only : nsurf, flag_veg
 
     implicit none
 
@@ -58,8 +59,9 @@ contains
         type(vc_t),      intent(in)  :: vc(:)
         real(wp),        intent(in)  :: wt(:)
 
-        integer  :: k
-        real(wp) :: w, wsum
+        integer  :: k, m
+        real(wp) :: w, wsum, f_veg_vc, fw
+        real(wp) :: tskin_vc, alb_vc, sh_vc, lh_vc, g_vc, ev_vc, et_vc
 
         cell%f_veg  = 0._wp
         cell%f_lake = 0._wp
@@ -121,6 +123,37 @@ contains
                 cell%evap   = cell%evap   + w * vc(k)%flx%evap_surface(1)
                 cell%et     = cell%et     + w * vc(k)%flx%et(1)
                 wsum = wsum + w
+            else if (vc(k)%desc%class == 1 .and. allocated(vc(k)%veg)) then
+                ! land vc: collapse the veg sub-tiles (frac-weighted mean over
+                ! the bare+PFT tiles) to a vc-level intensive value, then
+                ! area-weight by the vc weight. Land runoff is soil hydrology
+                ! (C.2), not aggregated here.
+                f_veg_vc = sum(vc(k)%flx%frac_surf, mask=flag_veg.eq.1)
+                if (f_veg_vc > 0._wp) then
+                    tskin_vc = 0._wp; alb_vc = 0._wp; sh_vc = 0._wp; lh_vc = 0._wp
+                    g_vc = 0._wp; ev_vc = 0._wp; et_vc = 0._wp
+                    do m = 1, nsurf
+                        if (flag_veg(m).eq.1) then
+                            fw = vc(k)%flx%frac_surf(m)/f_veg_vc
+                            tskin_vc = tskin_vc + vc(k)%flx%t_skin(m)*fw
+                            alb_vc   = alb_vc   + vc(k)%flx%albedo(m)*fw
+                            sh_vc    = sh_vc    + vc(k)%flx%flx_sh(m)*fw
+                            lh_vc    = lh_vc    + vc(k)%flx%flx_lh(m)*fw
+                            g_vc     = g_vc     + vc(k)%flx%flx_g(m)*fw
+                            ev_vc    = ev_vc    + vc(k)%flx%evap_surface(m)*fw
+                            et_vc    = et_vc    + vc(k)%flx%et(m)*fw
+                        end if
+                    end do
+                    w = vc(k)%desc%w
+                    cell%t_skin = cell%t_skin + w * tskin_vc
+                    cell%albedo = cell%albedo + w * alb_vc
+                    cell%flx_sh = cell%flx_sh + w * sh_vc
+                    cell%flx_lh = cell%flx_lh + w * lh_vc
+                    cell%flx_g  = cell%flx_g  + w * g_vc
+                    cell%evap   = cell%evap   + w * ev_vc
+                    cell%et     = cell%et     + w * et_vc
+                    wsum = wsum + w
+                end if
             end if
         end do
 
