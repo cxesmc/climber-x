@@ -83,13 +83,28 @@ contains
     end subroutine lndvc_aggregate_cell
 
     subroutine lndvc_conservation_check(lnd)
-        ! Assert energy/water/carbon closure across the aggregation boundary.
+        ! Sanity guard on the aggregation boundary. Phase 1: aggregated class
+        ! fractions must be non-negative and f_land must lie in [0,1].
+        ! (Phase 2 extends this to energy/water/carbon closure.)
 
         implicit none
 
         type(lndvc_class), intent(in) :: lnd
 
-        ! TODO: compare summed leaf budgets against coarse-cell aggregate.
+        integer :: n, i, j
+        real(wp), parameter :: eps = 1.e-6_wp
+
+        do n = 1, lnd%ncells
+            i = lnd%ij_1d(1,n)
+            j = lnd%ij_1d(2,n)
+            associate(c => lnd%cell(i,j))
+            if (c%f_veg < -eps .or. c%f_lake < -eps .or. c%f_ice < -eps .or. &
+                c%f_land < -eps .or. c%f_land > 1._wp+eps) then
+                write(*,'(a,2i5,4f10.5)') 'lndvc warning: fraction out of range at i,j:', &
+                    i, j, c%f_veg, c%f_lake, c%f_ice, c%f_land
+            end if
+            end associate
+        end do
 
         return
 

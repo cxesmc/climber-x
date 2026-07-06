@@ -87,6 +87,7 @@ program climber
   use lnd_model, only: lnd_init, lnd_update_wrapper, lnd_end, lnd_write_restart
   use lnd_def, only: lnd_class
   use lndvc_model, only: lndvc_init, lndvc_update, lndvc_end
+  use lndvc_decomp, only: lndvc_decompose
   use lndvc_def, only: lndvc_class
   use lnd_out, only: lnd_diag, lnd_diag_init
 
@@ -539,7 +540,14 @@ program climber
         endif
         call lnd_diag(lnd%l2d,lnd%l0d)
         call lnd_to_cmn(lnd,cmn)
-        if (flag_lndvc) call lndvc_update(lndvc)
+        if (flag_lndvc) then
+          ! Identity baseline: decompose from the land model's own per-cell
+          ! tiling (veg/lake/ice fractions + elevations), z_ice from the coupler.
+          call lndvc_decompose(lndvc, lnd%l2d%mask_lnd, &
+                               lnd%l2d%f_veg, lnd%l2d%f_ice, lnd%l2d%f_lake, &
+                               lnd%l2d%z_veg, cmn%z_ice)
+          call lndvc_update(lndvc)
+        endif
         !$ time_end = omp_get_wtime()
         !$ time_lnd = time_lnd + (time_end-time_ini)
       endif
