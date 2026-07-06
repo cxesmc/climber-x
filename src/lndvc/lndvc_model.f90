@@ -34,13 +34,16 @@ module lndvc_model
     use lndvc_surface_par_lnd, only : resist_aer_veg, resist_sur_veg, surface_albedo_veg
     use lndvc_veg_par_mod,     only : phenology
     use lndvc_photosynthesis_mod, only : photosynthesis
-    use lndvc_hydrology_mod,   only : canopy_water
-    use lndvc_soil_par_mod,    only : soil_par_thermal
+    use lndvc_hydrology_mod,   only : canopy_water, surface_hydrology_veg
+    use lndvc_soil_par_mod,    only : soil_par_thermal, soil_par_hydro
+    use lndvc_soil_hydro_mod,  only : soil_hydro
+    use lndvc_water_deficit_mod, only : calculate_pet, calculate_cwd
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
     use lnd_params,            only : lnd_surf_par => surf_par
     use lnd_params,            only : soil_par, hydro_par
+    use timer,                 only : time_soy_lnd, time_eoy_lnd
     use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
@@ -272,6 +275,8 @@ contains
         real(wp) :: rain(nsurf), snow(nsurf)
         ! per-tile conservation diagnostics (vc keeps only scalar residuals)
         real(wp) :: encons1(nsurf), encons2(nsurf)
+        ! potential evapotranspiration (per-tile local; only mcwd/cwd_mon persist)
+        real(wp) :: pet(nsurf)
 
         ! --- broadcast the vc's scalar forcing to the sub-tiles ---------------
         tatm(:)      = vc%forc%tatm
@@ -397,6 +402,57 @@ contains
             encons2, &
             vc%soil%w_w, vc%soil%w_w_iso, vc%soil%wilt, vc%flx%evap_can_iso, vc%flx%subl_can_iso, &
             vc%flx%evap_surface_iso, vc%flx%transpiration_iso, vc%flx%et_iso)
+
+        ! --- surface hydrology (snow layer, wetland, runoff, infiltration) ----
+        call surface_hydrology_veg(vc%flx%frac_surf, vc%snow%mask_snow, &
+            vc%flx%evap_surface, vc%flx%rain_ground, vc%flx%snow_ground, vc%snow%snowmelt, &
+            vc%soil%theta, vc%soil%theta_sat, vc%soil%theta_field, vc%soil%k_sat, vc%soil%cap_soil(1), &
+            vc%soil%cti_mean, vc%soil%cti_cdf, &
+            vc%soil%dyptop_k, vc%soil%dyptop_v, vc%soil%dyptop_xm, vc%soil%dyptop_fmax, &
+            vc%snow%w_snow_old, vc%snow%w_snow, vc%snow%w_snow_max, vc%soil%w_w, vc%soil%w_i, &
+            vc%soil%w_table_cum, vc%soil%f_wet_cum, vc%soil%t_soil, &
+            vc%snow%h_snow, vc%soil%calving(1), vc%soil%runoff_sur(1), vc%soil%infiltration, &
+            vc%soil%w_table, vc%soil%f_wet, vc%soil%f_wet_max, vc%soil%cti_lim, &
+            vc%flx%evap_surface_iso, vc%flx%rain_ground_iso, vc%flx%snow_ground_iso, vc%snow%snowmelt_iso, &
+            vc%snow%w_snow_iso, vc%soil%w_w_iso, vc%soil%w_i_iso, &
+            vc%soil%calving_iso, vc%soil%runoff_sur_iso, vc%soil%infiltration_iso)
+
+        ! --- soil hydraulic properties + soil water update (only if any soil) --
+        if (f_veg .gt. 0._wp) then
+            call soil_par_hydro(vc%soil%theta_w, vc%soil%theta_sat, &
+                vc%soil%w_w, vc%soil%w_i, vc%soil%psi_sat, vc%soil%k_sat, vc%soil%k_exp, vc%soil%psi_exp, &
+                vc%soil%theta, vc%soil%psi, vc%soil%kappa_int)
+
+            call soil_hydro(vc%flx%frac_surf, vc%snow%mask_snow, vc%soil%theta_sat, &
+                vc%soil%k_sat, vc%soil%k_exp, vc%soil%psi_exp, vc%soil%kappa_int, vc%soil%psi, &
+                vc%soil%w_table, &
+                vc%flx%transpiration, vc%flx%evap_surface, vc%soil%infiltration, vc%soil%wilt, &
+                vc%snow%w_snow, vc%soil%w_w, vc%soil%w_i, &
+                vc%soil%theta_w, vc%soil%theta_i, vc%soil%theta, vc%soil%theta_w_cum, vc%soil%theta_i_cum, vc%veg%theta_fire_cum, &
+                vc%soil%drainage(1), &
+                vc%flx%transpiration_iso, vc%flx%evap_surface_iso, vc%soil%infiltration_iso, &
+                vc%soil%w_w_iso, vc%soil%drainage_iso)
+        else
+            vc%soil%drainage(1) = 0._wp
+        endif
+
+        ! --- potential evapotranspiration + cumulative water deficit ----------
+        call calculate_pet(vc%flx%frac_surf, t2m, q2m, pressure, swnet, lwdown, vc%flx%flx_lwu, vc%flx%r_a, &
+            pet)
+        if (time_soy_lnd) vc%soil%cwd_mon(:) = 0._wp
+        call calculate_cwd(vc%flx%frac_surf, rain, snow, pet, vc%soil%cwd_mon)
+        if (time_eoy_lnd) vc%soil%mcwd = maxval(vc%soil%cwd_mon(:))
+        ! veg-mean pet diagnostic
+        vc%soil%pet = 0._wp
+        if (f_veg .gt. 0._wp) then
+            do n = 1, nsurf
+                if (flag_veg(n).eq.1) vc%soil%pet = vc%soil%pet + pet(n)*vc%flx%frac_surf(n)/f_veg
+            end do
+        endif
+
+        ! --- total surface + subsurface runoff over the veg column ------------
+        vc%soil%runoff(1) = vc%soil%runoff_sur(1) + vc%soil%drainage(1)
+        if (l_wiso) vc%soil%runoff_iso(:) = vc%soil%runoff_sur_iso(:) + vc%soil%drainage_iso(:)
 
         return
 
