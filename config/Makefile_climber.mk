@@ -170,6 +170,7 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_lnd_soil_temp.o $(objdir)/lndvc_lnd_dyn_veg.o \
                  $(objdir)/lndvc_lnd_soil_carbon_par.o $(objdir)/lndvc_lnd_soil_carbon.o \
                  $(objdir)/lndvc_lnd_peat_carbon.o \
+                 $(objdir)/lndvc_lnd_n2o_emis.o $(objdir)/lndvc_lnd_dust_emis.o \
                  $(objdir)/lndvc_lnd_init_cell.o
 # linked into the clim executables only when LNDVC=1 (see Makefile); empty
 # otherwise so a default build neither compiles nor links the framework.
@@ -820,6 +821,14 @@ $(objdir)/lndvc_lnd_soil_carbon.o : $(dir_lndvc)/lnd/soil_carbon.f90 $(objdir)/c
 
 $(objdir)/lndvc_lnd_peat_carbon.o : $(dir_lndvc)/lnd/peat_carbon.f90 $(objdir)/constants.o $(objdir)/control.o \
 						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/tridiag.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_n2o_emis.o : $(dir_lndvc)/lnd/n2o_emis.f90 $(objdir)/constants.o \
+						$(objdir)/lnd_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_dust_emis.o : $(dir_lndvc)/lnd/dust_emis.f90 \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_lnd_init_cell.o : $(dir_lndvc)/lnd/init_cell.f90 $(objdir)/constants.o \
