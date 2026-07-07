@@ -326,7 +326,7 @@
     i_weath_sc = 1              ! carbonate weathering model:
                                 ! 1 .. runoff-dependent model of Amiotte-Suchet 1995
                                 ! 2 .. runoff- and temperature-dependent model of Romero-Mujalli et al. (2019)
-    kweath_scale = 1.1          ! scaling factor for carbonate and silicate weathering fluxes
+    kweath_scale = 1.05         ! scaling factor for carbonate and silicate weathering fluxes
     l_river_export = F          ! enable export of land particulate and dissolved organic carbon through rivers?
     lithology_gemco2_file = "input/GEM_CO2_lithology_5x5.nc"   ! lithology file for GEM-CO2 weathering model (used only if i_weathering==1)
     lithology_uhh_file = "input/Lithology_pi_UHH.nc"           ! lithology file for UHH weathering model (used only if i_weathering==2)

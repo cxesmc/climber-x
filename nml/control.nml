@@ -261,7 +261,7 @@
                                     ! 0 = constant (n2o_emis_const)
                                     ! 1 = prescribed N2O emissions from file (n2o_emis_file)
  n2o_emis_const = 0.                ! TgN2O/yr, constant N2O emission rate to the atmosphere, used only if in2o_emis == 0
- n2o_emis_file  = "input/n2o_emis_historical_1850-2014.nc"
+ n2o_emis_file  = "input/n2o_emis_historical_ssp245_ext.nc"
 
  !-------------------------------------------------------
  ! atmospheric SO4 (tropospheric)
