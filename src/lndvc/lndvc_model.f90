@@ -26,9 +26,10 @@ module lndvc_model
     use smb_par_m,       only : p0, h_atm, gamma, prc_par, surf_par
     ! ported single-column lake physics
     use lndvc_surface_par_lnd, only : resist_aer_lake, snow_albedo_lake, surface_albedo_lake, resist_sur_lake
-    use lndvc_lake_par_mod,    only : lake_par_thermal
+    use lndvc_lake_par_mod,    only : lake_par_thermal, sublake_par_thermal
     use lndvc_ebal_lake_mod,   only : ebal_lake, update_tskin_lake
     use lndvc_lake_temp_mod,   only : lake_temp
+    use lndvc_sublake_temp_mod, only : sublake_temp
     use lndvc_hydrology_mod,   only : surface_hydrology_lake
     ! ported vegetated-land physics (port C)
     use lndvc_surface_par_lnd, only : resist_aer_veg, resist_sur_veg, surface_albedo_veg
@@ -628,11 +629,11 @@ contains
         ! Single-column lake-surface update (pattern A): unpack the vc's lake /
         ! snow / flux blocks into the ported single-tile lake chain, mirroring the
         ! reference lnd lake path (surface params -> lake thermal params -> energy
-        ! balance -> lake temperature -> skin update -> surface hydrology). The
-        ! downstream sublake soil column (sublake_par_thermal/sublake_temp) is
-        ! deferred: it needs soil params not on the lake block and feeds only
-        ! sublake-soil / lake-carbon state, not the surface coupling currency.
-        ! t_skin_old is snapshotted inside ebal_lake; the melt-iso redistribution
+        ! balance -> lake temperature -> sublake soil thermal -> skin update ->
+        ! surface hydrology). The sublake soil column (sublake_par_thermal/
+        ! sublake_temp, port L.1) runs on mineral soil params seeded from the
+        ! reference cell; its soil_resp_l heat source is zero until lake carbon
+        ! is wired (L.3). t_skin_old is snapshotted inside ebal_lake; the melt-iso redistribution
         ! that lives in the reference lnd_model wrapper is deferred (like SMB iso).
 
         implicit none
@@ -697,6 +698,20 @@ contains
             vc%lake%t_lake, vc%snow%w_snow, vc%lake%w_w_lake, vc%lake%w_i_lake, vc%lake%f_i_lake, vc%lake%f_lake_ice, &
             vc%snow%snowmelt, vc%lake%t_lake_old, vc%snow%w_snow_old, &
             vc%lake%h_lake_conv, vc%lake%h_lake_mix, &
+            vc%lake%energy_cons_lake, ii, jj)
+
+        ! --- sublake soil column (thermal, port L.1) --------------------------
+        ! bottom lake-layer temperature is the top boundary for the sublake soil
+        ! profile; soil params are the seeded mineral values, soil_resp_l is the
+        ! lake-carbon respiration heat (zero until lake carbon is wired in L.3).
+        vc%lake%t_sublake(0) = vc%lake%t_lake(nl_l)
+        call sublake_par_thermal(vc%lake%theta_w_sublake, vc%lake%theta_i_sublake, &
+            vc%lake%theta_sat, vc%lake%lambda_s, vc%lake%cap_sublake, vc%lake%lambda_int_sublake)
+        call sublake_temp(vc%lake%cap_sublake, vc%lake%lambda_int_sublake, &
+            vc%lake%psi_sat, vc%lake%psi_exp, vc%lake%theta_sat, vc%lake%soil_resp_l, &
+            vc%lake%t_sublake, vc%lake%w_w_sublake, vc%lake%w_i_sublake, &
+            vc%lake%theta_w_sublake, vc%lake%theta_i_sublake, &
+            vc%lake%t_sublake_cum, vc%lake%theta_w_sublake_cum, vc%lake%theta_i_sublake_cum, &
             vc%lake%energy_cons_lake, ii, jj)
 
         ! --- skin temperature + surface fluxes --------------------------------

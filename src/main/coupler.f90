@@ -2589,6 +2589,15 @@ contains
             lndvc%vc(i,j,k)%lake%h_lake = 100._wp
           endif
 
+          ! sublake mineral soil parameters (port L.1): copy the reference cell
+          ! soil params (decision A) — the sublake thermal column reuses the same
+          ! params the reference lnd sublake reads (lnd%l2d already computed this
+          ! step, before lndvc_update)
+          lndvc%vc(i,j,k)%lake%theta_sat = lnd%l2d(i,j)%theta_sat
+          lndvc%vc(i,j,k)%lake%lambda_s  = lnd%l2d(i,j)%lambda_s
+          lndvc%vc(i,j,k)%lake%psi_sat   = lnd%l2d(i,j)%psi_sat
+          lndvc%vc(i,j,k)%lake%psi_exp   = lnd%l2d(i,j)%psi_exp
+
         end associate
       enddo
 

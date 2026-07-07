@@ -260,6 +260,12 @@ module lndvc_def
         real(wp), allocatable, dimension(:) :: lambda_lake, lambda_int_lake, cap_lake
         real(wp), allocatable, dimension(:) :: t_sublake, lambda_sublake, lambda_int_sublake, cap_sublake
         real(wp), allocatable, dimension(:) :: theta_w_sublake, theta_i_sublake, w_w_sublake, w_i_sublake
+        ! sublake mineral soil parameters (copied from lnd%l2d each step) +
+        ! per-layer lake-carbon respiration heat source (soil_resp_l, zero until
+        ! lake carbon is wired)
+        real(wp), allocatable, dimension(:) :: theta_sat, lambda_s, psi_sat   ! (nl)
+        integer,  allocatable, dimension(:) :: psi_exp                        ! (nl)
+        real(wp), allocatable, dimension(:,:) :: soil_resp_l                  ! (nl,ncarb)
         real(wp), allocatable, dimension(:) :: w_w_lake, w_i_lake, f_i_lake
         real(wp), allocatable, dimension(:) :: t_sublake_cum, theta_w_sublake_cum, theta_i_sublake_cum
         real(wp), allocatable, dimension(:) :: t_shelf_cum, theta_w_shelf_cum, theta_i_shelf_cum

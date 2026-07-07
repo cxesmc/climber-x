@@ -237,6 +237,16 @@ contains
         vc%lake%theta_w_sublake_cum(:) = 0._wp
         vc%lake%theta_i_sublake_cum(:) = 0._wp
 
+        ! sublake mineral soil params (seeded from lnd%l2d in cmn_to_lndvc) +
+        ! per-layer lake-carbon respiration heat (zero until lake carbon wired)
+        allocate(vc%lake%theta_sat(nl), vc%lake%lambda_s(nl), vc%lake%psi_sat(nl), vc%lake%psi_exp(nl))
+        allocate(vc%lake%soil_resp_l(nl,ncarb))
+        vc%lake%theta_sat(:)   = 0._wp
+        vc%lake%lambda_s(:)    = 0._wp
+        vc%lake%psi_sat(:)     = 0._wp
+        vc%lake%psi_exp(:)     = 0
+        vc%lake%soil_resp_l(:,:) = 0._wp
+
         ! lake scalars
         vc%lake%h_lake              = 0._wp
         vc%lake%h_lake_conv         = 0._wp
