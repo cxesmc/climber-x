@@ -30,6 +30,8 @@ module lndvc_model
     use lndvc_ebal_lake_mod,   only : ebal_lake, update_tskin_lake
     use lndvc_lake_temp_mod,   only : lake_temp
     use lndvc_sublake_temp_mod, only : sublake_temp
+    use lndvc_lake_carbon_par_mod, only : lake_carbon_par
+    use lndvc_lake_carbon_mod, only : lake_carbon
     use lndvc_hydrology_mod,   only : surface_hydrology_lake
     ! ported vegetated-land physics (port C)
     use lndvc_surface_par_lnd, only : resist_aer_veg, resist_sur_veg, surface_albedo_veg
@@ -644,6 +646,7 @@ contains
         real(wp) :: z0m_lake
         real(wp) :: calving, runoff_sur              ! lake calving/runoff not yet aggregated
         real(wp) :: calving_iso(nwiso), runoff_sur_iso(nwiso)
+        real(wp) :: litter_lake_zero(nlc)            ! litter input to lake (zero: cross-class, deferred to wrapper)
 
         ! carry-over snapshot for the step
         vc%snow%w_snow_old = vc%snow%w_snow
@@ -732,6 +735,31 @@ contains
             vc%snow%h_snow, calving, runoff_sur, vc%lake%lake_water_tendency, &
             vc%flx%evap_surface_iso(1,:), vc%flx%snow_ground_iso(1,:), vc%flx%rain_ground_iso(1,:), &
             vc%snow%snowmelt_iso, vc%snow%w_snow_iso, calving_iso, runoff_sur_iso)
+
+        ! --- lake sediment carbon (port L.3) ----------------------------------
+        ! decomposition rates from the cumulative sublake T/moisture, then the
+        ! carbon pool update. litterfall into the lake is a cross-class quantity
+        ! (carbon_trans), zero here — deferred to the cell-level wrapper; at
+        ! static n_vc=1 geometry carbon_trans is a no-op, so identity holds.
+        ! No f_lake guard: the lake vc's existence is the gate (as the surface
+        ! chain above). ch4_emis_lake stays per-vc, aggregation deferred.
+        if (time_call_carb_p) then
+            call lake_carbon_par(vc%lake%t_sublake_cum, vc%lake%theta_w_sublake_cum, vc%lake%theta_i_sublake_cum, &
+                vc%lake%k_litter_lake, vc%lake%k_fast_lake, vc%lake%k_slow_lake, &
+                vc%lake%diff_lakec, vc%lake%adv_lakec, vc%lake%ch4_frac_lake)
+        endif
+        if (time_call_carb) then
+            litter_lake_zero(:) = 0._wp
+            call lake_carbon(litter_lake_zero, litter_lake_zero, litter_lake_zero, vc%lake%ch4_frac_lake, &
+                vc%lake%litter_c_lake, vc%lake%fast_c_lake, vc%lake%slow_c_lake, &
+                vc%lake%litter_c13_lake, vc%lake%fast_c13_lake, vc%lake%slow_c13_lake, &
+                vc%lake%litter_c14_lake, vc%lake%fast_c14_lake, vc%lake%slow_c14_lake, &
+                vc%lake%k_litter_lake, vc%lake%k_fast_lake, vc%lake%k_slow_lake, vc%lake%diff_lakec, vc%lake%adv_lakec, &
+                vc%lake%soil_resp_lake, vc%lake%soil_resp13_lake, vc%lake%soil_resp14_lake, vc%lake%soil_resp_l(:,ic_lake), &
+                vc%lake%soil_c_tot_lake, vc%lake%soil_c13_tot_lake, vc%lake%soil_c14_tot_lake, &
+                vc%lake%ch4_emis_lake, vc%lake%c13h4_emis_lake, &
+                vc%lake%carbon_cons_lake, vc%lake%carbon13_cons_lake, vc%lake%carbon14_cons_lake)
+        endif
 
         return
     end subroutine lndvc_update_lake
