@@ -145,7 +145,8 @@ module lndvc_def
         real(wp) :: infiltration, w_table, w_table_peat
         real(wp) :: w_table_cum, w_table_min
         real(wp) :: f_wet, f_wet_cum, f_wet_max, f_wetland, cti_lim
-        real(wp) :: f_wet_mon, w_table_mon, f_wet_long
+        real(wp), allocatable, dimension(:) :: f_wet_mon, w_table_mon   ! (nmon_year)
+        real(wp), allocatable, dimension(:) :: f_wet_long               ! (nmonwet)
         real(wp), allocatable, dimension(:) :: runoff, runoff_sur, calving, drainage, water_cons
         real(wp) :: runoff_ann
         real(wp) :: pet, mcwd, mcwd_clim

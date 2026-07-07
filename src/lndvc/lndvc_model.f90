@@ -39,12 +39,15 @@ module lndvc_model
     use lndvc_soil_hydro_mod,  only : soil_hydro
     use lndvc_water_deficit_mod, only : calculate_pet, calculate_cwd
     use lndvc_dyn_veg_mod,     only : dyn_veg
+    use lndvc_soil_carbon_par_mod, only : soil_carbon_par
+    use lndvc_soil_carbon_mod, only : soil_carbon
+    use lndvc_peat_carbon_mod, only : peat_carbon
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
     use lnd_params,            only : lnd_surf_par => surf_par
-    use lnd_params,            only : soil_par, hydro_par, veg_par
-    use lnd_params,            only : time_call_veg
+    use lnd_params,            only : soil_par, hydro_par, veg_par, peat_par
+    use lnd_params,            only : time_call_veg, time_call_carb, time_call_carb_p
     use timer,                 only : time_soy_lnd, time_eoy_lnd, time_eom_lnd
     use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
@@ -500,6 +503,26 @@ contains
         vc%soil%runoff(1) = vc%soil%runoff_sur(1) + vc%soil%drainage(1)
         if (l_wiso) vc%soil%runoff_iso(:) = vc%soil%runoff_sur_iso(:) + vc%soil%drainage_iso(:)
 
+        ! ===== soil-carbon decomposition parameters (port C.4) ================
+        ! runs before dyn_veg (needs the year's cumulative soil T/moisture); sets
+        ! the k_* decomposition rates soil_carbon/peat_carbon consume below.
+        if (time_call_carb_p .and. vc%forc%f_veg_cell .gt. 0._wp) then
+            call soil_carbon_par(vc%forc%f_veg_cell, vc%soil%theta_field, vc%soil%theta_sat, &
+                vc%carb%litter_c_peat, vc%carb%acro_c, vc%carb%cato_c, vc%forc%dust, &
+                vc%soil%t_soil_cum, vc%soil%theta_w_cum, vc%soil%theta_i_cum, vc%soil%psi, &
+                vc%soil%f_wet_cum, vc%soil%w_table_cum, vc%soil%f_wet_mon, vc%soil%f_wet_long, vc%soil%w_table_mon, &
+                vc%soil%t_soil_max, &
+                vc%soil%frozen_years, vc%soil%thaw_timer, vc%carb%k_slow_to_fast, &
+                vc%carb%ftemp, vc%carb%fmoist, vc%carb%fdepth, &
+                vc%carb%k_litter, vc%carb%k_fast, vc%carb%k_slow, vc%carb%diff_soilc, vc%carb%adv_soilc, &
+                vc%carb%k_litter_wet, vc%carb%k_fast_wet, vc%carb%k_slow_wet, &
+                vc%carb%k_litter_peat, vc%carb%k_acro, vc%carb%k_cato, vc%carb%k_litter_peat_anox, vc%carb%k_acro_anox, &
+                vc%carb%ch4_frac_wet, vc%carb%ch4_frac_peat, &
+                vc%carb%f_peat_pot, vc%carb%f_oxic_peat, vc%soil%f_wetland, &
+                vc%soil%w_table_min, vc%soil%w_table_peat, vc%soil%alt, &
+                vc%carb%acro_h, vc%carb%cato_h, vc%carb%peat_c_ini_year)
+        endif
+
         ! ===== end-of-month disturbance / fire parameters (port C.3) ==========
         if (time_eom_lnd) then
             call dynveg_par(vc%veg%disturbance, vc%veg%t2m_min_mon, vc%veg%gdd5, vc%veg%veg_c_above, &
@@ -531,6 +554,39 @@ contains
                 vc%veg%carbon_bal_veg, vc%veg%carbon13_bal_veg, vc%veg%carbon14_bal_veg, ii, jj)
             ! sync sub-tile fractions to the updated PFT fractions
             call set_frac_surf_veg(vc)
+        endif
+
+        ! ===== soil + peat carbon (port C.4) ==================================
+        ! consumes the dyn_veg litterfall + soil_carbon_par rates; mineral pool
+        ! (ic_min) then peatland pool (ic_peat).
+        if (time_call_carb) then
+            if (vc%forc%f_veg_cell .gt. 0._wp) then
+                call soil_carbon(vc%forc%f_veg_cell, vc%soil%f_wetland, vc%carb%f_peat, vc%veg%f_crop, vc%veg%f_pasture, &
+                    vc%carb%litterfall(:,ic_min), vc%carb%litterfall13(:,ic_min), vc%carb%litterfall14(:,ic_min), &
+                    vc%carb%litter_c, vc%carb%fast_c, vc%carb%slow_c, &
+                    vc%carb%litter_c13, vc%carb%fast_c13, vc%carb%slow_c13, &
+                    vc%carb%litter_c14, vc%carb%fast_c14, vc%carb%slow_c14, &
+                    vc%carb%k_litter, vc%carb%k_fast, vc%carb%k_slow, vc%carb%k_slow_to_fast, &
+                    vc%carb%k_litter_wet, vc%carb%k_fast_wet, vc%carb%k_slow_wet, vc%carb%diff_soilc, vc%carb%adv_soilc, vc%carb%ch4_frac_wet, &
+                    vc%carb%soil_resp(ic_min), vc%carb%soil_resp13(ic_min), vc%carb%soil_resp14(ic_min), vc%carb%soil_resp_l(:,ic_min), &
+                    vc%carb%soil_c_tot(ic_min), vc%carb%soil_c13_tot(ic_min), vc%carb%soil_c14_tot(ic_min), &
+                    vc%carb%ch4_emis_wetland, vc%carb%c13h4_emis_wetland, &
+                    vc%carb%carbon_cons_soil(ic_min), vc%carb%carbon13_cons_soil(ic_min), vc%carb%carbon14_cons_soil(ic_min))
+            endif
+            if (vc%forc%f_veg_cell .gt. 0._wp .and. peat_par%peat_carb) then
+                call peat_carbon(vc%carb%f_oxic_peat, &
+                    vc%carb%litterfall(:,ic_peat), vc%carb%litterfall13(:,ic_peat), vc%carb%litterfall14(:,ic_peat), &
+                    vc%carb%litter_c_peat, vc%carb%acro_c, vc%carb%cato_c, &
+                    vc%carb%litter_c13_peat, vc%carb%acro_c13, vc%carb%cato_c13, &
+                    vc%carb%litter_c14_peat, vc%carb%acro_c14, vc%carb%cato_c14, &
+                    vc%carb%k_litter_peat, vc%carb%k_acro, vc%carb%k_cato, &
+                    vc%carb%k_litter_peat_anox, vc%carb%k_acro_anox, vc%carb%ch4_frac_peat, &
+                    vc%carb%soil_resp(ic_peat), vc%carb%soil_resp13(ic_peat), vc%carb%soil_resp14(ic_peat), vc%carb%soil_resp_l(:,ic_peat), &
+                    vc%carb%soil_c_tot(ic_peat), vc%carb%soil_c13_tot(ic_peat), vc%carb%soil_c14_tot(ic_peat), &
+                    vc%carb%ch4_emis_peat, vc%carb%c13h4_emis_peat, &
+                    vc%carb%carbon_cons_soil(ic_peat), vc%carb%carbon13_cons_soil(ic_peat), vc%carb%carbon14_cons_soil(ic_peat), &
+                    vc%carb%peat_c_ini_year, vc%carb%dCpeat_dt)
+            endif
         endif
 
         return

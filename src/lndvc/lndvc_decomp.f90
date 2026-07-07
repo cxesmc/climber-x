@@ -22,6 +22,7 @@ module lndvc_decomp
     use lndvc_grid
     use const_m,    only : T0
     use timer,      only : nmon_year      ! months per year (cwd_mon accumulator size)
+    use lnd_params, only : nmonwet        ! wetland long-memory window (f_wet_long size)
     use smb_grid_m, only : nl_smb => nl   ! snow+ice/firn layer count (=4; distinct from land nl=5)
     use wiso_params, only : nwiso         ! water-isotope tracer count (lake iso arrays)
 
@@ -391,9 +392,10 @@ contains
         vc%soil%f_wet_max    = 0._wp
         vc%soil%f_wetland    = 0._wp
         vc%soil%cti_lim      = 0._wp
-        vc%soil%f_wet_mon    = 0._wp
-        vc%soil%w_table_mon  = 0._wp
-        vc%soil%f_wet_long   = 0._wp
+        allocate(vc%soil%f_wet_mon(nmon_year), vc%soil%w_table_mon(nmon_year), vc%soil%f_wet_long(nmonwet))
+        vc%soil%f_wet_mon(:)  = 0._wp
+        vc%soil%w_table_mon(:) = 0._wp
+        vc%soil%f_wet_long(:)  = 0._wp
         vc%soil%runoff_ann   = 0._wp
         vc%soil%pet          = 0._wp
         vc%soil%mcwd         = 0._wp
