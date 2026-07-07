@@ -178,7 +178,7 @@ module bgc_def
 
       type(carb_t) :: tra      !! carbon pool
       type(flux_t) :: flux     !! carbon flux
-      type(sedmnt_t) :: sed    !! bottom sediment
+      type(sedmnt_t) :: sed(kt)    !! sediment, resolved into depth classes (one per ocean level)
 
       real(wp) :: delta_c !! cumulated air-sea carbon flux over one year [kgc/s]
       real(wp) :: delta_c13 !! cumulated air-sea carbon 13 flux over one year [kgc13/s]
@@ -208,6 +208,9 @@ module bgc_def
       real(wp), dimension(:,:,:), allocatable :: mask3d
       real(wp), dimension(:,:,:), allocatable :: coral_f_area
       real(wp), dimension(:,:,:), allocatable :: coral_f_topo
+      real(wp), dimension(:), allocatable :: coral_f_lev          !! coral light fraction per depth bin (exp(-pk490*z)), allocated by the coupler
+      real(wp), dimension(:,:,:), allocatable :: f_sed_lev        !! fraction of each cell's wet seafloor area in each depth class (one per ocean level)
+      real(wp), dimension(:,:,:), allocatable :: f_sed_lev_old    !! previous-year f_sed_lev (for sediment redistribution on area/sea-level change)
     end type
 
     type bgc_class

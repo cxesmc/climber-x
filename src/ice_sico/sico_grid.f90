@@ -2,7 +2,7 @@ module sico_grid_mod
 
   use nml
   use control, only : out_dir
-  use coord, only : grid_class, grid_init, grid_write
+  use coords, only : grid_class, grid_init, grid_write
 
   use sico_types_m
   use sico_params, only : sico_par_class
@@ -168,7 +168,7 @@ contains
     call nml_read(filename,"ice_sico_par","nkr",grd%KRMAX)
 
     ! check for oblique stereographic projection
-    if (trim(grid%mtype)=="stereographic" .and. par%grid.ne.0) then
+    if (trim(grid%cs%mtype)=="stereographic" .and. par%grid.ne.0) then
       stop 'oblique stereographic projection only supported for grid==0'
     endif
 
@@ -177,8 +177,8 @@ grd%X0 = grid%G%x0 ! km
 grd%Y0 = grid%G%y0 ! km
 grd%IMAX = grid%G%nx-1 ! index starts from 0
 grd%JMAX = grid%G%ny-1 ! index starts from 0
-grd%PHI0 = grid%proj%phi*pi_180 ! deg -> rad
-grd%LAMBDA0 = grid%proj%lambda*pi_180 ! deg -> rad
+grd%PHI0 = grid%cs%proj%phi*pi_180 ! deg -> rad
+grd%LAMBDA0 = grid%cs%proj%lambda*pi_180 ! deg -> rad
 
 grd%H_R = H_R
 

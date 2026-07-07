@@ -104,13 +104,6 @@ FESMUSRC=$PWD
 cd ../climber-x/
 ln -s $FESMUSRC ./src/utils/
 
-# Download and configure coordinates
-cd src/utils/
-git clone git@github.com:fesmc/coordinates.git
-cd coordinates
-python3 config.py config/pik_hpc2024_ifx   # Or config file for your system
-cd ../../..   # Return to climber-x parent directory
-
 # Install other external utils library
 cd src/utils/fesm-utils/utils
 python config.py config/pik_hpc2024_ifx  # replace with config file for your system

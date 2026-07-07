@@ -28,7 +28,7 @@ module fake_geo_mod
   use precision, only : wp, dp
   use ncio
   use control, only : ifake_geo, fake_geo_const_file, fake_geo_var_file, fake_geo_ref_file
-  use coord, only : grid_class, grid_init
+  use coords, only : grid_class, grid_init
 
   implicit none
 

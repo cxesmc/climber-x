@@ -12,8 +12,10 @@ MODULE bgc_params
   integer :: i_compensate
   logical :: l_conserve_phos
   logical :: l_conserve_sil 
-  logical :: l_conserve_alk 
+  logical :: l_conserve_alk
   integer :: i_bgc_fw
+  logical :: l_sed_hypsometry = .false.   !! sediment depth-class hypsometry (mirrors real bgc; off in dummy)
+  real(wp) :: pk490 = 0.1_wp              !! light extinction coefficient (used by coupler coral hypsometry)
   real(wp), parameter :: rcar  = 122._wp
 
   ! advected tracers

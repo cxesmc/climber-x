@@ -29,7 +29,7 @@ module fake_ice_mod
   use ncio
   use control, only : ifake_ice, fake_ice_const_file, fake_ice_var_file
   use timer, only : sec_year, n_year_geo
-  use coord, only : grid_class, grid_init
+  use coords, only : grid_class, grid_init
 
   implicit none
 

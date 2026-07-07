@@ -4,7 +4,6 @@
 
 - NetCDF: [NetCDF library](https://www.unidata.ucar.edu/software/netcdf/docs/getting_and_building_netcdf.html)
 - FFTW (ver. 3.9+)
-- coordinates: [coordinates](https://github.com/cxesmc/coordinates), a module to handle grid/points definition, interpolation mapping and subsetting. The library will have to be compiled from the original source code.
 
 - Python 3.x, which is only needed for automatic configuration of the Makefile
 and the use of the `runme` script for job preparation and submission.
@@ -35,21 +34,6 @@ installation instructions are available from the Unidata website:
 
 The Climate Data Operators can be installed following the instructions here:
 [https://code.mpimet.mpg.de/projects/cdo/](https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-30001.1)
-
-## Installing coordinates
-
-Download the coordinates source:
-[https://github.com/fesmc/coordinates](https://github.com/fesmc/coordinates).
-Configure the package, and install it in the location
-of your choice (below defined as `$COORDROOT`):
-
-```bash
-git clone git@github.com:fesmc/coordinates.git $COORDROOT
-cd $COORDROOT
-python config.py config/pik_hpc2024_ifx
-make clean
-make coord-static openmp=1
-```
 
 ## Install LIS, FFTW and utils
 

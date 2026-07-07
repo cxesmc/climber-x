@@ -2,7 +2,7 @@ module ice_model
     
     use precision, only : wp
     use ice_def, only : ice_class
-    use coord, only : grid_class
+    use coords, only : grid_class
 
     implicit none 
 

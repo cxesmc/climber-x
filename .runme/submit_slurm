@@ -21,7 +21,9 @@ ulimit -a
 
 export GMON_OUT_PREFIX=./gmon
 export LD_LIBRARY_PATH=${NETCDF_FORTRANROOT}/lib:${NETCDF_CROOT}/lib:$LD_LIBRARY_PATH
-module load cdo
+# Load cdo only if not already provided by the environment (avoids
+# Lmod "Conflicting 'cdo' is loaded" when SLURM inherits loaded modules)
+module is-loaded cdo || module load cdo
 
 # Run the job
 srun <CMD> 

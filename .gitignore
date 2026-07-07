@@ -17,7 +17,6 @@ src/bgc
 src/utils/fesm-utils*
 src/utils/fftw*
 src/utils/lis*
-src/utils/coordinates*
 src/yelmo*
 src/vilma
 bench
@@ -32,8 +31,8 @@ TODO
 docs/_site/
 docs/.quarto/
 .configme
-coordinates
 fesm-utils
 yelmo
 FastHydrology
+FastEarth3D
 

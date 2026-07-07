@@ -40,7 +40,7 @@ program climber
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
   use control, only: l_aquaplanet
   use control, only : l_spinup_cc, l_daily_input_save_ocn, l_daily_input_save_bgc
-  use coord, only : grid_class
+  use coords, only : grid_class
 
   use climber_grid, only: climber_grid_init, ice_grid_init
 

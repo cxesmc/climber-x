@@ -6,9 +6,26 @@ objdir = obj
 srcdir = src
 
 # Command-line options at make call
-debug  ?= 0  
+debug  ?= 0
 openmp ?= 1
 openmp_yelmo ?= $(openmp)
+openmp_fastearth ?= $(openmp)
+
+# Solid-earth backend toggles (FULL build only; inert for CLIM targets). Default
+# on. Set vilma=0 / fastearth=0 to drop a backend when its library is unavailable
+# on this machine (e.g. the VILMA prebuilt archive). They gate -DVILMA/-DFASTEARTH
+# and the corresponding INC_/LIB_ flags in config/common.mk; selecting a dropped
+# backend at runtime (i_geo=2/3) aborts with a clear message (see the #else stubs
+# in src/geo/vilma.F90 / src/geo/fastearth.F90).
+vilma     ?= 1
+fastearth ?= 1
+
+# FastEarth3D static-lib prerequisite, gated so a fastearth=0 build neither
+# requires the FastEarth3D checkout nor builds its library.
+FASTEARTH_STATIC_DEP = fastearth-static
+ifeq ($(fastearth),0)
+    FASTEARTH_STATIC_DEP =
+endif
 
 defaulttarget: usage
 
@@ -23,7 +40,7 @@ defaulttarget: usage
 ## SHARED DEPENDENCY WIRING ##
 # Pulled in after the compiler/machine fragment so it can reference FFLAGS_BASE,
 # FFLAGS_OPENMP, CPPFLAGS_PP, INC_NC, LIB_NC, and LFLAGS_EXTRA set there.
-# Defines the COORD, FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
+# Defines the FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
 # the openmp= build switch, and the final FFLAGS_CLIM/FFLAGS_FULL and
 # LFLAGS_CLIM/LFLAGS_FULL flag sets.
 
@@ -66,18 +83,21 @@ include config/Makefile_climber.mk
 ###############################################
 
 # Compile the static libraries using their own Makefiles
-coord-static: 
-	$(MAKE) -C $(COORDROOT) coord-static openmp=$(openmp)
-
-yelmo-static: 
+yelmo-static:
 	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp_yelmo)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
+
+# FastEarth3D solid-earth library (i_geo=3). Built with the same openmp toggle as
+# climber-x so its objects match (FastEarth3D adds -fopenmp to its own per-degree
+# loop; its fesm-utils/SHTns/FFTW deps stay serial by its own design).
+fastearth-static:
+	$(MAKE) -C $(FASTEARTHROOT) fastearth-static openmp=$(openmp_fastearth)
 
 climber-clim: FFLAGS = $(FFLAGS_CLIM)
 climber-clim: LFLAGS = $(LFLAGS_CLIM)
 climber-clim: CPPFLAGS = $(CPPFLAGS_CLIM)
 climber-clim: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim: coord-static \
+climber-clim: \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -92,7 +112,7 @@ climber-clim-bgc: FFLAGS = $(FFLAGS_CLIM)
 climber-clim-bgc: LFLAGS = $(LFLAGS_CLIM)
 climber-clim-bgc: CPPFLAGS = $(CPPFLAGS_CLIM)
 climber-clim-bgc: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc: coord-static \
+climber-clim-bgc: \
 				utils bnd geo-clim \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
@@ -107,7 +127,7 @@ climber-clim-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-ice: coord-static yelmo-static \
+climber-clim-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -122,7 +142,7 @@ climber-clim-bgc-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-bgc-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-bgc-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc-ice: coord-static yelmo-static \
+climber-clim-bgc-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
@@ -457,5 +477,4 @@ clean:
 	rm -rf *.x.dSYM
 
 cleanall: clean
-	$(MAKE) -C $(COORDROOT) clean
 	if [ -d "$(YELMOROOT)" ]; then $(MAKE) -C $(YELMOROOT) clean; fi

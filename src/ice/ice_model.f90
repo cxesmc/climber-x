@@ -27,8 +27,9 @@ module ice_model
     
     use precision, only : wp, sp, dp 
     use control, only : out_dir
-    use coord, only : grid_class, grid_init
-    use coord, only : map_scrip_class, map_scrip_init, map_scrip_field
+    use coords, only : grid_class, grid_init
+    use coords, only : map_class, map_init, map_field
+    use constants, only : map_gen
     use ice_def, only : ice_class
     use yelmo, only : wp_yelmo, yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
@@ -255,7 +256,7 @@ contains
         real(wp), allocatable :: q_geo(:,:)    ! geothermal heat flux on ice sheet grid [W/m2]
         real(wp), allocatable :: h_sed(:,:)    ! sediment thickness on ice sheet grid [m]
         integer, allocatable :: id_mask(:,:)    ! ice id mask 
-        type(map_scrip_class) :: maps_geo_to_ice
+        type(map_class) :: maps_geo_to_ice
 
         type(yelmo_class), pointer :: ylmo
         type(sico_class),  pointer :: sico 
@@ -312,15 +313,15 @@ contains
         ! set ice ID mask
         call set_ice_id(ice%grid, id_mask)
 
-        call map_scrip_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",fldr="maps",load=.TRUE.,clean=.FALSE.)
-        call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,method="mean")
-        call map_scrip_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,method="mean", &
+        call map_init(maps_geo_to_ice,geo_grid,ice%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed,stat="mean")
+        call map_field(maps_geo_to_ice,"z_bed",z_bed_geo,z_bed_fil,stat="mean", &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-        call map_scrip_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,method="mean")
-        call map_scrip_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,method="mean")
-        call map_scrip_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,method="mean", missing_value=-9999._dp, &
+        call map_field(maps_geo_to_ice,"z_bed_rel",z_bed_rel_geo,z_bed_rel,stat="mean")
+        call map_field(maps_geo_to_ice,"h_ice",h_ice_geo,h_ice,stat="mean")
+        call map_field(maps_geo_to_ice,"q_geo",q_geo_geo,q_geo,stat="mean", missing_value=-9999._dp, &
           filt_method="gaussian",filt_par=[100._dp,ice%grid%G%dx])
-        call map_scrip_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,method="mean", missing_value=-9999._dp)
+        call map_field(maps_geo_to_ice,"h_sed",h_sed_geo,h_sed,stat="mean", missing_value=-9999._dp)
 
         where (h_ice<10._wp) h_ice = 0._wp
 
@@ -336,7 +337,7 @@ contains
                 ! First define the Yelmo grid information from cmn%grid 
                 ! Note: yelmo expects grid axes in [m], so use conversion factor.
                 call yelmo_init_grid(grd=ylmo%grd,grid_name=grid%name, &
-                        xc=real(grid%G%x*grid%xy_conv,wp_yelmo),yc=real(grid%G%y*grid%xy_conv,wp_yelmo), &
+                        xc=real(grid%G%x*grid%cs%xy_conv,wp_yelmo),yc=real(grid%G%y*grid%cs%xy_conv,wp_yelmo), &
                         lon=real(grid%lon,wp_yelmo),lat=real(grid%lat,wp_yelmo),area=real(grid%area,wp_yelmo))
 
                 ! Define the parameter file we expect for this simulation

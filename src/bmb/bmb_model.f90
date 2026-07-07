@@ -28,7 +28,7 @@ module bmb_model
   use nml
   use ncio
   use precision, only : wp, dp
-  use constants, only : rho_i, rho_sw, Lf, cap_w
+  use constants, only : rho_i, rho_sw, Lf, cap_w, map_gen
   use timer, only : year_ini, year_now, nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
   use control, only : out_dir, restart_in_dir, bmb_restart
   use bmb_grid, only : bmb_grid_init
@@ -38,8 +38,8 @@ module bmb_model
   use bmb_def, only : bmb_class
   use bmb_bias_corr_mod, only : Tocn_bias_corr_init, Tocn_bias_corr_update
   use bmb_bias_corr_mod, only : Tocn_offset_init, Tocn_offset_update
-  use coord, only : grid_allocate, grid_class
-  use coord, only : map_scrip_init, map_scrip_class, map_scrip_field
+  use coords, only : grid_allocate, grid_class
+  use coords, only : map_init, map_class, map_field
 
   implicit none
 
@@ -80,7 +80,7 @@ contains
   if (i_Tocn_bias_corr.eq.2) then
     call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_now,wp), bmb%t_ocn_bias_in)
     ! interpolate to ice sheet grid
-    call map_scrip_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,stat="mean",missing_value=-9999._dp)
   endif
 
   ! apply additional uniform offset if needed
@@ -166,8 +166,8 @@ contains
   ! map shelf temperature and salinity to ice sheet grid
   !$omp parallel do private(k)
   do k=1,nk_ocn
-    call map_scrip_field(bmb%maps_cmn_to_ice,"t_ocn",bmb%t_ocn_in(:,:,k), bmb%t_ocn(:,:,k),method="mean",missing_value=-9999._dp)
-    call map_scrip_field(bmb%maps_cmn_to_ice,"s_ocn",bmb%s_ocn_in(:,:,k), bmb%s_ocn(:,:,k),method="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"t_ocn",bmb%t_ocn_in(:,:,k), bmb%t_ocn(:,:,k),stat="mean",missing_value=-9999._dp)
+    call map_field(bmb%maps_cmn_to_ice,"s_ocn",bmb%s_ocn_in(:,:,k), bmb%s_ocn(:,:,k),stat="mean",missing_value=-9999._dp)
   enddo
   !$omp end parallel do 
 
@@ -237,8 +237,8 @@ contains
     ! map lake temperature and salinity to ice sheet grid
     !$omp parallel do private(k)
     do k=1,nk_lake
-      call map_scrip_field(bmb%maps_cmn_to_ice,"t_lake",bmb%t_lake_in(:,:,k), bmb%t_lake(:,:,k),method="mean",missing_value=-9999._dp)
-      call map_scrip_field(bmb%maps_cmn_to_ice,"s_lake",bmb%s_lake_in(:,:,k), bmb%s_lake(:,:,k),method="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"t_lake",bmb%t_lake_in(:,:,k), bmb%t_lake(:,:,k),stat="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"s_lake",bmb%s_lake_in(:,:,k), bmb%s_lake(:,:,k),stat="mean",missing_value=-9999._dp)
     enddo
     !$omp end parallel do 
 
@@ -408,7 +408,7 @@ contains
     bmb%grid = grid
 
     ! Generate mapping from cmn to bmb/ice
-    call map_scrip_init(bmb%maps_cmn_to_ice,cmn_grid,bmb%grid,method="bil",fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(bmb%maps_cmn_to_ice,cmn_grid,bmb%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
     bmb%grid_in = cmn_grid
 
@@ -436,7 +436,7 @@ contains
       endif
       call Tocn_bias_corr_update(i_Tocn_bias_corr, real(year_ini,wp), bmb%t_ocn_bias_in)
       ! interpolate to ice sheet grid
-      call map_scrip_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,method="mean",missing_value=-9999._dp)
+      call map_field(bmb%maps_cmn_to_ice,"Tocn_bias",bmb%t_ocn_bias_in, bmb%t_ocn_bias,stat="mean",missing_value=-9999._dp)
     else
       bmb%t_ocn_bias = 0._wp
     endif
