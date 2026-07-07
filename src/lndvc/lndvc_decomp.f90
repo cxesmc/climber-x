@@ -440,23 +440,58 @@ contains
         vc%veg%carbon_bal_veg=0._wp; vc%veg%carbon13_bal_veg=0._wp; vc%veg%carbon14_bal_veg=0._wp
         allocate(vc%veg%disturbance(npft)); vc%veg%disturbance=0._wp
 
-        ! --- soil carbon fields the thermal chain / init read ----------------
+        ! --- soil carbon (port C.4): full pool + decomposition-parameter set --
+        ! Allocated + zero-initialised here; the physical cold-start (peat f_peat,
+        ! isotope ratios) is applied by lndvc_init_cell_veg. soil_carbon_par /
+        ! soil_carbon / peat_carbon then evolve these each carbon step.
         allocate(vc%carb%soil_resp_l(nl,ncarb), vc%carb%litter_in_frac(nl))
-        vc%carb%soil_resp_l(:,:)  = 0._wp
-        vc%carb%litter_in_frac(:) = 0._wp
-        vc%carb%f_peat     = 0._wp
-        vc%carb%f_peat_pot = 0._wp
-        vc%carb%dCpeat_dt  = 0._wp
-        ! carbon pools read/written by the veg-dynamics chain (soil_par_update,
-        ! dynveg_par, dyn_veg). Lean zero-init (port C.3, option A); physical
-        ! carbon cold-start + soil_carbon updates are port C.4.
+        ! per-layer carbon pools (mineral + peat, incl. 13C/14C)
         allocate(vc%carb%litter_c(nl), vc%carb%fast_c(nl), vc%carb%slow_c(nl))
-        allocate(vc%carb%cato_c(nl), vc%carb%frac_soc(nl))
+        allocate(vc%carb%litter_c13(nl), vc%carb%fast_c13(nl), vc%carb%slow_c13(nl))
+        allocate(vc%carb%litter_c14(nl), vc%carb%fast_c14(nl), vc%carb%slow_c14(nl))
+        allocate(vc%carb%cato_c(nl), vc%carb%cato_c13(nl), vc%carb%cato_c14(nl))
+        allocate(vc%carb%frac_soc(nl))
+        ! per-layer decomposition rates + diffusion/advection + CH4 fractions
+        allocate(vc%carb%k_litter(nl), vc%carb%k_fast(nl), vc%carb%k_slow(nl))
+        allocate(vc%carb%k_litter_wet(nl), vc%carb%k_fast_wet(nl), vc%carb%k_slow_wet(nl))
+        allocate(vc%carb%k_slow_to_fast(nl), vc%carb%k_cato(nl))
+        allocate(vc%carb%diff_soilc(nl), vc%carb%adv_soilc(nl))
+        allocate(vc%carb%ch4_frac_wet(nl), vc%carb%ch4_frac_peat(nl))
+        allocate(vc%carb%ch4_frac_shelf(nl), vc%carb%ch4_frac_lake(nl))
+        allocate(vc%carb%ftemp(nl), vc%carb%fmoist(nl), vc%carb%fdepth(nl))
+        ! litter input (nlc,ncarb) + per-carbon-class totals / respiration (ncarb)
         allocate(vc%carb%litterfall(nlc,ncarb), vc%carb%litterfall13(nlc,ncarb), vc%carb%litterfall14(nlc,ncarb))
-        vc%carb%litter_c(:) = 0._wp; vc%carb%fast_c(:) = 0._wp; vc%carb%slow_c(:) = 0._wp
-        vc%carb%cato_c(:)   = 0._wp; vc%carb%frac_soc(:) = 0._wp
-        vc%carb%litterfall(:,:) = 0._wp; vc%carb%litterfall13(:,:) = 0._wp; vc%carb%litterfall14(:,:) = 0._wp
-        vc%carb%litter_c_peat = 0._wp; vc%carb%acro_c = 0._wp
+        allocate(vc%carb%soil_c_tot(ncarb), vc%carb%soil_c13_tot(ncarb), vc%carb%soil_c14_tot(ncarb))
+        allocate(vc%carb%soil_resp(ncarb), vc%carb%soil_resp13(ncarb), vc%carb%soil_resp14(ncarb))
+        allocate(vc%carb%carbon_cons_soil(ncarb), vc%carb%carbon13_cons_soil(ncarb), vc%carb%carbon14_cons_soil(ncarb))
+        ! zero-init all of the above
+        vc%carb%soil_resp_l = 0._wp; vc%carb%litter_in_frac = 0._wp
+        vc%carb%litter_c = 0._wp; vc%carb%fast_c = 0._wp; vc%carb%slow_c = 0._wp
+        vc%carb%litter_c13 = 0._wp; vc%carb%fast_c13 = 0._wp; vc%carb%slow_c13 = 0._wp
+        vc%carb%litter_c14 = 0._wp; vc%carb%fast_c14 = 0._wp; vc%carb%slow_c14 = 0._wp
+        vc%carb%cato_c = 0._wp; vc%carb%cato_c13 = 0._wp; vc%carb%cato_c14 = 0._wp
+        vc%carb%frac_soc = 0._wp
+        vc%carb%k_litter = 0._wp; vc%carb%k_fast = 0._wp; vc%carb%k_slow = 0._wp
+        vc%carb%k_litter_wet = 0._wp; vc%carb%k_fast_wet = 0._wp; vc%carb%k_slow_wet = 0._wp
+        vc%carb%k_slow_to_fast = 0._wp; vc%carb%k_cato = 0._wp
+        vc%carb%diff_soilc = 0._wp; vc%carb%adv_soilc = 0._wp
+        vc%carb%ch4_frac_wet = 0._wp; vc%carb%ch4_frac_peat = 0._wp
+        vc%carb%ch4_frac_shelf = 0._wp; vc%carb%ch4_frac_lake = 0._wp
+        vc%carb%ftemp = 0._wp; vc%carb%fmoist = 0._wp; vc%carb%fdepth = 0._wp
+        vc%carb%litterfall = 0._wp; vc%carb%litterfall13 = 0._wp; vc%carb%litterfall14 = 0._wp
+        vc%carb%soil_c_tot = 0._wp; vc%carb%soil_c13_tot = 0._wp; vc%carb%soil_c14_tot = 0._wp
+        vc%carb%soil_resp = 0._wp; vc%carb%soil_resp13 = 0._wp; vc%carb%soil_resp14 = 0._wp
+        vc%carb%carbon_cons_soil = 0._wp; vc%carb%carbon13_cons_soil = 0._wp; vc%carb%carbon14_cons_soil = 0._wp
+        ! peat + decomposition scalars (physical peat init in lndvc_init_cell_veg)
+        vc%carb%f_peat = 0._wp; vc%carb%f_peat_pot = 0._wp; vc%carb%dCpeat_dt = 0._wp
+        vc%carb%f_oxic_peat = 0._wp; vc%carb%peat_c_ini_year = 0._wp
+        vc%carb%acro_h = 0._wp; vc%carb%cato_h = 0._wp
+        vc%carb%k_litter_peat = 0._wp; vc%carb%k_acro = 0._wp
+        vc%carb%k_litter_peat_anox = 0._wp; vc%carb%k_acro_anox = 0._wp
+        vc%carb%litter_c_peat = 0._wp; vc%carb%litter_c13_peat = 0._wp; vc%carb%litter_c14_peat = 0._wp
+        vc%carb%acro_c = 0._wp; vc%carb%acro_c13 = 0._wp; vc%carb%acro_c14 = 0._wp
+        vc%carb%ch4_emis_wetland = 0._wp; vc%carb%ch4_emis_peat = 0._wp
+        vc%carb%c13h4_emis_wetland = 0._wp; vc%carb%c13h4_emis_peat = 0._wp
 
         ! --- shared snowpack (single land snow model) ------------------------
         vc%snow%mask_snow      = 0

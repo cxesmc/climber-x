@@ -220,7 +220,7 @@ module lndvc_def
         real(wp) :: poc_export, poc13_export, poc14_export, doc_export, doc13_export, doc14_export
         real(wp) :: lithology_gemco2, lithology_uhh, lithology_shelf_uhh
         ! conservation
-        real(wp) :: carbon_cons_soil, carbon13_cons_soil, carbon14_cons_soil
+        real(wp), allocatable, dimension(:) :: carbon_cons_soil, carbon13_cons_soil, carbon14_cons_soil  ! (ncarb)
     end type
 
 ! ============================================================================
