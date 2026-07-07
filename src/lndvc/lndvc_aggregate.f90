@@ -66,6 +66,7 @@ contains
         cell%f_veg  = 0._wp
         cell%f_lake = 0._wp
         cell%f_ice  = 0._wp
+        cell%f_peat = 0._wp
 
         do k = 1, size(vc)
             select case(vc(k)%desc%class)
@@ -73,6 +74,9 @@ contains
                 case(2); cell%f_lake = cell%f_lake + vc(k)%desc%w
                 case(3); cell%f_ice  = cell%f_ice  + vc(k)%desc%w
             end select
+            ! peatland fraction (cell fraction, on the land vc's carbon block)
+            if (vc(k)%desc%class == 1 .and. allocated(vc(k)%carb)) &
+                cell%f_peat = cell%f_peat + vc(k)%carb%f_peat
         end do
 
         cell%f_land    = cell%f_veg + cell%f_lake + cell%f_ice

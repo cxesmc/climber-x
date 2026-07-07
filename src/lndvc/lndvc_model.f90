@@ -47,6 +47,7 @@ module lndvc_model
     use lndvc_peat_carbon_mod, only : peat_carbon
     use lndvc_n2o_emis_mod,    only : n2o_emission
     use lndvc_dust_emis_mod,   only : dust_emission
+    use lndvc_carbon_flux_atm_lnd_mod, only : carbon_flux_atm_lnd
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
@@ -93,14 +94,22 @@ contains
 
         integer :: n, i, j, k
         real(wp), allocatable :: wt(:)
+        ! cell-level carbon-flux inputs assembled from the vcs (port W.2)
+        real(wp) :: sresp(ncarb), sresp13(ncarb), sresp14(ncarb)
+        real(wp) :: npp_real, npp13_real, npp14_real
+        real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux
 
         allocate(wt(lnd%n_vc))
 
-        ! reset the annual global emission accumulators at start-of-year
-        ! (mirror lnd_update_wrapper); per-cell fluxes accumulate below
+        ! reset the annual global accumulators at start-of-year (mirror
+        ! lnd_update_wrapper); per-cell emission fluxes + the monthly
+        ! atmosphere-land carbon flux accumulate below
         if (time_soy_lnd) then
             lnd%glob%ch4_emis = 0._wp
             lnd%glob%n2o_emis = 0._wp
+            lnd%glob%Cflx_atm_lnd   = 0._wp
+            lnd%glob%C13flx_atm_lnd = 0._wp
+            lnd%glob%C14flx_atm_lnd = 0._wp
         end if
 
         ! TODO: OMP over the compressed active-leaf list (lnd%leaf_1d).
@@ -117,6 +126,42 @@ contains
             ! reference lnd_update_wrapper: per-cell flux [kgC/m2/s] * dt * area
             lnd%glob%ch4_emis = lnd%glob%ch4_emis + lnd%cell(i,j)%ch4_emis * dt * area(i,j)
             lnd%glob%n2o_emis = lnd%glob%n2o_emis + lnd%cell(i,j)%n2o_emis * dt * area(i,j)
+
+            ! net atmosphere-land carbon flux (port W.2), monthly. Assemble the
+            ! cell carbon-flux inputs from the vcs (n_vc=1: direct per-class
+            ! values; a multi-band frac-weighted reduction is a Phase-3 item),
+            ! then accumulate to the cell (kgC/s) + annual global (kgC/mon sum).
+            ! ic_ice / ic_shelf respiration is zero (ice/shelf carbon out of
+            ! scope) — the f_ice_grd / f_shelf weights below multiply zero.
+            if (time_eom_lnd) then
+                sresp(:) = 0._wp; sresp13(:) = 0._wp; sresp14(:) = 0._wp
+                npp_real = 0._wp; npp13_real = 0._wp; npp14_real = 0._wp
+                fire_c_flux = 0._wp; fire_c13_flux = 0._wp; fire_c14_flux = 0._wp
+                do k = 1, lnd%n_vc
+                    associate(vc => lnd%vc(i,j,k))
+                    if (vc%desc%class == 1 .and. allocated(vc%carb)) then
+                        sresp(ic_min)    = vc%carb%soil_resp(ic_min)
+                        sresp(ic_peat)   = vc%carb%soil_resp(ic_peat)
+                        sresp13(ic_min)  = vc%carb%soil_resp13(ic_min)
+                        sresp13(ic_peat) = vc%carb%soil_resp13(ic_peat)
+                        sresp14(ic_min)  = vc%carb%soil_resp14(ic_min)
+                        sresp14(ic_peat) = vc%carb%soil_resp14(ic_peat)
+                        npp_real   = vc%veg%npp_real;   npp13_real = vc%veg%npp13_real;   npp14_real = vc%veg%npp14_real
+                        fire_c_flux = vc%veg%fire_c_flux; fire_c13_flux = vc%veg%fire_c13_flux; fire_c14_flux = vc%veg%fire_c14_flux
+                    else if (vc%desc%class == 2 .and. allocated(vc%lake)) then
+                        sresp(ic_lake)   = vc%lake%soil_resp_lake
+                        sresp13(ic_lake) = vc%lake%soil_resp13_lake
+                        sresp14(ic_lake) = vc%lake%soil_resp14_lake
+                    end if
+                    end associate
+                end do
+                call carbon_flux_atm_lnd(lnd%cell(i,j)%f_veg, lnd%cell(i,j)%f_peat, &
+                    lnd%cell(i,j)%f_ice_grd, lnd%cell(i,j)%f_shelf, lnd%cell(i,j)%f_lake, area(i,j), &
+                    npp_real, npp13_real, npp14_real, sresp, sresp13, sresp14, &
+                    fire_c_flux, fire_c13_flux, fire_c14_flux, &
+                    lnd%cell(i,j)%Cflx_atm_lnd, lnd%cell(i,j)%C13flx_atm_lnd, lnd%cell(i,j)%C14flx_atm_lnd, &
+                    lnd%glob%Cflx_atm_lnd, lnd%glob%C13flx_atm_lnd, lnd%glob%C14flx_atm_lnd)
+            end if
         end do
 
         deallocate(wt)

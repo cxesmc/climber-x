@@ -314,6 +314,7 @@ module lndvc_def
         ! class fractions (derived from summing vc area weights by class)
         real(wp) :: f_land, f_land0, f_ice, f_ice_old, f_ice_grd, f_ice_grd_old, f_ice_nbr
         real(wp) :: f_shelf, f_shelf_old, f_lake, f_lake_old, f_veg, f_veg_old
+        real(wp) :: f_peat
         real(wp) :: z_veg, z_veg_std, z_veg_min, z_veg_max
         ! aggregated coupling currency (area-weighted means of surface_flux_t)
         real(wp) :: t_skin, albedo, flx_sh, flx_lh, flx_g, runoff, evap, et
