@@ -50,6 +50,7 @@ module lndvc_model
     use lndvc_carbon_flux_atm_lnd_mod, only : carbon_flux_atm_lnd
     use lndvc_weathering_mod,  only : weathering_gemco2, weathering_uhh
     use lndvc_carbon_export_mod, only : carbon_export
+    use lndvc_carbon_inventory_mod, only : carbon_inventory
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
@@ -58,8 +59,10 @@ module lndvc_model
     use lnd_params,            only : time_call_veg, time_call_carb, time_call_carb_p
     use lnd_params,            only : dt                       ! land timestep (global emission accumulation)
     use lnd_params,            only : i_weathering, l_river_export
+    use lnd_params,            only : soilc_par                 ! l_burial (carbon burial branch)
     use climber_grid,          only : area                     ! coarse-cell area [m2]
     use timer,                 only : time_soy_lnd, time_eoy_lnd, time_eom_lnd
+    use timer,                 only : year                     ! year index (running averages)
     use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
 
@@ -101,6 +104,10 @@ contains
         real(wp) :: sresp(ncarb), sresp13(ncarb), sresp14(ncarb)
         real(wp) :: npp_real, npp13_real, npp14_real
         real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux
+        ! annual global carbon accounting (port W.5)
+        real(wp) :: landc, landc13, landc14, burc, burc13, burc14
+        real(wp) :: glandc, glandc13, glandc14, gburc, gburc13, gburc14
+        real(wp) :: dburc, dburc13, dburc14, atot, wcarb, wsil
 
         allocate(wt(lnd%n_vc))
 
@@ -167,6 +174,74 @@ contains
             end if
         end do
 
+        ! ===== annual global carbon accounting (port W.5), end-of-year ========
+        ! total land carbon + burial (carbon_inventory), the burial flux, and the
+        ! running-average diagnostics — mirror lnd_update_wrapper's post-loop.
+        ! ice/shelf sediment carbon is out of scope (zero pools); the total land
+        ! carbon therefore omits it (documented gap, option A).
+        if (time_eoy_lnd) then
+            glandc = 0._wp; glandc13 = 0._wp; glandc14 = 0._wp
+            gburc  = 0._wp; gburc13  = 0._wp; gburc14  = 0._wp
+            do n = 1, lnd%ncells
+                i = lnd%ij_1d(1,n); j = lnd%ij_1d(2,n)
+                call lndvc_carbon_inventory_cell(lnd%vc(i,j,:), lnd%cell(i,j), &
+                    landc, landc13, landc14, burc, burc13, burc14)
+                glandc = glandc + landc*area(i,j); glandc13 = glandc13 + landc13*area(i,j); glandc14 = glandc14 + landc14*area(i,j)
+                gburc  = gburc  + burc*area(i,j);  gburc13  = gburc13  + burc13*area(i,j);  gburc14  = gburc14  + burc14*area(i,j)
+            end do
+
+            ! burial flux: with burial the buried carbon leaves the system; without
+            ! it, the carbon reaching the burial layer returns to the atmosphere
+            dburc = gburc - lnd%glob%burc; dburc13 = gburc13 - lnd%glob%burc13; dburc14 = gburc14 - lnd%glob%burc14
+            if (soilc_par%l_burial) then
+                lnd%glob%Cflx_burial   = dburc
+                lnd%glob%C13flx_burial = dburc13
+                lnd%glob%C14flx_burial = dburc14
+            else
+                lnd%glob%Cflx_burial = 0._wp; lnd%glob%C13flx_burial = 0._wp; lnd%glob%C14flx_burial = 0._wp
+                lnd%glob%Cflx_atm_lnd   = lnd%glob%Cflx_atm_lnd   - dburc
+                lnd%glob%C13flx_atm_lnd = lnd%glob%C13flx_atm_lnd - dburc13
+                lnd%glob%C14flx_atm_lnd = lnd%glob%C14flx_atm_lnd - dburc14
+                atot = sum(area)
+                do n = 1, lnd%ncells
+                    i = lnd%ij_1d(1,n); j = lnd%ij_1d(2,n)
+                    lnd%cell(i,j)%Cflx_atm_lnd    = lnd%cell(i,j)%Cflx_atm_lnd    - dburc  /dt/atot
+                    lnd%cell(i,j)%C13flx_atm_lnd  = lnd%cell(i,j)%C13flx_atm_lnd  - dburc13/dt/atot
+                    lnd%cell(i,j)%C14flx_atm_lnd  = lnd%cell(i,j)%C14flx_atm_lnd  - dburc14/dt/atot
+                end do
+            end if
+
+            ! save totals for next year
+            lnd%glob%landc = glandc; lnd%glob%landc13 = glandc13; lnd%glob%landc14 = glandc14
+            lnd%glob%burc  = gburc;  lnd%glob%burc13  = gburc13;  lnd%glob%burc14  = gburc14
+
+            ! running-average land-atmosphere carbon flux (from year 2)
+            if (year > 1) then
+                if (year == 2) lnd%glob%Cflx_avg = lnd%glob%Cflx_atm_lnd
+                lnd%glob%Cflx_avg = 0.99_wp*lnd%glob%Cflx_avg + 0.01_wp*lnd%glob%Cflx_atm_lnd
+            end if
+
+            ! running-average global weathering fluxes (kgC/yr; from year 2)
+            if (year > 1) then
+                wcarb = 0._wp; wsil = 0._wp
+                do n = 1, lnd%ncells
+                    i = lnd%ij_1d(1,n); j = lnd%ij_1d(2,n)
+                    do k = 1, lnd%n_vc
+                        if (lnd%vc(i,j,k)%desc%class == 1 .and. allocated(lnd%vc(i,j,k)%carb) &
+                            .and. lnd%vc(i,j,k)%forc%f_veg_cell > 0._wp) then
+                            ! mol C/m2/yr * (cell veg area) * 12 g/mol * 1e-3 kg/g = kgC/yr
+                            wcarb = wcarb + lnd%vc(i,j,k)%carb%weath_carb * area(i,j)*lnd%cell(i,j)%f_veg * 12._wp*1e-3_wp
+                            wsil  = wsil  + lnd%vc(i,j,k)%carb%weath_sil  * area(i,j)*lnd%cell(i,j)%f_veg * 12._wp*1e-3_wp
+                        end if
+                    end do
+                end do
+                if (year == 2) lnd%glob%weath_carb_avg = wcarb
+                lnd%glob%weath_carb_avg = 0.99_wp*lnd%glob%weath_carb_avg + 0.01_wp*wcarb
+                if (year == 2) lnd%glob%weath_sil_avg = wsil
+                lnd%glob%weath_sil_avg = 0.99_wp*lnd%glob%weath_sil_avg + 0.01_wp*wsil
+            end if
+        end if
+
         deallocate(wt)
 
         call lndvc_conservation_check(lnd)
@@ -174,6 +249,69 @@ contains
         return
 
     end subroutine lndvc_update
+
+    subroutine lndvc_carbon_inventory_cell(vc, cell, landc, landc13, landc14, burc, burc13, burc14)
+        ! Assemble a coarse cell's carbon pools from its virtual cells (n_vc=1:
+        ! direct per-class values) and evaluate the reference carbon_inventory.
+        ! Vegetation + mineral + peat come from the land vc, lake sediment from
+        ! the lake vc; ice/shelf sediment carbon is out of scope (zero pools, so
+        ! the total land carbon omits it). A multi-band frac-weighted reduction
+        ! is a Phase-3 item.
+
+        implicit none
+
+        type(vc_t),      intent(in)  :: vc(:)
+        type(vc_cell_t), intent(in)  :: cell
+        real(wp),        intent(out) :: landc, landc13, landc14, burc, burc13, burc14
+
+        integer  :: k
+        real(wp) :: fsurf(nsurf)
+        real(wp) :: vgc(npft), vgc13(npft), vgc14(npft)
+        real(wp) :: lit(nlc), fst(nlc), slw(nlc), lit13(nlc), fst13(nlc), slw13(nlc), lit14(nlc), fst14(nlc), slw14(nlc)
+        real(wp) :: cato(nlc), cato13(nlc), cato14(nlc)
+        real(wp) :: litp, acro, litp13, acro13, litp14, acro14
+        real(wp) :: lkl(nlc), lkf(nlc), lks(nlc), lkl13(nlc), lkf13(nlc), lks13(nlc), lkl14(nlc), lkf14(nlc), lks14(nlc)
+        real(wp) :: zc(nlc)   ! zero ice/shelf sediment pools (out of scope)
+
+        fsurf = 0._wp; vgc = 0._wp; vgc13 = 0._wp; vgc14 = 0._wp
+        lit = 0._wp; fst = 0._wp; slw = 0._wp; lit13 = 0._wp; fst13 = 0._wp; slw13 = 0._wp
+        lit14 = 0._wp; fst14 = 0._wp; slw14 = 0._wp
+        cato = 0._wp; cato13 = 0._wp; cato14 = 0._wp
+        litp = 0._wp; acro = 0._wp; litp13 = 0._wp; acro13 = 0._wp; litp14 = 0._wp; acro14 = 0._wp
+        lkl = 0._wp; lkf = 0._wp; lks = 0._wp; lkl13 = 0._wp; lkf13 = 0._wp; lks13 = 0._wp
+        lkl14 = 0._wp; lkf14 = 0._wp; lks14 = 0._wp
+        zc = 0._wp
+
+        do k = 1, size(vc)
+            if (vc(k)%desc%class == 1 .and. allocated(vc(k)%carb)) then
+                fsurf = vc(k)%flx%frac_surf
+                vgc = vc(k)%veg%veg_c; vgc13 = vc(k)%veg%veg_c13; vgc14 = vc(k)%veg%veg_c14
+                lit = vc(k)%carb%litter_c; fst = vc(k)%carb%fast_c; slw = vc(k)%carb%slow_c
+                lit13 = vc(k)%carb%litter_c13; fst13 = vc(k)%carb%fast_c13; slw13 = vc(k)%carb%slow_c13
+                lit14 = vc(k)%carb%litter_c14; fst14 = vc(k)%carb%fast_c14; slw14 = vc(k)%carb%slow_c14
+                cato = vc(k)%carb%cato_c; cato13 = vc(k)%carb%cato_c13; cato14 = vc(k)%carb%cato_c14
+                litp = vc(k)%carb%litter_c_peat; acro = vc(k)%carb%acro_c
+                litp13 = vc(k)%carb%litter_c13_peat; acro13 = vc(k)%carb%acro_c13
+                litp14 = vc(k)%carb%litter_c14_peat; acro14 = vc(k)%carb%acro_c14
+            else if (vc(k)%desc%class == 2 .and. allocated(vc(k)%lake)) then
+                lkl = vc(k)%lake%litter_c_lake; lkf = vc(k)%lake%fast_c_lake; lks = vc(k)%lake%slow_c_lake
+                lkl13 = vc(k)%lake%litter_c13_lake; lkf13 = vc(k)%lake%fast_c13_lake; lks13 = vc(k)%lake%slow_c13_lake
+                lkl14 = vc(k)%lake%litter_c14_lake; lkf14 = vc(k)%lake%fast_c14_lake; lks14 = vc(k)%lake%slow_c14_lake
+            end if
+        end do
+
+        call carbon_inventory(fsurf, cell%f_veg, cell%f_peat, cell%f_ice_grd, cell%f_shelf, cell%f_lake, &
+            vgc, vgc13, vgc14, &
+            lit, fst, slw, lit13, fst13, slw13, lit14, fst14, slw14, &
+            litp, acro, cato, litp13, acro13, cato13, litp14, acro14, cato14, &
+            zc, zc, zc, zc, zc, zc, zc, zc, zc, &   ! ice sediment (out of scope)
+            zc, zc, zc, zc, zc, zc, zc, zc, zc, &   ! shelf sediment (out of scope)
+            lkl, lkf, lks, lkl13, lkf13, lks13, lkl14, lkf14, lks14, &
+            landc, landc13, landc14, burc, burc13, burc14)
+
+        return
+
+    end subroutine lndvc_carbon_inventory_cell
 
     subroutine lndvc_end(lnd)
         implicit none
