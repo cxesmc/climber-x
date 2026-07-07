@@ -247,6 +247,25 @@ contains
         vc%lake%psi_exp(:)     = 0
         vc%lake%soil_resp_l(:,:) = 0._wp
 
+        ! lake sediment carbon (port L.2): pools + rates + emissions, all
+        ! cold-start zero (physical spin-up deferred, as elsewhere in the lake vc)
+        allocate(vc%lake%litter_c_lake(nlc), vc%lake%fast_c_lake(nlc), vc%lake%slow_c_lake(nlc))
+        allocate(vc%lake%litter_c13_lake(nlc), vc%lake%fast_c13_lake(nlc), vc%lake%slow_c13_lake(nlc))
+        allocate(vc%lake%litter_c14_lake(nlc), vc%lake%fast_c14_lake(nlc), vc%lake%slow_c14_lake(nlc))
+        allocate(vc%lake%k_litter_lake(nlc), vc%lake%k_fast_lake(nlc), vc%lake%k_slow_lake(nlc))
+        allocate(vc%lake%diff_lakec(nlc), vc%lake%adv_lakec(nlc))
+        allocate(vc%lake%ch4_frac_lake(nl))
+        vc%lake%litter_c_lake(:)   = 0._wp;  vc%lake%fast_c_lake(:)   = 0._wp;  vc%lake%slow_c_lake(:)   = 0._wp
+        vc%lake%litter_c13_lake(:) = 0._wp;  vc%lake%fast_c13_lake(:) = 0._wp;  vc%lake%slow_c13_lake(:) = 0._wp
+        vc%lake%litter_c14_lake(:) = 0._wp;  vc%lake%fast_c14_lake(:) = 0._wp;  vc%lake%slow_c14_lake(:) = 0._wp
+        vc%lake%k_litter_lake(:)   = 0._wp;  vc%lake%k_fast_lake(:)   = 0._wp;  vc%lake%k_slow_lake(:)   = 0._wp
+        vc%lake%diff_lakec(:)      = 0._wp;  vc%lake%adv_lakec(:)     = 0._wp
+        vc%lake%ch4_frac_lake(:)   = 0._wp
+        vc%lake%soil_resp_lake   = 0._wp;  vc%lake%soil_resp13_lake = 0._wp;  vc%lake%soil_resp14_lake = 0._wp
+        vc%lake%soil_c_tot_lake  = 0._wp;  vc%lake%soil_c13_tot_lake = 0._wp; vc%lake%soil_c14_tot_lake = 0._wp
+        vc%lake%ch4_emis_lake    = 0._wp;  vc%lake%c13h4_emis_lake  = 0._wp
+        vc%lake%carbon_cons_lake = 0._wp;  vc%lake%carbon13_cons_lake = 0._wp; vc%lake%carbon14_cons_lake = 0._wp
+
         ! lake scalars
         vc%lake%h_lake              = 0._wp
         vc%lake%h_lake_conv         = 0._wp

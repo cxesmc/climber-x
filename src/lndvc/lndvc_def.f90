@@ -273,6 +273,16 @@ module lndvc_def
         real(wp) :: energy_cons_lake
         ! water isotopes (nl_l,nwiso)
         real(wp), allocatable, dimension(:,:) :: w_w_lake_iso, w_i_lake_iso
+        ! lake sediment carbon (port L.2): pools + decomposition rates + emissions
+        real(wp), allocatable, dimension(:) :: litter_c_lake, fast_c_lake, slow_c_lake        ! (nlc)
+        real(wp), allocatable, dimension(:) :: litter_c13_lake, fast_c13_lake, slow_c13_lake  ! (nlc)
+        real(wp), allocatable, dimension(:) :: litter_c14_lake, fast_c14_lake, slow_c14_lake  ! (nlc)
+        real(wp), allocatable, dimension(:) :: k_litter_lake, k_fast_lake, k_slow_lake, diff_lakec, adv_lakec  ! (nlc)
+        real(wp), allocatable, dimension(:) :: ch4_frac_lake                                  ! (nl)
+        real(wp) :: soil_resp_lake, soil_resp13_lake, soil_resp14_lake                        ! (ic_lake scalar)
+        real(wp) :: soil_c_tot_lake, soil_c13_tot_lake, soil_c14_tot_lake
+        real(wp) :: ch4_emis_lake, c13h4_emis_lake
+        real(wp) :: carbon_cons_lake, carbon13_cons_lake, carbon14_cons_lake
     end type
 
 ! ============================================================================
