@@ -2652,6 +2652,12 @@ contains
           f%f_shelf_cell       = lnd%l2d(i,j)%f_shelf
           f%f_shelf_old_cell   = lnd%l2d(i,j)%f_shelf_old
 
+          ! cell topography for dust emission (port C.5); copy the reference
+          ! lnd%l2d values (which already include the neighbor min/max expansion)
+          f%z_veg     = lnd%l2d(i,j)%z_veg
+          f%z_veg_min = lnd%l2d(i,j)%z_veg_min
+          f%z_veg_max = lnd%l2d(i,j)%z_veg_max
+
           ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
           if (flag_atm) then
             f%swnet = cmn%swnet(i,j,i_surf_lnd(i_bare))

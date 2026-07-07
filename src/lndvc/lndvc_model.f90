@@ -43,6 +43,7 @@ module lndvc_model
     use lndvc_soil_carbon_mod, only : soil_carbon
     use lndvc_peat_carbon_mod, only : peat_carbon
     use lndvc_n2o_emis_mod,    only : n2o_emission
+    use lndvc_dust_emis_mod,   only : dust_emission
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
@@ -600,6 +601,23 @@ contains
             else
                 vc%carb%n2o_emis = 0._wp
             endif
+        endif
+
+        ! ===== dust emissions (port C.5) =====================================
+        ! runs every land step (not time-gated), guarded f_veg>0 (reference lnd
+        ! order, after the carbon block). z_veg_std uses desc%z_sur_std (as
+        ! dyn_veg); tatm is the sub-tile broadcast; wind is the bare-tile scalar.
+        if (vc%forc%f_veg_cell .gt. 0._wp) then
+            call dust_emission(vc%flx%frac_surf, vc%desc%z_sur_std, &
+                vc%forc%z_veg, vc%forc%z_veg_min, vc%forc%z_veg_max, vc%flx%f_snow(i_bare), &
+                vc%veg%lai, vc%veg%sai, vc%snow%h_snow, vc%flx%t_skin, tatm, &
+                vc%soil%theta_w(1), vc%soil%theta_i(1), vc%forc%wind, &
+                vc%carb%dust_emis_d, vc%carb%dust_emis_g, vc%carb%dust_emis_s, vc%carb%dust_emis)
+        else
+            vc%carb%dust_emis_d = 0._wp
+            vc%carb%dust_emis_g = 0._wp
+            vc%carb%dust_emis_s = 0._wp
+            vc%carb%dust_emis   = 0._wp
         endif
 
         return

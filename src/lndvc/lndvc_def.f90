@@ -57,6 +57,10 @@ module lndvc_def
         real(wp) :: f_ice_grd_cell, f_ice_grd_old_cell, f_ice_nbr_cell
         real(wp) :: f_lake_cell, f_lake_old_cell
         real(wp) :: f_shelf_cell, f_shelf_old_cell
+        ! cell topography for dust emission (port C.5), copied from lnd%l2d
+        ! (z_veg_std uses desc%z_sur_std, matching dyn_veg; these three are the
+        !  mean/min/max ice-free-land elevation the topographic erodibility needs)
+        real(wp) :: z_veg, z_veg_min, z_veg_max
         ! reference elevation the _i forcing below is valid at [m]
         ! (coarse-cell mean; SEMI downscales from here to vc%desc%z)
         real(wp) :: z_sur_i
