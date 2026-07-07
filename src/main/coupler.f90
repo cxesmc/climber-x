@@ -83,6 +83,7 @@ module coupler
     use lnd_params, only : dt_lnd => dt, l_ice_albedo_semi, l_co2_fert_lim, co2_fert_lim_min, co2_fert_lim_max
     use lnd_params, only : mineral, lnd_surf_par => surf_par
     use lnd_params, only : topmodel, dyptop
+    use lnd_params, only : i_weathering
     use lnd_grid, only : is_veg, is_ice, is_lake, nl, i_bare
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
@@ -2666,6 +2667,16 @@ contains
           f%z_veg     = lnd%l2d(i,j)%z_veg
           f%z_veg_min = lnd%l2d(i,j)%z_veg_min
           f%z_veg_max = lnd%l2d(i,j)%z_veg_max
+
+          ! weathering inputs (port W.4): global weathering scale + the cell
+          ! lithology map (decision A — the reference lithology already carries
+          ! the shelf-expansion applied by lnd_update earlier this step)
+          f%weath_scale = lnd%l0d%weath_scale
+          if (i_weathering.eq.1) then
+            lndvc%vc(i,j,k)%carb%lithology_gemco2 = lnd%l2d(i,j)%lithology_gemco2
+          else if (i_weathering.eq.2) then
+            lndvc%vc(i,j,k)%carb%lithology_uhh = lnd%l2d(i,j)%lithology_uhh
+          endif
 
           ! net shortwave (+ daily minimum), mirroring cmn_to_lnd
           if (flag_atm) then

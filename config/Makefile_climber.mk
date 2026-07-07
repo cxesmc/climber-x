@@ -172,6 +172,7 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_lnd_peat_carbon.o \
                  $(objdir)/lndvc_lnd_lake_carbon_par.o $(objdir)/lndvc_lnd_lake_carbon.o \
                  $(objdir)/lndvc_lnd_carbon_flx_atm_lnd.o \
+                 $(objdir)/lndvc_lnd_weathering.o $(objdir)/lndvc_lnd_carbon_export.o \
                  $(objdir)/lndvc_lnd_n2o_emis.o $(objdir)/lndvc_lnd_dust_emis.o \
                  $(objdir)/lndvc_lnd_init_cell.o
 # linked into the clim executables only when LNDVC=1 (see Makefile); empty
@@ -835,6 +836,14 @@ $(objdir)/lndvc_lnd_lake_carbon.o : $(dir_lndvc)/lnd/lake_carbon.f90 $(objdir)/c
 
 $(objdir)/lndvc_lnd_carbon_flx_atm_lnd.o : $(dir_lndvc)/lnd/carbon_flx_atm_lnd.f90 \
 						$(objdir)/lnd_grid.o $(objdir)/timer.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_weathering.o : $(dir_lndvc)/lnd/weathering.f90 $(objdir)/constants.o $(objdir)/control.o \
+						$(objdir)/lnd_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_carbon_export.o : $(dir_lndvc)/lnd/carbon_export.f90 \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_lnd_n2o_emis.o : $(dir_lndvc)/lnd/n2o_emis.f90 $(objdir)/constants.o \

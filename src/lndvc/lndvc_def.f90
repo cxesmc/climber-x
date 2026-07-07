@@ -51,6 +51,7 @@ module lndvc_def
         ! vegetated-land forcing (port C): atmospheric CO2 + bare-soil albedo
         real(wp) :: co2, c13_c12_atm, c14_c_atm ! atmospheric CO2 for photosynthesis
         real(wp) :: alb_bare_vis, alb_bare_nir  ! per-cell bare-soil background albedo
+        real(wp) :: weath_scale                 ! global weathering scale factor (weathering)
         ! cross-class cell fractions for vegetation dynamics (port C.3), copied
         ! from the reference lnd%l2d each step (dyn_veg / surface_frac_up context)
         real(wp) :: f_veg_cell, f_veg_old_cell
@@ -223,7 +224,7 @@ module lndvc_def
         real(wp) :: f_carb
         real(wp) :: weath_carb, weath_sil, weath_loess, weath13_carb, weath13_sil, weath14_carb, weath14_sil
         real(wp) :: poc_export, poc13_export, poc14_export, doc_export, doc13_export, doc14_export
-        real(wp) :: lithology_gemco2, lithology_uhh, lithology_shelf_uhh
+        real(wp), allocatable, dimension(:) :: lithology_gemco2, lithology_uhh, lithology_shelf_uhh  ! (nlit_*)
         ! conservation
         real(wp), allocatable, dimension(:) :: carbon_cons_soil, carbon13_cons_soil, carbon14_cons_soil  ! (ncarb)
     end type

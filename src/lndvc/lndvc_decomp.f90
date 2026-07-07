@@ -23,6 +23,7 @@ module lndvc_decomp
     use const_m,    only : T0
     use timer,      only : nmon_year      ! months per year (cwd_mon accumulator size)
     use lnd_params, only : nmonwet        ! wetland long-memory window (f_wet_long size)
+    use lnd_params, only : nlit_gemco2, nlit_uhh   ! lithology-class counts (weathering)
     use smb_grid_m, only : nl_smb => nl   ! snow+ice/firn layer count (=4; distinct from land nl=5)
     use wiso_params, only : nwiso         ! water-isotope tracer count (lake iso arrays)
 
@@ -523,6 +524,20 @@ contains
         vc%carb%acro_c = 0._wp; vc%carb%acro_c13 = 0._wp; vc%carb%acro_c14 = 0._wp
         vc%carb%ch4_emis_wetland = 0._wp; vc%carb%ch4_emis_peat = 0._wp
         vc%carb%c13h4_emis_wetland = 0._wp; vc%carb%c13h4_emis_peat = 0._wp
+
+        ! lithology fractions for weathering (port W.4), seeded from lnd%l2d in
+        ! cmn_to_lndvc; weathering/carbon_export outputs on the carb block above
+        allocate(vc%carb%lithology_gemco2(nlit_gemco2))
+        allocate(vc%carb%lithology_uhh(nlit_uhh), vc%carb%lithology_shelf_uhh(nlit_uhh))
+        vc%carb%lithology_gemco2(:)    = 0._wp
+        vc%carb%lithology_uhh(:)       = 0._wp
+        vc%carb%lithology_shelf_uhh(:) = 0._wp
+        vc%carb%f_carb = 0._wp
+        vc%carb%weath_carb = 0._wp; vc%carb%weath13_carb = 0._wp; vc%carb%weath14_carb = 0._wp
+        vc%carb%weath_sil = 0._wp; vc%carb%weath13_sil = 0._wp; vc%carb%weath14_sil = 0._wp
+        vc%carb%weath_loess = 0._wp
+        vc%carb%poc_export = 0._wp; vc%carb%poc13_export = 0._wp; vc%carb%poc14_export = 0._wp
+        vc%carb%doc_export = 0._wp; vc%carb%doc13_export = 0._wp; vc%carb%doc14_export = 0._wp
 
         ! --- shared snowpack (single land snow model) ------------------------
         vc%snow%mask_snow      = 0
