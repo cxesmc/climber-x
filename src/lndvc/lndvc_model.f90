@@ -42,6 +42,7 @@ module lndvc_model
     use lndvc_soil_carbon_par_mod, only : soil_carbon_par
     use lndvc_soil_carbon_mod, only : soil_carbon
     use lndvc_peat_carbon_mod, only : peat_carbon
+    use lndvc_n2o_emis_mod,    only : n2o_emission
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
@@ -296,6 +297,7 @@ contains
         integer  :: n
         real(wp) :: f_veg, t_skin_veg
         real(wp) :: flx_g_veg, dflxg_dT_veg, flx_melt_veg
+        real(wp) :: soil_resp   ! combined mineral+peat soil respiration (n2o input)
         ! scalar forcing broadcast to the nsurf sub-tiles
         real(wp) :: tatm(nsurf), qatm(nsurf), t2m(nsurf), q2m(nsurf), wind(nsurf)
         real(wp) :: pressure(nsurf), swnet(nsurf), swnet_min(nsurf), lwdown(nsurf)
@@ -586,6 +588,17 @@ contains
                     vc%carb%ch4_emis_peat, vc%carb%c13h4_emis_peat, &
                     vc%carb%carbon_cons_soil(ic_peat), vc%carb%carbon13_cons_soil(ic_peat), vc%carb%carbon14_cons_soil(ic_peat), &
                     vc%carb%peat_c_ini_year, vc%carb%dCpeat_dt)
+            endif
+
+            ! N2O emissions (port C.5) — combined mineral+peat soil respiration
+            ! drives nitrification/denitrification (reference lnd_model order).
+            if (vc%forc%f_veg_cell .gt. 0._wp) then
+                soil_resp = vc%carb%soil_resp(ic_min)*(vc%forc%f_veg_cell-vc%carb%f_peat) &
+                          + vc%carb%soil_resp(ic_peat)*vc%carb%f_peat
+                call n2o_emission(soil_resp, vc%soil%t_soil(1), vc%soil%theta_w(1), &
+                    vc%soil%theta_field(1), vc%soil%theta_sat(1), vc%carb%n2o_emis)
+            else
+                vc%carb%n2o_emis = 0._wp
             endif
         endif
 
