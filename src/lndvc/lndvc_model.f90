@@ -53,6 +53,8 @@ module lndvc_model
     use lnd_params,            only : lnd_surf_par => surf_par
     use lnd_params,            only : soil_par, hydro_par, veg_par, peat_par
     use lnd_params,            only : time_call_veg, time_call_carb, time_call_carb_p
+    use lnd_params,            only : dt                       ! land timestep (global emission accumulation)
+    use climber_grid,          only : area                     ! coarse-cell area [m2]
     use timer,                 only : time_soy_lnd, time_eoy_lnd, time_eom_lnd
     use constants,             only : T0
     use wiso_params,           only : l_wiso, nwiso, i_o18, Rstd
@@ -94,6 +96,13 @@ contains
 
         allocate(wt(lnd%n_vc))
 
+        ! reset the annual global emission accumulators at start-of-year
+        ! (mirror lnd_update_wrapper); per-cell fluxes accumulate below
+        if (time_soy_lnd) then
+            lnd%glob%ch4_emis = 0._wp
+            lnd%glob%n2o_emis = 0._wp
+        end if
+
         ! TODO: OMP over the compressed active-leaf list (lnd%leaf_1d).
         do n = 1, lnd%ncells
             i = lnd%ij_1d(1,n)
@@ -104,6 +113,10 @@ contains
             end do
             call lndvc_aggregate_weights(lnd%vc(i,j,:), wt)
             call lndvc_aggregate_cell(lnd%cell(i,j), lnd%vc(i,j,:), wt)
+            ! accumulate the annual global CH4/N2O emission (kgC), mirroring the
+            ! reference lnd_update_wrapper: per-cell flux [kgC/m2/s] * dt * area
+            lnd%glob%ch4_emis = lnd%glob%ch4_emis + lnd%cell(i,j)%ch4_emis * dt * area(i,j)
+            lnd%glob%n2o_emis = lnd%glob%n2o_emis + lnd%cell(i,j)%n2o_emis * dt * area(i,j)
         end do
 
         deallocate(wt)

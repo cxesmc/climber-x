@@ -169,6 +169,27 @@ contains
             cell%et     = cell%et     / wsum
         end if
 
+        ! --- emission aggregation (port W.1) ----------------------------------
+        ! per-cell CH4/N2O emission flux [kgC/m2 cell/s], mirroring the reference
+        ! lnd_update_wrapper weighting. Land vc: wetland CH4 over the non-peat
+        ! wetland fraction (f_wetland*w - f_peat) + peatland CH4 over f_peat;
+        ! N2O over the veg fraction. Lake vc: lake CH4 over its area weight.
+        ! Shelf CH4 is out of scope (ice/shelf carbon not ported). The per-vc
+        ! sum is exact at n_vc=1; a multi-band split of f_peat is a Phase-3 item.
+        cell%ch4_emis = 0._wp
+        cell%n2o_emis = 0._wp
+        do k = 1, size(vc)
+            w = vc(k)%desc%w
+            if (vc(k)%desc%class == 1 .and. allocated(vc(k)%carb)) then
+                cell%ch4_emis = cell%ch4_emis &
+                    + vc(k)%carb%ch4_emis_wetland * max(0._wp, vc(k)%soil%f_wetland*w - vc(k)%carb%f_peat) &
+                    + vc(k)%carb%ch4_emis_peat * vc(k)%carb%f_peat
+                cell%n2o_emis = cell%n2o_emis + vc(k)%carb%n2o_emis * w
+            else if (vc(k)%desc%class == 2 .and. allocated(vc(k)%lake)) then
+                cell%ch4_emis = cell%ch4_emis + vc(k)%lake%ch4_emis_lake * w
+            end if
+        end do
+
         return
 
     end subroutine lndvc_aggregate_cell
