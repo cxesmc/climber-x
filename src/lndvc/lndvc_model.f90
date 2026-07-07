@@ -48,6 +48,8 @@ module lndvc_model
     use lndvc_n2o_emis_mod,    only : n2o_emission
     use lndvc_dust_emis_mod,   only : dust_emission
     use lndvc_carbon_flux_atm_lnd_mod, only : carbon_flux_atm_lnd
+    use lndvc_weathering_mod,  only : weathering_gemco2, weathering_uhh
+    use lndvc_carbon_export_mod, only : carbon_export
     use lndvc_ebal_veg_mod,    only : ebal_veg, update_tskin_veg
     use lndvc_soil_temp_mod,   only : soil_temp
     use lndvc_init_cell_mod,   only : lndvc_init_cell_veg
@@ -55,6 +57,7 @@ module lndvc_model
     use lnd_params,            only : soil_par, hydro_par, veg_par, peat_par
     use lnd_params,            only : time_call_veg, time_call_carb, time_call_carb_p
     use lnd_params,            only : dt                       ! land timestep (global emission accumulation)
+    use lnd_params,            only : i_weathering, l_river_export
     use climber_grid,          only : area                     ! coarse-cell area [m2]
     use timer,                 only : time_soy_lnd, time_eoy_lnd, time_eom_lnd
     use constants,             only : T0
@@ -679,6 +682,35 @@ contains
             vc%carb%dust_emis_g = 0._wp
             vc%carb%dust_emis_s = 0._wp
             vc%carb%dust_emis   = 0._wp
+        endif
+
+        ! ===== weathering + river carbon export (port W.4), end-of-year =======
+        ! land-cell operations (reference lnd_model order, after dust). Weathering
+        ! scales with f_veg internally; carbon_export leaches the veg+peat pools.
+        ! Outputs land on the carb block (fed to the ocean carbon cycle later).
+        if (time_eoy_lnd) then
+            if (i_weathering.eq.1) then
+                call weathering_gemco2(vc%forc%c13_c12_atm, vc%forc%c14_c_atm, vc%forc%weath_scale, &
+                    vc%forc%f_veg_cell, vc%carb%lithology_gemco2, vc%soil%runoff_ann, &
+                    vc%carb%weath_carb, vc%carb%weath13_carb, vc%carb%weath14_carb, &
+                    vc%carb%weath_sil, vc%carb%weath13_sil, vc%carb%weath14_sil, vc%carb%weath_loess)
+            else if (i_weathering.eq.2) then
+                call weathering_uhh(vc%forc%c13_c12_atm, vc%forc%c14_c_atm, vc%forc%weath_scale, &
+                    vc%forc%f_veg_cell, vc%carb%lithology_uhh, vc%soil%runoff_ann, vc%veg%t2m_ann_mean, &
+                    vc%carb%weath_carb, vc%carb%weath13_carb, vc%carb%weath14_carb, &
+                    vc%carb%weath_sil, vc%carb%weath13_sil, vc%carb%weath14_sil, vc%carb%weath_loess)
+            endif
+            if (l_river_export) then
+                call carbon_export(vc%soil%runoff_ann, vc%forc%f_veg_cell, vc%carb%f_peat, &
+                    vc%carb%litter_c, vc%carb%litter_c13, vc%carb%litter_c14, &
+                    vc%carb%fast_c, vc%carb%fast_c13, vc%carb%fast_c14, &
+                    vc%carb%slow_c, vc%carb%slow_c13, vc%carb%slow_c14, &
+                    vc%carb%litter_c_peat, vc%carb%litter_c13_peat, vc%carb%litter_c14_peat, &
+                    vc%carb%acro_c, vc%carb%acro_c13, vc%carb%acro_c14, &
+                    vc%carb%cato_c, vc%carb%cato_c13, vc%carb%cato_c14, &
+                    vc%carb%poc_export, vc%carb%poc13_export, vc%carb%poc14_export, &
+                    vc%carb%doc_export, vc%carb%doc13_export, vc%carb%doc14_export)
+            endif
         endif
 
         return
