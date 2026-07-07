@@ -477,17 +477,20 @@ contains
         ! isotope ratios) is applied by lndvc_init_cell_veg. soil_carbon_par /
         ! soil_carbon / peat_carbon then evolve these each carbon step.
         allocate(vc%carb%soil_resp_l(nl,ncarb), vc%carb%litter_in_frac(nl))
-        ! per-layer carbon pools (mineral + peat, incl. 13C/14C)
-        allocate(vc%carb%litter_c(nl), vc%carb%fast_c(nl), vc%carb%slow_c(nl))
-        allocate(vc%carb%litter_c13(nl), vc%carb%fast_c13(nl), vc%carb%slow_c13(nl))
-        allocate(vc%carb%litter_c14(nl), vc%carb%fast_c14(nl), vc%carb%slow_c14(nl))
-        allocate(vc%carb%cato_c(nl), vc%carb%cato_c13(nl), vc%carb%cato_c14(nl))
+        ! per-layer carbon pools (mineral + peat, incl. 13C/14C). These span nlc
+        ! layers (= nl soil layers + the burial layer at index nlc); soil_carbon /
+        ! soil_carbon_par / carbon_inventory all index 1:nlc (reference sizing).
+        allocate(vc%carb%litter_c(nlc), vc%carb%fast_c(nlc), vc%carb%slow_c(nlc))
+        allocate(vc%carb%litter_c13(nlc), vc%carb%fast_c13(nlc), vc%carb%slow_c13(nlc))
+        allocate(vc%carb%litter_c14(nlc), vc%carb%fast_c14(nlc), vc%carb%slow_c14(nlc))
+        allocate(vc%carb%cato_c(nlc), vc%carb%cato_c13(nlc), vc%carb%cato_c14(nlc))
         allocate(vc%carb%frac_soc(nl))
-        ! per-layer decomposition rates + diffusion/advection + CH4 fractions
-        allocate(vc%carb%k_litter(nl), vc%carb%k_fast(nl), vc%carb%k_slow(nl))
-        allocate(vc%carb%k_litter_wet(nl), vc%carb%k_fast_wet(nl), vc%carb%k_slow_wet(nl))
-        allocate(vc%carb%k_slow_to_fast(nl), vc%carb%k_cato(nl))
-        allocate(vc%carb%diff_soilc(nl), vc%carb%adv_soilc(nl))
+        ! per-layer decomposition rates + diffusion/advection (nlc, reference
+        ! sizing) + CH4 fractions (nl)
+        allocate(vc%carb%k_litter(nlc), vc%carb%k_fast(nlc), vc%carb%k_slow(nlc))
+        allocate(vc%carb%k_litter_wet(nlc), vc%carb%k_fast_wet(nlc), vc%carb%k_slow_wet(nlc))
+        allocate(vc%carb%k_slow_to_fast(nlc), vc%carb%k_cato(nlc))
+        allocate(vc%carb%diff_soilc(nlc), vc%carb%adv_soilc(nlc))
         allocate(vc%carb%ch4_frac_wet(nl), vc%carb%ch4_frac_peat(nl))
         allocate(vc%carb%ch4_frac_shelf(nl), vc%carb%ch4_frac_lake(nl))
         allocate(vc%carb%ftemp(nl), vc%carb%fmoist(nl), vc%carb%fdepth(nl))
