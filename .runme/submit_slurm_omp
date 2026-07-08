@@ -1,27 +1,18 @@
 ### OMP Specific settings ###
 
 #SBATCH --nodes=1
-#SBATCH --tasks-per-node=1
+#SBATCH --ntasks=1
 #SBATCH --cpus-per-task=<OMP>
+#SBATCH --hint=nomultithread     # use physical cores only (recommended)
 #SBATCH --no-requeue
 
-export OMP_PROC_BIND=true           # make sure our threads stick to cores
-export OMP_NUM_THREADS=<OMP>        # matches how many cpus-per-task we asked for
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_PROC_BIND=close
+export OMP_PLACES=cores
 export OMP_MAX_ACTIVE_LEVELS=1
 export OMP_STACKSIZE=512M
-export MKL_NUM_THREADS=<OMP>
 
-# OpenMP and srun, both need to know the number of CPUs per task
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=$OMP_NUM_THREADS
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
-
-## for HPC2024, other options
-#export OMP_SCHEDULE=static
-#export OMP_DYNAMIC=false
-#export OMP_THREAD_LIMIT=256
-#export OMP_MAX_ACTIVE_LEVELS=1
-#export OMP_STACKSIZE=256M
-#export OMP_PLACES=cores
-#export OMP_DISPLAY_AFFINITY=TRUE
 
 ### DONE OMP Specific settings ###

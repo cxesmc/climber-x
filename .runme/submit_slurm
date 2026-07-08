@@ -26,4 +26,4 @@ export LD_LIBRARY_PATH=${NETCDF_FORTRANROOT}/lib:${NETCDF_CROOT}/lib:$LD_LIBRARY
 module is-loaded cdo || module load cdo
 
 # Run the job
-srun <CMD> 
+srun --cpu-bind=cores <CMD> 
