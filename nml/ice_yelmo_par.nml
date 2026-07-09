@@ -207,11 +207,12 @@
 /
 
 &ytherm
-    method          = "temp"            ! "fixed", "robin", "temp", "enth"
+    method          = "enth"            ! "fixed", "robin", "temp", "enth"
     qb_method       = 2                 ! 1: simple-stagger, 2: quadrature
     dt_method       = "FE"              ! "FE", "AB", "SAM"
     solver_advec    = "impl-upwind"     ! "expl", "impl-upwind"
-    gamma           = 1.0               ! [K] Scalar for the pressure melting point decay function 
+    advecxy_order   = 2                 ! Horizontal advection order: 1=upwind, 2=flux-limited 2nd-order upwind
+    gamma           = 1.0               ! [K] Scalar for the pressure melting point decay function
     use_strain_sia  = False             ! True: calculate strain heating from SIA approx.
     use_const_cp    = False             ! Use specified constant value of heat capacity?
     const_cp        = 2009.0            ! [J kg-1 K-1] Specific heat capacity 
@@ -219,6 +220,8 @@
     const_kt        = 6.62e7            ! [J a-1 m-1 K-1] Thermal conductivity [W m-1 K-1 * sec_year] => [J a-1 m-1 K-1]
     enth_cr         = 1e-3              ! [--] Conductivity ratio for temperate ice (kappa_temp     = enth_cr*kappa_cold)
     omega_max       = 0.01              ! [--] Maximum allowed water content fraction
+    H_ice_thin      = 10.0              ! [m] Skip column solver below this thickness (linear profile imposed)
+    enth_cp_method  = "integral"        ! Enthalpy heat capacity: "const" (cp_ref) or "integral" (int cp(T) dT)
     ! Basal water bucket (till_rate, H_w_max) moved to &yhyd (bkt_till_rate, W_til_max).
 
     rock_method     = "active"          ! "equil" (not active bedrock) or "active"
