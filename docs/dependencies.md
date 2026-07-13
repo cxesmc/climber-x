@@ -8,8 +8,6 @@
 - Python 3.x, which is only needed for automatic configuration of the Makefile
 and the use of the `runme` script for job preparation and submission.
 - runme: ['runme' Python library (fesmc version)](https://github.com/fesmc/runme), used to stage, run, and submit single simulations and ensembles.
-- CDO: [Climate Data Operators](https://code.mpimet.mpg.de/projects/cdo/), used for more efficient
-creation of maps to transform between different coordinate grids.
 
 Needed only if running with coupled ice sheets:
 
@@ -29,11 +27,6 @@ If you want to install NetCDF from source, then you must install both the
 installation instructions are available from the Unidata website:
 
 [https://www.unidata.ucar.edu/software/netcdf/docs/getting_and_building_netcdf.html](https://www.unidata.ucar.edu/software/netcdf/docs/getting_and_building_netcdf.html)
-
-## Installing CDO
-
-The Climate Data Operators can be installed following the instructions here:
-[https://code.mpimet.mpg.de/projects/cdo/](https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-30001.1)
 
 ## Install LIS, FFTW and utils
 

@@ -20,7 +20,6 @@ For convenience you can also add those commands to your `.profile` file in your 
     module load netcdf-fortran-intel/4.6.1
     module load udunits/2.2.28
     module load ncview/2.1.10
-    module load cdo/2.4.2
 ```
 
 When installing `fesm-utils` (see [Dependencies](dependencies.md)) use the `pik` script:
@@ -39,7 +38,6 @@ Load the following modules in your `.bashrc` file in your home directory.
     module load netcdf-fortran/4.5.4-oneapi2022.1.0
     module load udunits/2.2.28
     module load ncview/2.1.8
-    module load cdo/2.2.0
     module load python/3.10.4
 ```
 
@@ -55,7 +53,6 @@ Load the following modules in your `.bashrc` file in your home directory.
 
 ```bash
 # Tools
-module load cdo/2.6.0-gcc-11.2.0
 module load esmvaltool/2.5.0
 module load ncview/2.1.8-gcc-11.2.0
 module load git/2.43.7-gcc-11.2.0

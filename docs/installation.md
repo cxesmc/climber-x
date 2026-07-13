@@ -17,7 +17,6 @@ which clones, configures, links, and builds the whole stack for you (see
 yourself are:
 
 - **netCDF** (C and Fortran libraries) — see [Dependencies](dependencies.md#installing-netcdf-preferably-version-4.0-or-higher) for installation tips.
-- **CDO** ([Climate Data Operators](https://code.mpimet.mpg.de/projects/cdo/)) — only needed to (re)generate maps that transform between coordinate grids.
 
 Everything else — the `fesm-utils` libraries (LIS + FFTW + utils),
 `yelmo`, and `runme` — is managed by `configme`. For the full dependency list see
@@ -195,7 +194,6 @@ module load netcdf-c/4.9.2
 module load netcdf-fortran-intel/4.6.1
 module load udunits/2.2.28
 module load ncview/2.1.10
-module load cdo/2.4.2
 ```
 
 Then install with `configme install climber-x -m pik_hpc2024 -c ifx`.
@@ -208,7 +206,6 @@ module load netcdf-c/4.8.1-openmpi4.1.3-oneapi2022.1.0
 module load netcdf-fortran/4.5.4-oneapi2022.1.0
 module load udunits/2.2.28
 module load ncview/2.1.8
-module load cdo/2.2.0
 module load python/3.10.4
 ```
 
@@ -218,7 +215,6 @@ Then install with `configme install climber-x -m awi_albedo -c ifx`.
 
 ```bash
 # Tools
-module load cdo/2.6.0-gcc-11.2.0
 module load esmvaltool/2.5.0
 module load ncview/2.1.8-gcc-11.2.0
 module load git/2.43.7-gcc-11.2.0

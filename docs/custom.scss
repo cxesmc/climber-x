@@ -1,0 +1,6 @@
+/*-- scss:defaults --*/
+
+// Bump the base font size. Everything (body text, headings, code) is sized in
+// rem relative to this, so it scales the whole site proportionally.
+// Cosmo/Bootstrap default is 16px; raise as desired.
+$font-size-root: 18px;
