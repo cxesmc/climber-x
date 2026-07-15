@@ -3,6 +3,13 @@
 All notable changes to CLIMBER-X are documented here. 
 Entries marked **Results** may change model output relative to the previous version.
 
+## [1.5.2] - 2026-07-15
+
+Build fix for the fully-coupled (FULL) build variant.
+
+### Fixed
+- `climber-clim-ice` (and other FULL targets) failed at link time with undefined references to `elsa_*`/`tracer3d_*`/`tracer_stats_*`/`tracer_io_*`/`elsa_io_*`. The elsa and tracer modules are separate static archives (`libelsa.a`, `libtracer.a`) not bundled into `libyelmo.a`; `LFLAGS_FULL` now links them (`LIB_ELSA`/`LIB_TRACER`, after `LIB_YELMO`), mirroring the existing FastHydrology wiring.
+
 ## [1.5.1] - 2026-07-15
 
 Maintenance release: adopt the Yelmo enthalpy thermodynamics solver by default,
@@ -125,6 +132,7 @@ Expect model output to differ from v1.4.x.
 ### Fixed
 - `fovn` diagnostic bug; missing trailing `/` in SICO namelist; `ico2_emis==3` bug; Yelmo `H_calv_ref_thin` → `Hc_ref_thin`.
 
+[1.5.2]: https://github.com/cxesmc/climber-x/compare/v1.5.1...v1.5.2
 [1.5.0]: https://github.com/cxesmc/climber-x/compare/v1.4.3...v1.5
 [1.4.3]: https://github.com/cxesmc/climber-x/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/cxesmc/climber-x/compare/v1.4.1...v1.4.2
