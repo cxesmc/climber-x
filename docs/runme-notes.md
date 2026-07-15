@@ -65,6 +65,10 @@ To run an ensemble of simulations with modified parameter values, `runme` handle
 
 When running an ensemble, the `-o` argument no longer names a single `RUNDIR` but an encapsulating experiment directory `OUTDIR` that will contain one run directory per member.
 
+::: {.callout-important}
+Before launching an ensemble for a new configuration, generate the shared maps once with `runme --gen-maps ...`. Otherwise every member tries to build the same map files at the same time and they crash. See [Generating maps](generating-maps.md).
+:::
+
 The simplest ensemble varies one parameter over a comma list:
 
 ```bash

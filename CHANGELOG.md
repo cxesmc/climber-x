@@ -3,6 +3,20 @@
 All notable changes to CLIMBER-X are documented here. 
 Entries marked **Results** may change model output relative to the previous version.
 
+## [1.5.1] - 2026-07-15
+
+Maintenance release: adopt the Yelmo enthalpy thermodynamics solver by default,
+promote build dependencies out of beta, and refresh documentation.
+
+### Changed / Results
+- **Yelmo thermodynamics:** enthalpy solver (`method="enth"`) now the default; 2nd-order flux-limited horizontal advection (`advecxy_order=2`); thin-ice columns below `H_ice_thin` skip the column solver (linear profile imposed); selectable enthalpy heat capacity via `enth_cp_method` (`const`/`integral`).
+
+### Build / Infrastructure
+- Promoted dependencies out of beta: `fesm-utils` → v1.2, `yelmo` → v2.3.
+
+### Docs
+- Dropped CDO; documented coords-based map generation.
+
 ## [1.5] - 2026-07-08
 
 Major release: new solid-earth backend, restructured build/dependencies, and a
