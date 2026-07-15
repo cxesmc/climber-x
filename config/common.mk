@@ -39,6 +39,18 @@ YELMOROOT = yelmo
 INC_YELMO = -I${YELMOROOT}/libyelmo/include
 LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 
+# --- elsa / tracer (age & isochrone tracers; required transitively by yelmo:
+# yelmo_defs declares elsa_class/tracer_class members of ytrc_class, so yelmo's
+# sources `use` their .mod files and libyelmo.a references libelsa/libtracer
+# symbols). Like FastHydrology, these are separate static archives NOT bundled
+# into libyelmo.a, so they must be linked explicitly in LFLAGS_FULL below.
+ELSAROOT = yelmo/elsa
+INC_ELSA = -I${ELSAROOT}/libelsa/include
+LIB_ELSA = -L${ELSAROOT}/libelsa/include -lelsa
+TRACERROOT = yelmo/tracer
+INC_TRACER = -I${TRACERROOT}/libtracer/include
+LIB_TRACER = -L${TRACERROOT}/libtracer/include -ltracer
+
 # --- FastHydrology (subglacial hydrology; required transitively by yelmo >= v2.2:
 # yelmo_defs declares `type(hydro_class) :: hyd`, so every yelmo module references
 # the fasthydro .mod files and libyelmo.a references libfasthydro symbols).
@@ -120,16 +132,16 @@ CPPFLAGS_CLIM = $(CPPFLAGS_PP)
 CPPFLAGS_FULL = $(CPPFLAGS_PP) $(CPPFLAGS_EARTH)
 
 FFLAGS_CLIM = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_FFTW)
-FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_FASTHYDRO) $(INC_EARTH) $(INC_FFTW)
+FFLAGS_FULL = $(FFLAGS_BASE) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_ELSA) $(INC_TRACER) $(INC_FASTHYDRO) $(INC_EARTH) $(INC_FFTW)
 
 # Extra link flags. -Wl,-zmuldefs works around duplicate symbols in the static
 # deps (the default on Linux). A machine fragment disables it with
 # `LFLAGS_EXTRA =` (macOS ld rejects -zmuldefs).
 LFLAGS_EXTRA ?= -Wl,-zmuldefs
 LFLAGS_CLIM = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
-# LIB_FASTHYDRO follows LIB_YELMO (yelmo references its symbols); the trailing
-# LIB_FFTW resolves the FFTW symbols pulled in by fasthydro and fesmutils
-# (static archives resolve left-to-right, so deps must come after dependents).
-# LIB_EARTH (the selected solid-earth libs, see above) precedes LIB_FESMUTILS,
-# which resolves the coords/ncio symbols VILMA and FastEarth3D share.
-LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_FASTHYDRO) $(LIB_EARTH) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
+# LIB_ELSA/LIB_TRACER and LIB_FASTHYDRO follow LIB_YELMO (yelmo references their
+# symbols); the trailing LIB_FFTW resolves the FFTW symbols pulled in by fasthydro
+# and fesmutils (static archives resolve left-to-right, so deps must come after
+# dependents). LIB_EARTH (the selected solid-earth libs, see above) precedes
+# LIB_FESMUTILS, which resolves the coords/ncio symbols VILMA and FastEarth3D share.
+LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_ELSA) $(LIB_TRACER) $(LIB_FASTHYDRO) $(LIB_EARTH) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
