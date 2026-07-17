@@ -193,17 +193,37 @@
     n_glen                  = 3.0           ! Glen flow law exponent
     visc_min                = 1e3           ! [Pa a] Minimum allowed viscosity 
     de_max                  = 0.5           ! [a-1]  Maximum allowed effective strain rate
-    enh_method              = "shear3D"     ! "simple","shear2D", "shear3D", "paleo-shear" 
+    enh_method              = "shear3D"     ! "simple","shear2D","shear3D" (+ "-tracer" variants)
     enh_shear               = 3.0
     enh_stream              = 1.0
     enh_shlf                = 0.7
-    enh_umin                = 50.0          ! [m/yr] Minimum transition velocity to enh_stream (enh_method="paleo-shear")
-    enh_umax                = 500.0         ! [m/yr] Maximum transition velocity to enh_stream (enh_method="paleo-shear")
-    calc_age                = False         ! Calculate age tracer field?
-    age_iso                 = 0.0
-    tracer_method           = "expl"        ! "expl", "impl": used for age and 'paleo-shear' enh fields
-    tracer_impl_kappa       = 1.5           ! [m2 a-1] Artificial diffusion term for implicit tracer solving 
-    
+    enh_umin                = 50.0          ! [m/yr] Minimum transition velocity to enh_stream ('*-tracer' enh methods)
+    enh_umax                = 500.0         ! [m/yr] Maximum transition velocity to enh_stream ('*-tracer' enh methods)
+    tracer_method           = "expl"        ! "expl", "impl": Eulerian solver for the '*-tracer' enh_bnd field
+    tracer_impl_kappa       = 1.5           ! [m2 a-1] Artificial diffusion term for implicit enh_bnd solving
+
+/
+
+&ytrc
+    ! Passive-tracer subsystem. Any combination of the three backends may run at
+    ! once; t_dep_source picks which one fills the authoritative t_dep field.
+    use_euler               = False         ! Run the in-tree Eulerian age tracer?
+    use_tracer              = False         ! Run the Lagrangian particle backend (tracer)?
+    use_elsa                = False         ! Run the Lagrangian layer backend (elsa)?
+    t_dep_source            = "euler"       ! "euler", "trc", "elsa": authoritative deposition-time source
+    time_end                = 0.0           ! [yr] simulation end time (sizes elsa's layer stack; set for use_elsa)
+
+    ! Eulerian backend
+    calc_age                = False         ! Calculate the Eulerian age tracer field?
+    time_iso                = -11.7, -29.0, -57.0, -115.0    ! [ka] isochrone deposition times
+    tracer_method           = "expl"        ! "expl", "impl": Eulerian age solver
+    tracer_impl_kappa       = 1.5           ! [m2 a-1] Artificial diffusion term for implicit age solving
+
+    ! Sub-model namelists (elsa reads elsa_group; tracer reads its fixed "trc" group)
+    elsa_nml                = "None"        ! Path to elsa namelist file
+    elsa_group              = "None"        ! Group name within elsa_nml
+    tracer_nml              = "None"        ! Path to tracer namelist file (group "trc")
+
 /
 
 &ytherm
@@ -270,6 +290,7 @@
     pd_vel_names      = "ux_srf" "uy_srf"            ! Surface velocity 
     pd_age_load       = False 
     pd_age_path       = "input/{domain}/{grid_name}/{grid_name}_STRAT-M15.nc"
-    pd_age_names      = "age_iso" "depth_iso"        ! ages of isochrones; depth of isochrones 
+    pd_age_names      = "age_iso" "depth_iso"        ! ages of isochrones; depth of isochrones
+    pd_age_to_time    = True                         ! Convert loaded obs isochrone ages [ka] to deposition times [ka] (t_dep = -age)
 
 /

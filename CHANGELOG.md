@@ -3,6 +3,27 @@
 All notable changes to CLIMBER-X are documented here. 
 Entries marked **Results** may change model output relative to the previous version.
 
+## [1.5.4] - 2026-07-17
+
+Namelist sync with Yelmo v2.3.1.
+
+### Fixed
+- `nml/ice_yelmo_par.nml` failed `nml_validate` with unknown parameters `calc_age`/`age_iso` in group `ymat`. Yelmo's tracer refactor moved the Eulerian age tracer into a new `ytrc` group and rekeyed isochrones by deposition time (`time_iso`, [ka], negative) instead of age (`age_iso`). Removed both from `ymat` and added the `ytrc` group; all backends default off, so behavior is unchanged.
+- Refreshed stale `ymat` comments: `enh_method="paleo-shear"` no longer exists (now the `"shear2D-tracer"`/`"shear3D-tracer"` variants), and `ymat.tracer_method` drives the `enh_bnd` field, not age.
+
+### Added
+- `ydata.pd_age_to_time` (default `True`): converts loaded observational isochrone ages [ka] to deposition times (`t_dep = -age`), the read-side counterpart of the `age_iso` → `time_iso` switch.
+
+### Build / Infrastructure
+- `yelmo` → v2.3.1.
+
+## [1.5.3] - 2026-07-16
+
+Bug fix in configme manifest.
+
+### Build / Infrastructure
+- `fesm-utils` → v1.3.
+
 ## [1.5.2] - 2026-07-15
 
 Build fix for the fully-coupled (FULL) build variant.
