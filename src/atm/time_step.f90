@@ -29,10 +29,10 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, l_diff_impl, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
+  use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, l_diff_impl, rh_max, rskin_ocn_min, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, z_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
   use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3
   use control, only : check_water, check_energy
-  use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
+  use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr
   use vesta_mod, only : t_prof
   !$ use omp_lib
 
@@ -48,7 +48,7 @@ contains
   !   Purpose    :  time integration of equations for temperature, humidity and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, convwtr_adv, wcon, A_trop, W_strat, sam, eke, &
-      tskin, convdse, rb_atm, rb_sur, sha, gams, gamb, gamt, &
+      tskin, convdse, rb_atm, sha, gams, gamb, gamt, &
       convdst, dust_emis, dust_dep, hdust, &
       convco2, co2flx, &
       tam, qam, dam, cam, prc, prcw, prcs, prc_conv, prc_wcon, prc_over, &
@@ -74,7 +74,6 @@ contains
     real(wp), intent(in   ) :: tskin(:,:,:)
     real(wp), intent(in   ) :: convdse(:,:)
     real(wp), intent(in   ) :: rb_atm(:,:)
-    real(wp), intent(in   ) :: rb_sur(:,:)
     real(wp), intent(in   ) :: sha(:,:)
     real(wp), intent(in   ) :: gams(:,:)
     real(wp), intent(in   ) :: gamb(:,:)
@@ -365,25 +364,24 @@ contains
         !-------------------------------------
 
         ! reduce temperature to sea level
-        if (i_tslz.eq.1) then
-          tsl(i,j)=t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
-        else if (i_tslz.eq.2) then
-          tsl(i,j)=t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
-            + (gamb(i,j)-gams(i,j))*(1500._wp*(frst(i,j,i_ocn)+frst(i,j,i_sic)))
+        tsl(i,j)=t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
+        if (i_tslz.eq.2) then
+          ! over open ocean and sea ice the surface layer lapse rate gams is not representative
+          ! of the layer the sea level temperature should come from, so the profile is corrected
+          ! back towards the free tropospheric lapse rate gamb over a depth of z_tslz.
+          tsl(i,j) = tsl(i,j) + (gamb(i,j)-gams(i,j))*(z_tslz*(frst(i,j,i_ocn)+frst(i,j,i_sic)))
         endif
 
-        ! sea level temperature for azonal sea level pressure, using skin temperature
-        if (i_tsl.eq.1) then
-          tsksl(i,j)=max(tam(i,j),tskina(i,j))+c_tsl_gam*zsa(i,j) 
-          if (rb_sur(i,j).gt.0._wp) then
-            tsksl(i,j)=tsksl(i,j) + (frst(i,j,i_ocn)+frst(i,j,i_sic)+frst(i,j,i_lake))*(gams_max_ocn-gams(i,j))*hgams
-          endif
-        else if (i_tsl.eq.2) then
+        ! sea level temperature for azonal sea level pressure
+        if (i_tsl.eq.0) then
+          ! the air temperature profile reduced to sea level, with no skin contribution at all
+          tsksl(i,j) = tsl(i,j)
+        else
+          ! built from the skin temperature instead: the warmer of tam and tskina, carried down
+          ! through the surface layer and then to sea level
           tsksl(i,j) = max(tam(i,j),tskina(i,j)) &
             - max(frst(i,j,i_lnd)*tsl_gams_min_lnd+frst(i,j,i_ice)*tsl_gams_min_ice,gams(i,j))*hgams &
-            + ((1._wp-frst(i,j,i_ice))*c_tsl_gam + frst(i,j,i_ice)*c_tsl_gam_ice)*zsa(i,j) 
-        else 
-          stop 'itsl'
+            + ((1._wp-frst(i,j,i_ice))*c_tsl_gam + frst(i,j,i_ice)*c_tsl_gam_ice)*zsa(i,j)
         endif
 
         !-------------------------------------

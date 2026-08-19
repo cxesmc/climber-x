@@ -107,18 +107,16 @@ module atm_params
   real(wp) :: c_gam_1   
   real(wp) :: c_gam_2
   real(wp) :: c_gam_3
-  real(wp) :: c_gam_4
-  real(wp) :: c_gam_5
-  real(wp) :: c_gam_6
-  real(wp) :: gams_max_lnd
-  real(wp) :: gams_min_ocn
-  real(wp) :: gams_max_ocn
+  real(wp) :: gams_min
+  real(wp) :: gams_max
+  real(wp) :: sh_gams
   real(wp) :: hgams
   real(wp) :: hgamt
   integer :: nsmooth_gam
   real(wp) :: c_gam_rel
   integer :: i_tsl
   integer :: i_tslz
+  real(wp) :: z_tslz
   real(wp) :: c_tsl_gam
   real(wp) :: c_tsl_gam_ice
   real(wp) :: tsl_gams_min_lnd
@@ -325,12 +323,9 @@ contains
     call nml_read(filename,"atm_par","c_gam_1",c_gam_1)
     call nml_read(filename,"atm_par","c_gam_2",c_gam_2)
     call nml_read(filename,"atm_par","c_gam_3",c_gam_3)
-    call nml_read(filename,"atm_par","c_gam_4",c_gam_4)
-    call nml_read(filename,"atm_par","c_gam_5",c_gam_5)
-    call nml_read(filename,"atm_par","c_gam_6",c_gam_6)
-    call nml_read(filename,"atm_par","gams_max_lnd",gams_max_lnd)
-    call nml_read(filename,"atm_par","gams_min_ocn",gams_min_ocn)
-    call nml_read(filename,"atm_par","gams_max_ocn",gams_max_ocn)
+    call nml_read(filename,"atm_par","gams_min",gams_min)
+    call nml_read(filename,"atm_par","gams_max",gams_max)
+    call nml_read(filename,"atm_par","sh_gams",sh_gams)
     call nml_read(filename,"atm_par","hgams",hgams)
     call nml_read(filename,"atm_par","hgamt",hgamt)
     call nml_read(filename,"atm_par","c_gam_rel",c_gam_rel)
@@ -338,6 +333,7 @@ contains
     call nml_read(filename,"atm_par","nsmooth_cld",nsmooth_cld)
     call nml_read(filename,"atm_par","i_tsl",i_tsl)
     call nml_read(filename,"atm_par","i_tslz",i_tslz)
+    call nml_read(filename,"atm_par","z_tslz",z_tslz)
     call nml_read(filename,"atm_par","c_tsl_gam",c_tsl_gam)
     call nml_read(filename,"atm_par","c_tsl_gam_ice",c_tsl_gam_ice)
     call nml_read(filename,"atm_par","tsl_gams_min_lnd",tsl_gams_min_lnd)

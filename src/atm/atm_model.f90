@@ -297,7 +297,7 @@ contains
 
       ! lapse rate and height scales of moisture and dust
       !$ time1 = omp_get_wtime()
-      call hscales(atm%frst, atm%f_ice_lake, atm%ra2a, atm%rb_sur, atm%tam, atm%tskin, atm%qam, atm%wcon, atm%wcld, &  ! in
+      call hscales(atm%ra2a, atm%sha, atm%qam, atm%wcon, atm%wcld, &  ! in
         atm%had_fi, atm%had_width, &   ! in
         atm%gams, atm%gamb, atm%gamt, atm%hrm, &    ! inout
         atm%hqeff, atm%hdust)    ! out
@@ -388,7 +388,7 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, &   ! in
-        atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
+        atm%tskin, atm%convdse, atm%rb_atm, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
@@ -759,6 +759,10 @@ contains
      allocate(atm%cda(im,jm))
      allocate(atm%cd0a(im,jm))
      allocate(atm%sha(im,jm))
+     ! sha is set by the coupler each step, but hscales reads it and it enters a tanh, so it must
+     ! not be undefined on the first call. Zero puts gam_s at the midpoint of (gams_min,
+     ! gams_max), which is harmless.
+     atm%sha(:,:) = 0._wp
      allocate(atm%lha(im,jm))
      allocate(atm%evpa(im,jm))
      allocate(atm%tskina(im,jm))

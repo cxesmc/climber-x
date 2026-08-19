@@ -87,17 +87,25 @@
   ! lapse rate parameters
   !-----------------------------------------------------------
   c_gam_1 = 3.7e-3              ! K/m, background lapse rate
-  c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
+  c_gam_2 = 0.04                ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
-  c_gam_4 = 5.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over ocean
-  c_gam_5 = 2.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land and ice
-  c_gam_6 = 10.e-3              ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land for inversion case
-  gams_max_lnd = 10.e-3         ! K/m, maximum surface lapse rate over land and ice
-  gams_max_ocn = 7.5e-3         ! K/m, maximum surface lapse rate over ocean
-  gams_min_ocn = 0.e-3          ! K/m, minimum surface lapse rate over ocean
+  ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
+  ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
+  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime.
+  gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
+  gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
+  sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
-  i_tsl = 2 !1
-  i_tslz = 2 !1
+  i_tslz = 2                    ! reduction of the air temperature to sea level, tsl:
+                                !   1 = the temperature profile evaluated at z=0, no correction
+                                !   2 = as 1, plus a correction over the ocean and sea ice fraction,
+                                !       (gamb-gams)*z_tslz*(f_ocn+f_sic), which removes the surface
+                                !       layer lapse rate from the lowest z_tslz metres there
+  z_tslz = 1500.                ! m, depth of the ocean/sea-ice correction to tsl, used only if i_tslz=2
+  i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
+                                !   0 = tsksl = tsl, the air temperature profile reduced to sea level
+                                !   1 = built from the skin temperature (c_tsl_gam, c_tsl_gam_ice,
+                                !       tsl_gams_min_lnd, tsl_gams_min_ice below)
   c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
   c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
   tsl_gams_min_lnd = 6.5e-3     ! K/m
