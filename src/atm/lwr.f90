@@ -65,7 +65,7 @@ contains
   !   Subroutine :  l w _ r a d i a t i o n 
   !   Purpose    :  driver for LW radiation 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lw_radiation(ecs_scale, frst, zsa, zs, htrop, hcld, ra2, gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &
+  subroutine lw_radiation(ecs_scale, frst, zsa, zs, htrop, hcld, ra2, gams, gamb, gamt, tam, ram, hrm, rhfree, ttrop, cld, clot, &
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &    ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &     ! out
       gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q) ! optional input arguments for feedback analysis
@@ -85,6 +85,7 @@ contains
     real(wp), intent(in ) :: tam(:,:)
     real(wp), intent(in ) :: ram(:,:)
     real(wp), intent(in ) :: hrm(:,:)
+    real(wp), intent(in ) :: rhfree(:,:)
     real(wp), intent(in ) :: ttrop(:,:)
     real(wp), intent(in ) :: cld(:,:)
     real(wp), intent(in ) :: clot(:,:)
@@ -214,11 +215,11 @@ contains
             ! Atmospheric characteristics at vertical levels
             if (.not.fb_q) then
               call lwr_column(zsa(i,j), zs(i,j,n), htrop(i,j), hcld(i,j), &    ! in
-                gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), ttrop(i,j), o3(i,j,:), &   ! in
+                gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), rhfree(i,j), ttrop(i,j), o3(i,j,:), &   ! in
                 zlwr, tlwr, qlwr, O3lwr)    ! out
             else
               call lwr_column(zsa(i,j), zs(i,j,n), htrop(i,j), hcld(i,j), &    ! in
-                gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), ttrop(i,j), o3(i,j,:), &   ! in
+                gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), rhfree(i,j), ttrop(i,j), o3(i,j,:), &   ! in
                 zlwr, tlwr, qlwr, O3lwr, &    ! out
                 gams_q(i,j), gamb_q(i,j), gamt_q(i,j), tam_q(i,j), ttrop_q(i,j), htrop_q(i,j)) ! optional input arguments for feedback analysis
             endif
@@ -350,7 +351,7 @@ contains
   !   Subroutine :  l w r _ c o l u m n
   !   Purpose    :  derive temperature, humidity and ozone at lwr levels
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lwr_column(zsa, zs, htrop, hcld, gams, gamb, gamt, tam, ram, hrm, ttrop, O3, &
+  subroutine lwr_column(zsa, zs, htrop, hcld, gams, gamb, gamt, tam, ram, hrm, rhfree, ttrop, O3, &
       zlwr, tlwr, qlwr, O3lwr, &    
       gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q) ! optional input arguments for feedback analysis
     
@@ -366,6 +367,7 @@ contains
     real(wp), intent(in ) :: tam
     real(wp), intent(in ) :: ram
     real(wp), intent(in ) :: hrm
+    real(wp), intent(in ) :: rhfree
     real(wp), intent(in ) :: ttrop
     real(wp), intent(in ) :: O3(:)
 
@@ -441,7 +443,7 @@ contains
 
     do k=2,llwr3
       tlwr(k) = t_prof(zs, zlwr(k), tamz, gams, gamb, gamt, htrop, 1)
-      rqlwr   = rh_prof(zs, zlwr(k), ram, hrm, htrop)
+      rqlwr   = rh_prof(zs, zlwr(k), ram, hrm, rhfree, htrop)
       qlwr(k) = fqsat(tlwr(k),p0*exp(-zlwr(k)/hatm))*rqlwr 
     enddo
 
@@ -462,7 +464,7 @@ contains
         if (zlwr(k).le.(htrop_q+10.)) then
           ! troposphere
           tlwr_q = t_prof(zs, zlwr(k), tamz, gams_q, gamb_q, gamt_q, htrop_q, 1)
-          rqlwr  = rh_prof(zs, zlwr(k), ram, hrm, htrop_q)
+          rqlwr  = rh_prof(zs, zlwr(k), ram, hrm, rhfree, htrop_q)
           qlwr(k)= FQSAT(tlwr_q,p0*exp(-zlwr(k)/hatm))*rqlwr 
         else
           ! stratosphere

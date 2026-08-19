@@ -19,6 +19,16 @@
  f_sic_max = 1.            ! maximum allowed sea ice concentration
  f_sic_pow = 0.25          ! exponent of the power-law relation between ice thickness and ice fraction, 0.25 in climber-2, used only if i_fsic==1
  h0 = 0.5                  ! m, thickness of newly formed sea ice, used only if i_fsic>1
+ l_sic_prescribe = .false. ! SENSITIVITY: prescribe fully ice-covered, thick, snow-covered conditions in a lon/lat box (Hudson Bay); non-conservative, diagnostic only
+                           ! box covers Hudson Bay, James Bay and the western Hudson Strait only, i.e. the shallow (<200 m) epicontinental cells.
+                           ! The deep Labrador Sea cells are deliberately excluded: prescribing ice there overshoots by 8-19 K, so their warm bias has a different (ocean) origin.
+ sic_prescribe_lon_w = -95. ! deg E, western boundary of the sea-ice prescription box
+ sic_prescribe_lon_e = -70. ! deg E, eastern boundary of the sea-ice prescription box (excludes the deep Labrador Sea at -67.5 and east)
+ sic_prescribe_lat_s = 50. ! deg N, southern boundary of the sea-ice prescription box (includes James Bay at 52.5N)
+ sic_prescribe_lat_n = 65. ! deg N, northern boundary of the sea-ice prescription box (excludes Foxe Basin / Baffin at 67.5N)
+ sic_prescribe_fsic = 1.   ! prescribed sea ice concentration (of the ocean fraction) in the box
+ sic_prescribe_h_sic = 2.  ! m, prescribed sea ice thickness over the ice-covered area in the box
+ sic_prescribe_h_snow = 0.3 ! m, prescribed snow thickness over the ice-covered area in the box
 
  !-----------------------------------------------------------------------------------------
  ! sea ice thermodynamics parameters

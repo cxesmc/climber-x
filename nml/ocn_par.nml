@@ -70,9 +70,28 @@
  adrag = 4.                   ! days, inverse minimum drag
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
  drag_topo_fac = 3.0          ! factor by which to increase drag in shallow water
+ drag_bcl_topo_fac = 0.0      ! same as drag_topo_fac, but applied to the drag used for the baroclinic velocity shear.
+                              ! 0 = uniform baroclinic drag adrag everywhere (original behaviour, baroclinic shear blind to the shelf)
+                              ! uses the same depth factor as the barotropic drag (drag_topo_n, z_drag_shallow)
  drag_topo_scale_eq = 0.
  z_drag_shallow = 1000.       ! m, depth of shallow water regions below which to increase adrag by factor drag_topo_fac
  drag_frac_fac = 0.           ! factor by which to increase drag where small ocean fraction
+
+ !-------------------------------------------------------------------------------------------
+ ! Neptune parameterisation of eddy-topography interaction (Holloway 1992, Eby and Holloway 1994)
+ !-------------------------------------------------------------------------------------------
+ l_neptune = F                ! apply the Neptune parameterisation? The drag relaxes the barotropic flow
+                              ! towards the eddy-topography equilibrium psi* = -f*L^2*H instead of towards rest,
+                              ! driving cyclonic-around-basin flow along the continental slopes
+ i_neptune_l = 2              ! Neptune length scale L:
+                              ! 1 = uniform, equal to neptune_l
+                              ! 2 = cosine fit between an equatorial and a polar value, as in Eby and Holloway 1994:
+                              !     L = neptune_l_pol + (neptune_l_eq-neptune_l_pol)*cos(lat)^2
+ neptune_l = 6000.            ! m, uniform Neptune length scale, used only if i_neptune_l==1. Sets the amplitude
+                              ! of the equilibrium flow (psi* ~ L^2)
+ neptune_l_eq  = 12000.       ! m, equatorial Neptune length scale, used only if i_neptune_l==2 (Eby and Holloway 1994)
+ neptune_l_pol = 3000.        ! m, polar Neptune length scale, used only if i_neptune_l==2 (Eby and Holloway 1994)
+ neptune_u_max = 0.2          ! m/s, cap on the magnitude of the Neptune velocity, needed because it scales with 1/H
 
  !-------------------------------------------------------------------------------------------
  ! Coriolis 
@@ -167,10 +186,10 @@
                               ! 2 = use volume averaged salinity
  saln0_const = 34.7           ! psu, reference salinity, used only if i_saln0==1
  l_salinity_restore = F       ! restore salinity to globally integrated value saln0?
- l_brines = F                 ! apply special treatment of brines during sea ice formation?
+ l_brines = T                 ! apply special treatment of brines during sea ice formation?
                               ! when true, a fraction frac_brines of the rejected brine salt is removed from the surface and
                               ! distributed thickness-weighted from the surface down to the neutral-buoyancy depth
- frac_brines = 0.
+ frac_brines = 1.0
  drho_brines_coast = 0.       ! density overshoot [kg/m3] for the brine plume in coastal cells: there the plume overshoots the neutral-buoyancy level until the ambient
                               ! density exceeds the parcel density by drho_brines_coast
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation

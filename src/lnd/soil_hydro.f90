@@ -26,7 +26,7 @@
 module soil_hydro_mod
 
   use precision, only : wp
-  use timer, only : sec_day, time_soy_lnd
+  use timer, only : time_soy_lnd
   use constants, only : rho_w, rho_i
   use control, only : check_water
   use lnd_grid, only : dz, rdz_neg, rdz_pos, nl
@@ -48,18 +48,18 @@ contains
   !   Purpose    :  update soil liquid water content
   !              :  by solving the tridiagonal system
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine soil_hydro(frac_surf,mask_snow,theta_sat,k_sat,k_exp,psi_exp,kappa_int,psi,w_table, &
+  subroutine soil_hydro(frac_surf,mask_snow,theta_sat,k_sat,k_exp,psi_exp,kappa_int,psi, &
                        transpiration,evap_surface,infiltration,wilt, &
                        w_snow,w_w,w_i,theta_w,theta_i,theta,theta_w_cum,theta_i_cum,theta_fire_cum, &
-                       drainage, &
+                       drainage,runoff_exc, &
                        transpiration_iso,evap_surface_iso,infiltration_iso, &
-                       w_w_iso,drainage_iso)
+                       w_w_iso,drainage_iso,runoff_exc_iso)
 
     implicit none
 
     integer, intent(inout) :: mask_snow
     real(wp), dimension(:), intent(in) :: frac_surf
-    real(wp), intent(in) :: infiltration, w_table
+    real(wp), intent(in) :: infiltration
     real(wp), dimension(:), intent(in) :: theta_sat, k_sat, kappa_int, psi
     integer, dimension(:), intent(in) :: psi_exp, k_exp
     real(wp), dimension(:), intent(in) :: transpiration, evap_surface
@@ -68,23 +68,25 @@ contains
     real(wp), dimension(:), intent(inout) :: w_w, w_i, theta_w, theta_i, theta, theta_w_cum, theta_i_cum
     real(wp), intent(inout) :: theta_fire_cum
     real(wp), dimension(:), intent(out) :: drainage
+    real(wp), intent(out) :: runoff_exc      ! saturation excess leaving at the surface, kg/m2/s
     ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
     real(wp), dimension(:,:), intent(in)    :: transpiration_iso, evap_surface_iso
     real(wp), dimension(:),   intent(in)    :: infiltration_iso
     real(wp), dimension(:,:), intent(inout) :: w_w_iso
     real(wp), dimension(:,:), intent(out)   :: drainage_iso
+    real(wp), dimension(:),   intent(out)   :: runoff_exc_iso
 
     integer :: i,j
     integer :: n, k, kk, i_here, i_print, j_print, n_print, iso
-    real(wp) :: frac_inf_2, wilt_tot, dw, ddw, run_sub, f_veg, water_bal
+    real(wp) :: wilt_tot, dw, ddw, f_veg, water_bal
     real(wp), dimension(nl) :: inf
-    real(wp), dimension(nl) :: r_sub
     real(wp), dimension(nl) :: q, e, dk_dtheta, dpsi_dtheta, dq_1_dtheta_1, dq_1_dtheta, dq_dtheta, dq_dtheta1
     real(wp), dimension(nl) :: a, b, c, r, x, ww_old
     real(wp), dimension(nl) :: w_w_max
     real(wp), dimension(nl) :: q_new
-    real(wp), dimension(nl,nwiso) :: inf_iso_l, e_iso, r_sub_iso, q_iso, ww_old_iso
+    real(wp), dimension(nl,nwiso) :: inf_iso_l, e_iso, q_iso, ww_old_iso
     real(wp) :: ratio(nwiso), excess_iso(nwiso), deficit_iso(nwiso)
+    real(wp) :: excess, acc, dw_iso
     real(wp), parameter :: w_w_min = 0.01_wp ! mm, kg/m2
 
 
@@ -94,18 +96,17 @@ contains
  
 
     ww_old = w_w
+    runoff_exc = 0._wp
+    if (l_wiso) runoff_exc_iso = 0._wp
     if (l_wiso) ww_old_iso = w_w_iso
 
     inf(:) = 0._wp
     if (l_wiso) inf_iso_l(:,:) = 0._wp
-    ! all infiltration into the top layer or spread over top two layers
-    frac_inf_2 = hydro_par%frac_inf_2 * (1._wp - theta_i(2)/(theta_w(2)+theta_i(2)+0.001_wp))
-    inf(1) = (1._wp-frac_inf_2)*infiltration
-    inf(2) = frac_inf_2*infiltration
+    ! all infiltration into the top layer
+    inf(1) = infiltration
     if (l_wiso) then
       do iso=1,nwiso
-        inf_iso_l(1,iso) = (1._wp-frac_inf_2)*infiltration_iso(iso)
-        inf_iso_l(2,iso) = frac_inf_2*infiltration_iso(iso)
+        inf_iso_l(1,iso) = infiltration_iso(iso)
       enddo
     endif
 
@@ -148,81 +149,22 @@ contains
      endif
     enddo
 
-    if( hydro_par%i_runoff .eq. 1 ) then
-     r_sub(:) = 0._wp
-     if (l_wiso) r_sub_iso(:,:) = 0._wp
-    elseif( hydro_par%i_runoff .eq. 2 ) then
-     ! subsurface runoff
-     run_sub = hydro_par%kappa_max/sec_day * exp(-2._wp*hydro_par%f_wtab*w_table) * sum(theta_w*dz(1:nl))/sum(theta*dz(1:nl)) ! kg/m2/s
-     do k=1,nl
-      r_sub(k) = run_sub * kappa_int(k)*dz(k) / sum(kappa_int*dz(1:nl))
-     enddo
-     if (l_wiso) then
-       do k=1,nl
-         if (ww_old(k).gt.0._wp) then
-           do iso=1,nwiso
-             r_sub_iso(k,iso) = r_sub(k) * ww_old_iso(k,iso)/ww_old(k)  ! upwind at layer ratio
-           enddo
-         else
-           r_sub_iso(k,:) = 0._wp
-         endif
-       enddo
-     endif
-    endif
-
 
     do k=1,nl-1
      q(k) = -kappa_int(k) * ( (psi(k+1) - psi(k)) * rdz_pos(k) - 1._wp )
-     if( hydro_par%i_cond_theta .eq. 1 ) then
-      ! use liquid AND frozen water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * ( max(hydro_par%theta_min, (theta(k)+theta(k+1))/(theta_sat(k)+theta_sat(k+1))) )**(k_exp(k)-1) &
-                   / (theta_sat(k) + theta_sat(k+1))
-     elseif( hydro_par%i_cond_theta .eq. 2 ) then
-      ! use only liquid water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * ( max(hydro_par%theta_min, (theta_w(k)+theta_w(k+1))/(theta_sat(k)+theta_sat(k+1))) ) **(k_exp(k)-1) &
-                   / (theta_sat(k) + theta_sat(k+1))
-     elseif( hydro_par%i_cond_theta .eq. 3 ) then
-      ! use only liquid water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * ( max(hydro_par%theta_min, 0.5_wp*(theta(k)+theta(k+1)+theta_w(k)+theta_w(k+1))/(theta_sat(k)+theta_sat(k+1))) ) **(k_exp(k)-1) &
-                   / (theta_sat(k) + theta_sat(k+1))
-     endif
+     ! liquid water only, consistent with kappa_int in soil_par_hydro()
+     dk_dtheta(k) = k_exp(k) * k_sat(k) &
+                  * ( max(hydro_par%theta_min, (theta_w(k)+theta_w(k+1))/(theta_sat(k)+theta_sat(k+1))) ) **(k_exp(k)-1) &
+                  / (theta_sat(k) + theta_sat(k+1))
     enddo
     ! bottom boundary condition
     k = nl
-    if( hydro_par%i_runoff .eq. 1 ) then
-     q(k) = kappa_int(k) ! free drainage
-     if( hydro_par%i_cond_theta .eq. 1 ) then
-      ! use liquid AND frozen water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * (max(hydro_par%theta_min, theta(k)/theta_sat(k)))**(k_exp(k)-1) / theta_sat(k)
-     elseif( hydro_par%i_cond_theta .eq. 2 ) then
-      ! use only liquid water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * (max(hydro_par%theta_min, theta_w(k)/theta_sat(k)))**(k_exp(k)-1) / theta_sat(k)
-     elseif( hydro_par%i_cond_theta .eq. 3 ) then
-      ! use only liquid water
-      dk_dtheta(k) = k_exp(k) * k_sat(k) &
-                   * (max(hydro_par%theta_min, 0.5_wp*(theta(k)+theta_w(k))/theta_sat(k)))**(k_exp(k)-1) / theta_sat(k)
-     endif
-    elseif( hydro_par%i_runoff .eq. 2 ) then
-     q(k) = 0._wp                ! no drainage
-     dk_dtheta(k) = 0._wp
-    endif
+    q(k) = kappa_int(k) ! free drainage
+    dk_dtheta(k) = k_exp(k) * k_sat(k) &
+                 * (max(hydro_par%theta_min, theta_w(k)/theta_sat(k)))**(k_exp(k)-1) / theta_sat(k)
 
     do k=1,nl
-    if( hydro_par%i_cond_theta .eq. 1 ) then
-      ! use liquid AND frozen water
-      dpsi_dtheta(k) = psi_exp(k) * psi(k) / max(hydro_par%theta_min*theta_sat(k), theta(k))
-     elseif( hydro_par%i_cond_theta .eq. 2 ) then
-      ! use only liquid water
-      dpsi_dtheta(k) = psi_exp(k) * psi(k) / max(hydro_par%theta_min*theta_sat(k), theta_w(k))
-     elseif( hydro_par%i_cond_theta .eq. 3 ) then
-      ! use only liquid water
-      dpsi_dtheta(k) = psi_exp(k) * psi(k) / max(hydro_par%theta_min*theta_sat(k), 0.5_wp*(theta(k)+theta_w(k)))
-     endif
+     dpsi_dtheta(k) = psi_exp(k) * psi(k) / max(hydro_par%theta_min*theta_sat(k), theta_w(k))
     enddo
 
     do k=2,nl
@@ -243,14 +185,14 @@ contains
     a(k) = 0._wp
     b(k) = - dq_dtheta(k) - rho_w*dz(k)*rdt
     c(k) = - dq_dtheta1(k)
-    r(k) = - inf(k) + q(k) + e(k) + r_sub(k) 
+    r(k) = - inf(k) + q(k) + e(k)
 
     ! intermediate layers
     do k=2,nl-1
      a(k) = dq_1_dtheta_1(k)
      b(k) = - dq_dtheta(k) + dq_1_dtheta(k) - rho_w*dz(k)*rdt
      c(k) = - dq_dtheta1(k)
-     r(k) = - inf(k) - q(k-1) + q(k) + e(k) + r_sub(k)
+     r(k) = - inf(k) - q(k-1) + q(k) + e(k)
     enddo
 
     ! bottom layer, k=nl, free drainage boundary condition: q_N = -k_N
@@ -258,7 +200,7 @@ contains
     a(k) = dq_1_dtheta_1(k)
     b(k) = - dk_dtheta(k) + dq_1_dtheta(k) - rho_w*dz(k)*rdt
     c(k) = 0._wp
-    r(k) = - q(k-1) + q(k) + e(k) + r_sub(k)
+    r(k) = - q(k-1) + q(k) + e(k)
 
     ! solve tridiagonal system for liquid volumetric water content change, x [m3/m3]
     call tridiag_solve(a,b,c,r,x,nl)
@@ -267,12 +209,8 @@ contains
     w_w = w_w + x*dz(1:nl)*rho_w
 
 
-    if( hydro_par%i_runoff .eq. 1 ) then
-     ! drainage is equal to -q(nl) at the new time step, expanded in Taylor series:
-     drainage(is_veg) = kappa_int(nl) + dk_dtheta(nl)*x(nl)
-    elseif( hydro_par%i_runoff .eq. 2 ) then
-     drainage(is_veg) = run_sub
-    endif
+    ! drainage is equal to -q(nl) at the new time step, expanded in Taylor series:
+    drainage(is_veg) = kappa_int(nl) + dk_dtheta(nl)*x(nl)
 
     ! ---------- water isotope advection ----------
     ! Reconstruct new-time inter-layer bulk fluxes from the solver (same equations as bulk),
@@ -282,11 +220,7 @@ contains
       do k=1,nl-1
         q_new(k) = q(k) + dq_dtheta(k)*x(k) + dq_dtheta1(k)*x(k+1)
       enddo
-      if (hydro_par%i_runoff .eq. 1) then
-        q_new(nl) = q(nl) + dk_dtheta(nl)*x(nl)   ! free drainage
-      else
-        q_new(nl) = 0._wp
-      endif
+      q_new(nl) = q(nl) + dk_dtheta(nl)*x(nl)   ! free drainage
       ! iso fluxes at each interface (upwind from donor's OLD ratio)
       do k=1,nl-1
         if (q_new(k) .ge. 0._wp) then
@@ -318,63 +252,101 @@ contains
       ! per-layer iso mass update (q_iso(0) := 0; influx from above = q_iso(k-1), outflux below = q_iso(k))
       do iso=1,nwiso
         w_w_iso(1,iso) = ww_old_iso(1,iso) &
-                        + dt * (inf_iso_l(1,iso) - q_iso(1,iso) - e_iso(1,iso) - r_sub_iso(1,iso))
+                        + dt * (inf_iso_l(1,iso) - q_iso(1,iso) - e_iso(1,iso))
         do k=2,nl
           w_w_iso(k,iso) = ww_old_iso(k,iso) &
                           + dt * (inf_iso_l(k,iso) + q_iso(k-1,iso) - q_iso(k,iso) &
-                                 - e_iso(k,iso) - r_sub_iso(k,iso))
+                                 - e_iso(k,iso))
         enddo
       enddo
-      ! drainage iso (consistent with bulk: q at bottom for i_runoff=1, total r_sub for i_runoff=2)
-      if (hydro_par%i_runoff .eq. 1) then
-        drainage_iso(is_veg,:) = q_iso(nl,:)
-      else
-        do iso=1,nwiso
-          drainage_iso(is_veg,iso) = sum(r_sub_iso(:,iso))
-        enddo
-      endif
+      ! drainage iso, consistent with the bulk: the flux at the bottom of the column
+      drainage_iso(is_veg,:) = q_iso(nl,:)
     endif
 
     ! check wether w_w_min < w_w < (theta_sat-theta_i)*dz, w_w_min = 0.01 [kg/m2]
     ! first check for excess liquid water
+    !
+    ! Redistribute liquid water in excess of the ice-reduced pore space. Every transfer is
+    ! limited by the FREE CAPACITY of the receiving layer, so a frozen layer, whose w_w_max is
+    ! small because the pores are filled with ice, actually blocks the flow. Water that cannot
+    ! move down is passed back up and leaves at the surface as saturation excess.
+    !
+    ! The previous version pushed the whole excess one layer down with no capacity limit, and so
+    ! carried snowmelt straight through permanently frozen ground into the aquifer: in permafrost
+    ! cells the recharge acquired a factor-130 seasonal cycle even though the bottom layer never
+    ! thaws and its conductivity, which is all the free-drainage boundary condition depends on,
+    ! is constant all year. It also sent half of any top-layer excess directly to drainage, a
+    ! second path that bypassed the hydraulic conductivity. Both are gone; the only route from
+    ! this block into the aquifer is now genuine oversaturation of the bottom layer.
     w_w_max = (theta_sat-theta_i)*dz(1:nl)*rho_w
-    do k=1,nl-1 ! start from top layer
-     if(w_w(k) .gt. w_w_max(k)) then
-      ! iso transfers at the donor (current layer) ratio BEFORE clipping
-      if (l_wiso .and. w_w(k).gt.0._wp) then
-        do iso=1,nwiso
-          ratio(iso) = w_w_iso(k,iso) / w_w(k)
-          excess_iso(iso) = ratio(iso) * (w_w(k) - w_w_max(k))
-          if (k.eq.1) then
-            w_w_iso(k+1,iso) = w_w_iso(k+1,iso) + 0.5_wp*excess_iso(iso)
-            drainage_iso(is_veg,iso) = drainage_iso(is_veg,iso) + 0.5_wp*excess_iso(iso) * rdt
-          else
-            w_w_iso(k+1,iso) = w_w_iso(k+1,iso) + excess_iso(iso)
-          endif
-          w_w_iso(k,iso) = ratio(iso) * w_w_max(k)
-        enddo
+
+    ! downward, never more than the layer below can accept
+    do k=1,nl-1
+     excess = w_w(k) - w_w_max(k)
+     if (excess .gt. 0._wp) then
+      acc = min(excess, max(0._wp, w_w_max(k+1)-w_w(k+1)))
+      if (acc .gt. 0._wp) then
+       if (l_wiso .and. w_w(k).gt.0._wp) then
+         do iso=1,nwiso
+           dw_iso = w_w_iso(k,iso)/w_w(k) * acc
+           w_w_iso(k+1,iso) = w_w_iso(k+1,iso) + dw_iso
+           w_w_iso(k,iso)   = w_w_iso(k,iso)   - dw_iso
+         enddo
+       endif
+       w_w(k+1) = w_w(k+1) + acc
+       w_w(k)   = w_w(k)   - acc
       endif
-      if(k.eq.1) then
-       ! half of excess water to drainage and half to layer below
-       w_w(k+1) = w_w(k+1) + 0.5_wp*(w_w(k) - w_w_max(k)) ! move excess water one layer down
-       drainage(is_veg) = drainage(is_veg) + 0.5_wp*(w_w(k) - w_w_max(k)) * rdt
-      else
-       w_w(k+1) = w_w(k+1) + w_w(k) - w_w_max(k) ! move excess water one layer down
-      endif
-      w_w(k) = w_w_max(k) ! reset water to saturation value
      endif
     enddo
-    if(w_w(nl) .gt. w_w_max(nl)) then ! bottom layer oversaturated
+
+    ! genuine saturation excess out of the base of the column, this feeds the aquifer
+    if(w_w(nl) .gt. w_w_max(nl)) then
+     excess = w_w(nl) - w_w_max(nl)
      if (l_wiso .and. w_w(nl).gt.0._wp) then
        do iso=1,nwiso
-         ratio(iso) = w_w_iso(nl,iso) / w_w(nl)
-         drainage_iso(is_veg,iso) = drainage_iso(is_veg,iso) + ratio(iso)*(w_w(nl) - w_w_max(nl)) * rdt
-         w_w_iso(nl,iso) = ratio(iso) * w_w_max(nl)
+         dw_iso = w_w_iso(nl,iso)/w_w(nl) * excess
+         drainage_iso(is_veg,iso) = drainage_iso(is_veg,iso) + dw_iso * rdt
+         w_w_iso(nl,iso) = w_w_iso(nl,iso) - dw_iso
        enddo
      endif
-     drainage(is_veg) = drainage(is_veg) &
-              + (w_w(nl) - w_w_max(nl)) * rdt ! add excess to drainage, kg/m2/s
+     drainage(is_veg) = drainage(is_veg) + excess * rdt ! add excess to drainage, kg/m2/s
      w_w(nl) = w_w_max(nl)
+    endif
+
+    ! upward, for water stalled below a frozen barrier. Unlike the downward pass this one is NOT
+    ! capacity limited: the destination is the surface, which is an unlimited sink, so there is
+    ! no barrier to respect and the water simply leaves the column. Limiting it would strand
+    ! layers above their capacity whenever several are oversaturated at once, because each one's
+    ! target is itself still full. Going from the bottom up hands the water on one layer at a
+    ! time until it reaches the top. Note the Richards fluxes are conductivity limited, so a
+    ! layer below a frozen one can barely be filled in the first place; this is a safety net.
+    do k=nl,2,-1
+     excess = w_w(k) - w_w_max(k)
+     if (excess .gt. 0._wp) then
+      if (l_wiso .and. w_w(k).gt.0._wp) then
+        do iso=1,nwiso
+          dw_iso = w_w_iso(k,iso)/w_w(k) * excess
+          w_w_iso(k-1,iso) = w_w_iso(k-1,iso) + dw_iso
+          w_w_iso(k,iso)   = w_w_iso(k,iso)   - dw_iso
+        enddo
+      endif
+      w_w(k-1) = w_w(k-1) + excess
+      w_w(k)   = w_w_max(k)
+     endif
+    enddo
+
+    ! whatever the column cannot hold at all leaves at the surface
+    if(w_w(1) .gt. w_w_max(1)) then
+     excess = w_w(1) - w_w_max(1)
+     if (l_wiso .and. w_w(1).gt.0._wp) then
+       do iso=1,nwiso
+         dw_iso = w_w_iso(1,iso)/w_w(1) * excess
+         runoff_exc_iso(iso) = runoff_exc_iso(iso) + dw_iso * rdt
+         w_w_iso(1,iso) = w_w_iso(1,iso) - dw_iso
+       enddo
+     endif
+     runoff_exc = runoff_exc + excess * rdt
+     w_w(1) = w_w_max(1)
     endif
 
 
@@ -461,7 +433,7 @@ lp1:  do k=nl-1,1,-1 ! search for the required amount of water in layers above
 
     if( check_water ) then
      ! water balance
-     water_bal =  sum(inf)*dt - sum(e)*dt - drainage(is_veg)*dt &
+     water_bal =  sum(inf)*dt - sum(e)*dt - drainage(is_veg)*dt - runoff_exc*dt &
                - sum(w_w-ww_old)
 
      if(abs(water_bal).gt.1.d-7) then
@@ -473,6 +445,7 @@ lp1:  do k=nl-1,1,-1 ! search for the required amount of water in layers above
       print *,'sum(inf)',sum(inf)*dt,infiltration*dt
       print *,'sum(e)',sum(e)*dt
       print *,'drain',drainage(is_veg)*dt
+      print *,'runoff_exc',runoff_exc*dt
       stop
      endif
     endif

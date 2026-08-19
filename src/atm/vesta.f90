@@ -28,12 +28,15 @@ module vesta_mod
   use atm_params, only : wp
   use constants, only : fqsat, pi
   use atm_params, only : gad, hatm, p0, ra, zmax
-  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, c_gam_4, c_gam_5, c_gam_6, gams_max_lnd, gams_min_ocn, gams_max_ocn, hgams, hgamt, c_gam_rel, nsmooth_gam
+  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_rel, nsmooth_gam
+  use atm_params, only : gams_min, gams_max, sh_gams
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
+  use atm_params, only : i_zpbl, h_pbl_min
+  use atm_params, only : i_rh_free, rh_free, c_rhf_1, c_rhf_2, c_rhf_3, c_rhf_4, rhf_min, rhf_max
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
-  use atm_grid, only : im, jm, km, nm, aim, zl, fit, exp_zc, i_ocn, i_lnd, i_lake
+  use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
@@ -48,18 +51,14 @@ contains
   !   Subroutine :  h s c a l e s
   !   Purpose    :  computation of lapse rate and height scales of moisture and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hscales(frst, f_ice_lake, ra2a, rb_sur, tam, tskin, qam, wcon, wcld, had_fi, had_width, &
-      gams, gamb, gamt, hrm, &
+  subroutine hscales(ra2a, sha, qam, wcon, wcld, had_fi, had_width, &
+      gams, gamb, gamt, hrm, rhfree, &
       hqeff, hdust)
 
     implicit none
 
-    real(wp), intent(in) :: frst(:,:,:)
-    real(wp), intent(in) :: f_ice_lake(:,:)
     real(wp), intent(in) :: ra2a(:,:)
-    real(wp), intent(in) :: rb_sur(:,:)
-    real(wp), intent(in) :: tam(:,:)
-    real(wp), intent(in) :: tskin(:,:,:)
+    real(wp), intent(in) :: sha(:,:)   !! grid mean sensible heat flux, positive upward (W/m2)
     real(wp), intent(in) :: qam(:,:)
     real(wp), intent(in) :: wcon(:,:)
     real(wp), intent(in) :: wcld(:,:)
@@ -70,87 +69,41 @@ contains
     real(wp), intent(inout) :: gamb(:,:)
     real(wp), intent(inout) :: gamt(:,:)
     real(wp), intent(inout) :: hrm(:,:)
+    real(wp), intent(inout) :: rhfree(:,:)
 
     real(wp), intent(out) :: hqeff(:,:)
     real(wp), intent(out) :: hdust(:,:)
 
-    integer :: i, j, n
-    real(wp) :: dt, hrs, fi, f_trop
-    real(wp), dimension(nm) :: gs
-    real(wp), dimension(2) :: gsl
+    integer :: i, j
+    real(wp) :: hrs, fi, f_trop, fi_rhf, f_rhf, rhfs
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
-    real(wp), parameter :: hrs_min = 1.e3_wp
+    ! The floor on hrm was 1000 m, which is above the values the observed profiles ask for
+    ! once rh_prof relaxes towards a background free tropospheric humidity (i_rh_free): the
+    ! best fit to ERA-Interim and CMIP5 is 300-2000 m by band, geometric mean about 730 m.
+    ! With the floor at 1000 m the residual (ram-rh_free)*exp(-2000/hrm) term still overshoots
+    ! the observed free troposphere by 0.04-0.06, which would have to be absorbed by tuning
+    ! rh_free downwards. At 500 m that residual is 0.003 and rh_free can be set to the
+    ! observed free tropospheric relative humidity directly.
+    real(wp), parameter :: hrs_min = 500._wp
     real(wp), parameter :: hrs_max = 10.e3_wp
 
 
-    !$omp parallel do collapse(2) private(i,j,n,gs,gsl,dt,hrs,fi,f_trop)
+    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,fi_rhf,f_rhf,rhfs)
     do j=1,jm
       do i=1,im
 
         !----------------------------------------------
         ! lapse rate
 
-        ! lapse rate in the boundary layer 
-        gs(:) = 0._wp
-        do n=1,nm
-          dt = (tskin(i,j,n)-tam(i,j))
-          if (n.eq.i_ocn) then
-            ! over ocean 
-            if (dt.gt.0._wp) then
-              gs(n) = c_gam_4*sqrt(dt)
-            else
-              gs(n) = 10e-3*dt
-            endif
-            gs(n) = min(gams_max_ocn,gs(n))
-            gs(n) = max(gams_min_ocn,gs(n))
-          else if (n.eq.i_lnd) then
-            ! over land
-            if (frst(i,j,i_lnd).gt.0._wp) then
-            if (dt.gt.0._wp) then
-              gs(n) = c_gam_5*dt 
-            else
-              gs(n) = c_gam_6*dt 
-            endif
-            if (rb_sur(i,j).gt.50._wp) then
-              ! minimum lapse rate over land when rb_sur>50 W/m2
-              gs(n) = max(5.e-3_wp,gs(n))
-            endif
-            gs(n) = min( gams_max_lnd,gs(n))
-            gs(n) = max(-gams_max_lnd,gs(n))
-            endif
-          else if (n.eq.i_lake) then
-            if (frst(i,j,i_lake).gt.0._wp) then
-            ! over lakes
-            ! icefree lake, same as over ocean
-            if (dt.gt.0._wp) then
-              gsl(1) = c_gam_4*sqrt(dt)
-            else
-              gsl(1) = 10e-3*dt
-            endif
-            gsl(1) = min(gams_max_ocn,gsl(1))
-            gsl(1) = max(gams_min_ocn,gsl(1))
-            ! ice-covered lake, same as over sea ice
-            gsl(2) = c_gam_5*dt 
-            gsl(2) = min( gams_max_lnd,gsl(2))
-            gsl(2) = max(-gams_max_lnd,gsl(2))
-            ! weighted average
-            gs(n) = (1._wp-f_ice_lake(i,j))*gsl(1) + f_ice_lake(i,j)*gsl(2) 
-            endif
-          else
-            ! over ice sheets and sea ice
-            gs(n) = c_gam_5*dt 
-            gs(n) = min( gams_max_lnd,gs(n))
-            gs(n) = max(-gams_max_lnd,gs(n))
-          endif
-        enddo
-        gam_s(i,j) = sum(gs*frst(i,j,:))
+        ! lapse rate in the boundary layer.
+        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams))
 
         ! bottom
         gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
 
         ! top
-        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
+        gam_t(i,j) = gam_b(i,j) + c_gam_3
 
         !----------------------------------------------
         ! height scale for relative humidity       
@@ -162,7 +115,32 @@ contains
         hrs = f_trop * c_hrs_1*exp(c_hrs_2*wcld(i,j)) + (1._wp-f_trop) * c_hrs_1*c_hrs_3 
         hrs = max(hrs,hrs_min)   
         hrs = min(hrs,hrs_max)   
-        hrm(i,j) = 0.9_wp*hrm(i,j) + 0.1_wp*hrs 
+        hrm(i,j) = 0.9_wp*hrm(i,j) + 0.1_wp*hrs
+
+        !----------------------------------------------
+        ! background free tropospheric relative humidity
+        ! The profile in rh_prof relaxes towards this value above the boundary layer instead of
+        ! decaying to zero. Observations put it at 0.68 poleward of 60 deg, 0.56 at 40-60 deg,
+        ! 0.37 at 20-40 deg and about 0.44 over the ocean in the deep tropics, i.e. a minimum in
+        ! the subsidence belts and maxima in the ascending tropics and at the poles. That is the
+        ! same shape the Hadley weight and the cloud level vertical velocity wcld already
+        ! describe, so the same construction as for hrs is used, with its own width parameter
+        ! c_rhf_4 because the free tropospheric humidity leaves the tropical regime much further
+        ! equatorward than hrs does, and it is relaxed in time in the same way.
+        if (i_rh_free.eq.0) then
+          ! uniform, taken straight from the namelist and not relaxed or clamped, so that
+          ! rh_free = 0 reproduces the original purely multiplicative profile exactly
+          rhfree(i,j) = rh_free
+        else
+          fi_rhf = c_rhf_4*(fit(j)-had_fi)/(0.5_wp*had_width)
+          fi_rhf = min(fi_rhf,pi/2._wp)
+          fi_rhf = max(fi_rhf,-pi/2._wp)
+          f_rhf  = 1._wp-sin(fi_rhf)**8
+          rhfs = f_rhf * (c_rhf_1 + c_rhf_2*wcld(i,j)) + (1._wp-f_rhf) * c_rhf_3
+          rhfs = max(rhfs,rhf_min)
+          rhfs = min(rhfs,rhf_max)
+          rhfree(i,j) = 0.9_wp*rhfree(i,j) + 0.1_wp*rhfs
+        endif
 
         !----------------------------------------------
         ! effective moisture height scale
@@ -214,7 +192,7 @@ contains
   !   Subroutine :  v e s t a
   !   Purpose    :  vertical structure of atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, dam, hdust, &
+  subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, rhfree, dam, hdust, &
       A_trop, W_strat, t3, q3, tp, d3, ttrop)
 
     implicit none
@@ -227,6 +205,7 @@ contains
     real(wp), intent(in ) :: htrop(:,:)
     real(wp), intent(in ) :: ram(:,:)
     real(wp), intent(in ) :: hrm(:,:)
+    real(wp), intent(in ) :: rhfree(:,:)
     real(wp), intent(in ) :: dam(:,:)
     real(wp), intent(in ) :: hdust(:,:)
 
@@ -242,11 +221,11 @@ contains
     logical :: flag_strat
     real(wp) :: z_sur, taml, htropl
     real(wp) :: gamsl, gambl, gamtl, z
-    real(wp) :: t, rsur, hrml, rh, rh_unit, q, q_unit, qsat, A_l, W_l
+    real(wp) :: t, rsur, hrml, rhfl, rh, rh_unit, rh_zero, q, q_unit, q_zero, qsat, A_l, W_l
     real(wp) :: dvol
 
 
-    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rh,rh_unit,q,q_unit,qsat,A_l,W_l,dvol,flag_strat)
+    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rhfl,rh,rh_unit,rh_zero,q,q_unit,q_zero,qsat,A_l,W_l,dvol,flag_strat)
     do j=1,jm
       do i=1,im
 
@@ -260,11 +239,12 @@ contains
         htropl = htrop(i,j)
         rsur   = ram(i,j)
         hrml   = hrm(i,j)
+        rhfl   = rhfree(i,j)
 
         ! 3D fields of temperature and humidity
 
-        A_l   = 0._wp   ! tropospheric coefficient ∫ g(z)·qsat·ρ dz
-        W_l   = 0._wp   ! stratospheric intercept ∫ rh_strat·qsat·ρ dz
+        A_l   = 0._wp   ! ram-dependent coefficient ∫ E(z)·qsat·ρ dz over the troposphere
+        W_l   = 0._wp   ! ram-independent intercept: free tropospheric background + stratosphere
         flag_strat = .false.
         do k=1,km
 
@@ -274,12 +254,19 @@ contains
             ! construct vertical temperature profile
             t = t_prof(z_sur, z, taml, gamsl, gambl, gamtl, htropl, 1)
             ! derive specific humidity profile from temperature and relative humidity profiles
-            rh = rh_prof(z_sur, z, rsur, hrml, htropl)
-            ! rh profile with ram=1: returns g(z) in the troposphere, rh_strat in the stratosphere
-            rh_unit = rh_prof(z_sur, z, 1._wp, hrml, htropl)
+            rh = rh_prof(z_sur, z, rsur, hrml, rhfl, htropl)
+            ! rh_prof is AFFINE in ram: rh = ram·E(z) + rh_free·(1-E(z)) in the troposphere,
+            ! with E(z) the exponential decay factor. Split it into the ram-dependent slope
+            ! E(z) and the ram-independent intercept, so that the column water stays linear
+            ! in ram and time_step can still invert wcon = ram·A_trop + W_strat.
+            ! With rh_free = 0 this reduces to rh_zero = 0 and rh_unit = E(z), i.e. the
+            ! original formulation.
+            rh_zero = rh_prof(z_sur, z, 0._wp, hrml, rhfl, htropl)
+            rh_unit = rh_prof(z_sur, z, 1._wp, hrml, rhfl, htropl) - rh_zero
             qsat = fqsat(t,p0*exp_zc(k))
             q = rh*qsat
             q_unit = rh_unit*qsat
+            q_zero = rh_zero*qsat
           endif
 
           ! volume element (mass per unit area for this layer above surface)
@@ -291,11 +278,13 @@ contains
             dvol = 0._wp
           endif
 
-          ! vertical integral of water content split into tropospheric slope (A) and stratospheric intercept (W);
-          ! the total column water wcon = ram·A_trop + W_strat is reconstructed in time_step.
+          ! vertical integral of water content split into the ram-dependent slope (A) and the
+          ! ram-independent intercept (W); the total column water wcon = ram·A_trop + W_strat
+          ! is reconstructed in time_step.
           if (z.le.htropl+1._wp) then
-            ! tropospheric: q = ram·g(z)·qsat ⇒ dA = g(z)·qsat·dvol = q_unit·dvol
+            ! tropospheric: q = ram·E(z)·qsat + rh_free·(1-E(z))·qsat
             A_l = A_l + q_unit*dvol
+            W_l = W_l + q_zero*dvol   ! zero unless rh_free > 0
           else
             ! stratospheric: q = rh_strat·qsat ⇒ dW = q·dvol (independent of ram)
             W_l = W_l + q*dvol
@@ -384,7 +373,7 @@ contains
   !   Function   :  r h _ p r o f
   !   Purpose    :  compute vertical relative humidity profile
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  pure function rh_prof(zs, z, ram, h_rh, htrop)
+  pure function rh_prof(zs, z, ram, h_rh, rh_fr, htrop)
 
     implicit none
 
@@ -392,19 +381,40 @@ contains
     real(wp), intent(in) :: z
     real(wp), intent(in) :: ram
     real(wp), intent(in) :: h_rh
+    real(wp), intent(in) :: rh_fr
     real(wp), intent(in) :: htrop
 
     real(wp) :: rh_prof
 
     real(wp) :: z_pbl
 
-    z_pbl = zs+c_hrs_5
+    ! Above the boundary layer the relative humidity relaxes exponentially from the
+    ! boundary layer value ram towards the background free tropospheric value rh_fr, which
+    ! is either the namelist scalar rh_free or the 2d field computed in hscales (i_rh_free).
+    ! rh_fr = 0 gives back the purely multiplicative profile rh = ram*exp(-(z-z_pbl)/h_rh),
+    ! for which rh(z)/ram depends on h_rh alone and is therefore identical over land and
+    ! ocean. Observations show a free troposphere that is nearly the same over land and
+    ! ocean while the boundary layer differs strongly, which no value of h_rh can reproduce
+    ! without a background term.
+    ! Height at which the boundary layer value gives way to the free troposphere.
+    ! With i_zpbl=0 this follows the terrain, so over elevated land the relative humidity is
+    ! held at ram up to c_hrs_5 above the local surface - 2.1 km above sea level at the mean
+    ! NH midlatitude land elevation, against 1.0 km over the ocean. The free troposphere is
+    ! quasi-horizontal, so once the profile above z_pbl is sharp this makes the elevated land
+    ! boundary layer moister than the ocean through 1.3-1.8 km, where observations have the
+    ! ocean moister. i_zpbl=1 references the transition to sea level instead, keeping only a
+    ! minimum depth h_pbl_min above the local surface.
+    if (i_zpbl.eq.0) then
+      z_pbl = zs+c_hrs_5
+    else
+      z_pbl = max(zs+h_pbl_min, c_hrs_5)
+    endif
     if (z.le.z_pbl) then
-      rh_prof = ram      
+      rh_prof = ram
     else if (z.gt.z_pbl.and.z.le.(zs+c_hrs_4)) then
-      rh_prof = ram*exp(-(z-z_pbl)/h_rh)
+      rh_prof = rh_fr + (ram-rh_fr)*exp(-(z-z_pbl)/h_rh)
     else if (z.gt.(zs+c_hrs_4).and.z.le.(htrop+1.)) then
-      rh_prof = ram*exp(-(zs+c_hrs_4-z_pbl)/h_rh)
+      rh_prof = rh_fr + (ram-rh_fr)*exp(-(zs+c_hrs_4-z_pbl)/h_rh)
     else
       rh_prof = rh_strat
     endif

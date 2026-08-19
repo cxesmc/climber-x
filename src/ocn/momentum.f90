@@ -37,7 +37,7 @@ module momentum_mod
   use control, only : out_dir
   use climber_grid, only : lon, latv
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
-  use ocn_params, only : drag_par
+  use ocn_params, only : drag_par, neptune_par
   use ocn_params, only : i_eos
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
   use ocn_grid, only : maxisles, n_isles, psiles
@@ -51,6 +51,7 @@ module momentum_mod
   use matinv_mod, only : matinv, matmult
   use wind_mod, only : wind
   use velc_mod, only : velc
+  use neptune_mod, only : neptune_init, neptune_update, tau_neptune
 
   !$  use omp_lib
 
@@ -73,6 +74,8 @@ module momentum_mod
   integer, allocatable :: erisl_ipiv(:)   ! row-pivot vector from matinv, replayed by matmult each step
   real(wp), allocatable :: psibc(:)
   real(wp), allocatable :: tmpdrg(:,:)
+  real(wp), allocatable :: dep_fac_drag(:,:)   ! shallow-water factor at psi points, shared by the barotropic and baroclinic drag
+  real(wp), allocatable :: tau_tot(:,:,:)      ! wind stress plus the equivalent Neptune stress
   real(wp), allocatable :: rho_tb(:,:,:)
 
   private
@@ -124,9 +127,19 @@ contains
       enddo
     endif
 
+    ! total stress driving the barotropic flow. The Neptune parameterisation turns the
+    ! drag term drag*ub into drag*(ub-ub_neptune), which is equivalent to adding the stress
+    ! tau_neptune to the wind stress. Adding it here rather than in wind() keeps the
+    ! streamfunction forcing and the island path integrals below consistent with each other.
+    if (neptune_par%l_neptune) then
+      tau_tot(:,:,:) = tau(:,:,:) + tau_neptune(:,:,:)
+    else
+      tau_tot(:,:,:) = tau(:,:,:)
+    endif
+
     ! wind stress term for barotropic streamfunction
     !$ time1 = omp_get_wtime()
-    call wind(tau, &    ! in 
+    call wind(tau_tot, &    ! in
               ubar_wind)       ! out
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: wind',time2-time1
@@ -162,7 +175,7 @@ contains
     ! find island path integral due to wind and jbar terms 
     !$ time1 = omp_get_wtime()
     do isl=1,n_isles
-       call island(ub,tau,bp, &
+       call island(ub,tau_tot,bp, &
                    isl,1, &
                    erisl(isl,n_isles+1))
     enddo
@@ -265,9 +278,14 @@ contains
               i1p = 1 + mod(maxi + i1-1,maxi)
               min_dep = min(min_dep,-zw(min(maxk,k1(i1p,j1))))
             enddo
-          enddo 
+          enddo
+        else
+          ! no topographic drag increase
+          min_dep = drag_par%z_drag_shallow
         endif
         dep_fac = max(0._wp,(drag_par%z_drag_shallow-min_dep)/drag_par%z_drag_shallow)
+        ! save for the baroclinic drag below
+        dep_fac_drag(i,j) = dep_fac
 
         !topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq*cv(j))
         if (latv(j+1).ge.-20._wp .and. latv(j+1).le.20._wp) then
@@ -307,9 +325,12 @@ contains
 
     ! for baroclinic velocity
 
+    ! increase drag in shallow water regions, using the same depth factor as for the barotropic
+    ! mode but with a separate scaling factor. drag_bcl_topo_fac==0 gives a uniform drag of adrag,
+    ! i.e. the baroclinic shear is blind to the shelf.
     do j=0,maxj
       do i=0,maxi
-        tmpdrg(i,j) = drag_par%adrag
+        tmpdrg(i,j) = drag_par%adrag*(1._wp + drag_par%drag_bcl_topo_fac*dep_fac_drag(i,j))
       enddo
     enddo
 
@@ -334,6 +355,13 @@ contains
         rtv3(i,j) = 1._wp/(fcorv(j)**2 + drag_bcl(2,i,j)*drag_bcl(2,i,j))
       enddo
     enddo
+
+
+    ! equivalent stress of the Neptune parameterisation, depends on the new topography
+    ! and on the barotropic drag set above
+    if (neptune_par%l_neptune) then
+      call neptune_update
+    endif
 
 
     ! for barotropic velocity
@@ -430,6 +458,8 @@ contains
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))
     allocate(tmpdrg(0:maxi,0:maxj))
+    allocate(dep_fac_drag(0:maxi,0:maxj))
+    allocate(tau_tot(2,maxi,maxj))
     allocate(fcor(0:maxj+1))
     allocate(fcorv(0:maxj+1))
     allocate(rtv(maxi,maxj))
@@ -446,6 +476,11 @@ contains
     do j=0,maxj
       fcorv(j) = sign(max(abs(2._wp*omega*sv(j)),fcormin),sv(j))
     enddo
+
+    ! Neptune parameterisation of eddy-topography interaction
+    if (neptune_par%l_neptune) then
+      call neptune_init
+    endif
 
     return
 

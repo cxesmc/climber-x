@@ -28,7 +28,7 @@ module photosynthesis_mod
   use precision, only : wp
   use timer, only : sec_day, day_year, time_soy_lnd, time_eoy_lnd
   use constants, only : e_sat_w, q_to_e, T0
-  use lnd_grid, only : nsurf, npft, nveg, nl, flag_tree, flag_veg
+  use lnd_grid, only : nsurf, npft, nveg, nl, flag_tree, flag_veg, soil_at_depth
   use lnd_params, only : i_ci, i_beta, i_vcmax, i_disc, veg_par, pft_par, sw_par_frac
 
   real(wp), parameter :: alpha_c3 = 0.08_wp
@@ -39,6 +39,8 @@ module photosynthesis_mod
   real(wp), parameter :: ne_c4 = 4.e-4_wp     ! molCO2 m−2 s−1 kg C (kg N)−1
 
   real(wp), parameter :: O2 = 20.9_wp      ! O2 concentration in air (%)
+
+  real(wp), parameter :: z_ftemp_soil = 0.2_wp  ! m, reference soil depth for the temperature factor of autotrophic respiration
 
   real(wp), parameter :: thetar = 0.7_wp 
 
@@ -98,7 +100,7 @@ contains
     real(wp) :: vm, vm25, je, jc, tstress, beta
     real(wp) :: agd, rd, rm, and, adt, conv_fac
     real(wp) :: low, high
-    real(wp) :: ftemp_air, ftemp_soil, resp10, wT
+    real(wp) :: ftemp_air, ftemp_soil, t_soil_resp, resp10, wT
     real(wp) :: resp_leaf, resp_stem, resp_root
     real(wp) :: Ratm13
     real(wp) :: Ratm14
@@ -138,9 +140,11 @@ contains
       gamma_star = pO2 / ( 2._wp * tau )    ! Pa
       fac = 1._wp + pO2 / ko
 
-      ! temperature factors for autotrophic respiration
-      if( t_soil(2) .gt. 240._wp ) then
-        ftemp_soil = exp(308.56_wp * (1._wp/56.02_wp - 1._wp/(46.02_wp+t_soil(2)-T0)) )
+      ! temperature factors for autotrophic respiration, using the soil temperature at a fixed
+      ! reference depth so that it does not depend on the vertical discretisation
+      t_soil_resp = soil_at_depth(t_soil,z_ftemp_soil)
+      if( t_soil_resp .gt. 240._wp ) then
+        ftemp_soil = exp(308.56_wp * (1._wp/56.02_wp - 1._wp/(46.02_wp+t_soil_resp-T0)) )
       else
         ftemp_soil = 0._wp
       endif

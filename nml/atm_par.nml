@@ -19,7 +19,58 @@
   !-----------------------------------------------------------
   ! Coriolis
   !-----------------------------------------------------------
-  fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter
+  fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter.  Two roles: the magnitude floor of
+                                ! fcort/fcorta/fcorua (binds for |lat| < 3.93 deg), and, with i_fcorg=1,
+                                ! the linear drag rate r of the damped geostrophic factor fcorg below.
+                                ! The two scales agree: cd*|V|/h_pbl with cd = 1.3e-3, |V| = 7 m/s and
+                                ! h_pbl = 1 km gives 9e-6.  Raising it therefore widens the floored band
+                                ! as well - at 4.2e-5 the floor binds out to |lat| = 16.7 deg and
+                                ! flattens the whole trade-wind belt.
+
+  i_fcorg  = 1                  ! how the equatorial singularity of the geostrophic PBL wind is handled.
+                                ! u2d.f90 forms ugb = -dpdy*fcorg/ra, vgb = dpdx*fcorg/ra, and
+                                !   0   fcorg = 1/fcort, the original.  fcort is floored in MAGNITUDE at
+                                !       fcormin but keeps its sign, so |fcorg| is LARGEST on the two rows
+                                !       either side of the equator and reverses between them.  ugb jumps
+                                !       by 2*|dpdy|/(fcormin*ra) there: about 9.5 m/s in the PI zonal mean
+                                !       at the solstices, against a smooth equator in ERA-Interim and in
+                                !       every GCM.  The two seasonal jumps have opposite sign and largely
+                                !       cancel in the annual mean, which is why the feature is easy to miss.
+                                !   1   fcorg = f/(f**2 + fcormin**2), the Rayleigh-damped geostrophic
+                                !       balance with fcormin as the linear drag rate.  Same regularisation,
+                                !       opposite behaviour at the equator: |fcorg| peaks at 1/(2*fcormin)
+                                !       where |f| = fcormin and goes to ZERO at f = 0, so ugb crosses zero
+                                !       continuously.  It is also the factor consistent with the
+                                !       ageostrophic wind uab/vab, which already carries the exact
+                                !       down-gradient companion -dpdx*<sin a cos a>/(|f|*ra) of the same
+                                !       balance; only the geostrophic half was left singular.
+                                ! Only ugb and vgb use fcorg.  fcorta and fcorua, which carry uab, vab and
+                                ! the SLP integration in slp.f90, are unsigned and were never discontinuous.
+                                ! NOTE ugb and vgb also feed u3d, so i_fcorg=1 changes the tropical
+                                ! free-troposphere wind as well and is not a surface-diagnostic switch.
+                                ! The other branch that divides by fcort, the thermal wind of u3d.f90, is
+                                ! already regular there: uter is multiplied by c_damp_eq =
+                                ! min(1,c_uter_eq*sin(lat)**2), which cancels its 1/f to leading order.
+                                ! Only the barotropic branch was left on the floor.
+                                !
+                                ! The drag rate was fitted by rebuilding us from the archived ugb, vgb and acbar of
+                                ! output/cacbar/pi, a reconstruction that reproduces the archived us to 4%:
+                                !
+                                !   drag rate    jump at eq DJF    u rms |lat|<25, DJF / JJA / ANN
+                                !   floor 1e-5         9.58 m/s              2.23 / 2.12 / 0.59
+                                !   1.0e-5             4.34                  1.36 / 1.35 / 0.88
+                                !   1.5e-5             2.30                  1.29 / 1.31 / 1.08
+                                !   2.0e-5             1.38                  1.44 / 1.43 / 1.26
+                                !   3.0e-5             0.65                  1.84 / 1.75 / 1.60
+                                !
+                                ! The solstice seasons want 1.0-1.5e-5 and DJF v rms drops 0.96 -> 0.28
+                                ! over the same range.  The ANNUAL mean gets worse, because it was living
+                                ! off the cancellation of the two seasonal jumps; once that is gone the
+                                ! model's equatorial easterlies show up as too weak (-0.6 against -1.6 m/s
+                                ! in CMIP5 at 2.5N).  That bias is pre-existing and was hidden, not created
+                                ! by i_fcorg=1, and the missing easterly belongs in the down-gradient term
+                                ! uab rather than in geostrophy - usur never sees uab, which is the next
+                                ! thing to try if the residual weakness matters.
 
   !-----------------------------------------------------------
   ! drag and cross-isobar angle parameters 
@@ -27,27 +78,51 @@
   cd0_ocn = 1.3e-3              ! drag coefficient for momentum over ocean, realistic values : 1.2e-3 - 1.5e-3
   cd0_sic = 1.63e-3             ! drag coefficient for momentum over sea ice, 1.63e-3 in Large and Yaeger 2004
   i_zoro = 3                    ! parameterisation of topographic roughness
-  i_acbar = 2
+  i_acbar = 2                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
+                                ! equivalently tan(a) = R/(1+R), and differ only in R:
+                                !   1 = R = cd/sqrt(|f|), the original
+                                !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**2), phi = |f|/f_45
+                                ! Closure 2 is fitted to the angle IMPLIED by the relation the angle is
+                                ! actually used in, psz(j) = psz(j-1) + vsz*fcorua*ra*dy/sin(a)cos(a),
+                                ! inverted on the CMIP5 aquaControl ensemble. It reproduces the
+                                ! measured angle to 0.46 deg rms against 1.86 for closure 1; the measurement's own
+                                ! hemispheric asymmetry, on a symmetric aquaplanet, is 0.08 deg.
+                                ! Closure 1 is not dimensionally homogeneous - cd is dimensionless and f is 1/s, so
+                                ! an unwritten 1 s**(-1/2) sits in its calibration - and it is too flat in latitude:
+                                ! it gives 8.8 deg at 20 where the data says 11.5, and 6.8 at 40 where the data says
+                                ! 5.4. That error CHANGES SIGN, so no retuning of the cell amplitudes absorbs it.
+                                ! DEFAULT 1 until closure 2 has been run coupled: everything downstream - the MMC
+                                ! amplitudes, aslp, the surface wind - was tuned against closure 1.
   acbar_max = 0.5               ! maximum cross-isobar angle
   acbar_scale = 1.              ! scaling factor of cross-isobar angle
+  c_acbar_0 = 3.1713e-3         ! equatorial denominator of the cross-isobar angle, Larger means a smaller angle everywhere, most strongly in the tropics.
+  c_acbar_f = 1.0132e-2         ! Coriolis term of the same denominator, Sets how fast the angle falls with latitude
+  c_acbar_wind = 1.6            ! factor on the cross-isobar angle used to ROTATE the surface wind in usur.
 
   !-----------------------------------------------------------
   ! zonal mean overturning circulation parameters
   !-----------------------------------------------------------
-  i_mmc = 1                     ! meridional temperature gradients:
-                                ! 1 = assuming fixed position of cell borders
-                                ! 2 = following borders of the cells
-  c_mmc_had = 0.35              ! parameter for strength of Hadley cells
-  c_mmc_fer = 0.06 !0.05              ! parameter for strength of Ferrel cells
+  i_mmc_had = 1                 ! Hadley branch amplitude: 1 = c_mmc_had*(ttrpmx-tsl(30 deg)) (original), 2 = the same scaled by the thermal equator displacement, (1 -+ c_mmc_te*fi_te*|fi_te|)
+  c_mmc_had = 0.35              ! parameter for strength of Hadley cells. Needs retuning between i_mmc_had 1 and 2: the displacement factor raises the winter branches, which carry nearly all of the circulation, so at c_mmc_te = 0.002 the coefficient comes down by about a tenth, to 0.34
+  c_mmc_te = 0.002              ! 1/deg**2, weakening of the summer Hadley cell and strengthening of the winter one with the thermal equator displacement, used only if i_mmc_had=2. 0 recovers i_mmc_had=1.
+                                ! The response is quadratic because that is what the cells ask for: the austral summer thermal equator reaches 6-7 deg and the winter cell needs no correction there, while the boreal
+                                ! summer one reaches 11-13 deg and the winter cell needs 27 per cent at the pre-industrial and 40 at the LGM. A linear factor tuned on JJA over-corrects DJF and collapses its summer cell.
+  n_mmc_te = 4                  ! exponent sharpening the thermal equator centroid towards the tropical temperature maximum, used only if i_mmc_had=2. Larger is closer to the maximum and less smooth
+  i_mmc_fer = 2                 ! Ferrel cell amplitude: 1 = meridional tslz contrast across the cell (original), 2 = transient eddy DSE flux resolved in latitude, 3 = as 2 but with the TOTAL eddy DSE flux, transient + stationary
+  c_mmc_fer = 0.06              ! 1/K, parameter for strength of Ferrel cells, used only if i_mmc_fer=1
+  c_mmc_fer_e = 0.055           ! parameter for strength of Ferrel cells, used only if i_mmc_fer=2 or 3. Needs retuning between 2 and 3: adding the standing waves raises the northern hemisphere flux by roughly half and leaves the southern nearly unchanged
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
-  c_mmc_1 = 5.                  ! 
+  c_mmc_1 = 5.                  !
   c_mmc_2 = 0.025               ! 1/K
-  c_mmc_3 = 90.                 ! K
-  c_mmc_4 = 195. !200.                ! K 
-  c_mmc_z = 750.                ! m 
-  pblp = 0.85                   ! pressure level of PBL top at the poles
-  pble = 0.8                    ! pressure level of PBL top at the equator
-  dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
+  c_mmc_dt0 = 70                ! deg, total Hadley width at zero tropical contrast
+  c_mmc_dt1 = 2.0               ! deg/K, Hadley cell narrowing per K of tropical contrast
+  i_fzsa = 0                    ! topographic mask on the cell amplitudes: 0 = no mask (fzsa=1), 1 = 1-<zsa>/c_mmc_z (zonal mean elevation first), 2 = <max(0,1-zsa/c_mmc_z)> (per grid cell, then zonal mean)
+  c_mmc_z = 750.                ! m, elevation scale of the topographic mask, used only if i_fzsa/=0
+  vprof_stl = 0.70              ! level where the zonal mean meridional wind changes sign, as a fraction of the surface pressure
+  vprof_a = 2.0                 ! lower branch exponent: psi/psi_max = 1-(1-zeta)^vprof_a
+  vprof_b = 2.8                 ! return branch exponent: psi/psi_max = 1-xi^vprof_b
+  vprof_tope = 0.12             ! cell top at the equator, fraction of p0
+  vprof_topp = 0.18             ! cell top at the poles
 
   !-----------------------------------------------------------
   ! sea level pressure parameters
@@ -58,22 +133,165 @@
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
-  c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
+  l_aslp_temp_adv = T           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  c_aslp_temp_tau = 0.5         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
-  c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 
-  c_aslp_topo_3 = 1.            ! scaling factor of 500 hPa wind for topographic stationary waves 
-  c_aslp_topo_4 = 0.4           ! scaling factor of topography for topographic stationary waves, to mimic difference between 500 hPa and surface wind 
+  c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves
+  c_aslp_topo_3 = 1.            ! scaling factor of 500 hPa wind for topographic stationary waves
+  c_aslp_topo_4 = 0.4           ! scaling factor of topography for topographic stationary waves, to mimic difference between 500 hPa and surface wind
 
   !-----------------------------------------------------------
   ! additional dynamics parameters 
   !-----------------------------------------------------------
-  l_mass_com_topo = F           ! special treatment of vertical mass flux generated by orography?
-  c_uter_pol = 3.               ! parameter for polar damping of thermal wind
+  i_ugb_psi = 0                 ! form of the barotropic geostrophic wind ugb/vgb:
+                                ! 0 = the original  V = fcorg * k x grad(p) / ra  (u2d.f90).  Its column
+                                !     flux is divergent - mostly the beta term -(beta/f)*v_g, plus the
+                                !     gradient of any latitude factor - and that divergence is removed
+                                !     afterwards by the Poisson correction in u3d.f90, whose VERTICAL
+                                !     placement is set by i_mass_com_topo / i_mass_com_vert / dp_com.
+                                ! 1 = the streamfunction form.  A velocity streamfunction is carried on
+                                !     the cell corners and the face winds are its discrete curl, so the
+                                !     barotropic geostrophic VELOCITY field is non-divergent to round-off
+                                !     and contributes no beta divergence at all.  The remaining column
+                                !     convergence is then only the topographic part, V.grad(p_s), because
+                                !     psi carries no column mass (see NOTE below).
+                                !
+                                ! psi = psi_bar(j) + fcorgu(j)*slp_azonal/ra, on corners.  The split is
+                                ! essential and not cosmetic: with the FULL slp the term -p*d(fcorg)/dy
+                                ! becomes a rotational wind of order (p/ra)*beta/f**2 ~ 120 m/s at 45 deg,
+                                ! because p ~ 1e5 Pa.  Only the azonal part (~1e3 Pa) may go through
+                                ! fcorgu; psi_bar is integrated directly from the zonal-mean zonal wind of
+                                ! the i_ugb_psi=0 form, so that zonal mean is reproduced exactly and adds
+                                ! no divergence (a psi independent of i gives no v and a zonal flux that
+                                ! telescopes away).
+                                !
+                                ! WARNING, measured offline in analysis/psi_streamfunction_test.jl against
+                                ! the model's own staggering and Poisson operator: the divergent wind this
+                                ! removes is only 0.16-0.42 m/s rms, while the rotational wind error the
+                                ! closed form introduces, |V_psi - V_rot|, is 0.65-1.16 m/s rms (max 3.2-4.3),
+                                ! i.e. 2.5-4x larger.  It is concentrated at the equator and in the
+                                ! subtropics where fcorgu varies fastest, and it is present with i_fcorg=1.
+                                ! The Helmholtz projection already performed by solve_poisson returns the
+                                ! L2-closest non-divergent flux, so no explicitly constructed psi can beat
+                                ! it.  This option exists to test that offline result in the coupled model,
+                                ! not because it is expected to be better.  Keep 0 for production.
+                                !
+                                ! NOTE psi is a VELOCITY streamfunction, so it removes the beta/latitude
+                                ! -factor half of the column convergence (about 50 per cent of it; the
+                                ! other half is topography, see analysis/psi_streamfunction_test.jl).  A
+                                ! mass-flux streamfunction would remove the topographic half too, but the
+                                ! column mass varies by ~40 per cent over Tibet and grad(P) would then
+                                ! appear as a rotational wind of several m/s, so it is deliberately not
+                                ! done here.
+  i_uter_pol = 0                ! shape of the polar amplitude reduction c(lat) of the thermal wind:
+                                ! 0 = min(1,c_uter_pol*cos(lat)**2), the original. dc/dy is zero equatorward of
+                                !     54.7 deg (c_uter_pol=3), switches on discontinuously there because of the
+                                !     min(), and stays non-zero all the way to the pole.
+                                ! 1 = 1 equatorward of lat_uter_pol_1, the constant c_uter_pol_min poleward of
+                                !     lat_uter_pol_2, joined by a quintic smoothstep. dc/dy is then exactly zero
+                                !     inside the polar cap AND in mid-latitudes, and can be spread as thinly as
+                                !     wanted over the transition band. c_uter_pol is not used.
+                                !     This matters only for i_uter_damp=2, where c multiplies the azonal
+                                !     temperature and the wind therefore picks up an extra -K*T_az*dc/dy that
+                                !     scales with the anomaly itself and not with its gradient. Diagnosed from
+                                !     the t3 of output/iuterdamp/itrdmp.2, that term is 1.96 m/s rms over
+                                !     55-140E / 50-75N in JJA with i_uter_pol=0, sitting right on the Siberian
+                                !     heat dome; the settings below bring it to 0.88 (-55%) and the NH 30-87N
+                                !     rms from 0.98 to 0.52.
+                                !     The same choice fixes the OTHER defect, the one i_uter_damp=1 has. Scaling
+                                !     the wind by c is identical to computing it with f_eff = f/c, so it IS the
+                                !     geostrophic wind of a scalar - of a planet whose beta is d(f/c)/dy. That
+                                !     is the real problem with mode 1: beta_eff/beta = 1+2tan(lat)^2 = 7 at 60,
+                                !     29 at 75, 116 at 82.5 deg. Holding c constant makes f_eff = f/c_min, so
+                                !     beta_eff/f_eff = beta/f EXACTLY inside the cap, and the discrete maximum
+                                !     over 40-85N drops from 140 to 4. In the cap both modes therefore become
+                                !     clean, and which one is used stops mattering there.
+  c_uter_pol = 3.               ! parameter for polar damping of thermal wind (i_uter_pol=0 only)
+  c_uter_pol_min = 0.45         ! the constant value of c inside the polar cap (i_uter_pol=1). This is the
+                                ! load-bearing amplitude reduction, so it is the knob to scan if the model
+                                ! destabilises. The area-weighted mean of c poleward of 55 deg is 0.505 for
+                                ! i_uter_pol=0 and 0.513 for the defaults here, i.e. the same total damping,
+                                ! but it is redistributed: c at 82.5 deg goes from 0.05 to 0.45 (the polar cap
+                                ! is far less damped) while c at 52.5 deg goes from 1.00 to 0.72.
+                                ! The trade-off is monotone - the further equatorward the transition and the
+                                ! wider it is, the smaller the spurious wind but the more the mid-latitude
+                                ! waves are damped. The limit lat_uter_pol_1/2 = 35/45 removes the spurious
+                                ! wind entirely, at the price of damping the whole extratropics uniformly.
+  lat_uter_pol_1 = 30.          ! deg, equatorward edge of the transition band, c = 1 equatorward of it
+  lat_uter_pol_2 = 75.          ! deg, poleward edge of the transition band, c = c_uter_pol_min poleward of it
+                                ! WARNING, and the reason i_uter_pol defaults to 0: a constant c in the polar
+                                ! cap is NOT admissible on this grid. The polar damping is there in the first
+                                ! place to keep the zonal Courant number Cx = u*tstep/dxt finite (dxt = 24 km at
+                                ! 87.5 deg against 556 at the equator) and to kill the 1/cos(lat) singularity of
+                                ! v_ter, which is built from dT/dx = dT/(2*dxt). c ~ cos(lat)**2 does both: it
+                                ! makes Cx ~ 3cos(lat), bounded and DECREASING poleward, and v_ter ~ cos(lat).
+                                ! Measured from the thermal wind of output/iuterdamp t3, max over JJA and DJF:
+                                !
+                                !   lat      c=3cos^2: Cx  max|v|   const 0.45: Cx  max|v|   c=3cos: Cx  max|v|
+                                !   82.5N            0.11     1.4              0.98    12.0        0.85    10.4
+                                !   77.5N            0.28     4.0              0.91    12.7        1.31    18.4
+                                !   72.5N            0.44     8.1              0.72    13.4        1.45    26.8
+                                !   67.5N            0.56    12.2              0.60    13.1        1.28    27.8
+                                !   52.5N            0.91    16.9              0.66    12.3        0.91    16.9
+                                !
+                                ! so c must fall at LEAST as fast as cos(lat)**2 near the pole - c ~ cos is
+                                ! already unstable - and any such c has |dln(c)/dlat| >= 2*tan(lat). The three
+                                ! wishes (polar CFL, small dc/dy, a multiplicative latitude factor) cannot be
+                                ! satisfied together. i_uter_pol=1 is kept for experiments with the transition
+                                ! band at mid-latitudes only, where the CFL is not the binding constraint.
   c_uter_eq = 5.                ! parameter for equatorial damping of thermal wind
-  pcmin = 0.2                   ! top pressure level for compensation of mass in the column 
-  pcmax = 0.3                   ! bottom pressure level for compensation of mass in the column
-  ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
+  i_uter_damp = 1               ! how the polar and equatorial limiting of the thermal wind is applied:
+                                ! 1 = to the wind, by the factor c_uter_eq*c_uter_pol. Simple, but the result is
+                                !     not the geostrophic wind of any scalar field and carries a spurious
+                                !     divergence v*dc/dy, an order of magnitude larger than beta poleward of 55 deg.
+                                ! 2 = the polar factor to the azonal temperature that generates it, as azslp does
+                                !     for azonal sea level pressure. The amplitude reduction is unchanged, but
+                                !     acting on the potential means the compensating zonal wind -Psi*dc/dy appears
+                                !     by itself and the thermal wind stays exactly balanced: its divergence is the
+                                !     beta term alone. The zonal mean part has v=0 and no zonal structure, so its
+                                !     divergence vanishes identically and the cap on the jet is applied to it
+                                !     directly. The equatorial factor stays on the wind: its spurious divergence is
+                                !     only twice beta at any latitude, against 2*tan(lat)^2 for the polar one (6 at
+                                !     60 deg, 28 at 75), while its compensating wind would scale as cot(lat) and so
+                                !     blow up in the tropics, where f is only kept finite by fcormin anyway.
+                                !     Replacing the polar damping by zonal filtering instead does not work: the
+                                !     planetary waves that survive any amount of filtering destabilise the model,
+                                !     so it is the amplitude reduction that is load bearing, not the scale cut.
+                                !     Note that the polar factor was tuned against mode 1 and acts differently
+                                !     here, which is what i_uter_pol above addresses.
+  i_mass_com_topo = 1           ! treatment of the topographic part of the column convergence, V.grad(p_s):
+                                ! 0 = not separated, corrected together with the rest of the column mass correction
+                                ! 1 = corrected separately, with its own flux potential, in a terrain following
+                                !     band from dps_com_topo above the local surface up to the tropopause. 
+  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com_topo=1)
+  i_mass_com_vert = 1           ! vertical placement of the NON-topographic column mass correction:
+                                ! 0 = the whole residual in a band of depth dp_com below the tropopause.
+                                ! 1 = split by wind component - one flux potential for the barotropic
+                                !     geostrophic part and one for the thermal wind - and each returned
+                                !     through the same layers, in the same proportion, that the component's
+                                !     own flux occupies at that face. The correction then carries the same
+                                !     dry static energy and moisture per unit mass as the flux that created
+                                !     the imbalance, so it is neutral in both by construction.
+                                !     The reason: the barotropic geostrophic wind is height independent
+                                !     through the troposphere, so its divergence arrives distributed by
+                                !     layer mass, whereas the thermal wind is a shear anchored at zero and
+                                !     its divergence is made aloft. Measured in output/uterpol2 over
+                                !     55-140E / 50-70N in JJA, the centroid of the divergence generation is
+                                !     3.3 km for the barotropic part against 5.3-6.6 km for the thermal
+                                !     wind, while dp_com returns both at 6.5-12 km where s = c_p*T+g*z is
+                                !     328 kJ/kg against 313 mass weighted - a 15 kJ/kg lever worth
+                                !     20-25 W/m2 on the barotropic part alone.
+                                !     With i_uter_damp=2 the thermal wind's column divergence is already
+                                !     cut by a factor 4 (4.65e-3 -> 1.19e-3 kg/m2/s), which leaves the
+                                !     barotropic part as the larger residual - and the worse placed one.
+                                !     The topographic term keeps its own potential and band either way.
+  dp_com = 0.2                  ! depth of the band below the tropopause over which the column mass correction is spread (i_mass_com_vert=0 only)
+  i_ptopdyn = 1                 ! top of the layer carrying the geostrophic wind:
+                                ! 1 = fixed at ptopdyn
+                                ! 2 = follows the tropopause
+  ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded, used only if i_ptopdyn=1
   i_pbl = 2                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
                                 ! 2 = PBL assumed to start from sea level
@@ -86,18 +304,20 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 3.7e-3              ! K/m, background lapse rate
+  c_gam_1 = 3.6e-3              ! K/m, background lapse rate
   c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
-  c_gam_4 = 5.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over ocean
-  c_gam_5 = 2.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land and ice
-  c_gam_6 = 10.e-3              ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land for inversion case
-  gams_max_lnd = 10.e-3         ! K/m, maximum surface lapse rate over land and ice
-  gams_max_ocn = 7.5e-3         ! K/m, maximum surface lapse rate over ocean
-  gams_min_ocn = 0.e-3          ! K/m, minimum surface lapse rate over ocean
+  ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
+  ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
+  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime.
+  gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
+  gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
+  sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
-  i_tsl = 2 !1
-  i_tslz = 2 !1
+  i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
+                                !   0 = tsksl = tsl, the air temperature profile reduced to sea level
+                                !   1 = built from the skin temperature (c_tsl_gam, c_tsl_gam_ice,
+                                !       tsl_gams_min_lnd, tsl_gams_min_ice below)
   c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
   c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
   tsl_gams_min_lnd = 6.5e-3     ! K/m
@@ -119,15 +339,74 @@
   !-----------------------------------------------------------
   ! relative humidity height scale parameters
   !-----------------------------------------------------------
-  c_hrs_1 = 2500.               ! m
+  c_hrs_1 = 700.                ! m
   c_hrs_2 = 200.                ! s/m
   c_hrs_3 = 2.4                 ! 
   c_hrs_4 = 3000.               ! m
   c_hrs_5 = 1000.               ! m
   c_hrs_6 = 0.7                 !
+  i_zpbl = 1                    ! reference height for the top of the boundary layer branch of rh_prof, i.e. the level
+                                ! at which the relative humidity stops being ram and starts relaxing towards rh_free:
+                                !   0   z_pbl = zs + c_hrs_5, following the terrain (original)
+                                !   1   z_pbl = max(zs + h_pbl_min, c_hrs_5), referenced to sea level
+                                ! With i_zpbl=0 the relative humidity over elevated land is held at ram up to c_hrs_5
+                                ! above the LOCAL surface, which is 2.1 km above sea level at the mean NH midlatitude
+                                ! land elevation against 1.0 km over the ocean. The free troposphere is quasi-horizontal,
+                                ! so once the profile above z_pbl is sharp (small hrm, i_rh_free) this leaves the
+                                ! elevated land boundary layer moister than the ocean through 1.3-1.8 km, where the
+                                ! observations have the ocean moister: at 30-50 deg the ocean minus land specific
+                                ! humidity difference at 1299 m is +0.52 g/kg in ERA-Interim but -0.44 g/kg with
+                                ! i_rh_free=1, c_hrs_1=700, i_zpbl=0, which alone costs about half of the mass weighted
+                                ! ocean to land moisture contrast that drives the diffusive supply to the continents.
+                                ! Note i_zpbl=1 leaves only h_pbl_min of boundary layer over terrain higher than
+                                ! c_hrs_5, so the columns over ice sheets and the high plateaus get noticeably drier
+  h_pbl_min = 200.              ! m, minimum depth of the boundary layer branch above the local surface, used if i_zpbl=1
   rh_max = 0.95                 ! maximum relative humidity
   rskin_ocn_min = 0.7 !0.
   rh_strat = 0.05               ! relative humidity in stratosphere
+  i_rh_free = 1                 ! how the background free tropospheric relative humidity is set.
+                                !   0   uniform, equal to rh_free below
+                                !   1   2d field computed in hscales from the Hadley geometry and the cloud level
+                                !       vertical velocity, built exactly like hrs but with its own width c_rhf_4:
+                                !         f_rhf  = 1 - sin(c_rhf_4*(lat-had_fi)/(0.5*had_width))**8
+                                !         rhfree = f_rhf*(c_rhf_1 + c_rhf_2*wcld) + (1-f_rhf)*c_rhf_3
+                                !       The observed free tropospheric (3-7 km) relative humidity has a minimum in the
+                                !       subsidence belts and maxima in the ascending tropics and at the poles, which is
+                                !       the same shape f_rhf and wcld already describe. Diagnosed offline from the
+                                !       model's own wcld and Hadley geometry, against the ERA-Interim 3-7 km mean
+                                !       (band means, land and ocean together):
+                                !         60-90N 0.680/0.681   40-60N 0.564/0.555   20-40N 0.375/0.374
+                                !         20S-20N 0.403/0.398  20-40S 0.370/0.319   40-60S 0.585/0.539
+                                !         60-90S 0.680/0.704
+                                !       i.e. within 0.01 in the NH and in the tropics, about 0.05 too moist in the
+                                !       southern subtropics and midlatitudes. Within a band, the observed land-ocean
+                                !       contrast in the deep tropics has the opposite sign to wcld and is not captured
+  c_rhf_1 = 0.38                ! intercept of the tropical branch of rhfree, used if i_rh_free=1
+  c_rhf_2 = 40.                 ! s/m, sensitivity of the tropical branch of rhfree to the cloud level vertical velocity
+                                ! wcld. Positive: ascent moistens the free troposphere, subsidence dries it. With
+                                ! |wcld| ~ 1 mm/s this spans about +-0.04
+  c_rhf_3 = 0.68                ! extratropical/polar value of rhfree, used if i_rh_free=1
+  c_rhf_4 = 0.82                ! width of the tropical weight for rhfree, the analogue of c_hrs_6 for hrs. Separate from
+                                ! c_hrs_6 = 0.7 because the free tropospheric humidity leaves the tropical regime much
+                                ! further equatorward than the humidity scale height does: at c_rhf_4 = 0.82 the weight
+                                ! is 0.5 at 45 deg from the Hadley centre against 53 deg for hrs
+  rhf_min = 0.05                ! lower bound on rhfree
+  rhf_max = 0.85                ! upper bound on rhfree
+  rh_free = 0.4                 ! background free tropospheric relative humidity, the value rh_prof relaxes to above the boundary layer.
+                                ! Used directly if i_rh_free=0, ignored otherwise:
+                                ! rh = rh_free + (ram-rh_free)*exp(-(z-z_pbl)/hrm).
+                                ! 0 recovers the original purely multiplicative profile rh = ram*exp(-(z-z_pbl)/hrm), for which
+                                ! rh(z)/ram depends on hrm alone and is therefore identical over land and ocean. Observations have a
+                                ! free troposphere that is nearly the same over land and ocean while the boundary layer differs
+                                ! strongly, which no value of hrm can reproduce: fitting the original form to ERA-Interim with the
+                                ! observed ram needs hrm = 14 km over land against 3.5 km over ocean at 30-50 deg (200 km against
+                                ! 4.7 km for the CMIP5 ensemble), i.e. no decay at all over land.
+                                ! Best-fit values by band are 0.46-0.54 at 30-50 deg, 0.32-0.36 at 20-30 deg, 0.58-0.64 at 50-70 deg
+                                ! and ~0.46 in the tropics, so a single global value is a compromise; 0.3 is a reasonable start.
+                                ! Note the model partly finances this itself: the rh_free part of the column is independent of ram
+                                ! and goes into W_strat, so at unchanged wcon ram drops (at 30-50 deg with rh_free=0.3, ocean ram
+                                ! 0.91 -> 0.82 against 0.81 observed, land 0.73 -> 0.65 against 0.56). Water vapour above 3 km rises
+                                ! by about 36% globally at rh_free=0.3, which is radiatively active and will need an lwr retune
 
   !-----------------------------------------------------------
   ! water residence time parameters
@@ -140,19 +419,23 @@
   ! synoptic kinetic energy parameteres
   !-----------------------------------------------------------
   c_syn_1 = 1e-4                ! m2/s2/s, background synoptic energy production rate
-  c_syn_2 = 1.6e2               ! m2/s2, synoptic energy production parameter
+  c_syn_2 = 1.6e2               ! m2/s2, synoptic energy production parameter (Eady growth rate f/N*|du/dz| from the 3D thermal wind)
   c_syn_3 = 8.e-7               ! 1/m, background synoptic energy dissipation rate
   c_syn_4 = 1.e-4               ! 1/m, synoptic energy dissipation parameter
   c_syn_5 = 2.3e5               ! effective macrodiffusive coefficient parameter
-  c_syn_6 = 0.7                 ! scaling from synoptic kinetic energy to synoptic wind
+  c_syn_6 = 0.57                ! scaling from synoptic kinetic energy to synoptic wind
   c_syn_7 = 1.e-3               ! scaling for synoptic vertical velocity at ~700 hPa
   c_syn_8 = 0. !1.
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
   c_wind_ele = 0.               ! m/s / m, elevation gradient of surface wind speed
+  tau_fac = 1.5                 ! scaling factor on the surface wind stress taux/tauy
   c_diff_dse = 2.e5             ! m, factor for macro-diffusion of dry static energy
-  i_diff_wtr = 1                ! 
+  f_diff_x_dse = 1.             ! anisotropy factor applied to the ZONAL diffusivity for dry static energy (1=isotropic; <1 weakens zonal smoothing without affecting meridional heat transport)
+  i_diff_wtr = 1                !
   c_diff_wtr = 1.6e4            ! s, factor for macro-diffusion of moisture
+  f_diff_x_wtr = 1.             ! anisotropy factor applied to the ZONAL diffusivity for moisture (1=isotropic)
+  f_diff_x_dst = 1.             ! anisotropy factor applied to the ZONAL diffusivity for dust (1=isotropic)
 
   !-----------------------------------------------------------
   ! diffusion and stability parameters 
@@ -165,7 +448,7 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.45                !
+  c_cld_1 = 0.46                !
   c_cld_2 = 0.5                 !
   c_cld_3 = 200.                !
   c_cld_4 = 1.5                 !
@@ -259,8 +542,6 @@
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
   nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  nsmooth_aslp_eq = 5           ! spatial smoothing of azonal sea level pressure around the equator
-  nj_eq = 5                     ! latitudinal extent of spatial smoothing of azonal sea level pressure around the equator
   nsmooth_aslp_topo = 4         ! spatial smoothing of azonal sea level pressure from topographic waves
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle
   nsmooth_gam = 2               ! spatial smoothing of lapse rate 
@@ -272,5 +553,7 @@
   l_write_timer = F             ! write simulation times of the different atm model components to standard output?
   l_daily_output = F            ! enable daily output?
   l_output_flx3d = F            ! enable output of 3D flux fields?
+  l_diag_wcomp = F              ! diagnose the vertical velocity separately for each wind component
+                                ! (geostrophic, thermal wind, ageostrophic PBL)? diagnostic only, no effect on the simulation
   l_output_extended = F         ! enable extended atmospheric output?
 /

@@ -26,6 +26,8 @@
 module lnd_grid
 
   use precision, only : wp
+  use nml
+  use control, only : out_dir
   use climber_grid, only : ni, nj, lat
 
   implicit none
@@ -33,22 +35,22 @@ module lnd_grid
      integer,  parameter :: nx = ni
      integer,  parameter :: ny = nj
 
-     ! levels
-     integer,  parameter :: nl = 5
-     real(wp), dimension(0:nl) :: z = (/0._wp,0.1_wp,0.3_wp,0.7_wp,1.5_wp,3.1_wp/)! z(0) is overwritten with 0.5*h_snow
-     real(wp), dimension(0:nl) :: z_int, dz, rdz, rdz_pos, rdz_neg
+     ! soil levels, read from lnd_par.nml
+     ! the layer interface depths z_int are prescribed, the nodes z are the layer midpoints
+     ! note: src/lndvc/lndvc_grid.f90, src/smb/smb_grid.f90 and src/bmb/bmb_grid.f90 keep their
+     ! own hardcoded vertical columns and are not affected by the settings here
+     integer :: nl
+     real(wp), allocatable, dimension(:) :: z          ! z(0) is overwritten with -0.5*h_snow in the local copies
+     real(wp), allocatable, dimension(:) :: z_int, dz, rdz, rdz_pos, rdz_neg
      ! levels for lakes, bottom layer adjusted for lake depth
-     !integer,  parameter :: nl_l = 7
-     !real(wp), dimension(0:nl_l) :: z_l = (/0._wp,0.2_wp,0.5_wp,1._wp,2._wp,10._wp,20._wp,50._wp/)! z_l(0) is overwritten with 0.5*h_snow
-     integer,  parameter :: nl_l = 10
-     real(wp), dimension(0:nl_l) :: z_l = (/0._wp,0.2_wp,0.5_wp,1._wp,2._wp,5._wp,10._wp,20._wp,30._wp,50._wp,100._wp/)! z_l(0) is overwritten with 0.5*h_snow
-     !real(wp), dimension(0:nl_l) :: z_l = (/0._wp,0.2_wp,0.5_wp,1._wp,2._wp,5._wp,8._wp,11._wp,14._wp,17._wp,20._wp/)! z_l(0) is overwritten with 0.5*h_snow
-     real(wp), dimension(0:nl_l) :: z_int_l, dz_l, rdz_l, rdz_pos_l, rdz_neg_l
+     integer :: nl_l
+     real(wp), allocatable, dimension(:) :: z_l        ! z_l(0) is overwritten with -0.5*h_snow in the local copies
+     real(wp), allocatable, dimension(:) :: z_int_l, dz_l, rdz_l, rdz_pos_l, rdz_neg_l
 
-     ! levels for carbon (including burial layer) 
-     integer,  parameter :: nlc = nl+1
-     real(wp), dimension(0:nlc) :: z_c 
-     real(wp), dimension(0:nlc) :: z_int_c, dz_c, rdz_c, rdz_pos_c, rdz_neg_c
+     ! levels for carbon (including burial layer)
+     integer :: nlc
+     real(wp), allocatable, dimension(:) :: z_c
+     real(wp), allocatable, dimension(:) :: z_int_c, dz_c, rdz_c, rdz_pos_c, rdz_neg_c
 
      ! surface types
      integer,  parameter :: nsurf = 8 ! 5 pfts + bare soil + lake + ice
@@ -93,100 +95,173 @@ contains
   implicit none
 
   integer :: k
+  character (len=256) :: fnm
 
 
-    z(0) = 0._wp 
-    dz(0) = 0._wp
-    ! vertical layers thickness
-    dz(1) = 0.5_wp * ( z(1) + z(2) )
-    do k=2,nl-1
-     dz(k) = 0.5_wp * ( z(k+1) - z(k-1) )
-    enddo
-    dz(nl) = z(nl) - z(nl-1)
+    ! read the vertical grid from the namelist.
+    ! note that lnd_grid_init is called before lnd_params_init, so the namelist is read
+    ! here directly, following the same approach used by atm_grid_init
+    fnm = trim(out_dir)//"/lnd_par.nml"
+    call nml_read(fnm,"lnd_par","nl",nl)
+    call nml_read(fnm,"lnd_par","nl_lake",nl_l)
+    nlc = nl+1
 
-    ! depth of vertical layer interfaces
-    z_int(0) = 0._wp ! snow - soil interface
-    do k=1,nl-1
-     z_int(k) = 0.5_wp * ( z(k) + z(k+1) )
-    enddo
-    z_int(nl) = z(nl) + 0.5_wp * dz(nl)
+    ! allocate and initialise the vertical grid arrays.
+    ! zero initialisation matters: rdz_pos(0), rdz_neg(0) and their lake/carbon counterparts
+    ! are never assigned below but are used by some of the local grid copies
+    allocate(z(0:nl), z_int(0:nl), dz(0:nl), rdz(0:nl), rdz_pos(0:nl), rdz_neg(0:nl))
+    allocate(z_l(0:nl_l), z_int_l(0:nl_l), dz_l(0:nl_l), rdz_l(0:nl_l), rdz_pos_l(0:nl_l), rdz_neg_l(0:nl_l))
+    allocate(z_c(0:nlc), z_int_c(0:nlc), dz_c(0:nlc), rdz_c(0:nlc), rdz_pos_c(0:nlc), rdz_neg_c(0:nlc))
+    z     = 0._wp; z_int     = 0._wp; dz     = 0._wp; rdz     = 0._wp; rdz_pos     = 0._wp; rdz_neg     = 0._wp
+    z_l   = 0._wp; z_int_l   = 0._wp; dz_l   = 0._wp; rdz_l   = 0._wp; rdz_pos_l   = 0._wp; rdz_neg_l   = 0._wp
+    z_c   = 0._wp; z_int_c   = 0._wp; dz_c   = 0._wp; rdz_c   = 0._wp; rdz_pos_c   = 0._wp; rdz_neg_c   = 0._wp
+
+    ! depth of the vertical layer interfaces, nl+1 (nl_lake+1) values starting with 0
+    call nml_read(fnm,"lnd_par","z_int_soil",z_int(0:nl))
+    call nml_read(fnm,"lnd_par","z_int_lake",z_int_l(0:nl_l))
+
+    call check_levels("z_int_soil",nl,z_int)
+    call check_levels("z_int_lake",nl_l,z_int_l)
+
+    ! for soil
+    call make_levels(nl,z_int,z,dz,rdz,rdz_pos,rdz_neg)
 
     print *,'z',z
     print *,'z_int',z_int
     print *,'dz',dz
 
-    ! reciprocals to speed up fortran
-    rdz(1:nl) = 1._wp/dz(1:nl)
-    do k=1,nl-1
-     rdz_pos(k) = 1._wp/(z(k+1)-z(k))
-    enddo
-    rdz_pos(nl) = 0._wp
-    do k=2,nl
-     rdz_neg(k) = 1._wp/(z(k)-z(k-1))
-    enddo
-
     ! for lakes
-    z_l(0) = 0._wp 
-    dz_l(0) = 0._wp
-    ! vertical layers thickness
-    dz_l(1) = 0.5_wp * ( z_l(1) + z_l(2) )
-    do k=2,nl_l-1
-     dz_l(k) = 0.5_wp * ( z_l(k+1) - z_l(k-1) )
-    enddo
-    dz_l(nl_l) = z_l(nl_l) - z_l(nl_l-1)
+    call make_levels(nl_l,z_int_l,z_l,dz_l,rdz_l,rdz_pos_l,rdz_neg_l)
 
-    ! depth of vertical layer interfaces
-    z_int_l(0) = 0._wp ! snow - lake interface
-    do k=1,nl_l-1
-     z_int_l(k) = 0.5_wp * ( z_l(k) + z_l(k+1) )
-    enddo
-    z_int_l(nl_l) = z_l(nl_l) + 0.5_wp * dz_l(nl_l)
+    print *,'z_l',z_l
+    print *,'z_int_l',z_int_l
+    print *,'dz_l',dz_l
 
-    ! reciprocals to speed up fortran
-    rdz_l(1:nl_l) = 1._wp/dz_l(1:nl_l)
-    do k=1,nl_l-1
-     rdz_pos_l(k) = 1._wp/(z_l(k+1)-z_l(k))
-    enddo
-    rdz_pos_l(nl_l) = 0._wp
-    do k=2,nl_l
-     rdz_neg_l(k) = 1._wp/(z_l(k)-z_l(k-1))
-    enddo
-
-    ! for carbon
-    z_c(0:nl) = z
-    z_c(nlc) = z(nl) + dz(nl)! 4.7_wp
-    dz_c(0) = 0._wp
-    ! vertical layers thickness
-    dz_c(1) = 0.5_wp * ( z_c(1) + z_c(2) )
-    do k=2,nlc-1
-     dz_c(k) = 0.5_wp * ( z_c(k+1) - z_c(k-1) )
-    enddo
-    dz_c(nlc) = z_c(nlc) - z_c(nlc-1)
-
-    ! depth of vertical layer interfaces
-    z_int_c(0) = 0._wp ! snow - soil interface
-    do k=1,nlc-1
-     z_int_c(k) = 0.5_wp * ( z_c(k) + z_c(k+1) )
-    enddo
-    z_int_c(nlc) = z_c(nlc) + 0.5_wp * dz_c(nlc)
+    ! for carbon, the soil column plus one burial layer of thickness dz(nl) at the bottom
+    z_int_c(0:nl) = z_int(0:nl)
+    z_int_c(nlc)  = z_int(nl) + dz(nl)
+    call make_levels(nlc,z_int_c,z_c,dz_c,rdz_c,rdz_pos_c,rdz_neg_c)
 
     print *,'z_c',z_c
     print *,'z_int_c',z_int_c
     print *,'dz_c',dz_c
 
-    ! reciprocals to speed up fortran
-    rdz_c(1:nlc) = 1._wp/dz_c(1:nlc)
-    do k=1,nlc-1
-     rdz_pos_c(k) = 1._wp/(z_c(k+1)-z_c(k))
-    enddo
-    rdz_pos_c(nlc) = 0._wp
-    do k=2,nlc
-     rdz_neg_c(k) = 1._wp/(z_c(k)-z_c(k-1))
+  return
+
+  end subroutine lnd_grid_init
+
+
+  ! check that the layer interface depths read from the namelist are usable
+  subroutine check_levels(name,n,zi)
+
+  implicit none
+
+  character (len=*), intent(in) :: name
+  integer, intent(in) :: n
+  real(wp), dimension(0:), intent(in) :: zi
+
+  integer :: k
+
+
+    if (n.lt.2) then
+      print *,'ERROR: at least 2 layers are required, got ',n,' for ',trim(name)
+      stop
+    endif
+    if (zi(0).ne.0._wp) then
+      print *,'ERROR: the first value of ',trim(name),' must be 0., got ',zi(0)
+      stop
+    endif
+    do k=1,n
+      if (zi(k).le.zi(k-1)) then
+        print *,'ERROR: ',trim(name),' must be strictly increasing, but level ',k,' = ',zi(k), &
+                ' is not larger than level ',k-1,' = ',zi(k-1)
+        print *,'       ',trim(name),' needs ',n+1,' increasing values, the first one being 0.'
+        stop
+      endif
     enddo
 
   return
 
-  end subroutine lnd_grid_init
+  end subroutine check_levels
+
+
+  ! derive layer thicknesses, node depths and reciprocals from the layer interface depths
+  subroutine make_levels(n,zi,zz,dzz,rdzz,rdzz_pos,rdzz_neg)
+
+  implicit none
+
+  integer, intent(in) :: n
+  real(wp), dimension(0:), intent(in)  :: zi
+  real(wp), dimension(0:), intent(out) :: zz, dzz, rdzz, rdzz_pos, rdzz_neg
+
+  integer :: k
+
+
+    zz  = 0._wp
+    dzz = 0._wp
+    rdzz = 0._wp
+    rdzz_pos = 0._wp
+    rdzz_neg = 0._wp
+
+    ! layer thicknesses and node depths (layer midpoints)
+    do k=1,n
+     dzz(k) = zi(k) - zi(k-1)
+     zz(k)  = 0.5_wp * ( zi(k-1) + zi(k) )
+    enddo
+
+    ! reciprocals to speed up fortran
+    rdzz(1:n) = 1._wp/dzz(1:n)
+    do k=1,n-1
+     rdzz_pos(k) = 1._wp/(zz(k+1)-zz(k))
+    enddo
+    rdzz_pos(n) = 0._wp
+    do k=1,n
+     rdzz_neg(k) = 1._wp/(zz(k)-zz(k-1))
+    enddo
+
+  return
+
+  end subroutine make_levels
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Function :  s o i l _ a t _ d e p t h
+  ! Purpose  :  linearly interpolate a soil profile given at the layer nodes
+  !             z(1:nl) to an arbitrary depth, so that parameterisations can refer
+  !             to a fixed physical depth instead of to a layer index
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function soil_at_depth(prof,depth) result(val)
+
+  implicit none
+
+  real(wp), dimension(:), intent(in) :: prof    ! soil profile, prof(k) is the value at node z(k), k=1..nl
+  real(wp), intent(in) :: depth                 ! m, depth to interpolate to
+  real(wp) :: val
+
+  integer :: k
+  real(wp) :: w
+
+
+    if (depth.le.z(1)) then
+      ! above the first node, no extrapolation towards the surface
+      val = prof(1)
+    else if (depth.ge.z(nl)) then
+      ! below the last node, no extrapolation towards the bottom
+      val = prof(nl)
+    else
+      val = prof(nl)
+      do k=1,nl-1
+        if (depth.le.z(k+1)) then
+          w = (depth-z(k)) / (z(k+1)-z(k))
+          val = (1._wp-w)*prof(k) + w*prof(k+1)
+          exit
+        endif
+      enddo
+    endif
+
+  return
+
+  end function soil_at_depth
 
 end module lnd_grid
 

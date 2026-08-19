@@ -85,11 +85,22 @@ module ocn_params
        real(wp) :: adrag
        integer :: drag_topo_n
        real(wp) :: drag_topo_fac
+       real(wp) :: drag_bcl_topo_fac
        real(wp) :: drag_frac_fac
        real(wp) :: drag_topo_scale_eq
        real(wp) :: z_drag_shallow
      end type
      type(drag_par_type) :: drag_par
+
+     type neptune_par_type
+       logical :: l_neptune
+       integer :: i_l
+       real(wp) :: l
+       real(wp) :: l_eq
+       real(wp) :: l_pol
+       real(wp) :: u_max
+     end type
+     type(neptune_par_type) :: neptune_par
 
      integer :: i_advection
      integer :: i_conv_shuffle
@@ -262,9 +273,17 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
     call nml_read(filename,"ocn_par","drag_topo_n",drag_par%drag_topo_n)
     call nml_read(filename,"ocn_par","drag_topo_fac",drag_par%drag_topo_fac)
+    call nml_read(filename,"ocn_par","drag_bcl_topo_fac",drag_par%drag_bcl_topo_fac)
     call nml_read(filename,"ocn_par","drag_topo_scale_eq",drag_par%drag_topo_scale_eq)
     call nml_read(filename,"ocn_par","drag_frac_fac",drag_par%drag_frac_fac)
     call nml_read(filename,"ocn_par","z_drag_shallow",drag_par%z_drag_shallow)
+
+    call nml_read(filename,"ocn_par","l_neptune",neptune_par%l_neptune)
+    call nml_read(filename,"ocn_par","i_neptune_l",neptune_par%i_l)
+    call nml_read(filename,"ocn_par","neptune_l",neptune_par%l)
+    call nml_read(filename,"ocn_par","neptune_l_eq",neptune_par%l_eq)
+    call nml_read(filename,"ocn_par","neptune_l_pol",neptune_par%l_pol)
+    call nml_read(filename,"ocn_par","neptune_u_max",neptune_par%u_max)
 
     call nml_read(filename,"ocn_par","i_eos",i_eos)
 

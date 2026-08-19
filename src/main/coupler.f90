@@ -446,6 +446,7 @@ contains
           atm%solarm(:,j)  = cmn%solarm(:,ja)
           atm%cosz(:,:,j)  = cmn%cosz(:,:,ja)
           atm%coszm(:,j)   = cmn%coszm(:,ja)
+          atm%daylength(:,j) = cmn%daylength(:,ja)
 
 
           ! SO4 load

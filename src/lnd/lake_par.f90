@@ -30,7 +30,7 @@ module lake_par_mod
   use constants, only : rho_w, rho_i, T0, karman, g
   use constants, only : lambda_i, lambda_w, cap_i, cap_w
   use constants, only : rho_w, rho_i
-  use lnd_grid, only : z_int, z, z_l, nl, nl_l
+  use lnd_grid, only : z_int, z, z_l, z_int_l, nl, nl_l
   use lnd_params, only : snow_par
   use lnd_params, only : soil_par, K_eddy_lake_bg, K_eddy_lake_max
   use lake_rho_mod, only : lake_rho
@@ -63,13 +63,13 @@ contains
     real(wp), dimension(0:nl_l) :: z_int_loc
 
 
-     z_loc(0) = -0.5_wp*h_snow
-     z_loc(1:nl_l-1) = z_l(1:nl_l-1)
-     z_loc(nl_l) = (h_lake+0.5_wp*z_loc(nl_l-1))/1.5_wp 
+     ! local grid, the bottom layer is stretched to the actual lake depth
+     z_int_loc(0:nl_l-1) = z_int_l(0:nl_l-1)   ! z_int_loc(0) is the snow - lake interface
+     z_int_loc(nl_l) = h_lake
 
-     z_int_loc(0) = 0._wp ! snow - lake interface
-     do k=1,nl_l-1
-       z_int_loc(k) = 0.5_wp * ( z_loc(k) + z_loc(k+1) )
+     z_loc(0) = -0.5_wp*h_snow
+     do k=1,nl_l
+       z_loc(k) = 0.5_wp * ( z_int_loc(k-1) + z_int_loc(k) )
      enddo
 
      ! snow heat capacity, J/m3/K

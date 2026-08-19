@@ -27,9 +27,9 @@ module u2d_mod
 
   use atm_params, only : wp
   use constants, only : g
-  use atm_params, only : ra, i_kata_wind, h_kata
-  use atm_grid, only : im, imc, jm, jmc, nm, dxt, dy
-  use atm_grid, only : fcort, fcorta, fcorua, signf
+  use atm_params, only : ra, i_kata_wind, h_kata, i_ugb_psi
+  use atm_grid, only : im, imc, jm, jmc, nm, dxt, dxu, dy, aim
+  use atm_grid, only : fcorg, fcorgu, fcorta, fcorua, signf
   !$use omp_lib
 
   implicit none
@@ -45,7 +45,7 @@ contains
   !                 planetary boundary layer
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine u2d(slp, sin_cos_acbar, &
-      ugb, vgb, uab, vab)
+      ugb, vgb, ugbu, vgbv, psi_g, uab, vab)
 
     implicit none
 
@@ -54,11 +54,15 @@ contains
 
     real(wp), intent(out) :: ugb(:,:)
     real(wp), intent(out) :: vgb(:,:)
+    real(wp), intent(out) :: ugbu(:,:)
+    real(wp), intent(out) :: vgbv(:,:)
+    real(wp), intent(out) :: psi_g(:,:)
     real(wp), intent(out) :: uab(:,:)
     real(wp), intent(out) :: vab(:,:)
 
     integer :: i, j, ipl, imi, jpl, jmi
     real(wp) :: dpdx, dpdy, dpdxa, dpdya, acbarb
+    real(wp) :: slpz(jm), slpa(im,jm), psibar(jmc), ubarz(jm), slpc
 
 
     !$omp parallel do collapse(2) private(i,j,ipl,imi,jpl,jmi,dpdx,dpdy,dpdxa,dpdya,acbarb)
@@ -77,8 +81,11 @@ contains
         dpdx = 0.5_wp*(slp(ipl,j)-slp(imi,j))/dxt(j) 
         dpdy = 0.5_wp*(slp(i,jmi)-slp(i,jpl))/dy  
 
-        ugb(i,j) = -dpdy/(fcort(j)*ra)
-        vgb(i,j) =  dpdx/(fcort(j)*ra)
+        ! fcorg is 1/fcort for i_fcorg=0 and the regular f/(f**2+fcormin**2) for i_fcorg=1, which
+        ! takes ugb through zero at the equator instead of reversing it at full amplitude.
+        ! See the fcorg block in atm_grid.f90.
+        ugb(i,j) = -dpdy*fcorg(j)/ra
+        vgb(i,j) =  dpdx*fcorg(j)/ra
 
         !------------------------------------------------------
         ! Ageostrophic wind components in PBL (on U-points)
@@ -106,6 +113,130 @@ contains
       enddo
     enddo 
     !$omp end parallel do
+
+    !------------------------------------------------------
+    ! Barotropic geostrophic wind on the faces, which is what the mass flux in
+    ! u3d.f90 actually needs.  Building it here rather than averaging ugb/vgb
+    ! inside u3d is what makes the streamfunction option possible: the curl of a
+    ! corner streamfunction lives on the faces, and averaging it to T-points and
+    ! back would apply a 1-2-1 filter and destroy the non-divergence.
+    !------------------------------------------------------
+
+    if (i_ugb_psi.eq.0) then
+
+      ! Exactly the averaging u3d used to do internally, so this branch reproduces
+      ! the previous code bit for bit.
+      do j=1,jm
+        do i=1,im
+          imi = modulo(i - 2, im) + 1
+          ugbu(i,j) = 0.5_wp*(ugb(imi,j)+ugb(i,j))
+        enddo
+        ugbu(imc,j) = ugbu(1,j)
+      enddo
+      vgbv(:,1)   = 0._wp
+      vgbv(:,jmc) = 0._wp
+      do j=2,jm
+        do i=1,im
+          vgbv(i,j) = 0.5_wp*(vgb(i,j-1)+vgb(i,j))
+        enddo
+      enddo
+      psi_g(:,:) = 0._wp
+
+    else if (i_ugb_psi.eq.1) then
+
+      !----------------------------------------------------
+      ! Streamfunction form.
+      !
+      ! psi is carried on the cell corners, and the face winds are its discrete
+      ! curl in exactly the pairing that annihilates the column convergence
+      ! stencil used in u3d.f90,
+      !     conv(i,j) = Fx(i,j)-Fx(i+1,j) + Fy(i,j+1)-Fy(i,j) ,
+      ! namely  Fx(i,j) ~ psi(i,j+1)-psi(i,j)  and  Fy(i,j) ~ psi(i+1,j)-psi(i,j).
+      ! Substituting the two into conv cancels all eight terms identically, so the
+      ! barotropic geostrophic velocity field carries no divergence at all - no
+      ! beta term, and no contribution from the meridional variation of fcorgu or
+      ! of any other latitude factor folded into psi.
+      !
+      ! The zonal mean is separated out and reinstated exactly.  This is essential:
+      ! psi = fcorgu*p/ra with the FULL slp would add the term -p*d(fcorgu)/dy to
+      ! the zonal wind, and with p ~ 1e5 Pa that is of order (p/ra)*beta/f**2, some
+      ! 120 m/s at 45 deg.  Only the azonal slp, of order 1e3 Pa, may pass through
+      ! fcorgu.  psibar is instead integrated straight from the zonal mean zonal
+      ! wind of the i_ugb_psi=0 form, so that zonal mean is reproduced to round-off;
+      ! being independent of i it produces no meridional wind and a zonal flux that
+      ! telescopes away, so it adds no divergence either.
+      !----------------------------------------------------
+
+      ! zonal mean and azonal sea level pressure
+      do j=1,jm
+        slpz(j) = 0._wp
+        do i=1,im
+          slpz(j) = slpz(j) + slp(i,j)
+        enddo
+        slpz(j) = slpz(j)*aim
+        do i=1,im
+          slpa(i,j) = slp(i,j) - slpz(j)
+        enddo
+      enddo
+
+      ! zonal mean zonal geostrophic wind, identical to the zonal mean of the
+      ! ugb built above because the meridional difference is linear in slp
+      do j=1,jm
+        jpl = min(jm,j+1)
+        jmi = max(1,j-1)
+        ubarz(j) = -0.5_wp*(slpz(jmi)-slpz(jpl))/dy * fcorg(j)/ra
+      enddo
+
+      ! streamfunction of that zonal mean, from u = (psi(j+1)-psi(j))/dy
+      psibar(1) = 0._wp
+      do j=1,jm
+        psibar(j+1) = psibar(j) + ubarz(j)*dy
+      enddo
+
+      ! full streamfunction on the corners. Both polar rows are held zonally
+      ! constant, which is the no-flux-through-the-pole condition: the meridional
+      ! flux there is psi(i+1,j)-psi(i,j) and dxu vanishes anyway.
+      psi_g(:,1)   = psibar(1)
+      psi_g(:,jmc) = psibar(jmc)
+      do j=2,jm
+        do i=1,im
+          imi = modulo(i - 2, im) + 1
+          slpc = 0.25_wp*(slpa(imi,j-1)+slpa(i,j-1)+slpa(imi,j)+slpa(i,j))
+          psi_g(i,j) = psibar(j) + fcorgu(j)*slpc/ra
+        enddo
+      enddo
+
+      ! face winds as the discrete curl
+      do j=1,jm
+        do i=1,im
+          ugbu(i,j) = (psi_g(i,j+1)-psi_g(i,j))/dy
+        enddo
+        ugbu(imc,j) = ugbu(1,j)
+      enddo
+      vgbv(:,1)   = 0._wp
+      vgbv(:,jmc) = 0._wp
+      do j=2,jm
+        do i=1,im
+          ipl = modulo(i,im) + 1
+          vgbv(i,j) = (psi_g(ipl,j)-psi_g(i,j))/dxu(j)
+        enddo
+      enddo
+
+      ! T-point values, overwriting the f^-1*grad(p) form, so that the surface wind
+      ! in usur and every diagnostic sees the same field the transport does
+      do j=1,jm
+        do i=1,im
+          ipl = modulo(i,im) + 1
+          ugb(i,j) = 0.5_wp*(ugbu(i,j)+ugbu(ipl,j))
+          vgb(i,j) = 0.5_wp*(vgbv(i,j)+vgbv(i,j+1))
+        enddo
+      enddo
+
+    else
+
+      stop 'i_ugb_psi'
+
+    endif
 
     return
 

@@ -30,7 +30,9 @@ module synop_mod
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, c_syn_8, windmin, synsurmin, c_wind_ele
+  use atm_params, only : tau_fac
   use atm_params, only : c_diff_dse, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
+  use atm_params, only : f_diff_x_dse, f_diff_x_wtr, f_diff_x_dst
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
@@ -50,7 +52,7 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, cos_acbar, sam, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, wsyn)
 
     implicit none
@@ -68,7 +70,6 @@ contains
     real(wp), intent(in   ) :: cda(:,:)
     real(wp), intent(in   ) :: cd(:,:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
-    real(wp), intent(in   ) :: cos_acbar(:,:,:)
 
     real(wp), intent(inout) :: sam(:,:)
     real(wp), intent(inout) :: cdif(:,:)
@@ -130,13 +131,15 @@ contains
         !-----------------------------------------------
         ! synoptic energy production
 
-        ! proportional to max Eady model baroclinic growth rate (e.g. Hoskins and Valdes 1990)
+        ! proportional to max Eady model baroclinic growth rate (e.g. Hoskins and Valdes 1990),
+        ! from the vertical shear of the 3D thermal wind
 
         Nfreq = sqrt(g/tp(i,j,k700)*(tp(i,j,k500)-tp(i,j,k850))/(zl(k500)-zl(k850)))   ! Brunt-Vaisala frequency
         dudz = (ut3f(i,j,k500)-ut3f(i,j,k850))/(zl(k500)-zl(k850))
         dvdz = (vt3f(i,j,k500)-vt3f(i,j,k850))/(zl(k500)-zl(k850)) * cost(j)
         ugrad = sqrt(dudz**2+dvdz**2)
         synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad * (1._wp-c_syn_8*zsa(i,j)/3000._wp)
+
         synprod(i,j) = max(0._wp,synprod(i,j))
 
         !-----------------------------------------------
@@ -265,7 +268,16 @@ contains
         do n=1,nm
 
           ! synoptic surface wind
-          synsur(i,j,n) = c_syn_6*sqsam*epsa(i,j,n)*cos_acbar(i,j,n) 
+          ! epsa = cos(a)-sin(a) is the COMPLETE reduction from the free-atmosphere wind to the
+          ! surface: usur is built so that sqrt(us**2+vs**2) = epsa*|Vgb| exactly, so sqrt(sam),
+          ! a geostrophic synoptic wind scale, needs epsa and nothing else.  A second cos(a)
+          ! factor used to sit here; it had no separate derivation and was a partly redundant
+          ! reduction, worth 0.4 per cent over the midlatitude ocean but 12 per cent over the
+          ! roughest land and 4 per cent in the tropics, i.e. it deepened the roughness and
+          ! latitude dependence of the gustiness for no stated reason.  Removing it raises synsur
+          ! by 2 per cent in the global mean and 6 per cent over land; c_syn_6 was recalibrated
+          ! with it gone, see the note in atm_par.nml.
+          synsur(i,j,n) = c_syn_6*sqsam*epsa(i,j,n)
           synsur(i,j,n) = max(synsur(i,j,n),synsurmin)
 
           ! total surface wind
@@ -274,9 +286,18 @@ contains
             wind(i,j,n) = max(wind(i,j,n),windmin)
           endif
 
-          ! wind stress 
-          taux(i,j,n) = cd(i,j,n)*ra*us(i,j,n)*wind(i,j,n)
-          tauy(i,j,n) = cd(i,j,n)*ra*vs(i,j,n)*wind(i,j,n)
+          ! wind stress
+          ! tau_fac is an explicit factor on the momentum flux alone.  It is needed because the
+          ! bulk law is evaluated on a MEAN wind: the true stress is <cd*ra*u*|V|> over the
+          ! synoptic variability, while this line forms cd*ra*<u>*|V| with the variability only in
+          ! the magnitude |V|.  Fed with observed winds the line returns 71 per cent of the
+          ! observed ocean stress (ERA-Interim iews/inss, PI annual mean), which is NOT a drag
+          ! coefficient error - Large & Yaeger give 1.24e-3 at the 11 m/s of the Southern Ocean
+          ! westerlies against the 1.30e-3 used here - but the missing <u'|V'|> correlation.
+          ! Scaling here rather than through cd0_ocn is deliberate: cd also sets the cross-isobar
+          ! angle through acbar_cd, so raising it would turn the surface wind and move the SLP.
+          taux(i,j,n) = tau_fac*cd(i,j,n)*ra*us(i,j,n)*wind(i,j,n)
+          tauy(i,j,n) = tau_fac*cd(i,j,n)*ra*vs(i,j,n)*wind(i,j,n)
 
         enddo
 
@@ -297,15 +318,19 @@ contains
       if (imi.lt.1) imi=im
       do j=1,jm
         ! diffusivity for dry static energy, proportional to sqrt(EKE)
-        diffxdse(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        ! zonal component scaled by f_diff_x_dse: unlike the meridional flux, the zonal
+        ! eddy heat flux is largely rotational and non-divergent, so it carries little net
+        ! transport but strongly damps zonal (stationary-wave) temperature structure.
+        ! f_diff_x_dse<1 weakens that smoothing without touching the meridional heat transport.
+        diffxdse(i,j) = f_diff_x_dse * c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
         ! diffusivity for water vapor, proportional to EKE (e.g. Caballero & Hanley, 2012)
         if (i_diff_wtr.eq.1) then
-          diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 
+          diffxwtr(i,j) = f_diff_x_wtr * c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j))
         else if (i_diff_wtr.eq.2) then
-          diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+          diffxwtr(i,j) = f_diff_x_wtr * c_diff_wtr * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
         endif
         ! diffusivity for dust
-        diffxdst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        diffxdst(i,j) = f_diff_x_dst * c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
         ! limit the zonal diffusivities. Explicit scheme: CFL stability requires the
         ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
         ! Implicit scheme: unconditionally stable, but near the pole (dxt->0) the

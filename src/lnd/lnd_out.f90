@@ -68,7 +68,7 @@ module lnd_out
     real(wp) :: Cflx_burial, d13Cflx_burial
     real(wp) :: gpp, npp, npp_pimask, sresp, npp14, sresp14
     real(wp) :: fire_c
-    real(wp) :: runoff, runsur, calving, drain, evp, esur, trans, prc, t, wet, wettrop, wetextrop, inund, peat, peatpot
+    real(wp) :: runoff, runsur, runsub, calving, drain, evp, esur, trans, prc, t, wet, wettrop, wetextrop, inund, peat, peatpot
     real(wp) :: forest, grass, shrub, desert, crop, pasture, vegc, vegc_pimask
     real(wp) :: soilc, soilc60N, litterc, fastc, slowc, minc, peatc, icec, shelfc, lakec, permc, soilc_pimask, inertc
     real(wp) :: soilc1m, soilc60N1m, minc1m, peatc1m, icec1m, shelfc1m, lakec1m, permc1m, soilc1m_pimask
@@ -99,6 +99,9 @@ module lnd_out
     real(wp), allocatable, dimension(:,:) :: fwetmax
     real(wp), allocatable, dimension(:,:) :: fwetmaxpot
     real(wp), allocatable, dimension(:,:) :: wtab
+    real(wp), allocatable, dimension(:,:) :: runoffgw
+    real(wp), allocatable, dimension(:,:) :: wtabperch
+    real(wp), allocatable, dimension(:,:) :: wtabeff
     real(wp), allocatable, dimension(:,:) :: inf
     real(wp), allocatable, dimension(:,:) :: alt
     real(wp), allocatable, dimension(:,:) :: vpd
@@ -162,8 +165,8 @@ module lnd_out
     real(wp), dimension(nx,ny) :: fuel, f_fire_fuel, f_fire_cwd
     real(wp), dimension(nx,ny) :: bare
     real(wp), dimension(nx,ny,ncarb) :: sresp, sresp13, sresp14, soilc, litter
-    real(wp), dimension(nx,ny,nl) :: frozen_years, thaw_timer   ! permafrost-thaw priming state (consecutive perennially-frozen years per layer)
-    real(wp), dimension(nx,ny,nlc) :: k_slow_to_fast               ! permafrost-thaw slow->fast conversion rate
+    real(wp), allocatable, dimension(:,:,:) :: frozen_years, thaw_timer   ! (nx,ny,nl) permafrost-thaw priming state (consecutive perennially-frozen years per layer)
+    real(wp), allocatable, dimension(:,:,:) :: k_slow_to_fast             ! (nx,ny,nlc) permafrost-thaw slow->fast conversion rate
     real(wp), allocatable, dimension(:,:,:,:) :: litter_prof, litter13_prof, litter14_prof
     real(wp), allocatable, dimension(:,:,:,:) :: litterc_prof, fastc_prof, slowc_prof, soilc_prof
     real(wp), allocatable, dimension(:,:,:,:) :: litterc13_prof, fastc13_prof, slowc13_prof, soilc13_prof
@@ -276,6 +279,9 @@ contains
       allocate(mon_su(k)%fwet(nx,ny))
       allocate(mon_su(k)%fwetmax(nx,ny))
       allocate(mon_su(k)%wtab(nx,ny))
+      allocate(mon_su(k)%runoffgw(nx,ny))
+      allocate(mon_su(k)%wtabperch(nx,ny))
+      allocate(mon_su(k)%wtabeff(nx,ny))
       allocate(mon_su(k)%inf(nx,ny))
       allocate(mon_su(k)%alt(nx,ny))
       allocate(mon_su(k)%vpd(nx,ny))
@@ -368,6 +374,13 @@ contains
       allocate(mon_c(k)%litter_prof(nx,ny,nlc,ncarb))
       allocate(mon_c(k)%litter13_prof(nx,ny,nlc,ncarb))
       allocate(mon_c(k)%litter14_prof(nx,ny,nlc,ncarb))
+      allocate(mon_c(k)%frozen_years(nx,ny,nl))
+      allocate(mon_c(k)%thaw_timer(nx,ny,nl))
+      allocate(mon_c(k)%k_slow_to_fast(nx,ny,nlc))
+      ! these are diagnosed annually only, keep them at zero for the monthly output
+      mon_c(k)%frozen_years   = 0._wp
+      mon_c(k)%thaw_timer     = 0._wp
+      mon_c(k)%k_slow_to_fast = 0._wp
     enddo
 
     do k=1,nday_year
@@ -409,6 +422,9 @@ contains
     allocate(ann_su%fwetmax(nx,ny))
     allocate(ann_su%fwetmaxpot(nx,ny))
     allocate(ann_su%wtab(nx,ny))
+    allocate(ann_su%runoffgw(nx,ny))
+    allocate(ann_su%wtabperch(nx,ny))
+    allocate(ann_su%wtabeff(nx,ny))
     allocate(ann_su%inf(nx,ny))
     allocate(ann_su%alt(nx,ny))
     allocate(ann_su%vpd(nx,ny))
@@ -473,6 +489,9 @@ contains
     allocate(ann_s%d18O_w_w_n(nx,ny,nl))
     allocate(ann_s%d18O_w_i_n(nx,ny,nl))
 
+    allocate(ann_c%frozen_years(nx,ny,nl))
+    allocate(ann_c%thaw_timer(nx,ny,nl))
+    allocate(ann_c%k_slow_to_fast(nx,ny,nlc))
     allocate(ann_c%litter_prof(nx,ny,nlc,ncarb))
     allocate(ann_c%litter13_prof(nx,ny,nlc,ncarb))
     allocate(ann_c%litter14_prof(nx,ny,nlc,ncarb))
@@ -548,7 +567,7 @@ contains
     real(wp) :: global_npp, global_npp_pimask, global_npp13, global_npp14, global_sresp, global_sresp13, global_sresp14
     real(wp) :: global_fire_c
     real(wp) :: global_t, global_snow
-    real(wp) :: global_run, global_runsur, global_calving, global_drain, global_evp, global_esur, global_trans, global_prc
+    real(wp) :: global_run, global_runsur, global_runsub, global_calving, global_drain, global_evp, global_esur, global_trans, global_prc
     real(wp) :: global_wet, global_wettrop, global_wetextrop, global_inund, global_peat, global_peatpot, tmp
     real(wp) :: global_forest, global_grass, global_shrub, global_desert, global_crop, global_pasture
     real(wp), dimension(npft) :: global_pfts
@@ -576,6 +595,7 @@ contains
     global_gpp = 0._wp
     global_run = 0._wp
     global_runsur = 0._wp
+    global_runsub = 0._wp
     global_calving= 0._wp
     global_drain = 0._wp
     global_evp   = 0._wp
@@ -587,7 +607,7 @@ contains
     global_dust_e = 0._wp
 
     !$omp parallel do collapse(2) private(i,j,k) &
-    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_calving,global_drain,global_run,global_snow,global_dust_e)
+    !$omp reduction(+:global_gpp,global_evp,global_esur,global_trans,global_t,global_prc,global_runsur,global_runsub,global_calving,global_drain,global_run,global_snow,global_dust_e)
     do j = 1, ny
       do i = 1, nx
         if( lnd(i,j)%f_land.gt.0._wp ) then
@@ -613,22 +633,31 @@ contains
           if (lnd(i,j)%f_shelf.lt.1._wp) then
             global_prc = global_prc + sum((lnd(i,j)%rain(:)+lnd(i,j)%snow(:))*lnd(i,j)%frac_surf(:)) * area(i,j) * 1.d-15 * dt  ! 10^15 kg/m2/sum_dt
           endif
-          ! surface runoff
+          ! surface runoff, including the saturation excess that soil_hydro returns at the surface
           global_runsur = global_runsur &
-          + (lnd(i,j)%f_veg*lnd(i,j)%runoff_sur(is_veg) + lnd(i,j)%f_ice*lnd(i,j)%runoff_sur(is_ice) &
+          + (lnd(i,j)%f_veg*(lnd(i,j)%runoff_sur(is_veg)+lnd(i,j)%runoff_exc) &
+          + lnd(i,j)%f_ice*lnd(i,j)%runoff_sur(is_ice) &
           + lnd(i,j)%f_lake*lnd(i,j)%runoff_sur(is_lake)) &
+          * area(i,j) * 1.d-15 * dt! 10^15 kg/m2/sum_dt
+          ! subsurface runoff: aquifer baseflow over the vegetated tile, drainage over ice and lake
+          ! where there is no aquifer. runoff = runsur + runsub exactly, by construction
+          global_runsub = global_runsub &
+          + (lnd(i,j)%f_veg*lnd(i,j)%runoff_gw + lnd(i,j)%f_ice*lnd(i,j)%drainage(is_ice) &
+          + lnd(i,j)%f_lake*lnd(i,j)%drainage(is_lake)) &
           * area(i,j) * 1.d-15 * dt! 10^15 kg/m2/sum_dt
           ! 'calving' 
           global_calving = global_calving &
           + (lnd(i,j)%f_veg*lnd(i,j)%calving(is_veg) + lnd(i,j)%f_ice*lnd(i,j)%calving(is_ice) &
           + lnd(i,j)%f_lake*lnd(i,j)%calving(is_lake)) &
           * area(i,j) * 1.d-15 * dt! 10^15 kg/m2/sum_dt
-          ! drainage
+          ! drainage out of the bottom of the soil column. Over the vegetated tile this is the
+          ! aquifer RECHARGE, an internal flux, not a runoff component; it equals the baseflow
+          ! only in the long-term mean
           global_drain = global_drain &
           + (lnd(i,j)%f_veg*lnd(i,j)%drainage(is_veg) + lnd(i,j)%f_ice*lnd(i,j)%drainage(is_ice) &
           + lnd(i,j)%f_lake*lnd(i,j)%drainage(is_lake)) &
           * area(i,j) * 1.d-15 * dt! 10^15 kg/m2/sum_dt
-          ! total runoff (surface runoff + drainage)
+          ! total runoff
           global_run = global_run &
           + (lnd(i,j)%f_veg*lnd(i,j)%runoff(is_veg) + lnd(i,j)%f_ice*lnd(i,j)%runoff(is_ice) + lnd(i,j)%f_lake*lnd(i,j)%runoff(is_lake)) &
           * area(i,j) * 1.d-15 * dt! 10^15 kg/m2/sum_dt
@@ -666,6 +695,7 @@ contains
     mon_ts(y,mon)%gpp    = mon_ts(y,mon)%gpp + global_gpp 
     mon_ts(y,mon)%runoff = mon_ts(y,mon)%runoff + global_run 
     mon_ts(y,mon)%runsur = mon_ts(y,mon)%runsur + global_runsur
+    mon_ts(y,mon)%runsub = mon_ts(y,mon)%runsub + global_runsub
     mon_ts(y,mon)%calving= mon_ts(y,mon)%calving+ global_calving
     mon_ts(y,mon)%drain  = mon_ts(y,mon)%drain + global_drain
     mon_ts(y,mon)%evp    = mon_ts(y,mon)%evp   + global_evp
@@ -1195,6 +1225,9 @@ contains
                   mon_su(m)%cti_lim(i,j)    = 0._wp
                   mon_su(m)%fwet(i,j)       = 0._wp
                   mon_su(m)%wtab(i,j)       = 0._wp
+                  mon_su(m)%runoffgw(i,j)   = 0._wp
+                  mon_su(m)%wtabperch(i,j) = 0._wp
+                  mon_su(m)%wtabeff(i,j) = 0._wp
                   mon_su(m)%inf(i,j)        = 0._wp
                   mon_su(m)%runoff(i,j,:)   = 0._wp
                   mon_su(m)%runsur(i,j,:)   = 0._wp
@@ -1251,6 +1284,9 @@ contains
                   mon_su(m)%cti_lim(i,j)    = missing_value 
                   mon_su(m)%fwet(i,j)       = missing_value 
                   mon_su(m)%wtab(i,j)       = missing_value 
+                  mon_su(m)%runoffgw(i,j)   = missing_value 
+                  mon_su(m)%wtabperch(i,j) = missing_value
+                  mon_su(m)%wtabeff(i,j) = missing_value
                   mon_su(m)%inf(i,j)        = missing_value 
                   mon_su(m)%runoff(i,j,:)   = missing_value 
                   mon_su(m)%runsur(i,j,:)   = missing_value 
@@ -1423,9 +1459,14 @@ contains
               mon_su(mon)%tsnow(i,j,3)    = mon_su(mon)%tsnow(i,j,3)    + lnd(i,j)%t_lake(0)            * mon_avg
               mon_su(mon)%tlake_sur(i,j)  = mon_su(mon)%tlake_sur(i,j)  + lnd(i,j)%t_lake(1) * mon_avg
               mon_su(mon)%wtab(i,j)       = mon_su(mon)%wtab(i,j)       + lnd(i,j)%w_table              * mon_avg
+              mon_su(mon)%runoffgw(i,j)   = mon_su(mon)%runoffgw(i,j)   + lnd(i,j)%runoff_gw*sec_day    * mon_avg
+              mon_su(mon)%wtabperch(i,j) = mon_su(mon)%wtabperch(i,j) + lnd(i,j)%w_table_perch * mon_avg
+              mon_su(mon)%wtabeff(i,j) = mon_su(mon)%wtabeff(i,j) + lnd(i,j)%w_table_eff * mon_avg
               mon_su(mon)%inf(i,j)        = mon_su(mon)%inf(i,j)        + lnd(i,j)%infiltration*sec_day * mon_avg
-              mon_su(mon)%runoff(i,j,:)   = mon_su(mon)%runoff(i,j,:)   + (lnd(i,j)%runoff_sur+lnd(i,j)%drainage)*sec_day     * mon_avg
+              mon_su(mon)%runoff(i,j,:)   = mon_su(mon)%runoff(i,j,:)   + lnd(i,j)%runoff*sec_day     * mon_avg
               mon_su(mon)%runsur(i,j,:)   = mon_su(mon)%runsur(i,j,:)   + lnd(i,j)%runoff_sur*sec_day     * mon_avg
+              ! the saturation excess soil_hydro returns at the surface is surface runoff too
+              mon_su(mon)%runsur(i,j,is_veg) = mon_su(mon)%runsur(i,j,is_veg) + lnd(i,j)%runoff_exc*sec_day * mon_avg
               mon_su(mon)%calving(i,j,:)  = mon_su(mon)%calving(i,j,:)  + lnd(i,j)%calving*sec_day     * mon_avg
               mon_su(mon)%drain(i,j,:)    = mon_su(mon)%drain(i,j,:)    + lnd(i,j)%drainage*sec_day     * mon_avg
               mon_su(mon)%snowmelt(i,j,:) = mon_su(mon)%snowmelt(i,j,:) + lnd(i,j)%snowmelt*sec_day     * mon_avg
@@ -1463,8 +1504,11 @@ contains
               enddo
             enddo
           endif
-          where ( (mon_su(mon)%drain+mon_su(mon)%runsur) .gt. 0 ) 
-            mon_su(mon)%rsursub = mon_su(mon)%runsur/(mon_su(mon)%drain+mon_su(mon)%runsur)
+          ! surface fraction of the total runoff. Uses runoff, not drain: over the vegetated tile
+          ! the subsurface component that leaves the land is the aquifer baseflow, and drain is the
+          ! recharge. 1-rsursub is the baseflow index
+          where ( mon_su(mon)%runoff .gt. 0 ) 
+            mon_su(mon)%rsursub = mon_su(mon)%runsur/mon_su(mon)%runoff
           elsewhere
             mon_su(mon)%rsursub = 0._wp
           endwhere
@@ -2114,10 +2158,11 @@ contains
     call nc_write(fnm,"npp",     sngl(vars%npp),    dim1=dim_time,start=[ndat],count=[y],long_name="net primary productivity",units="PgC/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"npp_pimask",     sngl(vars%npp_pimask),    dim1=dim_time,start=[ndat],count=[y],long_name="net primary productivity in pre-industrial permafrost area",units="PgC/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"sresp",   sngl(vars%sresp),  dim1=dim_time,start=[ndat],count=[y],long_name="soil respiration",units="PgC/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"runoff",  sngl(vars%runoff), dim1=dim_time,start=[ndat],count=[y],long_name="total runoff (surface runoff + drainage)",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"runsur",  sngl(vars%runsur), dim1=dim_time,start=[ndat],count=[y],long_name="surface runoff",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runoff",  sngl(vars%runoff), dim1=dim_time,start=[ndat],count=[y],long_name="total runoff (surface + subsurface)",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runsur",  sngl(vars%runsur), dim1=dim_time,start=[ndat],count=[y],long_name="surface runoff, including saturation excess",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runsub",  sngl(vars%runsub), dim1=dim_time,start=[ndat],count=[y],long_name="subsurface runoff (aquifer baseflow, drainage over ice and lake)",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"calving", sngl(vars%calving),dim1=dim_time,start=[ndat],count=[y],long_name="calving",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"drain",   sngl(vars%drain),  dim1=dim_time,start=[ndat],count=[y],long_name="drainage",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"drain",   sngl(vars%drain),  dim1=dim_time,start=[ndat],count=[y],long_name="drainage out of the soil column (aquifer recharge, NOT a runoff component)",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"evp",     sngl(vars%evp),    dim1=dim_time,start=[ndat],count=[y],long_name="evapotranspiration",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"esur",    sngl(vars%esur),   dim1=dim_time,start=[ndat],count=[y],long_name="surface evaporation",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"trans",   sngl(vars%trans),  dim1=dim_time,start=[ndat],count=[y],long_name="transpiration",units="10^15 kg/yr",missing_value=missing_value,ncid=ncid)
@@ -2223,6 +2268,7 @@ contains
     ave%sresp14 = 0._wp
     ave%runoff  = 0._wp
     ave%runsur  = 0._wp
+    ave%runsub  = 0._wp
     ave%calving = 0._wp
     ave%drain   = 0._wp
     ave%evp     = 0._wp
@@ -2298,6 +2344,7 @@ contains
      ave%sresp14 = ave%sresp14    + d(k)%sresp14
      ave%runoff  = ave%runoff     + d(k)%runoff
      ave%runsur  = ave%runsur     + d(k)%runsur
+     ave%runsub  = ave%runsub     + d(k)%runsub
      ave%calving = ave%calving    + d(k)%calving
      ave%drain   = ave%drain      + d(k)%drain
      ave%evp     = ave%evp        + d(k)%evp
@@ -2481,12 +2528,15 @@ end do
     call nc_write(fnm,"cti_lim",  sngl(vars%cti_lim), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="critical CTI index",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fwet",     sngl(vars%fwet), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="saturated fraction",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"wtab",     sngl(vars%wtab), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="water table depth",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runoffgw", sngl(vars%runoffgw), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="groundwater baseflow",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"wtabperch", sngl(vars%wtabperch), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="water table perched on the frost table",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"wtabeff", sngl(vars%wtabeff), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="effective water table used for wetlands and peat",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"inf",      sngl(vars%inf),  dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="infiltration",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"runoff",     sngl(vars%runoff), dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="total runoff (surface runoff + drainage)",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"runsur",     sngl(vars%runsur), dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="surface unoff",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runoff",     sngl(vars%runoff), dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="total runoff (surface + subsurface)",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"runsur",     sngl(vars%runsur), dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="surface runoff, including saturation excess",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"calving",     sngl(vars%calving), dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="calving",units="kg/m2/day weq",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"drain",    sngl(vars%drain),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="drainage",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"rsursub",  sngl(vars%rsursub),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="ratio surface runoff to drainage",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"drain",    sngl(vars%drain),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="drainage out of the soil column (aquifer recharge over the vegetated tile)",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"rsursub",  sngl(vars%rsursub),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="surface fraction of total runoff (1 minus the baseflow index)",units="1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"snowmelt",  sngl(vars%snowmelt),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="snowmelt",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"icemelt",  sngl(vars%icemelt),dims=[dim_lon,dim_lat,dim_nsoil,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[nx,ny,nsoil,1,1],long_name="icemelt",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"vpd",         sngl(vars%vpd), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[nx,ny,1,1],long_name="vapor pressure deficit",units="Pa",missing_value=missing_value,ncid=ncid)
@@ -2602,6 +2652,9 @@ end do
     ave%cti_lim = 0._wp
     ave%fwet    = 0._wp
     ave%wtab    = 0._wp
+    ave%runoffgw = 0._wp
+    ave%wtabperch = 0._wp
+    ave%wtabeff = 0._wp
     ave%inf     = 0._wp
     ave%runoff  = 0._wp
     ave%runsur  = 0._wp
@@ -2712,6 +2765,9 @@ end do
       ave%cti_lim = ave%cti_lim    + d(k)%cti_lim   / div
       ave%fwet    = ave%fwet       + d(k)%fwet      / div
       ave%wtab    = ave%wtab       + d(k)%wtab      / div
+      ave%runoffgw = ave%runoffgw  + d(k)%runoffgw  / div
+      ave%wtabperch = ave%wtabperch + d(k)%wtabperch / div
+      ave%wtabeff = ave%wtabeff + d(k)%wtabeff / div
       ave%inf     = ave%inf        + d(k)%inf       / div
       ave%runoff  = ave%runoff     + d(k)%runoff    / div
       ave%runsur  = ave%runsur     + d(k)%runsur    / div

@@ -38,7 +38,7 @@ module atm_out
   dxt, dy, cost, sint, i_ice
   use atm_params, only : l_daily_output
   use atm_params, only : amas, p0, ra, gad, cle, cls, cp, cv, hatm, sigma_so4, c_syn_6, l_co2d
-  use atm_params, only : l_output_flx3d, l_output_extended
+  use atm_params, only : l_output_flx3d, l_output_extended, l_diag_wcomp
   use vesta_mod, only : t_prof, rh_prof
   use atm_def, only : atm_class
   use ncio
@@ -174,6 +174,7 @@ module atm_out
 
     real(wp), allocatable, dimension(:,:,:) :: zs
     real(wp), allocatable, dimension(:,:) :: zsa
+    real(wp), allocatable, dimension(:,:) :: psa
     real(wp), allocatable, dimension(:,:) :: zsa_smooth
     real(wp), allocatable, dimension(:,:) :: slope
     real(wp), allocatable, dimension(:,:) :: slope_x
@@ -191,6 +192,7 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: dam        !! surface dust mass mixing ratio (kg/kg)
     real(wp), allocatable, dimension(:,:) :: hqeff      !! vertical moisture scale (m)
     real(wp), allocatable, dimension(:,:) :: hrm        !! vertical scale for relative humidity(m)
+    real(wp), allocatable, dimension(:,:) :: rhfree     !! background free tropospheric relative humidity (/)
     real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2)
     real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
     real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
@@ -265,7 +267,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: acbar
     real(wp), allocatable, dimension(:,:) :: epsa
     real(wp), allocatable, dimension(:,:) :: slp
-    real(wp), allocatable, dimension(:,:) :: slp1
+    real(wp), allocatable, dimension(:,:) :: ps
+    real(wp), allocatable, dimension(:,:,:) :: zg
     real(wp), allocatable, dimension(:,:) :: tsksl
     real(wp), allocatable, dimension(:,:) :: atsksl
     real(wp), allocatable, dimension(:,:) :: atsl
@@ -295,14 +298,19 @@ module atm_out
     real(wp), allocatable, dimension(:,:,:) :: u3
     real(wp), allocatable, dimension(:,:,:) :: v3
     real(wp), allocatable, dimension(:,:,:) :: w3
+    real(wp), allocatable, dimension(:,:,:) :: w3_geo
+    real(wp), allocatable, dimension(:,:,:) :: w3_ter
+    real(wp), allocatable, dimension(:,:,:) :: w3_ageo
     real(wp), allocatable, dimension(:,:,:) :: uter
     real(wp), allocatable, dimension(:,:,:) :: vter
 
     real(wp), allocatable, dimension(:,:,:) :: fax
-    real(wp), allocatable, dimension(:,:,:) :: faxo
     real(wp), allocatable, dimension(:,:,:) :: fay
-    real(wp), allocatable, dimension(:,:,:) :: fayo
     real(wp), allocatable, dimension(:,:) :: fac
+    real(wp), allocatable, dimension(:,:) :: fac_topo
+    real(wp), allocatable, dimension(:,:) :: fac_geo
+    real(wp), allocatable, dimension(:,:) :: ucor
+    real(wp), allocatable, dimension(:,:) :: vcor
 
     real(wp), allocatable, dimension(:,:) :: xz
 
@@ -331,6 +339,7 @@ module atm_out
     real(wp), allocatable, dimension(:) :: fayleg       ! zonal integral of meridional latent energy flux by mean circulation (W)
     real(wp), allocatable, dimension(:) :: faywtrg      ! zonal integral of meridional water flux by mean circulation (kg/s)
     real(wp), allocatable, dimension(:) :: fdydseg      ! zonal integral of meridional dry static energy flux by eddies (W)
+    real(wp), allocatable, dimension(:) :: fsydseg      ! zonal integral of meridional dry static energy flux by stationary waves (W)
     real(wp), allocatable, dimension(:) :: fdyleg       ! zonal integral of meridional latent energy flux by eddies (W)
     real(wp), allocatable, dimension(:) :: fdywtrg      ! zonal integral of meridional water flux by eddies (kg/s)
     real(wp), allocatable, dimension(:) :: fydseg       ! zonal integral of meridional dry static energy flux (W)
@@ -450,6 +459,7 @@ contains
 
      allocate(ann_a%zs(im,jm,nm))
      allocate(ann_a%zsa(im,jm))
+     allocate(ann_a%psa(im,jm))
      allocate(ann_a%zsa_smooth(im,jm))
      allocate(ann_a%slope(im,jm))
      allocate(ann_a%slope_x(im,jm))
@@ -467,6 +477,7 @@ contains
      allocate(ann_a%dam(im,jm))  
      allocate(ann_a%hqeff(im,jm))  
      allocate(ann_a%hrm(im,jm))  
+     allocate(ann_a%rhfree(im,jm))  
      allocate(ann_a%wcon(im,jm)) 
      allocate(ann_a%cld_rh(im,jm)) 
      allocate(ann_a%cld_low(im,jm)) 
@@ -548,7 +559,8 @@ contains
      allocate(ann_a%aslp_topo(im,jm))
      allocate(ann_a%dz500(im,jm))
      allocate(ann_a%slp(im,jm))
-     allocate(ann_a%slp1(im,jm))
+     allocate(ann_a%ps(im,jm))
+     allocate(ann_a%zg(im,jm,km))
      allocate(ann_a%us(im,jm))
      allocate(ann_a%vs(im,jm))
      allocate(ann_a%usk(im,jm))
@@ -570,15 +582,20 @@ contains
      allocate(ann_a%u3(im,jm,km))
      allocate(ann_a%v3(im,jm,km))
      allocate(ann_a%w3(im,jm,kmc))
+     allocate(ann_a%w3_geo(im,jm,kmc))
+     allocate(ann_a%w3_ter(im,jm,kmc))
+     allocate(ann_a%w3_ageo(im,jm,kmc))
      allocate(ann_a%uter(im,jm,km))
      allocate(ann_a%vter(im,jm,km))
 
      if (l_output_flx3d) then
        allocate(ann_a%fax(imc,jm,km))
-       allocate(ann_a%faxo(imc,jm,km))
        allocate(ann_a%fay(im,jmc,km))
-       allocate(ann_a%fayo(im,jmc,km))
        allocate(ann_a%fac(im,jm))
+       allocate(ann_a%fac_topo(im,jm))
+       allocate(ann_a%fac_geo(im,jm))
+       allocate(ann_a%ucor(im,jm))
+       allocate(ann_a%vcor(im,jm))
      endif
 
      allocate(ann_a%xz(jmc,kmc))
@@ -608,6 +625,7 @@ contains
      allocate(ann_a%fayleg(jmc))
      allocate(ann_a%faywtrg(jmc))
      allocate(ann_a%fdydseg(jmc))
+     allocate(ann_a%fsydseg(jmc))
      allocate(ann_a%fdyleg(jmc))
      allocate(ann_a%fdywtrg(jmc))
      allocate(ann_a%fydseg(jmc))
@@ -693,6 +711,7 @@ contains
      allocate(mon_a(k)%dam(im,jm))  
      allocate(mon_a(k)%hqeff(im,jm))  
      allocate(mon_a(k)%hrm(im,jm))  
+     allocate(mon_a(k)%rhfree(im,jm))  
      allocate(mon_a(k)%wcon(im,jm)) 
      allocate(mon_a(k)%cld_rh(im,jm)) 
      allocate(mon_a(k)%cld_low(im,jm)) 
@@ -774,7 +793,8 @@ contains
      allocate(mon_a(k)%aslp_topo(im,jm))
      allocate(mon_a(k)%dz500(im,jm))
      allocate(mon_a(k)%slp(im,jm))
-     allocate(mon_a(k)%slp1(im,jm))
+     allocate(mon_a(k)%ps(im,jm))
+     allocate(mon_a(k)%zg(im,jm,km))
      allocate(mon_a(k)%us(im,jm))
      allocate(mon_a(k)%vs(im,jm))
      allocate(mon_a(k)%usk(im,jm))
@@ -796,15 +816,20 @@ contains
      allocate(mon_a(k)%u3(im,jm,km))
      allocate(mon_a(k)%v3(im,jm,km))
      allocate(mon_a(k)%w3(im,jm,kmc))
+     allocate(mon_a(k)%w3_geo(im,jm,kmc))
+     allocate(mon_a(k)%w3_ter(im,jm,kmc))
+     allocate(mon_a(k)%w3_ageo(im,jm,kmc))
      allocate(mon_a(k)%uter(im,jm,km))
      allocate(mon_a(k)%vter(im,jm,km))
 
      if (l_output_flx3d) then
        allocate(mon_a(k)%fax(imc,jm,km))
-       allocate(mon_a(k)%faxo(imc,jm,km))
        allocate(mon_a(k)%fay(im,jmc,km))
-       allocate(mon_a(k)%fayo(im,jmc,km))
        allocate(mon_a(k)%fac(im,jm))
+       allocate(mon_a(k)%fac_topo(im,jm))
+       allocate(mon_a(k)%fac_geo(im,jm))
+       allocate(mon_a(k)%ucor(im,jm))
+       allocate(mon_a(k)%vcor(im,jm))
      endif
 
      allocate(mon_a(k)%xz(jmc,kmc))
@@ -834,6 +859,7 @@ contains
      allocate(mon_a(k)%fayleg(jmc))
      allocate(mon_a(k)%faywtrg(jmc))
      allocate(mon_a(k)%fdydseg(jmc))
+     allocate(mon_a(k)%fsydseg(jmc))
      allocate(mon_a(k)%fdyleg(jmc))
      allocate(mon_a(k)%fdywtrg(jmc))
      allocate(mon_a(k)%fydseg(jmc))
@@ -940,7 +966,11 @@ contains
     real(wp) :: t, rh
     real(wp) :: faxmasi, faymasi
     real(wp) :: tup
-    real(wp) :: ps, slp
+    real(wp) :: ps
+    real(wp) :: tstar, gamsl, tsl0, betasl, xsl, fred   ! sea level reduction, see ps below
+    integer  :: kk, kp                                  ! geopotential height, see zg below
+    real(wp) :: zgl, ptarg, tbar, tprv
+    real(wp) :: pcol(kmc), zcol(kmc)
     real(wp) :: ctt
 
     real(wp) :: fayg(jmc)
@@ -1478,6 +1508,7 @@ contains
           mon_a(m)%dam         = 0. 
           mon_a(m)%hqeff       = 0. 
           mon_a(m)%hrm         = 0. 
+          mon_a(m)%rhfree      = 0. 
           mon_a(m)%wcon        = 0. 
           mon_a(m)%cld_rh         = 0. 
           mon_a(m)%cld_low         = 0. 
@@ -1540,7 +1571,8 @@ contains
           mon_a(m)%aslp_topo   = 0. 
           mon_a(m)%dz500       = 0. 
           mon_a(m)%slp         = 0. 
-          mon_a(m)%slp1        = 0. 
+          mon_a(m)%ps          = 0. 
+          mon_a(m)%zg          = 0. 
           mon_a(m)%us         = 0. 
           mon_a(m)%vs         = 0. 
           mon_a(m)%usk        = 0. 
@@ -1560,14 +1592,19 @@ contains
           mon_a(m)%u3         = 0. 
           mon_a(m)%v3         = 0. 
           mon_a(m)%w3         = 0. 
+          mon_a(m)%w3_geo     = 0. 
+          mon_a(m)%w3_ter     = 0. 
+          mon_a(m)%w3_ageo    = 0. 
           mon_a(m)%uter        = 0. 
           mon_a(m)%vter        = 0. 
           if (l_output_flx3d) then
             mon_a(m)%fax        = 0. 
-            mon_a(m)%faxo       = 0. 
             mon_a(m)%fay        = 0. 
-            mon_a(m)%fayo       = 0. 
             mon_a(m)%fac        = 0. 
+            mon_a(m)%fac_topo   = 0. 
+            mon_a(m)%fac_geo    = 0. 
+            mon_a(m)%ucor        = 0. 
+            mon_a(m)%vcor        = 0. 
           endif
           mon_a(m)%diffxdse    = 0. 
           mon_a(m)%diffydse    = 0. 
@@ -1599,6 +1636,7 @@ contains
           mon_a(m)%fayleg     = 0. 
           mon_a(m)%faywtrg    = 0. 
           mon_a(m)%fdydseg    = 0. 
+          mon_a(m)%fsydseg    = 0. 
           mon_a(m)%fdyleg     = 0. 
           mon_a(m)%fdywtrg    = 0. 
           mon_a(m)%fydseg     = 0. 
@@ -1688,6 +1726,7 @@ contains
       mon_a(mon)%dam         = mon_a(mon)%dam         + mon_avg * atm%dam
       mon_a(mon)%hqeff       = mon_a(mon)%hqeff       + mon_avg * atm%hqeff
       mon_a(mon)%hrm         = mon_a(mon)%hrm         + mon_avg * atm%hrm
+      mon_a(mon)%rhfree      = mon_a(mon)%rhfree      + mon_avg * atm%rhfree
       mon_a(mon)%wcon        = mon_a(mon)%wcon        + mon_avg * atm%wcon
       mon_a(mon)%cld_rh         = mon_a(mon)%cld_rh         + mon_avg * atm%cld_rh
       mon_a(mon)%cld_low        = mon_a(mon)%cld_low        + mon_avg * atm%cld_low
@@ -1770,14 +1809,19 @@ contains
       mon_a(mon)%u3         = mon_a(mon)%u3         + mon_avg * atm%u3
       mon_a(mon)%v3         = mon_a(mon)%v3         + mon_avg * atm%v3
       mon_a(mon)%w3         = mon_a(mon)%w3         + mon_avg * atm%w3
+      mon_a(mon)%w3_geo     = mon_a(mon)%w3_geo     + mon_avg * atm%w3_geo
+      mon_a(mon)%w3_ter     = mon_a(mon)%w3_ter     + mon_avg * atm%w3_ter
+      mon_a(mon)%w3_ageo    = mon_a(mon)%w3_ageo    + mon_avg * atm%w3_ageo
       mon_a(mon)%uter        = mon_a(mon)%uter        + mon_avg * atm%uter
       mon_a(mon)%vter        = mon_a(mon)%vter        + mon_avg * atm%vter
       if (l_output_flx3d) then
         mon_a(mon)%fax        = mon_a(mon)%fax        + mon_avg * atm%fax
-        mon_a(mon)%faxo       = mon_a(mon)%faxo       + mon_avg * atm%faxo
         mon_a(mon)%fay        = mon_a(mon)%fay        + mon_avg * atm%fay
-        mon_a(mon)%fayo       = mon_a(mon)%fayo       + mon_avg * atm%fayo
         mon_a(mon)%fac        = mon_a(mon)%fac        + mon_avg * atm%fac
+        mon_a(mon)%fac_topo   = mon_a(mon)%fac_topo   + mon_avg * atm%fac_topo
+        mon_a(mon)%fac_geo    = mon_a(mon)%fac_geo    + mon_avg * atm%fac_geo
+        mon_a(mon)%ucor        = mon_a(mon)%ucor        + mon_avg * atm%ucor
+        mon_a(mon)%vcor        = mon_a(mon)%vcor        + mon_avg * atm%vcor
       endif
       mon_a(mon)%diffxdse    = mon_a(mon)%diffxdse        + mon_avg * atm%diffxdse
       mon_a(mon)%diffydse    = mon_a(mon)%diffydse        + mon_avg * atm%diffydse
@@ -1808,13 +1852,98 @@ contains
           jmi=max(1,j-1)
           jpl=min(jm,j+1)
 
-          ! derive sea level pressure to be compared to other models, using constant lapse rate of 6.5 K/km
-          ! compute surface pressure from sea level pressure using actual lapse rate
-          ps = atm%slp(i,j)*(1.+atm%gamb(i,j)*atm%zsa(i,j)/(atm%tam(i,j)-atm%gamb(i,j)*atm%zsa(i,j)))**(-g/(Rd*atm%gamb(i,j)))
-          ! reduce pressure to sea level using constant lapse rate of 6.5 K/km
+          ! diagnostic surface pressure, obtained by taking the simulated sea level pressure down
+          ! to the surface with the standard reduction convention (constant 6.5 K/km plus the two
+          ! ECMWF temperature limiters), i.e. exactly the inverse of the Trenberth/ECMWF algorithm
+          ! that IFS and CAM (cpslec) use to produce the msl/psl that atm%slp is compared with.
+          ! The limiters are part of that convention, not an option: inverting msl/ps month by
+          ! month for the implied (constant) elevation identifies the T*<255 K limiter in
+          ! ERA-Interim and in 7 of the 8 CMIP5 LGM models (all but IPSL-CM5A-LR).
           ! https://www.wmo.int/pages/prog/www/IMOP/meetings/SI/ET-Stand-1/Doc-10_Pressure-red.pdf
-          slp = ps*(1.+6.5e-3*atm%zsa(i,j)/(atm%tam(i,j)-6.5e-3*atm%zsa(i,j)))**(g/(Rd*6.5e-3))
-          mon_a(mon)%slp1(i,j) = mon_a(mon)%slp1(i,j) + mon_avg * slp 
+          !
+          ! Using the model lapse rate gamb here instead (as an earlier version did, on the way to
+          ! a "slp1" reduced back with 6.5 K/km) is wrong twice over.  gamb = c_gam_1-c_gam_2*qam
+          ! is the LOWER-TROPOSPHERIC lapse rate, 3.4-3.7 K/km, deliberately much smaller than the
+          ! free-atmosphere value; extrapolating a fictitious column from sea level to the top of
+          ! an ice sheet with it, from the cold surface temperature tam, made the surface pressure
+          ! ~23 hPa too low above 2500 m against both ERA-Interim (PI) and the CMIP5 LGM median,
+          ! after allowing for the orography difference.  And because the round trip down with
+          ! gamb and back up with 6.5 K/km is not the identity, it stripped 2-3% from the sea
+          ! level pressure over the ice sheets, leaving slp1 a factor 2.5-3 worse than atm%slp
+          ! itself as an estimate of the observed msl (rms against ERA over land above 1500 m:
+          ! 32.7 hPa for slp1 against 12.6 hPa for slp).  slp1 has therefore been dropped; compare
+          ! atm%slp directly with ERA msl / CMIP psl, which are on the same convention.
+          tstar = atm%tam(i,j)
+          gamsl = 6.5e-3
+          tsl0  = tstar + gamsl*atm%zsa(i,j)
+          if (tstar.le.290.5 .and. tsl0.gt.290.5) then
+            ! hot elevated terrain: hold the extrapolated sea level temperature at 290.5 K
+            gamsl = (290.5-tstar)/max(atm%zsa(i,j),1.e-6)
+          else if (tstar.gt.290.5 .and. tsl0.gt.290.5) then
+            gamsl = 0.
+            tstar = 0.5*(290.5+tstar)
+          endif
+          ! cold surface (the ice sheets): damp the extrapolation toward 255 K
+          if (tstar.lt.255.) tstar = 0.5*(255.+tstar)
+          ! series form of (1+gamsl*zsa/tstar)**(g/(Rd*gamsl)); needed because the branch above
+          ! can set gamsl = 0, where that closed form is singular
+          betasl = g*atm%zsa(i,j)/(Rd*tstar)
+          xsl    = gamsl*atm%zsa(i,j)/tstar
+          fred   = exp(betasl*(1.-0.5*xsl+xsl*xsl/3.))
+          ps = atm%slp(i,j)/fred
+          mon_a(mon)%ps(i,j) = mon_a(mon)%ps(i,j) + mon_avg * ps
+
+          ! geopotential height on the standard pressure levels plev, for comparison with the
+          ! zg of reanalyses and CMIP models.  Hydrostatic integration of the model temperature
+          ! t3 upward from (zsa, ps); below ground the standard reduction profile above is
+          ! continued downward, as ERA and the CMIP archives do, which keeps zg at 1000 hPa
+          ! consistent with atm%slp.
+          ! Note this cannot usefully be done from the winds instead.  u3/v3 contain the
+          ! ageostrophic PBL branch and the MMC return flow, which are not part of any gradient;
+          ! the geostrophic inversion is singular at the equator; and uter/vter are multiplied
+          ! by the latitude dependent factors c_damp_eq and c_damp_pol in u3d, after which
+          ! f*(k x v) is no longer a gradient of anything, so the inversion would leave a
+          ! residual.  It would also add no information, uter being derived from t3 to begin with.
+          ! the thickness of a layer is set by its VIRTUAL temperature; ignoring the correction
+          ! leaves zg ~13 m low at 850 hPa and ~108 m low at 100 hPa, most of it in the tropics
+          ! where q is largest (500 hPa rms over 30S-30N 104 m without it against 88 m with)
+          pcol(1) = ps
+          zcol(1) = atm%zsa(i,j)
+          tprv    = atm%tam(i,j)*(1._wp+0.608_wp*atm%q2a(i,j))
+          kp      = 1
+          do k=1,kmc
+            if (zl(k).le.atm%zsa(i,j)) cycle
+            tbar = 0.5_wp*(tprv+atm%t3(i,j,k)*(1._wp+0.608_wp*atm%q3(i,j,k)))
+            kp   = kp+1
+            zcol(kp) = zl(k)
+            pcol(kp) = pcol(kp-1)*exp(-g*(zcol(kp)-zcol(kp-1))/(Rd*tbar))
+            tprv = atm%t3(i,j,k)*(1._wp+0.608_wp*atm%q3(i,j,k))
+          enddo
+          do k=1,km
+            ptarg = pl(k)*1.e5_wp
+            if (ptarg.ge.ps) then
+              ! below the surface: continue the reduction profile of ps downward
+              if (gamsl.gt.0._wp) then
+                zgl = atm%zsa(i,j) - tstar/gamsl*((ptarg/ps)**(Rd*gamsl/g)-1._wp)
+              else
+                zgl = atm%zsa(i,j) - Rd*tstar/g*log(ptarg/ps)
+              endif
+            else
+              ! above the top of the column, extrapolate with the topmost layer mean temperature
+              tbar = -g*(zcol(kp)-zcol(kp-1))/(Rd*log(pcol(kp)/pcol(kp-1)))
+              zgl  = zcol(kp) + Rd*tbar/g*log(pcol(kp)/ptarg)
+              do kk=2,kp
+                if (pcol(kk).le.ptarg) then
+                  ! layer mean temperature taken from the layer itself, so that zg is exactly
+                  ! consistent with the integration above
+                  tbar = -g*(zcol(kk)-zcol(kk-1))/(Rd*log(pcol(kk)/pcol(kk-1)))
+                  zgl  = zcol(kk-1) + Rd*tbar/g*log(pcol(kk-1)/ptarg)
+                  exit
+                endif
+              enddo
+            endif
+            mon_a(mon)%zg(i,j,k) = mon_a(mon)%zg(i,j,k) + mon_avg * zgl
+          enddo
 
           ! surface humidity gradient
           mon_a(mon)%dq(i,j) = mon_a(mon)%dq(i,j) + mon_avg * (fqsat(atm%tskina(i,j),atm%psa(i,j))-atm%q2a(i,j))
@@ -1946,6 +2075,7 @@ contains
       mon_a(mon)%fayleg     = mon_a(mon)%fayleg     + mon_avg * fayleg *1.e-15    ! PW
       mon_a(mon)%faywtrg    = mon_a(mon)%faywtrg    + mon_avg * faywtrg
       mon_a(mon)%fdydseg    = mon_a(mon)%fdydseg    + mon_avg * fdydseg*1.e-15    ! PW
+      mon_a(mon)%fsydseg    = mon_a(mon)%fsydseg    + mon_avg * atm%fsydseg*cp*1.e-15  ! PW
       mon_a(mon)%fdyleg     = mon_a(mon)%fdyleg     + mon_avg * fdyleg*1.e-15     ! PW
       mon_a(mon)%fdywtrg    = mon_a(mon)%fdywtrg    + mon_avg * fdywtrg
       mon_a(mon)%fydseg     = mon_a(mon)%fydseg     + mon_avg * fydseg*1.e-15    ! PW
@@ -2065,7 +2195,7 @@ contains
             mon_a(mon)%tp(i,j,k) = mon_a(mon)%tp(i,j,k) + mon_avg * (t+gad*zl(k))
 
             ! relative humidity
-            rh = rh_prof(atm%zsa(i,j), zl(k), atm%ram(i,j), atm%hrm(i,j), atm%htrop(i,j))
+            rh = rh_prof(atm%zsa(i,j), zl(k), atm%ram(i,j), atm%hrm(i,j), atm%rhfree(i,j), atm%htrop(i,j))
             mon_a(mon)%r3(i,j,k) = mon_a(mon)%r3(i,j,k) + mon_avg * rh 
 
             ! specific humidity 
@@ -2180,6 +2310,7 @@ contains
         day_a(doy)%gamb    = atm%gamb
         day_a(doy)%gamt    = atm%gamt
         day_a(doy)%hrm     = atm%hrm
+        day_a(doy)%rhfree  = atm%rhfree
         day_a(doy)%flwr_dw_sur         = atm%flwr_dw_sur
         day_a(doy)%flwr_dw_sur_cs      = atm%flwr_dw_sur_cs
         day_a(doy)%flwr_dw_sur_cld     = atm%flwr_dw_sur_cld
@@ -2199,6 +2330,7 @@ contains
       ann_a%coszm       = atm%coszm
       ann_a%zs          = atm%zs
       ann_a%zsa         = atm%zsa
+      ann_a%psa         = atm%psa
       ann_a%zsa_smooth  = atm%zsa_smooth
       ann_a%slope       = atm%slope
       ann_a%slope_x     = atm%slope_X
@@ -2474,6 +2606,13 @@ contains
 
       call nc_write(fnm,"zsa        ", sngl(vars%zsa       (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
         start=[1,1,nout],count=[im,jm,1],long_name="grid cell average surface elevation",units="m",ncid=ncid)
+      ! the surface pressure the physics actually uses (atm_grid.f90:391): a function of
+      ! elevation alone, with a scale height fixed at T0=273.15 K.  Written alongside the
+      ! diagnostic ps above so the two can be compared directly; they differ by ~26 hPa in the
+      ! mean above 2500 m (psa too high over the cold ice sheets, too low over warm plateaus)
+      ! and psa has no seasonal cycle and, over the ocean, no spatial structure at all.
+      call nc_write(fnm,"psa        ", sngl(vars%psa       (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
+        start=[1,1,nout],count=[im,jm,1],long_name="static surface pressure used by the physics, p0*exp(-zsa/hatm)",units="Pa",ncid=ncid)
       call nc_write(fnm,"zsa_smooth ", sngl(vars%zsa_smooth(:,jm:1:-1) ), dims=["lon ","lat ","time"], &
         start=[1,1,nout],count=[im,jm,1],long_name="grid cell average smoothed surface elevation",units="m",ncid=ncid)
       call nc_write(fnm,"slope      ", sngl(vars%slope     (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
@@ -2536,6 +2675,8 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="prognostic atmospheric dust mass mixing ratio",units="kg/kg",ncid=ncid)
     call nc_write(fnm,"hqeff      ", sngl(vars%hqeff     (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="effective specific humidity height scale",units="m",ncid=ncid)
+    call nc_write(fnm,"rhfree     ", sngl(vars%rhfree    (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="background free tropospheric relative humidity",units="/",ncid=ncid)
     call nc_write(fnm,"hrm        ", sngl(vars%hrm       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="relative humidity height scale",units="m",ncid=ncid)
     call nc_write(fnm,"wcon       ", sngl(vars%wcon      (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2685,8 +2826,10 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal sea level pressure from topographic stationary waves",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp        ", sngl(vars%slp        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure",units="Pa",ncid=ncid)
-    call nc_write(fnm,"slp1       ", sngl(vars%slp1       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure derived using constant 6.5 K/km lapse rate",units="Pa",ncid=ncid)
+    call nc_write(fnm,"ps         ", sngl(vars%ps         (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="surface pressure, from slp using the standard 6.5 K/km reduction convention",units="Pa",ncid=ncid)
+    call nc_write(fnm,"zg         ", sngl(vars%zg         (:,jm:1:-1,:)), dims=["lon ","lat ","plev","mon ","time"], &
+      start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="geopotential height on pressure levels",units="m",ncid=ncid)
     call nc_write(fnm,"dz500      ", sngl(vars%dz500      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal geopotential height at 500 hPa",units="m",ncid=ncid)
     call nc_write(fnm,"us        ", sngl(vars%us        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2804,6 +2947,14 @@ contains
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D meridional wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"w3         ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D vertical velocity",units="m/s",ncid=ncid)
+    if (l_diag_wcomp) then
+      call nc_write(fnm,"w3_geo     ", sngl(vars%w3_geo         (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+        start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="vertical velocity from the divergence of the barotropic geostrophic wind",units="m/s",ncid=ncid)
+      call nc_write(fnm,"w3_ter     ", sngl(vars%w3_ter         (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+        start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="vertical velocity from the divergence of the thermal wind",units="m/s",ncid=ncid)
+      call nc_write(fnm,"w3_ageo    ", sngl(vars%w3_ageo        (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+        start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="vertical velocity from the divergence of the ageostrophic PBL wind",units="m/s",ncid=ncid)
+    endif
 
     call nc_write(fnm,"xz         ", sngl(vars%xz         (jmc:1:-1,:)), dims=["latv ","zlevw","mon  ","time "], &
       start=[1,1,ndat,nout],count=[jmc,kmc,1,1],long_name="mean meridional mass streamfunction",units="10**10 kg/s",ncid=ncid)
@@ -2820,6 +2971,8 @@ contains
       start=[1,ndat,nout],count=[jmc,1,1],long_name="meridional latent heat transport by mean circulation",units="PW",ncid=ncid)
     call nc_write(fnm,"faywtrg   ", sngl(vars%faywtrg   (jmc:1:-1)), dims=["latv","mon ","time"], &
       start=[1,ndat,nout],count=[jmc,1,1],long_name="meridional moisture transport by mean circulation",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"fsydseg   ", sngl(vars%fsydseg   (jmc:1:-1)), dims=["latv","mon ","time"], &
+      start=[1,ndat,nout],count=[jmc,1,1],long_name="meridional dry static energy transport by stationary waves",units="PW",ncid=ncid)
     call nc_write(fnm,"fdydseg   ", sngl(vars%fdydseg   (jmc:1:-1)), dims=["latv","mon ","time"], &
       start=[1,ndat,nout],count=[jmc,1,1],long_name="meridional dry static energy transport by synoptic eddies",units="PW",ncid=ncid)
     call nc_write(fnm,"fdyleg    ", sngl(vars%fdyleg    (jmc:1:-1)), dims=["latv","mon ","time"], &
@@ -2895,17 +3048,21 @@ contains
     call nc_write(fnm,"dswd_dz_ir_cld  ", sngl(vars%dswd_dz_ir_cld  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="partial derivative of shortwave surface down radiation wrt surface albedo",units="W/m2",ncid=ncid)
     if (l_output_flx3d) then
+    call nc_write(fnm,"fac       ", sngl(vars%fac       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated mass flux convergence before the mass correction",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"fac_topo  ", sngl(vars%fac_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="topographic part of the column convergence, -V.grad(p_s), zero unless i_mass_com_topo=1",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"fac_geo   ", sngl(vars%fac_geo   (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="barotropic geostrophic part of the column convergence, zero unless i_mass_com_vert=1; the thermal wind part is fac-fac_geo",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"ucor      ", sngl(vars%ucor      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="implied zonal velocity of the per-column mass correction",units="m/s",ncid=ncid)
+    call nc_write(fnm,"vcor      ", sngl(vars%vcor      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="implied meridional velocity of the per-column mass correction",units="m/s",ncid=ncid)
     call nc_write(fnm,"fax       ", sngl(vars%fax       (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
-      start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"faxo      ", sngl(vars%faxo      (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fay       ", sngl(vars%fay       (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fayo      ", sngl(vars%fayo      (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
-      start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fac       ", sngl(vars%fac       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-      endif
+    endif
     call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic zonal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"v3a        ", sngl(vars%va        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
@@ -3009,6 +3166,7 @@ contains
     call nc_write(fnm,"gamb       ", sngl(vars%gamb      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"gamt       ", sngl(vars%gamt      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"hrm        ", sngl(vars%hrm       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"rhfree     ", sngl(vars%rhfree    (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"prc        ", sngl(vars%prc       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"wind       ", sngl(vars%wind      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"convdse    ", sngl(vars%convdse   (:,jm:1:-1)),  dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
@@ -3074,6 +3232,7 @@ contains
     ave%dam         = 0._wp
     ave%hqeff       = 0._wp
     ave%hrm         = 0._wp
+    ave%rhfree      = 0._wp
     ave%wcon        = 0._wp
     ave%cld_rh        = 0._wp
     ave%cld_low        = 0._wp
@@ -3136,7 +3295,8 @@ contains
     ave%aslp_topo   = 0._wp
     ave%dz500       = 0._wp
     ave%slp         = 0._wp
-    ave%slp1        = 0._wp
+    ave%ps          = 0._wp
+    ave%zg          = 0._wp
     ave%us         = 0._wp
     ave%vs         = 0._wp
     ave%usk        = 0._wp
@@ -3156,14 +3316,19 @@ contains
     ave%u3         = 0._wp
     ave%v3         = 0._wp
     ave%w3         = 0._wp
+    ave%w3_geo     = 0._wp
+    ave%w3_ter     = 0._wp
+    ave%w3_ageo    = 0._wp
     ave%uter        = 0._wp
     ave%vter        = 0._wp
     if (l_output_flx3d) then
       ave%fax        = 0._wp
-      ave%faxo       = 0._wp
       ave%fay        = 0._wp
-      ave%fayo       = 0._wp
       ave%fac        = 0._wp
+      ave%fac_topo   = 0._wp
+      ave%fac_geo    = 0._wp
+      ave%ucor        = 0._wp
+      ave%vcor        = 0._wp
     endif
     ave%xz          = 0._wp
     ave%diffxdse    = 0._wp
@@ -3196,6 +3361,7 @@ contains
     ave%fayleg     = 0._wp
     ave%faywtrg    = 0._wp
     ave%fdydseg    = 0._wp
+    ave%fsydseg    = 0._wp
     ave%fdyleg     = 0._wp
     ave%fdywtrg    = 0._wp
     ave%fydseg     = 0._wp
@@ -3285,6 +3451,7 @@ contains
        ave%dam         = ave%dam         + d(k)%dam         / div
        ave%hqeff       = ave%hqeff       + d(k)%hqeff       / div
        ave%hrm         = ave%hrm         + d(k)%hrm         / div
+       ave%rhfree      = ave%rhfree      + d(k)%rhfree      / div
        ave%wcon        = ave%wcon        + d(k)%wcon        / div
        ave%cld_rh         = ave%cld_rh         + d(k)%cld_rh         / div
        ave%cld_low         = ave%cld_low         + d(k)%cld_low         / div
@@ -3339,7 +3506,8 @@ contains
        ave%acbar       = ave%acbar       + d(k)%acbar       / div
        ave%epsa        = ave%epsa        + d(k)%epsa        / div
        ave%slp         = ave%slp         + d(k)%slp         / div
-       ave%slp1        = ave%slp1        + d(k)%slp1        / div
+       ave%ps          = ave%ps          + d(k)%ps          / div
+       ave%zg          = ave%zg          + d(k)%zg          / div
        ave%tsksl        = ave%tsksl        + d(k)%tsksl        / div
        ave%atsksl        = ave%atsksl        + d(k)%atsksl        / div
        ave%atsl        = ave%atsl        + d(k)%atsl        / div
@@ -3367,14 +3535,19 @@ contains
        ave%u3         = ave%u3         + d(k)%u3         / div
        ave%v3         = ave%v3         + d(k)%v3         / div
        ave%w3         = ave%w3         + d(k)%w3         / div
+       ave%w3_geo     = ave%w3_geo     + d(k)%w3_geo     / div
+       ave%w3_ter     = ave%w3_ter     + d(k)%w3_ter     / div
+       ave%w3_ageo    = ave%w3_ageo    + d(k)%w3_ageo    / div
        ave%uter        = ave%uter        + d(k)%uter        / div
        ave%vter        = ave%vter        + d(k)%vter        / div
        if (l_output_flx3d) then
          ave%fax        = ave%fax        + d(k)%fax        / div
-         ave%faxo       = ave%faxo       + d(k)%faxo       / div
          ave%fay        = ave%fay        + d(k)%fay        / div
-         ave%fayo       = ave%fayo       + d(k)%fayo       / div
          ave%fac        = ave%fac        + d(k)%fac        / div
+         ave%fac_topo   = ave%fac_topo   + d(k)%fac_topo   / div
+         ave%fac_geo    = ave%fac_geo    + d(k)%fac_geo    / div
+         ave%ucor        = ave%ucor        + d(k)%ucor        / div
+         ave%vcor        = ave%vcor        + d(k)%vcor        / div
        endif
        ave%xz          = ave%xz          + d(k)%xz          / div
        ave%diffxdse        = ave%diffxdse        + d(k)%diffxdse        / div
@@ -3407,6 +3580,7 @@ contains
        ave%fayleg     = ave%fayleg     + d(k)%fayleg     / div
        ave%faywtrg    = ave%faywtrg    + d(k)%faywtrg    / div
        ave%fdydseg    = ave%fdydseg    + d(k)%fdydseg    / div
+       ave%fsydseg    = ave%fsydseg    + d(k)%fsydseg    / div
        ave%fdyleg     = ave%fdyleg     + d(k)%fdyleg     / div
        ave%fdywtrg    = ave%fdywtrg    + d(k)%fdywtrg    / div
        ave%fydseg     = ave%fydseg     + d(k)%fydseg     / div

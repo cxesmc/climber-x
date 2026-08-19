@@ -63,6 +63,7 @@ module cmn_out
     real(wp), dimension(:,:), allocatable :: f_ocn, f_lnd, f_ice
     real(wp), dimension(:,:), allocatable :: prc, rain, snow, wind
     real(wp), dimension(:,:), allocatable :: lh, evp, sh, lwd, lwu, swn, lwn, lsnow, ebal
+    real(wp), dimension(:,:), allocatable :: evp_ocn   ! evaporation over the ocean only (open water + sea ice)
     real(wp), dimension(:,:), allocatable :: lh_l, sh_l, swn_l, lwn_l, ebal_l
     real(wp), dimension(:,:), allocatable :: lh_o, sh_o, swn_o, lwn_o, ebal_o
     real(wp), dimension(:,:), allocatable :: tskin, t2m, q2m
@@ -111,6 +112,7 @@ contains
      allocate(mon_sur(k)%wind(ni,nj))
      allocate(mon_sur(k)%lh(ni,nj))
      allocate(mon_sur(k)%evp(ni,nj))
+     allocate(mon_sur(k)%evp_ocn(ni,nj))
      allocate(mon_sur(k)%sh(ni,nj))
      allocate(mon_sur(k)%lwd(ni,nj))
      allocate(mon_sur(k)%lwu(ni,nj))
@@ -157,6 +159,7 @@ contains
      allocate(ann_sur%wind(ni,nj))
      allocate(ann_sur%lh(ni,nj))
      allocate(ann_sur%evp(ni,nj))
+     allocate(ann_sur%evp_ocn(ni,nj))
      allocate(ann_sur%sh(ni,nj))
      allocate(ann_sur%lwd(ni,nj))
      allocate(ann_sur%lwu(ni,nj))
@@ -460,6 +463,7 @@ contains
           mon_sur(m)%rain     = 0._wp
           mon_sur(m)%snow     = 0._wp
           mon_sur(m)%evp      = 0._wp
+          mon_sur(m)%evp_ocn  = 0._wp
           mon_sur(m)%runoff   = 0._wp
           mon_sur(m)%runoff_veg   = 0._wp
           mon_sur(m)%runoff_ice   = 0._wp
@@ -498,6 +502,8 @@ contains
       mon_sur(mon)%snow = mon_sur(mon)%snow + sum(cmn%snow*cmn%f_stp,3) ! kg/m2/s
       mon_sur(mon)%prc = mon_sur(mon)%rain + mon_sur(mon)%snow ! kg/m2/s
       mon_sur(mon)%evp = mon_sur(mon)%evp + sum(cmn%evp*cmn%f_stp,3) ! kg/m2/s
+      mon_sur(mon)%evp_ocn = mon_sur(mon)%evp_ocn &
+        + ((1._wp-cmn%f_sic)*cmn%evp(:,:,1)+cmn%f_sic*cmn%evp(:,:,2)) ! kg/m2/s, per unit ocean area
       mon_sur(mon)%runoff = mon_sur(mon)%runoff + cmn%runoff_o ! kg/m2/s
       mon_sur(mon)%runoff_veg = mon_sur(mon)%runoff_veg + cmn%runoff_veg_o ! kg/m2/s
       mon_sur(mon)%runoff_ice = mon_sur(mon)%runoff_ice + cmn%runoff_ice_o ! kg/m2/s
@@ -534,6 +540,7 @@ contains
         mon_sur(mon)%rain = mon_sur(mon)%rain * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%snow = mon_sur(mon)%snow * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%evp = mon_sur(mon)%evp * mon_avg * sec_day ! kg/m2/day
+        mon_sur(mon)%evp_ocn = mon_sur(mon)%evp_ocn * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%runoff = mon_sur(mon)%runoff * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%runoff_veg = mon_sur(mon)%runoff_veg * mon_avg * sec_day ! kg/m2/day
         mon_sur(mon)%runoff_ice = mon_sur(mon)%runoff_ice * mon_avg * sec_day ! kg/m2/day
@@ -595,7 +602,9 @@ contains
           tmp = 0.
           do i=1,ni
             if (basin_mask(i,j).eq.i_atlantic) then
-              tmp = tmp + cmn%f_ocn(i,j)*area(i,j)*(ann_sur%prc(i,j)-ann_sur%evp(i,j)+ann_sur%runoff(i,j)+ann_sur%calving(i,j)+ann_sur%bmelt(i,j))/sec_day*1.e-6*1.e-3  ! kg/m2/day * m2 * day/s * Sv/(m3/s) * m3/kg = Sv
+              ! evp_ocn, not the grid-cell mean evp: over the ocean fraction only the
+              ! ocean evaporation applies, otherwise coastal cells carry the land flux
+              tmp = tmp + cmn%f_ocn(i,j)*area(i,j)*(ann_sur%prc(i,j)-ann_sur%evp_ocn(i,j)+ann_sur%runoff(i,j)+ann_sur%calving(i,j)+ann_sur%bmelt(i,j))/sec_day*1.e-6*1.e-3  ! kg/m2/day * m2 * day/s * Sv/(m3/s) * m3/kg = Sv
             endif
           enddo
           if (j.eq.nj) then
@@ -994,6 +1003,7 @@ contains
     ave%rain     = 0._wp
     ave%snow     = 0._wp
     ave%evp      = 0._wp
+    ave%evp_ocn  = 0._wp
     ave%runoff   = 0._wp
     ave%runoff_veg   = 0._wp
     ave%runoff_ice   = 0._wp
@@ -1025,6 +1035,7 @@ contains
      ave%rain     = ave%rain    + d(k)%rain    / div
      ave%snow     = ave%snow    + d(k)%snow    / div
      ave%evp      = ave%evp     + d(k)%evp     / div
+     ave%evp_ocn  = ave%evp_ocn + d(k)%evp_ocn / div
      ave%runoff   = ave%runoff  + d(k)%runoff  / div
      ave%runoff_veg   = ave%runoff_veg  + d(k)%runoff_veg  / div
      ave%runoff_ice   = ave%runoff_ice  + d(k)%runoff_ice  / div

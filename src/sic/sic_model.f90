@@ -36,6 +36,8 @@ module sic_model
     use sic_params, only : sic_params_init
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
     use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, rho_sic, rho_snow, dt
+    use sic_params, only : l_sic_prescribe, sic_prescribe_lon_w, sic_prescribe_lon_e, &
+      sic_prescribe_lat_s, sic_prescribe_lat_n, sic_prescribe_fsic, sic_prescribe_h_sic, sic_prescribe_h_snow
     use sic_def, only : sic_class
 
     use ebal_sic_mod, only : ebal_sic
@@ -447,6 +449,34 @@ contains
         print *,'  mass_new_total [kg]      = ',water_mass_new_tot
         print *,'  flux_total*dt  [kg]      = ',water_flux_tot
       endif
+    endif
+
+
+    !-------------------------------------------------------------------------------
+    ! SENSITIVITY EXPERIMENT: prescribe fully ice-covered, thick, snow-covered
+    ! conditions in a lon/lat box (e.g. Hudson Bay + Labrador Sea).
+    ! Applied last, after the physical update and the water-budget check, so it
+    ! overrides the state seen by the coupler/atmosphere and stored in the restart.
+    ! This is deliberately NON-CONSERVATIVE (ice/snow mass is imposed, not fluxed)
+    ! and is intended as a diagnostic sensitivity test only. The skin temperature
+    ! t_skin_sic is left prognostic: next step ebal_sic will cool it over the
+    ! imposed thick, snow-covered ice.
+    !-------------------------------------------------------------------------------
+    if (l_sic_prescribe) then
+      do j=1,maxj
+        do i=1,maxi
+          if (sic%f_ocn(i,j).gt.0._wp &
+            .and. lon(i).ge.sic_prescribe_lon_w .and. lon(i).le.sic_prescribe_lon_e &
+            .and. lat(j).ge.sic_prescribe_lat_s .and. lat(j).le.sic_prescribe_lat_n) then
+            sic%f_sic(i,j)      = sic_prescribe_fsic
+            sic%h_sic(i,j)      = sic_prescribe_h_sic
+            sic%h_snow(i,j)     = sic_prescribe_h_snow
+            sic%h_sic_mean(i,j)  = sic_prescribe_fsic*sic_prescribe_h_sic
+            sic%h_snow_mean(i,j) = sic_prescribe_fsic*sic_prescribe_h_snow
+            sic%w_snow(i,j)     = sic_prescribe_h_snow*rho_snow
+          endif
+        enddo
+      enddo
     endif
 
 

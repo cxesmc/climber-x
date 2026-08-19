@@ -67,7 +67,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: solarm
       real(wp), allocatable, dimension(:,:,:) :: cosz
       real(wp), allocatable, dimension(:,:) :: coszm
-      
+      real(wp), allocatable, dimension(:,:) :: daylength
+
       real(wp), allocatable, dimension(:,:) :: cam 
       real(wp), allocatable, dimension(:,:) :: co2flx
       real(wp), allocatable, dimension(:,:) :: C13flx
@@ -97,10 +98,11 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: gamt       !! lapse rate in the upper troposphere (K/m)
       real(wp), allocatable, dimension(:,:) :: dam        !! surface dust mass mixing ratio (kg/kg)
       real(wp), allocatable, dimension(:,:) :: hrm        !! vertical scale for relative humidity(m)
+      real(wp), allocatable, dimension(:,:) :: rhfree     !! background free tropospheric relative humidity the profile relaxes to (/)
       real(wp), allocatable, dimension(:,:) :: hqeff      !! effective vertical scale for specific humidity (m)
       real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2), prognostic, budget-conserving
       real(wp), allocatable, dimension(:,:) :: A_trop     !! tropospheric coefficient ∂wcon/∂ram (kg m-2), from vesta
-      real(wp), allocatable, dimension(:,:) :: W_strat    !! stratospheric column water intercept (kg m-2), from vesta
+      real(wp), allocatable, dimension(:,:) :: W_strat    !! ram-independent column water intercept (kg m-2), from vesta: stratosphere plus, if rh_free>0, the free tropospheric background
       real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
@@ -187,6 +189,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: vsk
       real(wp), allocatable, dimension(:,:) :: ugb
       real(wp), allocatable, dimension(:,:) :: vgb
+      real(wp), allocatable, dimension(:,:) :: ugbu   !! barotropic geostrophic zonal wind on u-points [m/s]
+      real(wp), allocatable, dimension(:,:) :: vgbv   !! barotropic geostrophic meridional wind on v-points [m/s]
+      real(wp), allocatable, dimension(:,:) :: psi_g  !! geostrophic velocity streamfunction on cell corners, i_ugb_psi=1 [m2/s]
       real(wp), allocatable, dimension(:,:) :: uab
       real(wp), allocatable, dimension(:,:) :: vab
       real(wp), allocatable, dimension(:,:,:) :: taux
@@ -207,11 +212,16 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: uterf
       real(wp), allocatable, dimension(:,:,:) :: vterf
       real(wp), allocatable, dimension(:,:,:) :: fax
-      real(wp), allocatable, dimension(:,:,:) :: faxo
       real(wp), allocatable, dimension(:,:,:) :: fay
-      real(wp), allocatable, dimension(:,:,:) :: fayo
       real(wp), allocatable, dimension(:,:) :: fac
+      real(wp), allocatable, dimension(:,:) :: fac_topo
+      real(wp), allocatable, dimension(:,:) :: fac_geo
+      real(wp), allocatable, dimension(:,:) :: ucor   !! implied zonal velocity of the mass correction [m/s]
+      real(wp), allocatable, dimension(:,:) :: vcor   !! implied meridional velocity of the mass correction [m/s]
       real(wp), allocatable, dimension(:,:,:) :: w3
+      real(wp), allocatable, dimension(:,:,:) :: w3_geo    !! vertical velocity from the divergence of the barotropic geostrophic wind [m/s]
+      real(wp), allocatable, dimension(:,:,:) :: w3_ter    !! vertical velocity from the divergence of the thermal wind [m/s]
+      real(wp), allocatable, dimension(:,:,:) :: w3_ageo   !! vertical velocity from the divergence of the ageostrophic PBL wind [m/s]
 
       real(wp), allocatable, dimension(:,:) :: convdse
       real(wp), allocatable, dimension(:,:) :: convwtr       ! total moisture convergence = convwtr_adv + convwtr_dif (drives precip)
@@ -235,6 +245,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: fdywtr
       real(wp), allocatable, dimension(:,:) :: fdydst
       real(wp), allocatable, dimension(:,:) :: fdyco2
+      real(wp), allocatable, dimension(:)   :: fsydseg   !! zonally integrated stationary eddy meridional DSE flux, kg/s*K
 
       real(wp), allocatable, dimension(:,:,:) :: fswr_sur
       real(wp), allocatable, dimension(:,:,:) :: fswr_sur_cs

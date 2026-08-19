@@ -30,8 +30,9 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin
-  use atm_params, only : l_p0_var, p0, ps0, pble, pblp
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg
+  use atm_params, only : l_p0_var, p0, ps0, vprof_tope, vprof_topp
+  use atm_params, only : i_uter_pol, c_uter_pol, c_uter_pol_min, lat_uter_pol_1, lat_uter_pol_2
   use smooth_atm_mod, only : smooth2
 
   implicit none
@@ -85,16 +86,19 @@ module atm_grid
   real(wp) :: aim
  
   real(wp) :: fcort(jm)
+  real(wp) :: fcorg(jm)      !! s, the reciprocal-Coriolis factor of the geostrophic PBL wind, see i_fcorg
+  real(wp) :: fcorgu(jmc)    !! s, the same factor on the v-face latitudes, for the streamfunction form (i_ugb_psi=1)
   real(wp) :: fcorta_sqrt(jm)
   real(wp) :: fcorta(jm)
   real(wp) :: fcorua(jmc)
+  real(wp) :: cdamp_pol(jm)  !! 1, the polar amplitude reduction of the thermal wind, see i_uter_pol
        
   real(wp) :: plx(imc,jm)
   real(wp) :: plx_trop(imc,jm)   !! tropospheric (k<=km-2) zonal column mass, for implicit zonal diffusion
   real(wp) :: ply(im,jmc)
   real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass, for implicit meridional diffusion
-  real(wp) :: pblt(jm)      !! planetary boundary height in t-points
-  real(wp) :: pblu(jmc)     !! planetary boundary height in u-points
+  real(wp) :: ptopt(jm)     !! top of the mean meridional cell in t-points
+  real(wp) :: ptopu(jmc)    !! top of the mean meridional cell in u-points
   integer :: k1(im,jm)  
   integer :: kweff(im,jm)  !! k-index for effective vertical velocity leve (w-grid)
   integer :: k1000
@@ -103,6 +107,10 @@ module atm_grid
   integer :: k700
   integer :: k500
   integer :: k300
+  ! layer centres bracketing the two branches of the Ferrel cell, used by slp_mod::zslp to form
+  ! the dry static energy contrast of the eddy closure
+  integer :: k_dse_lo
+  integer :: k_dse_up
 
   real(wp), allocatable :: pl(:)
   real(wp), allocatable :: dpl(:)
@@ -110,10 +118,6 @@ module atm_grid
   real(wp), allocatable :: zc(:)
   real(wp), allocatable :: dplx(:,:,:)
   real(wp), allocatable :: dply(:,:,:)
-  real(wp), allocatable :: dplxo(:,:,:)
-  real(wp), allocatable :: dplyo(:,:,:)
-  integer, allocatable :: kplxo(:,:)
-  integer, allocatable :: kplyo(:,:)
   real(wp), allocatable :: exp_zc(:)
 
 contains
@@ -128,6 +132,7 @@ contains
 
     integer :: i, j, k
     real(wp) :: fcortp, fcorup
+    real(wp) :: xpol
     character(len=256) :: fnm
 
 
@@ -146,10 +151,6 @@ contains
     allocate(zc(km))
     allocate(dplx(im,jm,km))
     allocate(dply(im,jm,km))
-    allocate(dplxo(im,jm,km))
-    allocate(dplyo(im,jm,km))
-    allocate(kplxo(im,jm))
-    allocate(kplyo(im,jm))
     allocate(exp_zc(km))
 
     ! read pressure levels from namelist
@@ -218,11 +219,65 @@ contains
 
     ! Coriolis parameter
 
+    ! fcort is floored in MAGNITUDE at fcormin but keeps its sign, so any quantity built as
+    ! 1/fcort reverses sign discontinuously across the equator at the full floored magnitude.
+    ! With fcormin = 1e-5 the floor binds for |lat| < 3.93 deg, i.e. on the two rows either
+    ! side of the equator, and that is where the geostrophic PBL wind ugb jumps.
+    !
+    ! fcorg is the factor u2d.f90 actually divides the SLP gradient by, and i_fcorg chooses how
+    ! the equatorial singularity in it is handled:
+    !
+    !   i_fcorg = 0   fcorg = 1/fcort, the original.  Floored in magnitude, so |fcorg| is at its
+    !                 LARGEST on the two rows either side of the equator and changes sign between
+    !                 them: ugb jumps by 2*|dpdy|/(fcormin*ra), which is about 9.5 m/s in the
+    !                 zonal mean at the solstices.
+    !   i_fcorg = 1   fcorg = f/(f**2 + fcormin**2), the Rayleigh-damped geostrophic balance, in
+    !                 which fcormin doubles as the linear drag rate r.  This is the same
+    !                 regularisation but with the opposite behaviour at the equator: |fcorg| peaks
+    !                 at 1/(2*fcormin) where |f| = fcormin and goes to ZERO at f = 0, so ugb
+    !                 crosses zero continuously instead of reversing at full amplitude.  It is
+    !                 also the factor consistent with uab/vab below, which already carry the exact
+    !                 down-gradient companion -dpdx*<sin a cos a>/(|f|*ra) of the same balance.
+    !
+    ! Using fcormin as the drag rate is dimensionally the right scale: cd*|V|/h_pbl with
+    ! cd = 1.3e-3, |V| = 7 m/s and h_pbl = 1 km gives 9e-6, essentially the 1e-5 the floor
+    ! already carries.  |f| = fcormin at |lat| = 3.93 deg.
+    !
+    ! Rebuilding us from the archived ugb, vgb and acbar of output/cacbar/pi (the reconstruction
+    ! reproduces the archived us to 4%) gives, for the PI zonal mean:
+    !
+    !     drag rate     jump at eq DJF     u rms |lat|<25   DJF / JJA / ANN
+    !     floor 1e-5          9.58 m/s                 2.23 / 2.12 / 0.59
+    !     1.0e-5              4.34                     1.36 / 1.35 / 0.88
+    !     1.5e-5              2.30                     1.29 / 1.31 / 1.08
+    !     2.0e-5              1.38                     1.44 / 1.43 / 1.26
+    !
+    ! so the solstice seasons want 1.0-1.5e-5.  The annual mean gets WORSE because it was living
+    ! off the cancellation of the two seasonal jumps, which have opposite sign; once that
+    ! cancellation is gone the model's equatorial easterlies show up as too weak (-0.6 against
+    ! -1.6 m/s in CMIP5 at 2.5N).  That bias is pre-existing and was hidden, not created here,
+    ! and the missing easterly belongs in the down-gradient term uab, not in geostrophy.
+    !
+    ! The other branch of the wind that divides by fcort, the thermal wind of u3d.f90:496, is
+    ! already regular at the equator: uter is multiplied by c_damp_eq = min(1,c_uter_eq*sin**2),
+    ! so its 1/f is cancelled to leading order and it goes to zero at f = 0 - qualitatively what
+    ! i_fcorg=1 now does for ugb.  It was only the barotropic branch that was left on the floor.
+    !
+    ! NOTE fcormin now sets both the magnitude floor of fcort/fcorta/fcorua and, with i_fcorg=1,
+    ! the drag rate of fcorg, so raising it widens the floored band as well: at 4.2e-5 the floor
+    ! would bind out to |lat| = 16.7 deg and flatten the whole trade-wind belt.
     do j=1,jm
-      fcortp = 2._wp*omega*sint(j) 
+      fcortp = 2._wp*omega*sint(j)
       fcort(j) = signf(j)*max(ABS(fcortp),fcormin)
       fcorta(j) = max(ABS(fcortp),fcormin)
       fcorta_sqrt(j) = sqrt(abs(fcorta(j)))
+      if (i_fcorg.eq.0) then
+        fcorg(j) = 1._wp/fcort(j)
+      else if (i_fcorg.eq.1) then
+        fcorg(j) = fcortp/(fcortp**2 + fcormin**2)
+      else
+        stop 'i_fcorg'
+      endif
     enddo
 
     do j=1,jm
@@ -230,11 +285,93 @@ contains
       fcorua(j) = max(ABS(fcorup),fcormin)
     enddo
 
-    ! PBL thickness
+    ! The same reciprocal-Coriolis factor as fcorg, but evaluated on the v-face latitudes.
+    ! The streamfunction form of the barotropic geostrophic wind (i_ugb_psi=1) carries the
+    ! streamfunction on the cell corners, which sit at fiu, so it needs the factor there.
+    ! Both poles are included: fiu(1) and fiu(jmc) are +-90 deg, where dxu vanishes and the
+    ! streamfunction is held zonally constant so that no mass crosses the pole.
+    do j=1,jmc
+      fcorup = 2._wp*omega*sinu(j)
+      if (i_fcorg.eq.0) then
+        fcorgu(j) = 1._wp/(sign(1._wp,fcorup)*max(ABS(fcorup),fcormin))
+      else if (i_fcorg.eq.1) then
+        fcorgu(j) = fcorup/(fcorup**2 + fcormin**2)
+      else
+        stop 'i_fcorg'
+      endif
+    enddo
+
+    ! Polar amplitude reduction of the thermal wind.
+    !
+    ! With i_uter_damp=2 this factor multiplies the azonal TEMPERATURE, so the wind picks up
+    ! the extra term -K*T_az*dc/dy on top of the damped thermal wind -K*c*dT_az/dy.  That term
+    ! is proportional to the anomaly itself rather than to its gradient, so over a broad warm
+    ! anomaly it is a monopole where the physical thermal wind is a dipole, and it does not
+    ! weaken the wave, it adds a different one.  Everything therefore depends on WHERE dc/dy is
+    ! put, not just on how much total damping there is.
+    !
+    !   i_uter_pol = 0   c = min(1, c_uter_pol*cos(lat)**2), the original.  The min() makes
+    !                    dc/dy vanish equatorward of 54.7 deg (for c_uter_pol=3) and then switch
+    !                    on discontinuously, and c keeps falling all the way to the pole, so
+    !                    dc/dy is non-zero over the whole 55-90 deg band - which in JJA is
+    !                    exactly where the Siberian azonal temperature maximum sits.  Measured
+    !                    from the t3 of output/iuterdamp/itrdmp.2, the resulting spurious zonal
+    !                    wind is 1.96 m/s rms over 55-140E / 50-75N, 0.98 over the NH 30-87N.
+    !
+    !   i_uter_pol = 1   c = 1 equatorward of lat_uter_pol_1, c = c_uter_pol_min poleward of
+    !                    lat_uter_pol_2, joined by a quintic smoothstep.  dc/dy is then exactly
+    !                    zero inside the polar cap and in mid-latitudes, and confined to the
+    !                    transition band, where it can be spread as thinly as wanted by widening
+    !                    the band.  c_uter_pol is not used.  With the namelist defaults the same
+    !                    diagnostic gives 0.88 m/s rms over Siberia and 0.52 over the NH, i.e.
+    !                    -55% and -47%, at the same area-weighted total damping poleward of
+    !                    55 deg (0.513 against 0.505).
+    !
+    ! A constant c also repairs the defect of i_uter_damp=1, for the same reason.  Scaling the
+    ! wind by c is identical to computing the thermal wind with f_eff = f/c, so mode 1 is not
+    ! unbalanced at all - it is the geostrophic wind of a planet whose Coriolis parameter is
+    ! f/c, and its divergence is exactly that planet's beta term.  What is wrong is the size of
+    ! that beta: beta_eff/beta = 1 + 2*tan(lat)^2, i.e. 7 at 60 deg, 29 at 75, 116 at 82.5.
+    ! Where c is constant f_eff = f/c_uter_pol_min, so beta_eff/f_eff = beta/f EXACTLY; the
+    ! discrete maximum over 40-85N falls from 140 to 4.  Inside the cap both modes are therefore
+    ! clean and the choice of i_uter_damp stops mattering there.
+    !
+    ! BUT a constant c is not admissible in the polar cap on this grid, which is why i_uter_pol
+    ! defaults to 0.  The damping exists to keep the zonal Courant number u*tstep/dxt finite
+    ! (dxt = 24 km at 87.5 deg against 556 at the equator) and to kill the 1/cos(lat) singularity
+    ! of v_ter, which is built from dT/dx = dT/(2*dxt).  c ~ cos(lat)**2 does both: Cx ~ 3cos(lat),
+    ! bounded and decreasing poleward, and v_ter ~ cos(lat).  A constant 0.45 gives Cx = 0.98 at
+    ! 82.5 deg and max|v_ter| there of 12 m/s against 1.4 now; c ~ cos gives Cx = 1.3-1.45 at
+    ! 67.5-77.5 deg, outright unstable.  So c must fall at least as fast as cos(lat)**2 near the
+    ! pole, and any such c has |dln(c)/dlat| >= 2*tan(lat).  Polar CFL, a small dc/dy and a
+    ! multiplicative latitude factor cannot all hold at once; the way out is a limiter or a polar
+    ! zonal filter that acts only where the Courant number is actually violated, not a smooth
+    ! amplitude factor spread over the whole cap.
+    !
+    ! The smoothstep 10x^3-15x^4+6x^5 has zero first AND second derivative at both ends, so the
+    ! join carries no kink of the kind min() introduces.
     do j=1,jm
-      pblt(j) = pblp-(pblp-pble)*cost(j)**2      
-      pblu(j) = pblp-(pblp-pble)*cosu(j)**2 
-    enddo       
+      if (i_uter_pol.eq.0) then
+        cdamp_pol(j) = min(1._wp, c_uter_pol*cost(j)**2)
+      else if (i_uter_pol.eq.1) then
+        xpol = (abs(fit(j))*180._wp/pi - lat_uter_pol_1) / (lat_uter_pol_2-lat_uter_pol_1)
+        xpol = min(1._wp, max(0._wp, xpol))
+        cdamp_pol(j) = 1._wp - (1._wp-c_uter_pol_min) * xpol**3*(10._wp+xpol*(6._wp*xpol-15._wp))
+      else
+        stop 'i_uter_pol'
+      endif
+    enddo
+
+    ! Top of the mean meridional cells, used by the ageostrophic wind profile in u3d.
+    ! The observed 5 % level of the streamfunction sits at 121 hPa in the Hadley cell, 155 in
+    ! the Ferrel cell and 177 in the polar cell, and moves by only 15-33 hPa between PI, LGM
+    ! and aquaplanet, so this is a fixed function of latitude with no climate dependence.
+    do j=1,jm
+      ptopt(j) = vprof_topp-(vprof_topp-vprof_tope)*cost(j)**2
+      ptopu(j) = vprof_topp-(vprof_topp-vprof_tope)*cosu(j)**2
+    enddo
+    ! u3d never reaches j=jmc, but this slot should not be left undefined
+    ptopu(jmc) = vprof_topp
 
     ! pressure levels
 
@@ -267,12 +404,19 @@ contains
     k500  = minloc(abs(pl-0.5_wp),1)
     k300  = minloc(abs(pl-0.3_wp),1)
 
+    ! layer centres nearest the lower and upper branch of the Ferrel cell (~1300 and ~7300 m,
+    ! i.e. roughly 850 and 400 hPa); zc, not zl, because t3 is carried at layer centres
+    k_dse_lo = minloc(abs(zc-1300._wp),1)
+    k_dse_up = minloc(abs(zc-7300._wp),1)
+
     print *,'k 1000 hPa',k1000, ', z 1000 hPa',zl(k1000)
     print *,'k 900  hPa',k900,  ', z 900  hPa',zl(k900)
     print *,'k 850  hPa',k850,  ', z 850  hPa',zl(k850)
     print *,'k 700  hPa',k700,  ', z 700  hPa',zl(k700)
     print *,'k 500  hPa',k500,  ', z 500  hPa',zl(k500)
     print *,'k 300  hPa',k300,  ', z 500  hPa',zl(k300)
+    print *,'k dse lo  ',k_dse_lo, ', zc      ',zc(k_dse_lo)
+    print *,'k dse up  ',k_dse_up, ', zc      ',zc(k_dse_up)
 
     ! initialize, needed by vesta
     kweff(:,:) = 4
@@ -428,12 +572,13 @@ contains
           plx(i,j) = plx(i,j)+dplx(i,j,k)
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
-          ! orographic component
-          dplxo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(imi,j),pzsa(i,j)))-pl(k+1))*amas
         enddo
 
       enddo
     enddo    
+    ! periodic wrap point, so that plx can be addressed at i+1 up to imc
+    plx(imc,:)      = plx(1,:)
+    plx_trop(imc,:) = plx_trop(1,:)
 
 
     do i=1,im
@@ -455,39 +600,16 @@ contains
           ply(i,j) = ply(i,j)+dply(i,j,k)
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
-          ! orographic component
-          dplyo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(i,j-1),pzsa(i,j)))-pl(k+1))*amas
         enddo
 
       enddo
     enddo
     dply(:,1,:) = 0._wp
-    dplyo(:,1,:) = 0._wp
+    ! no flux through the poles, so these carry no mass
+    ply(:,1)        = 0._wp
+    ply(:,jmc)      = 0._wp
     ply_trop(:,1)   = 0._wp
     ply_trop(:,jmc) = 0._wp
-
-    ! k-index of first layer above topography
-    do i=1,im
-      do j=1,jm
-        do k=1,km
-          if (dplx(i,j,k).gt.0._wp) then  ! first layer above topography
-            kplxo(i,j) = k
-            exit
-          endif
-        enddo
-      enddo
-    enddo
-    do i=1,im
-      do j=2,jm
-        do k=1,km
-          if (dply(i,j,k).gt.0._wp) then  ! first layer above topography
-            kplyo(i,j) = k
-            exit
-          endif
-        enddo
-      enddo
-    enddo
-    kplyo(:,1) = 1
 
     return
 

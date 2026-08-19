@@ -48,6 +48,15 @@ module sic_params
   real(wp) :: f_sic_max
   real(wp) :: f_sic_pow
   real(wp) :: h0
+  ! regional sea-ice prescription (sensitivity experiment)
+  logical :: l_sic_prescribe
+  real(wp) :: sic_prescribe_lon_w
+  real(wp) :: sic_prescribe_lon_e
+  real(wp) :: sic_prescribe_lat_s
+  real(wp) :: sic_prescribe_lat_n
+  real(wp) :: sic_prescribe_fsic
+  real(wp) :: sic_prescribe_h_sic
+  real(wp) :: sic_prescribe_h_snow
   real(wp) :: u_star
   integer :: i_cd_ocn
   logical :: l_neutral_ocn
@@ -158,6 +167,14 @@ contains
     call nml_read(filename,"sic_par","f_sic_max",f_sic_max)
     call nml_read(filename,"sic_par","f_sic_pow",f_sic_pow)
     call nml_read(filename,"sic_par","h0",h0)
+    call nml_read(filename,"sic_par","l_sic_prescribe",l_sic_prescribe)
+    call nml_read(filename,"sic_par","sic_prescribe_lon_w",sic_prescribe_lon_w)
+    call nml_read(filename,"sic_par","sic_prescribe_lon_e",sic_prescribe_lon_e)
+    call nml_read(filename,"sic_par","sic_prescribe_lat_s",sic_prescribe_lat_s)
+    call nml_read(filename,"sic_par","sic_prescribe_lat_n",sic_prescribe_lat_n)
+    call nml_read(filename,"sic_par","sic_prescribe_fsic",sic_prescribe_fsic)
+    call nml_read(filename,"sic_par","sic_prescribe_h_sic",sic_prescribe_h_sic)
+    call nml_read(filename,"sic_par","sic_prescribe_h_snow",sic_prescribe_h_snow)
     call nml_read(filename,"sic_par","lambda_snow",lambda_snow)
     call nml_read(filename,"sic_par","lambda_sic",lambda_sic)
     call nml_read(filename,"sic_par","h_k_crit",h_k_crit)

@@ -44,10 +44,11 @@ module atm_model
     use atm_params, only : l_diff_impl
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
+    use atm_params, only : rh_free
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
-    use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
+    use atm_grid, only : i_ocn, i_sic, i_lnd, i_lake
     use atm_grid, only : dxt, dy, fit, sqr
     use atm_params, only : tstep
     use constants, only : pi
@@ -134,7 +135,7 @@ contains
     !$ time1 = omp_get_wtime()
     ecs_scale_now = ecs_scale + ecs_scale_dT*atm%dt2m_glob_ann_cum
     call lw_radiation(ecs_scale_now, atm%frst, atm%zsa, atm%zs, atm%htrop, atm%hcld, atm%ra2, &   ! in
-      atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%ttrop, atm%cld, atm%clot, &
+      atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%rhfree, atm%ttrop, atm%cld, atm%clot, &
       atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%co2e, atm%o3, &  ! in
       atm%flwr_up_sur, &  ! in
       atm%lwr_sur, atm%flwr_dw_sur, atm%flwr_dw_sur_cs, atm%flwr_dw_sur_cld, &    ! out
@@ -190,13 +191,13 @@ contains
     if (l_feedbacks .and. time_feedback_analysis) then 
       ! feedback analysis
       call feedback_analysis(fb, atm%frst, atm%zs, atm%zsa, atm%htrop, atm%hcld, atm%tskin, atm%t2, atm%ra2, & 
-        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
+        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%rhfree, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
         atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%o3, atm%flwr_up_sur, &  
         atm%swr_dw_top, atm%coszm, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
         atm%had_fi, atm%had_width)
       ! radiative kernels 
       call rad_kernels(rk, atm%frst, atm%zs, atm%zsa, atm%htrop, atm%hcld, atm%ra2, & 
-        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
+        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%rhfree, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
         atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%o3, atm%flwr_up_sur, &  
         atm%swr_dw_top, atm%coszm, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4)
       if (time_eoy_atm) then
@@ -221,7 +222,10 @@ contains
     !-------------------------------------------------
     ! zonal sea level pressure and total sea level pressure
     !$ time1 = omp_get_wtime()
-    call zslp(atm%zsa, atm%sin_cos_acbar, atm%tsl, atm%aslp, & ! in
+    ! fdydse and t3 are from the previous step: adifa and vesta run further down, see
+    ! slp_mod::zslp.
+    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, atm%zsa, & ! in
+      atm%fdydse, atm%fsydseg, atm%t3, & ! in
       atm%slp, atm%had_fi, atm%had_width)  ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'zslp',(time2-time1)
@@ -230,7 +234,7 @@ contains
     ! 2d geostrophic and ageostrophic wind components in the PBL
     !$ time1 = omp_get_wtime()
     call u2d(atm%slp, atm%sin_cos_acbar, &  ! in
-      atm%ugb, atm%vgb, atm%uab, atm%vab) ! out
+      atm%ugb, atm%vgb, atm%ugbu, atm%vgbv, atm%psi_g, atm%uab, atm%vab) ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'u2d',(time2-time1)
 
@@ -249,9 +253,10 @@ contains
       ! 3d velocity field
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, & ! in
+      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%ugbu, atm%vgbv, atm%uab, atm%vab, atm%t3, & ! in
         atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%uz500, &  ! out   
-        atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac)  ! out
+        atm%fax, atm%fay, atm%fac, atm%fac_topo, atm%fac_geo, atm%ucor, atm%vcor, &  ! out
+        atm%w3_geo, atm%w3_ter, atm%w3_ageo)  ! out, diagnostic
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'u3d1',(time2-time1)*nstep_fast
       !$ if(l_write_timer .and. niter.eq.2) print *,'u3d2',(time2-time1)*nstep_fast
@@ -261,6 +266,10 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
+        ! usur rotates by the WIND angle, c_acbar_wind*acbar, but still scales by epsa, which
+        ! carries the closure angle, so that sqrt(us**2+vs**2) = epsa*|Vgb| is unchanged and only
+        ! the direction moves.  synop no longer sees any angle at all: epsa is the whole surface
+        ! reduction and the synoptic surface wind now uses it alone.
         call usur(atm%ugb, atm%vgb, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%t2a, atm%tskina, atm%cd0a, atm%slope_x, atm%slope_y, &
           atm%usk, atm%vsk, & 
           atm%us, atm%vs)
@@ -297,16 +306,15 @@ contains
 
       ! lapse rate and height scales of moisture and dust
       !$ time1 = omp_get_wtime()
-      call hscales(atm%frst, atm%f_ice_lake, atm%ra2a, atm%rb_sur, atm%tam, atm%tskin, atm%qam, atm%wcon, atm%wcld, &  ! in
-        atm%had_fi, atm%had_width, &   ! in
-        atm%gams, atm%gamb, atm%gamt, atm%hrm, &    ! inout
+      call hscales(atm%ra2a, atm%sha, atm%qam, atm%wcon, atm%wcld, atm%had_fi, atm%had_width, &  ! in
+        atm%gams, atm%gamb, atm%gamt, atm%hrm, atm%rhfree, &    ! inout
         atm%hqeff, atm%hdust)    ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'hscales',(time2-time1)*nstep_fast
 
       ! vertical profiles of temperature, humidity and dust
       !$ time1 = omp_get_wtime()
-      call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
+      call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%rhfree, atm%dam, atm%hdust, &  ! in
         atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'vesta',(time2-time1)*nstep_fast
@@ -329,7 +337,7 @@ contains
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
         call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
-          atm%zsa, atm%cda, atm%cd, atm%epsa, atm%cos_acbar, &    ! in
+          atm%zsa, atm%cda, atm%cd, atm%epsa, &    ! in
           atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
           atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst, atm%wsyn)    ! out
@@ -347,7 +355,8 @@ contains
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
-        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2)   ! out
+        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &  ! out
+        atm%fsydseg)   ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'adifa',(time2-time1)*nstep_fast
 
@@ -388,7 +397,7 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, &   ! in
-        atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
+        atm%tskin, atm%convdse, atm%rb_atm, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
@@ -415,7 +424,7 @@ contains
     if (l_feedbacks .and. time_feedback_save) then
       ! save fields needed for feedback analysis in derived type fb
       call feedback_save(atm%co2, atm%tam, atm%cld, atm%hcld, atm%clot, atm%gams, atm%gamb, atm%gamt, &
-        atm%htrop, atm%ttrop, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
+        atm%htrop, atm%ttrop, atm%ram, atm%hrm, atm%rhfree, atm%hqeff, atm%q2, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
         atm%frst, atm%tskin, atm%t2, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%flwr_up_sur, &
         fb)
     endif
@@ -545,6 +554,7 @@ contains
          atm%gamb(i,j) = 5.e-3_wp
          atm%gamt(i,j) = 8.e-3_wp
          atm%hrm(i,j) = 2000._wp
+         atm%rhfree(i,j) = rh_free
          atm%qam(i,j) = 0.8_wp*fqsat(atm%tam(i,j),p0)
          atm%q2a(i,j) = atm%qam(i,j)
          atm%ram(i,j) = 0.8_wp
@@ -614,16 +624,23 @@ contains
         enddo
        enddo        
 
+         atm%ugbu = 0._wp
+         atm%vgbv = 0._wp
+         atm%psi_g = 0._wp
+
          atm%u3 = 0._wp  
          atm%v3 = 0._wp
          atm%w3 = 0._wp
+         atm%w3_geo = 0._wp
+         atm%w3_ter = 0._wp
+         atm%w3_ageo = 0._wp
 
          atm%uter = 0._wp  
          atm%vter = 0._wp
          atm%uterf = 0._wp  
          atm%vterf = 0._wp
 
-         call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
+         call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%rhfree, atm%dam, atm%hdust, &  ! in
            atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
          ! initialize column water from vesta's reconstruction: wcon = ram·A_trop + W_strat
          atm%wcon = atm%ram*atm%A_trop + atm%W_strat
@@ -674,6 +691,7 @@ contains
      allocate(atm%solarm(nday_year,jm))
      allocate(atm%cosz(nday_year,24,jm))
      allocate(atm%coszm(nday_year,jm))
+     allocate(atm%daylength(nday_year,jm))
 
      allocate(atm%cam(im,jm))  
      allocate(atm%co2flx(im,jm))
@@ -704,6 +722,7 @@ contains
      allocate(atm%gamt(im,jm)) 
      allocate(atm%dam(im,jm))  
      allocate(atm%hrm(im,jm))  
+     allocate(atm%rhfree(im,jm))  
      allocate(atm%hqeff(im,jm)) 
      allocate(atm%wcon(im,jm))
      allocate(atm%A_trop(im,jm))
@@ -759,6 +778,10 @@ contains
      allocate(atm%cda(im,jm))
      allocate(atm%cd0a(im,jm))
      allocate(atm%sha(im,jm))
+     ! sha is set by the coupler each step, but hscales reads it and it enters a tanh, so it must
+     ! not be undefined on the first call. Zero puts gam_s at the midpoint of (gams_min,
+     ! gams_max), which is harmless.
+     atm%sha(:,:) = 0._wp
      allocate(atm%lha(im,jm))
      allocate(atm%evpa(im,jm))
      allocate(atm%tskina(im,jm))
@@ -792,6 +815,9 @@ contains
      allocate(atm%usk(im,jm))
      allocate(atm%vsk(im,jm))
      allocate(atm%ugb(im,jm))
+     allocate(atm%ugbu(imc,jm))
+     allocate(atm%vgbv(im,jmc))
+     allocate(atm%psi_g(im,jmc))
      allocate(atm%vgb(im,jm))
      allocate(atm%uab(imc,jm))
      allocate(atm%vab(im,jmc))
@@ -813,11 +839,16 @@ contains
      allocate(atm%uterf(im,jm,km))
      allocate(atm%vterf(im,jm,km))
      allocate(atm%fax(imc,jm,km))
-     allocate(atm%faxo(imc,jm,km))
      allocate(atm%fay(im,jmc,km))
-     allocate(atm%fayo(im,jmc,km))
      allocate(atm%fac(im,jm))
+     allocate(atm%fac_topo(im,jm))
+     allocate(atm%fac_geo(im,jm))
+     allocate(atm%ucor(im,jm))
+     allocate(atm%vcor(im,jm))
      allocate(atm%w3(im,jm,kmc))
+     allocate(atm%w3_geo(im,jm,kmc))
+     allocate(atm%w3_ter(im,jm,kmc))
+     allocate(atm%w3_ageo(im,jm,kmc))
 
      allocate(atm%convdse(im,jm))
      allocate(atm%convwtr(im,jm))
@@ -838,9 +869,14 @@ contains
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
+     ! zslp reads fdydse, and adifa, which fills it, runs later in the step
+     atm%fdydse(:,:) = 0._wp
      allocate(atm%fdywtr(im,jmc))
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
+     allocate(atm%fsydseg(jmc))
+     ! as for fdydse, zslp reads it before adifa has filled it in the first step
+     atm%fsydseg(:) = 0._wp
 
      allocate(atm%fswr_sur(im,jm,nm))
      allocate(atm%fswr_sur_cs(im,jm,nm))
@@ -933,6 +969,7 @@ contains
      deallocate(atm%solarm)
      deallocate(atm%cosz)
      deallocate(atm%coszm)
+     deallocate(atm%daylength)
 
      deallocate(atm%cam)  
      deallocate(atm%co2flx)
@@ -963,6 +1000,7 @@ contains
      deallocate(atm%gamt) 
      deallocate(atm%dam)  
      deallocate(atm%hrm)  
+     deallocate(atm%rhfree)  
      deallocate(atm%hqeff) 
      deallocate(atm%wcon)
      deallocate(atm%A_trop)
@@ -1051,6 +1089,9 @@ contains
      deallocate(atm%usk)
      deallocate(atm%vsk)
      deallocate(atm%ugb)
+     deallocate(atm%ugbu)
+     deallocate(atm%vgbv)
+     deallocate(atm%psi_g)
      deallocate(atm%vgb)
      deallocate(atm%uab)
      deallocate(atm%vab)
@@ -1068,15 +1109,20 @@ contains
      deallocate(atm%u3)
      deallocate(atm%v3)
      deallocate(atm%w3)
+     deallocate(atm%w3_geo)
+     deallocate(atm%w3_ter)
+     deallocate(atm%w3_ageo)
      deallocate(atm%uter)
      deallocate(atm%vter)
      deallocate(atm%uterf)
      deallocate(atm%vterf)
      deallocate(atm%fax)
-     deallocate(atm%faxo)
      deallocate(atm%fay)
-     deallocate(atm%fayo)
      deallocate(atm%fac)
+     deallocate(atm%fac_topo)
+     deallocate(atm%fac_geo)
+     deallocate(atm%ucor)
+     deallocate(atm%vcor)
      deallocate(atm%diffxdse)
      deallocate(atm%diffydse)
      deallocate(atm%diffxwtr)
@@ -1106,6 +1152,7 @@ contains
      deallocate(atm%fdywtr)
      deallocate(atm%fdydst)
      deallocate(atm%fdyco2)
+     deallocate(atm%fsydseg)
 
      deallocate(atm%fswr_sur)
      deallocate(atm%fswr_sur_cs)
@@ -1193,6 +1240,7 @@ contains
     call nc_write(fnm,"gamb     ",     atm%gamb     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gamt     ",     atm%gamt     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"hrm      ",     atm%hrm      ,     dims=["lon","lat"],long_name="",units="")
+    call nc_write(fnm,"rhfree   ",     atm%rhfree   ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"qam      ",     atm%qam      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"q2a      ",     atm%q2a      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"q2       ",     atm%q2       ,     dims=["lon","lat","nm "],long_name="",units="")
@@ -1283,6 +1331,14 @@ contains
     call nc_read(fnm,"gamb     ",     atm%gamb    ) 
     call nc_read(fnm,"gamt     ",     atm%gamt    ) 
     call nc_read(fnm,"hrm      ",     atm%hrm     ) 
+    ! rhfree was introduced after some restart files were written; it is a relaxed
+    ! diagnostic that respins up within a few tens of timesteps, so fall back to the
+    ! namelist value rather than failing on an older restart
+    if (nc_exists_var(fnm,"rhfree")) then
+      call nc_read(fnm,"rhfree   ",     atm%rhfree  ) 
+    else
+      atm%rhfree(:,:) = rh_free
+    endif
     call nc_read(fnm,"qam      ",     atm%qam     ) 
     call nc_read(fnm,"q2a      ",     atm%q2a     ) 
     call nc_read(fnm,"q2       ",     atm%q2      ) 

@@ -44,6 +44,9 @@ module ocn_out
   use ocn_params, only : l_daily_output, l_output_extended
   use ocn_params, only: dt, age_tracer, i_age, dye_tracer, i_dye, cons_tracer, i_cons, l_cfc, i_cfc11, i_cfc12, rho0, n_tracers_ocn
   use ocn_params, only: diff_dia, drag, drag_bcl, l_hosing, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, i_fwf_buoy, i_alphabeta
+  use ocn_params, only: neptune_par
+  use ocn_params, only: l_brines, frac_brines
+  use neptune_mod, only: psi_neptune, u_neptune
   use ocn_params, only : l_noise_fw, l_noise_flx
   use ocn_params, only : depth_buoy
   use ocn_params, only : l_diff_dia_strat
@@ -148,6 +151,8 @@ module ocn_out
      integer, dimension(:,:,:), allocatable :: map_edge
      real(wp), dimension(:,:), allocatable :: drag
      real(wp), dimension(:,:), allocatable :: drag_bcl
+     real(wp), dimension(:,:), allocatable :: psi_neptune
+     real(wp), dimension(:,:), allocatable :: u_neptune, v_neptune
      real(wp), dimension(:,:,:), allocatable :: t, s, age, dye, cons, rho, rho2, u, v, w
      real(wp), dimension(:,:,:), allocatable :: dt_dt_adv, dt_dt_diff
      real(wp), dimension(:,:,:), allocatable :: ds_dt_adv, ds_dt_diff
@@ -241,6 +246,9 @@ contains
     allocate(ann_o%k1(maxi,maxj))
     allocate(ann_o%map_isles(maxi,maxj))
     allocate(ann_o%map_edge(maxi,maxj,maxisles))
+    allocate(ann_o%psi_neptune(maxi,maxj))
+    allocate(ann_o%u_neptune(maxi,maxj))
+    allocate(ann_o%v_neptune(maxi,maxj))
     allocate(ann_o%vol(maxi,maxj,maxk))
     allocate(ann_o%t(maxi,maxj,maxk))
     allocate(ann_o%dt_dt_adv(maxi,maxj,maxk))
@@ -1090,6 +1098,7 @@ contains
     real(wp) :: s_atlN50, s_lab, s_irm, s_gin, s_bkn, s_wedd, s_ross, s_sos
     real(wp) :: rho_s1, rho_n1
     real(wp) :: rho_b2, rho_n2, rho_n3, rhoT_b2, rhoT_n2, rhoT_n3, rhoS_b2, rhoS_n2, rhoS_n3, area_b, area_n, area_n3, area_ij
+    real(wp) :: vsf_ij
     real(wp) :: ocnvol
     real(wp) :: shelf
     integer :: bmask, bmask2
@@ -1195,7 +1204,7 @@ contains
       rho_0 = ocn%rho
     endif
 
-    !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2,area_ij) &
+    !$omp parallel do collapse(2) private(i,j,k,l,ocnvol,tv2,tv3,bmask,bmask2,area_ij,vsf_ij) &
     !$omp reduction(+:sum_2d,sum_3d,ohc,ohc700,ohc2000,tdocn,tdocn_atl,tdocn_pac,tdocn_ind,tdocn_so,sdocn,sdocn_atl,sdocn_pac,sdocn_ind,sdocn_so,ocnvol_tot) &
     !$omp reduction(+:ocnvol_atl,ocnvol_pac,ocnvol_ind,ocnvol_so,global_cons,global_age,global_dye,global_cfc11,global_cfc12) &
     !$omp reduction(+:rsl_steric,rsl_mass,fw,fw_corr,fw_noise,p_e_sic,runoff,runoff_veg,runoff_ice,runoff_lake,icemelt,calving,bmelt,fw_dhdt_ice,vsf,flx) &
@@ -1256,6 +1265,14 @@ contains
           do l=1,n_tracers_ocn
             sum_2d(l) = sum_2d(l) + ocn%ts(i,j,maxk,l)*dx(j)*dy*ocn%f_ocn(i,j)
           enddo
+          ! virtual salinity flux into the cell, expressed as an equivalent freshwater flux using saln0.
+          ! With l_brines the brine salt is removed from flx_sur and applied directly to the water column
+          ! in ocn_model, so it has to be added back here to recover the total virtual salinity flux.
+          if (l_brines) then
+            vsf_ij = (ocn%flx_sur(i,j,2)*rho_w/ocn%saln0 + frac_brines*ocn%fw_brines(i,j))*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
+          else
+            vsf_ij = ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+          endif
           ! freshwater and heat fluxes (1=global, 2=Atlantic, 3=Pacific, 4=Indian, 5=Southern)
           ! Global ocean
           fw(1) = fw(1) + ((ocn%p_e_sic(i,j)+ocn%runoff(i,j)+ocn%calving(i,j)+ocn%bmelt(i,j)+ocn%fw_hosing(i,j)+ocn%fw_hosing_comp(i,j)+ocn%fw_flux_adj(i,j))*ocn%grid%ocn_area(i,j))  ! kg/m2/s * m2 = kg/s
@@ -1270,7 +1287,7 @@ contains
           bmelt(1) = bmelt(1) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
           icemelt(1) = icemelt(1) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
           fw_dhdt_ice(1) = fw_dhdt_ice(1) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-          vsf(1) = vsf(1) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+          vsf(1) = vsf(1) + vsf_ij
           flx(1) = flx(1) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))   ! W/m2 * m2 = W
           ! Atlantic basin cells
           if (bmask.eq.i_atlantic) then
@@ -1284,7 +1301,7 @@ contains
             bmelt(2) = bmelt(2) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(2) = icemelt(2) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(2) = fw_dhdt_ice(2) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(2) = vsf(2) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(2) = vsf(2) + vsf_ij
             flx(2) = flx(2) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).gt.0._wp) then
               ! North Atlantic north of 30N
@@ -1298,7 +1315,7 @@ contains
               bmelt(8) = bmelt(8) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(8) = icemelt(8) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(8) = fw_dhdt_ice(8) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(8) = vsf(8) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(8) = vsf(8) + vsf_ij
               flx(8) = flx(8) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.30._wp) then
@@ -1313,7 +1330,7 @@ contains
               bmelt(6) = bmelt(6) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(6) = icemelt(6) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(6) = fw_dhdt_ice(6) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(6) = vsf(6) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(6) = vsf(6) + vsf_ij
               flx(6) = flx(6) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.50._wp) then
@@ -1328,7 +1345,7 @@ contains
               bmelt(7) = bmelt(7) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(7) = icemelt(7) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(7) = fw_dhdt_ice(7) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(7) = vsf(7) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(7) = vsf(7) + vsf_ij
               flx(7) = flx(7) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             if (lat(j).gt.55._wp) then
@@ -1343,7 +1360,7 @@ contains
               bmelt(9) = bmelt(9) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(9) = icemelt(9) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(9) = fw_dhdt_ice(9) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(9) = vsf(9) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(9) = vsf(9) + vsf_ij
               flx(9) = flx(9) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
             ! Pacific basin cells
@@ -1358,7 +1375,7 @@ contains
             bmelt(3) = bmelt(3) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(3) = icemelt(3) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(3) = fw_dhdt_ice(3) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(3) = vsf(3) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(3) = vsf(3) + vsf_ij
             flx(3) = flx(3) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Indian basin cells
           else if (bmask.eq.i_indian) then
@@ -1372,7 +1389,7 @@ contains
             bmelt(4) = bmelt(4) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(4) = icemelt(4) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(4) = fw_dhdt_ice(4) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(4) = vsf(4) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(4) = vsf(4) + vsf_ij
             flx(4) = flx(4) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             ! Southern basin cells
           else if (bmask.eq.i_southern) then
@@ -1386,7 +1403,7 @@ contains
             bmelt(5) = bmelt(5) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             icemelt(5) = icemelt(5) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
             fw_dhdt_ice(5) = fw_dhdt_ice(5) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-            vsf(5) = vsf(5) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+            vsf(5) = vsf(5) + vsf_ij
             flx(5) = flx(5) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             if (lat(j).lt.-60._wp) then
               ! Southern Ocean south of 60S
@@ -1400,7 +1417,7 @@ contains
               bmelt(10) = bmelt(10) + ocn%bmelt(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               icemelt(10) = icemelt(10) + ocn%melt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
               fw_dhdt_ice(10) = fw_dhdt_ice(10) + ocn%fw_dhdt_ice(i,j)*ocn%grid%ocn_area(i,j)  ! kg/m2/s * m2 = kg/s
-              vsf(10) = vsf(10) + ocn%flx_sur(i,j,2)*rho_w/ocn%saln0*ocn%grid%ocn_area(i,j)  ! m/s*psu * kg/m3 / psu * m2 = kg/s
+              vsf(10) = vsf(10) + vsf_ij
               flx(10) = flx(10) + (ocn%flx(i,j)*ocn%grid%ocn_area(i,j))
             endif
           endif
@@ -1551,7 +1568,7 @@ contains
         ! difference between average 40-60N and the whole Atlantic basin south of 60N.
         ! alpha and beta are taken as constants here (value at 5 degC and 0.8 kg/m3/psu), as in the original code.
         if (bmask.eq.i_atlantic .and. k_drho.ge.k1(i,j)) then
-          area_ij = ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j)
+          area_ij = ocn%grid%ocn_area(i,j)   ! ocn_area already includes the ocean fraction
           if (j.ge.js_drho2 .and. j.le.jn2_drho2) then
             area_b = area_b + area_ij
             rho_b2 = rho_b2 + ocn%rho(i,j,k_drho)*area_ij
@@ -2758,7 +2775,7 @@ contains
        do i=1,maxi
          do j=1,maxj
            if (k1(i,j).ge.k1_shelf .and. k1(i,j).le.maxk) then
-             shelf = shelf + ocn%f_ocn(i,j)*ocn%grid%ocn_area(i,j) ! m2
+             shelf = shelf + ocn%grid%ocn_area(i,j) ! m2, ocn_area already includes the ocean fraction
            endif
          enddo
        enddo
@@ -3230,7 +3247,6 @@ contains
       mon_o(mon)%ds_dt_flxsur = mon_o(mon)%ds_dt_flxsur - ocn%flx_sur(:,:,2)/dz(maxk) * sec_year * mon_avg ! psu/year
       mon_o(mon)%flx   = mon_o(mon)%flx   + ocn%flx                              * mon_avg ! W/m2
       mon_o(mon)%fw    = mon_o(mon)%fw    + (ocn%p_e_sic+ocn%runoff+ocn%calving+ocn%bmelt+ocn%fw_hosing+ocn%fw_hosing_comp+ocn%fw_flux_adj)*sec_day         * mon_avg ! kg/m2/day
-      mon_o(mon)%vsf   = mon_o(mon)%vsf   + ocn%flx_sur(:,:,2)*rho_w/ocn%saln0*sec_day                   * mon_avg ! kg/m2/day
       mon_o(mon)%p_e_sic   = mon_o(mon)%p_e_sic   + ocn%p_e_sic*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%runoff= mon_o(mon)%runoff+ ocn%runoff*sec_day         * mon_avg ! kg/m2/day
       mon_o(mon)%runoffSv= mon_o(mon)%runoffSv+ ocn%runoff*ocn%grid%ocn_area/rho_w*1.e-6_wp         * mon_avg ! Sv
@@ -3281,6 +3297,12 @@ contains
       mon_o(mon)%ubisl(:,:,n) = mon_o(mon)%ubisl(:,:,n) + ocn%ub_isl(1,1:maxi,1:maxj,n)         * mon_avg ! m/s
       mon_o(mon)%vbisl(:,:,n) = mon_o(mon)%vbisl(:,:,n) + ocn%ub_isl(2,1:maxi,1:maxj,n)         * mon_avg ! m/s
     enddo
+    ! brine salt is applied directly to the water column in ocn_model and has to be added back to flx_sur (see above)
+    if (l_brines) then
+      mon_o(mon)%vsf = mon_o(mon)%vsf + (ocn%flx_sur(:,:,2)*rho_w/ocn%saln0+frac_brines*ocn%fw_brines)*sec_day * mon_avg ! kg/m2/day
+    else
+      mon_o(mon)%vsf = mon_o(mon)%vsf + ocn%flx_sur(:,:,2)*rho_w/ocn%saln0*sec_day                   * mon_avg ! kg/m2/day
+    endif
 
     ! bottom ocean temperature and salinity
     do j=1,maxj
@@ -3360,12 +3382,21 @@ contains
 
      ann_o%f_ocn = ocn%f_ocn
      ann_o%mask_ocn = ocn%grid%mask_ocn
-     ann_o%area = ocn%f_ocn*ocn%grid%ocn_area
+     ann_o%area = ocn%grid%ocn_area   ! ocn_area already includes the ocean fraction
      ann_o%topo = topo
      ann_o%bathy = bathy
      ann_o%k1 = ocn%grid%k1
      ann_o%drag  = drag(1,1:maxi,:)
      ann_o%drag_bcl  = drag_bcl(1,1:maxi,:)
+     if (neptune_par%l_neptune) then
+       ann_o%psi_neptune = psi_neptune(1:maxi,1:maxj)*1.e-6_wp ! m3/s -> Sv
+       ann_o%u_neptune   = u_neptune(1,1:maxi,1:maxj)
+       ann_o%v_neptune   = u_neptune(2,1:maxi,1:maxj)
+     else
+       ann_o%psi_neptune = 0._wp
+       ann_o%u_neptune   = 0._wp
+       ann_o%v_neptune   = 0._wp
+     endif
      ann_o%map_isles = map_isles
      do n=1,n_isles+1
        ann_o%map_edge(:,:,n) = map_edge(:,:,n)
@@ -3887,6 +3918,9 @@ contains
     call nc_write(fnm,"vol",    sngl(vars%vol),  dims=[dim_lon,dim_lat,dim_lev,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxk,1],long_name="ocean volume",units="m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"drag",    sngl(vars%drag),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="drag",units="s^-1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"drag_bcl",    sngl(vars%drag_bcl),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="drag",units="s^-1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"psi_neptune", sngl(vars%psi_neptune),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="Neptune equilibrium barotropic streamfunction",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"u_neptune",   sngl(vars%u_neptune), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="Neptune zonal velocity",units="m/s",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"v_neptune",   sngl(vars%v_neptune), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="Neptune meridional velocity",units="m/s",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"map_isles",    vars%map_isles,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="island map",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"map_edge",    vars%map_edge,  dims=[dim_lon,dim_lat,dim_isles,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxisles,1],long_name="island edges",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"mldmax",    sngl(vars%mldmax),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth from mixed layer scheme",units="m",missing_value=missing_value,ncid=ncid)

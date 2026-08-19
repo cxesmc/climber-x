@@ -48,7 +48,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine adifa(fax, fay, tp, q3, d3, cam, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, &
     convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
-    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2)
+    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, fsydseg)
 
     implicit none
 
@@ -87,9 +87,17 @@ contains
     real(wp), intent(out  ) :: fdywtr(:,:)
     real(wp), intent(out  ) :: fdydst(:,:)
     real(wp), intent(out  ) :: fdyco2(:,:)
+    !! Zonally integrated STATIONARY EDDY meridional DSE flux, kg/s*K.  It is the advective
+    !! flux with the part carried by the zonal mean circulation removed, level by level:
+    !!   fsydseg(j) = sum_i faydse(i,j) - sum_k [ (sum_i fay) * (sum_i tpup)/im ]
+    !! so what is left is sum_i sum_k v* tp*, the transport by the standing waves alone.  The
+    !! mean part has to go: it IS the meridional overturning, and feeding it back into the
+    !! Ferrel closure that generates it would be circular.
+    real(wp), intent(out  ) :: fsydseg(:)
 
     integer :: i, j, k, imi, jmi
     real(wp) :: tpup, qup, dup, cup
+    real(wp) :: fayk(km), tpk(km), fmmc
     real(wp) :: dpl_x, dpl_y
     real(wp) :: tp_ijk, tp_i1jk, tp_ij1k
     real(wp) :: q3_ijk, q3_i1jk, q3_ij1k
@@ -100,10 +108,15 @@ contains
 
 
     !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
-    !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk)
+    !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk) &
+    !$omp private (fayk, tpk, fmmc)
     do j=1,jm
 
       jmi=max(1,j-1)
+
+      ! zonal sums per level, for the stationary eddy DSE flux below
+      fayk(:) = 0._wp
+      tpk(:)  = 0._wp
 
       do i=1,im
 
@@ -193,6 +206,10 @@ contains
             cup  = c3_ij1
           endif 
           faydse(i,j) = faydse(i,j) + fay_ijk*tpup ! kg/s * K
+          ! the same mass flux and upstream DSE the advection uses, kept per level so that the
+          ! zonal mean part can be subtracted after the i loop
+          fayk(k) = fayk(k) + fay_ijk
+          tpk(k)  = tpk(k)  + tpup
           faywtr(i,j) = faywtr(i,j) + fay_ijk*qup  ! kg/s * kg/kg
           faydst(i,j) = faydst(i,j) + fay_ijk*dup
           fayco2(i,j) = fayco2(i,j) + fay_ijk*cup
@@ -225,9 +242,18 @@ contains
 
       enddo
 
+      ! stationary eddy DSE flux: the zonally integrated advective flux minus the transport by
+      ! the zonal mean circulation, level by level
+      fmmc = 0._wp
+      do k=1,km
+        fmmc = fmmc + fayk(k)*tpk(k)/real(im,wp)
+      enddo
+      fsydseg(j) = sum(faydse(1:im,j)) - fmmc
+
       ! no-flux condition at the poles
       if (j.eq.jm) then
-        faydse(:,jmc) = 0._wp              
+        fsydseg(jmc)  = 0._wp
+        faydse(:,jmc) = 0._wp
         faywtr(:,jmc) = 0._wp          
         faydst(:,jmc) = 0._wp          
         fayco2(:,jmc) = 0._wp          

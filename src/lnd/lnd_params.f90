@@ -63,8 +63,8 @@ module lnd_params
   integer :: i_vcmax
   integer :: i_disc
   real(wp) :: z_sfl
-  integer :: i_racan
-  real(wp) :: p_cdense
+  real(wp) :: c_racan_1
+  real(wp) :: c_racan_2
   integer :: i_roots
 
   character (len=256) :: lithology_uhh_file
@@ -85,23 +85,19 @@ module lnd_params
 
   ! hydrology parameters
   type hydro_par_type
-    integer :: i_frz_imp
-    integer :: i_cond_theta
     integer :: i_hydro_par
-    integer :: i_wtab
-    integer :: i_fwet
     logical :: l_dew 
     logical :: l_prc_intercept
-    integer :: i_runoff
     logical :: l_runoff_icemelt
     logical :: l_allow_icesub
-    integer :: i_evp_soil
     real(wp) :: theta_crit_evp
-    real(wp) :: dz_evp
-    real(wp) :: frac_inf_2
     real(wp) :: p_psi_min
     real(wp) :: p_psi_max
-    real(wp) :: kappa_max = 10._wp   ! kg/m2/day
+    real(wp) :: kappa_max     ! kg/m2/day
+    real(wp) :: sy_aqf
+    real(wp) :: z_wtab_max
+    real(wp) :: f_drain       ! 1/m, TOPMODEL transmissivity decay factor: sets both the
+                              ! aquifer baseflow recession and the CTI threshold for f_sat
     real(wp) :: theta_min = 0.01_wp ! m3/m3
     real(wp), dimension(npft) :: alpha_int_w ! interception factor for water, CLM, TUNABLE
     real(wp) :: alpha_int_s ! interception factor for snow
@@ -109,10 +105,9 @@ module lnd_params
     real(wp) :: can_max_s      ! kg/m2, canopy interception capacity parameter for snow
     real(wp) :: tau_w       ! s, removal time scale of water from canopy
     real(wp) :: tau_s       ! s, removal time scale of snow from canopy
-    real(wp) :: f_wtab
+    real(wp) :: f_ice_perch   ! ice fraction of the pore space defining the frost table
+    real(wp) :: f_drain_perch ! 1/m, TOPMODEL transmissivity decay factor of the perched zone
     real(wp) :: cti_min
-    real(wp) :: wtab_scale
-    real(wp) :: fmax_crit
     real(wp) :: cti_mean_crit
   end type
   type(hydro_par_type) :: hydro_par
@@ -123,15 +118,6 @@ module lnd_params
     real(wp) :: cti_cdf(15)
   end type
   type(topmodel_type), dimension(nx,ny) :: topmodel
-
-  ! dyptop parameters
-  type dyptop_type
-    real(wp) :: k
-    real(wp) :: xm
-    real(wp) :: v
-    real(wp) :: fmax
-  end type
-  type(dyptop_type), dimension(nx,ny) :: dyptop
 
   ! snow parameters
   type snow_par_type
@@ -227,6 +213,7 @@ module lnd_params
     real(wp) :: k_sat_u
     real(wp) :: psi_sat_u
     integer :: b_u
+    integer :: k_exp_u
   end type
   type(soil_par_type) :: soil_par
   ! organic soil properties
@@ -301,9 +288,9 @@ module lnd_params
     real(wp), dimension(npft) :: root_jackson          = (/ 0.965_wp , 0.95_wp , 0.95_wp , 0.95_wp , 0.97_wp /) ! beta factor in root distribution from Jackson 1996
     real(wp), dimension(npft) :: root_clm1             = (/ 6.5_wp, 7._wp, 11._wp, 11._wp, 7._wp /) ! CLM root parameters from Zeng 2001
     real(wp), dimension(npft) :: root_clm2             = (/ 1.5_wp, 2._wp, 2._wp , 2._wp , 1.5_wp/) ! CLM root parameters from Zeng 2001
-    real(wp), dimension(nl,npft) :: root_frac
+    real(wp), allocatable, dimension(:,:) :: root_frac     ! (nl,npft)
     ! aboveground litter input vertical distribution
-    real(wp), dimension(nl) :: litter_in_frac
+    real(wp), allocatable, dimension(:) :: litter_in_frac  ! (nl)
     ! PFT albedo values from Houldcroft 2009, derived from MODIS for JULES, modified
     real(wp), dimension(npft) :: alb_can_vis_dir = (/ 0.04_wp, 0.04_wp, 0.04_wp, 0.03_wp, 0.04_wp/) 
     real(wp), dimension(npft) :: alb_can_vis_dif = (/ 0.05_wp, 0.05_wp, 0.05_wp, 0.04_wp, 0.05_wp/)
@@ -506,6 +493,10 @@ contains
   dt_v = real(dt_day_veg,wp)*sec_day
   nstep_v = nint(dt_day_v/dt_day)
 
+  ! allocate the vertical distributions on the grid read from the namelist
+  allocate(pft_par%root_frac(nl,npft))
+  allocate(pft_par%litter_in_frac(nl))
+
   ! define standard vertical root distribution in the absence of permafrost
   do n=1,npft
     do k=1,nl
@@ -587,11 +578,6 @@ contains
   enddo
 
   !call nc_read( "input/fmax_5x5.nc", "fmax",clm_fmax )
-  ! read dyptop parameters
-  call nc_read( lnd_par_file, "k",dyptop%k )
-  call nc_read( lnd_par_file, "xm",dyptop%xm )
-  call nc_read( lnd_par_file, "v",dyptop%v )
-  call nc_read( lnd_par_file, "fmax",dyptop%fmax )
 
   ! lithologies
 
@@ -722,8 +708,10 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","l_diurnal_cycle" ,l_diurnal_cycle )
     call nml_read(filename,"lnd_par","l_neutral",l_neutral)
     call nml_read(filename,"lnd_par","z_sfl",z_sfl)
-    call nml_read(filename,"lnd_par","i_racan",i_racan)
-    call nml_read(filename,"lnd_par","p_cdense",p_cdense)
+    call nml_read(filename,"lnd_par","c_racan_1",c_racan_1)
+    call nml_read(filename,"lnd_par","c_racan_2",c_racan_2)
+    if (c_racan_1.lt.0._wp) stop "c_racan_1 must be >= 0"
+    if (c_racan_2.le.0._wp) stop "c_racan_2 must be > 0"
     call nml_read(filename,"lnd_par","i_roots",i_roots)
     call nml_read(filename,"lnd_par","z0m_bare",surf_par%z0m_bare)
     call nml_read(filename,"lnd_par","z0m_ice",surf_par%z0m_ice)
@@ -765,25 +753,22 @@ subroutine lnd_par_load
     surf_par%alb_nir_dir_ice = alb_ice
     surf_par%alb_nir_dif_ice = alb_ice
 
-    call nml_read(filename,"lnd_par","i_runoff",hydro_par%i_runoff)
     call nml_read(filename,"lnd_par","l_runoff_icemelt",hydro_par%l_runoff_icemelt)
     call nml_read(filename,"lnd_par","l_allow_icesub",hydro_par%l_allow_icesub)
     call nml_read(filename,"lnd_par","l_dew",hydro_par%l_dew)
     call nml_read(filename,"lnd_par","l_prc_intercept",hydro_par%l_prc_intercept)
-    call nml_read(filename,"lnd_par","i_cond_theta",hydro_par%i_cond_theta)
-    call nml_read(filename,"lnd_par","i_wtab",hydro_par%i_wtab)
-    call nml_read(filename,"lnd_par","i_fwet",hydro_par%i_fwet)
-    call nml_read(filename,"lnd_par","i_evp_soil",hydro_par%i_evp_soil)
+    call nml_read(filename,"lnd_par","sy_aqf",hydro_par%sy_aqf)
+    call nml_read(filename,"lnd_par","z_wtab_max",hydro_par%z_wtab_max)
+    call nml_read(filename,"lnd_par","f_drain",hydro_par%f_drain)
+    call nml_read(filename,"lnd_par","kappa_max",hydro_par%kappa_max)
     call nml_read(filename,"lnd_par","theta_crit_evp",hydro_par%theta_crit_evp)
-    call nml_read(filename,"lnd_par","dz_evp",hydro_par%dz_evp)
-    call nml_read(filename,"lnd_par","frac_inf_2",hydro_par%frac_inf_2)
     call nml_read(filename,"lnd_par","p_psi_min",hydro_par%p_psi_min)
     call nml_read(filename,"lnd_par","p_psi_max",hydro_par%p_psi_max)
-    call nml_read(filename,"lnd_par","wtab_scale",hydro_par%wtab_scale)
-    call nml_read(filename,"lnd_par","f_wtab",hydro_par%f_wtab)
+    call nml_read(filename,"lnd_par","f_ice_perch",hydro_par%f_ice_perch)
+    call nml_read(filename,"lnd_par","f_drain_perch",hydro_par%f_drain_perch)
     call nml_read(filename,"lnd_par","cti_min",hydro_par%cti_min)
-    call nml_read(filename,"lnd_par","fmax_crit",hydro_par%fmax_crit)
     call nml_read(filename,"lnd_par","cti_mean_crit",hydro_par%cti_mean_crit)
+
     call nml_read(filename,"lnd_par","alpha_int_w_tree",alpha_int_w_tree)
     call nml_read(filename,"lnd_par","alpha_int_w_grass",alpha_int_w_grass)
     do n=1,npft
@@ -907,6 +892,12 @@ subroutine lnd_par_load
     soil_par%k_sat_u = soil_par%k_sat_u/sec_day
     call nml_read(filename,"lnd_par","psi_sat_u",soil_par%psi_sat_u)
     call nml_read(filename,"lnd_par","b_u",soil_par%b_u)
+    call nml_read(filename,"lnd_par","k_exp_u",soil_par%k_exp_u)
+    ! the exponent of the hydraulic conductivity curve is decoupled from the exponent of the
+    ! retention curve: k_exp_u<0 restores the Clapp-Hornberger/Burdine relation k_exp = 2*b+3,
+    ! a smaller value gives an effective grid-scale conductivity curve flatter than the
+    ! point-scale one (see below)
+    if (soil_par%k_exp_u.lt.0) soil_par%k_exp_u = 2*soil_par%b_u+3
     call nml_read(filename,"lnd_par","theta_sat_u",soil_par%theta_sat_u)
     call nml_read(filename,"lnd_par","theta_field_u",soil_par%theta_field_u)
     call nml_read(filename,"lnd_par","theta_wilt_u",soil_par%theta_wilt_u)
