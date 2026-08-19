@@ -98,7 +98,7 @@ contains
         gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
 
         ! top
-        gam_t(i,j) = gam_b(i,j) + c_gam_3
+        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
 
         !----------------------------------------------
         ! height scale for relative humidity       
