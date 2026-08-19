@@ -31,10 +31,10 @@ module slp_mod
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
   use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
   use atm_params, only : i_mmc, c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_z, c_mmc_1, c_mmc_2, c_mmc_3, c_mmc_4
-  use atm_params, only : nsmooth_aslp, nsmooth_aslp_eq, nj_eq, nsmooth_aslp_topo
+  use atm_params, only : nsmooth_aslp, nsmooth_aslp_topo
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, i_ice
   use atm_grid, only : fcorua, sint, cost, fiu, fit
-  use smooth_atm_mod, only : smooth2_m, smooth2eq, zona
+  use smooth_atm_mod, only : smooth2_m, zona
   !$ use omp_lib
 
   implicit none
@@ -225,7 +225,6 @@ contains
     enddo
 
     ! smooth in space
-    call smooth2eq(aslp,nj_eq,nsmooth_aslp_eq)
     call smooth2_m(aslp,nsmooth_aslp)
 
     ! polar and equatorial damping

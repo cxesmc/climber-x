@@ -37,6 +37,7 @@ module atm_params
   integer :: nstep_fast
 
   real(wp) :: fcormin
+  integer :: i_fcorg
 
   logical :: l_sct_0
   logical :: l_alb_0
@@ -216,8 +217,6 @@ module atm_params
   integer :: nsmooth_cda
   integer :: nsmooth_weff
   integer :: nsmooth_aslp
-  integer :: nsmooth_aslp_eq
-  integer :: nj_eq
   integer :: nsmooth_aslp_topo
   integer :: nsmooth_acbar
 
@@ -279,6 +278,7 @@ contains
     write(*,*) "atmosphere parameters ==========="
     call nml_read(filename,"atm_par","nstep_fast",nstep_fast)
     call nml_read(filename,"atm_par","fcormin",fcormin)
+    call nml_read(filename,"atm_par","i_fcorg",i_fcorg)
     call nml_read(filename,"atm_par","f_ice_pow",f_ice_pow)
     call nml_read(filename,"atm_par","r_scat",r_scat)
     call nml_read(filename,"atm_par","l_sct_0",l_sct_0)
@@ -442,8 +442,6 @@ contains
     call nml_read(filename,"atm_par","nsmooth_cda",nsmooth_cda)
     call nml_read(filename,"atm_par","nsmooth_weff",nsmooth_weff)
     call nml_read(filename,"atm_par","nsmooth_aslp",nsmooth_aslp)
-    call nml_read(filename,"atm_par","nsmooth_aslp_eq",nsmooth_aslp_eq)
-    call nml_read(filename,"atm_par","nj_eq",nj_eq)
     call nml_read(filename,"atm_par","nsmooth_aslp_topo",nsmooth_aslp_topo)
     call nml_read(filename,"atm_par","nsmooth_acbar",nsmooth_acbar)
 

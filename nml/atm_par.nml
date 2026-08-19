@@ -21,6 +21,11 @@
   !-----------------------------------------------------------
   fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter
 
+  i_fcorg  = 1                  ! how the equatorial singularity of the geostrophic PBL wind is handled.
+                                ! u2d.f90 forms ugb = -dpdy*fcorg/ra, vgb = dpdx*fcorg/ra, and
+                                !   0   fcorg = 1/fcort, the original. fcort is floored in MAGNITUDE at fcormin but keeps its sign
+                                !   1   fcorg = f/(f**2 + fcormin**2)
+
   !-----------------------------------------------------------
   ! drag and cross-isobar angle parameters 
   !-----------------------------------------------------------
@@ -58,7 +63,7 @@
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
-  c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
   c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 
@@ -267,8 +272,6 @@
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
   nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  nsmooth_aslp_eq = 5           ! spatial smoothing of azonal sea level pressure around the equator
-  nj_eq = 5                     ! latitudinal extent of spatial smoothing of azonal sea level pressure around the equator
   nsmooth_aslp_topo = 4         ! spatial smoothing of azonal sea level pressure from topographic waves
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle
   nsmooth_gam = 2               ! spatial smoothing of lapse rate 

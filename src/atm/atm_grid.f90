@@ -30,7 +30,7 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg
   use atm_params, only : l_p0_var, p0, ps0, pble, pblp
   use smooth_atm_mod, only : smooth2
 
@@ -85,6 +85,7 @@ module atm_grid
   real(wp) :: aim
  
   real(wp) :: fcort(jm)
+  real(wp) :: fcorg(jm)      !! s, the reciprocal-Coriolis factor of the geostrophic PBL wind, see i_fcorg
   real(wp) :: fcorta_sqrt(jm)
   real(wp) :: fcorta(jm)
   real(wp) :: fcorua(jmc)
@@ -223,6 +224,24 @@ contains
       fcort(j) = signf(j)*max(ABS(fcortp),fcormin)
       fcorta(j) = max(ABS(fcortp),fcormin)
       fcorta_sqrt(j) = sqrt(abs(fcorta(j)))
+      ! fcorg is the factor u2d.f90 divides the SLP gradient by to form ugb/vgb.
+      !   0  fcorg = 1/fcort, the original. fcort is floored in MAGNITUDE at fcormin but keeps
+      !      its sign, so |fcorg| is LARGEST on the two rows either side of the equator and
+      !      reverses between them; ugb jumps by 2*|dpdy|/(fcormin*ra) there.
+      !   1  fcorg = f/(f**2+fcormin**2), the Rayleigh-damped geostrophic balance with fcormin
+      !      doubling as the linear drag rate. Same regularisation, opposite behaviour at the
+      !      equator: |fcorg| peaks at 1/(2*fcormin) where |f| = fcormin and goes to ZERO at
+      !      f = 0, so ugb crosses zero continuously. It is also the factor consistent with the
+      !      ageostrophic wind uab/vab, which already carries the down-gradient companion of the
+      !      same balance; only the geostrophic half was left singular.
+      ! fcorta/fcorua are unsigned and were never discontinuous, so they are untouched.
+      if (i_fcorg.eq.0) then
+        fcorg(j) = 1._wp/fcort(j)
+      else if (i_fcorg.eq.1) then
+        fcorg(j) = fcortp/(fcortp**2 + fcormin**2)
+      else
+        stop 'i_fcorg'
+      endif
     enddo
 
     do j=1,jm
