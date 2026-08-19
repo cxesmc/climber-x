@@ -47,14 +47,21 @@ contains
   !   Purpose    :  per-timestep water and water-isotope conservation
   !                 check, per surface type. Lake budget is intentionally
   !                 not enforced (lake water is treated as inexhaustible).
+  !                 NOTE: with the prognostic water table the aquifer sits below the
+  !                 soil column and 'drainage' is still the flux out of the soil column, so the
+  !                 budget below is unchanged and remains exact. 'runoff_exc' is the saturation
+  !                 excess that soil_hydro cannot fit into the column and returns at the surface;
+  !                 it is a genuine loss from the vegetated tile and has to be counted here. The aquifer itself is not checked
+  !                 because groundwater() diagnoses the baseflow from the change in aquifer
+  !                 storage, so its budget closes identically and a check would be tautological.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine water_balance_check(i, j, frac_surf, f_veg, &
-                                 rain, snow, et, runoff_sur, calving, drainage, icemelt, icesub, &
+                                 rain, snow, et, runoff_sur, runoff_exc, calving, drainage, icemelt, icesub, &
                                  w_w, w_i, w_snow, w_can, s_can, &
                                  w_w_old, w_i_old, w_snow_old, w_can_old, s_can_old, &
                                  lake_water_tendency, &
                                  rain_iso, snow_iso, et_iso, &
-                                 runoff_sur_iso, calving_iso, drainage_iso, icemelt_iso, icesub_iso, &
+                                 runoff_sur_iso, runoff_exc_iso, calving_iso, drainage_iso, icemelt_iso, icesub_iso, &
                                  w_w_iso, w_i_iso, w_snow_iso, w_can_iso, s_can_iso, &
                                  w_w_iso_old, w_i_iso_old, w_snow_iso_old, w_can_iso_old, s_can_iso_old, &
                                  water_cons, water_iso_cons)
@@ -67,11 +74,13 @@ contains
     real(wp), dimension(:),   intent(in) :: frac_surf
     real(wp), dimension(:),   intent(in) :: rain, snow, et
     real(wp), dimension(:),   intent(in) :: runoff_sur, calving, drainage, icemelt, icesub
+    real(wp), intent(in) :: runoff_exc                 ! kg/m2/s, saturation excess at the surface, veg tile only
     real(wp), dimension(:),   intent(in) :: w_can, s_can, w_can_old, s_can_old
     real(wp), dimension(:),   intent(in) :: w_w, w_i, w_w_old, w_i_old
     real(wp), dimension(:),   intent(in) :: w_snow, w_snow_old
     real(wp), dimension(:,:), intent(in) :: rain_iso, snow_iso, et_iso
     real(wp), dimension(:,:), intent(in) :: runoff_sur_iso, calving_iso, drainage_iso, icemelt_iso, icesub_iso
+    real(wp), dimension(:),   intent(in) :: runoff_exc_iso
     real(wp), dimension(:,:), intent(in) :: w_can_iso, s_can_iso, w_can_iso_old, s_can_iso_old
     real(wp), dimension(:,:), intent(in) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old
     real(wp), dimension(:,:), intent(in) :: w_snow_iso, w_snow_iso_old
@@ -102,14 +111,14 @@ contains
       enddo
 
       in_b    = (rain_veg + snow_veg) * dt
-      out_b   = (runoff_sur(is_veg) + calving(is_veg) + drainage(is_veg) + et_veg) * dt
+      out_b   = (runoff_sur(is_veg) + runoff_exc + calving(is_veg) + drainage(is_veg) + et_veg) * dt
       store_b = sum(w_w - w_w_old + w_i - w_i_old) + (w_snow(is_veg) - w_snow_old(is_veg)) + dw_can_veg
       water_cons(is_veg) = in_b - out_b - store_b
 
       if (abs(water_cons(is_veg)) .gt. tol_water) then
         call print_bulk_failure('is_veg', i, j, water_cons(is_veg), &
                                 rain_veg*dt, snow_veg*dt, 0._wp, 0._wp, &
-                                et_veg*dt, runoff_sur(is_veg)*dt, drainage(is_veg)*dt, calving(is_veg)*dt, &
+                                et_veg*dt, runoff_sur(is_veg)*dt+runoff_exc*dt, drainage(is_veg)*dt, calving(is_veg)*dt, &
                                 sum(w_w-w_w_old), sum(w_i-w_i_old), w_snow(is_veg)-w_snow_old(is_veg), dw_can_veg)
         if (abs(water_cons(is_veg)) .gt. stop_water) stop 'water_balance_check: bulk imbalance over SOIL exceeds stop_water'
       endif
@@ -131,7 +140,7 @@ contains
           enddo
 
           in_i    = (rain_veg_iso(iso) + snow_veg_iso(iso)) * dt
-          out_i   = (runoff_sur_iso(is_veg,iso) + calving_iso(is_veg,iso) &
+          out_i   = (runoff_sur_iso(is_veg,iso) + runoff_exc_iso(iso) + calving_iso(is_veg,iso) &
                    + drainage_iso(is_veg,iso) + et_veg_iso(iso)) * dt
           store_i = sum(w_w_iso(:,iso) - w_w_iso_old(:,iso) + w_i_iso(:,iso) - w_i_iso_old(:,iso)) &
                   + (w_snow_iso(is_veg,iso) - w_snow_iso_old(is_veg,iso)) + dw_can_veg_iso(iso)
@@ -140,7 +149,7 @@ contains
           if (abs(water_iso_cons(is_veg,iso)) .gt. tol_water) then
             call print_iso_failure('is_veg', i, j, iso, water_iso_cons(is_veg,iso), &
                                    rain_veg_iso(iso)*dt, snow_veg_iso(iso)*dt, 0._wp, 0._wp, &
-                                   et_veg_iso(iso)*dt, runoff_sur_iso(is_veg,iso)*dt, &
+                                   et_veg_iso(iso)*dt, runoff_sur_iso(is_veg,iso)*dt+runoff_exc_iso(iso)*dt, &
                                    drainage_iso(is_veg,iso)*dt, calving_iso(is_veg,iso)*dt, &
                                    sum(w_w_iso(:,iso)-w_w_iso_old(:,iso)), &
                                    sum(w_i_iso(:,iso)-w_i_iso_old(:,iso)), &

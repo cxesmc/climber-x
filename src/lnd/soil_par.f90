@@ -209,51 +209,26 @@ contains
     ! total volumetric water content (liquid + frozen)
     theta = w_w/(rho_w*dz(1:nl)) + w_i/(rho_i*dz(1:nl))
 
+    ! Both the matric potential and the hydraulic conductivity are evaluated from the LIQUID
+    ! water content only (Swenson 2012): ice does not conduct liquid water, and the freezing
+    ! curve in soil_temp() defines the unfrozen water content by inverting
+    ! psi = psi_sat*(theta_w/theta_sat)**psi_exp, so any other choice here would give the
+    ! thermal and the hydrological solver two different psi for the same soil state.
+    ! The liquid+frozen and the (liquid+frozen)/liquid-mean variants were removed.
+
     ! psi, m
-    if( hydro_par%i_cond_theta .eq. 1 ) then
-     ! use liquid AND frozen water for metric potential formulation
-     psi = psi_sat*(max(hydro_par%theta_min, theta/theta_sat))**psi_exp
-    elseif( hydro_par%i_cond_theta .eq. 2 ) then
-     ! use only liquid water, Swenson 2012
-     psi = psi_sat*(max(hydro_par%theta_min, theta_w/theta_sat))**psi_exp
-    elseif( hydro_par%i_cond_theta .eq. 3 ) then
-     ! use only liquid water, Swenson 2012
-     psi = psi_sat * ( max(hydro_par%theta_min, 0.5_wp*(theta+theta_w) / theta_sat) )**psi_exp
-    endif
+    psi = psi_sat*(max(hydro_par%theta_min, theta_w/theta_sat))**psi_exp
     psi = max(-1.e5_wp, psi)
 
     ! hydraulic conductivity, mm/s
-    if( hydro_par%i_cond_theta .eq. 1 ) then 
-     ! use liquid AND frozen water for conductivity formulation
-     do k=1,nl-1
-      kappa_int(k) = k_sat(k) &
-                   * ( max(hydro_par%theta_min, (theta(k) + theta(k+1)) / (theta_sat(k) + theta_sat(k+1))) ) &
-                   **k_exp(k)
-     enddo
-     k = nl
+    do k=1,nl-1
      kappa_int(k) = k_sat(k) &
-                  * ( max(hydro_par%theta_min, theta(k) / theta_sat(k)) )**k_exp(k)
-    elseif( hydro_par%i_cond_theta .eq. 2 ) then
-     ! use only liquid water, recommended
-     do k=1,nl-1
-      kappa_int(k) = k_sat(k) &
-                   * ( max(hydro_par%theta_min, (theta_w(k) + theta_w(k+1)) / (theta_sat(k) + theta_sat(k+1))) ) &
-                   **k_exp(k)
-     enddo
-     k = nl
-     kappa_int(k) = k_sat(k) &
-                  * ( max(hydro_par%theta_min, theta_w(k) / theta_sat(k)) )**k_exp(k)
-    elseif( hydro_par%i_cond_theta .eq. 3 ) then
-     ! use only liquid water, recommended
-     do k=1,nl-1
-      kappa_int(k) = k_sat(k) &
-                   * ( max(hydro_par%theta_min, 0.5_wp*(theta(k) + theta(k+1) + theta_w(k) + theta_w(k+1)) / (theta_sat(k) + theta_sat(k+1))) ) &
-                   **k_exp(k)
-     enddo
-     k = nl
-     kappa_int(k) = k_sat(k) &
-                  * ( max(hydro_par%theta_min, 0.5_wp*(theta(k)+theta_w(k)) / theta_sat(k)) )**k_exp(k)
-    endif
+                  * ( max(hydro_par%theta_min, (theta_w(k) + theta_w(k+1)) / (theta_sat(k) + theta_sat(k+1))) ) &
+                  **k_exp(k)
+    enddo
+    k = nl
+    kappa_int(k) = k_sat(k) &
+                 * ( max(hydro_par%theta_min, theta_w(k) / theta_sat(k)) )**k_exp(k)
 
 
     return

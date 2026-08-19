@@ -55,6 +55,11 @@ module lnd_def
      real(wp) :: t2m_min_mon
      real(wp) :: t2m_ann_mean
      real(wp) :: infiltration, w_table, w_table_peat
+     real(wp) :: runoff_gw   ! kg/m2/s, groundwater baseflow
+     real(wp) :: runoff_exc  ! kg/m2/s, saturation excess leaving at the surface
+     real(wp) :: w_table_perch ! m, water table perched on the frost table
+     real(wp) :: w_table_eff   ! m, effective water table seen by the peat scheme
+     real(wp) :: fz_eff        ! -, TOPMODEL shift of cti_lim from the winning water table regime
      real(wp) :: f_wet, f_wet_cum, f_wet_max, f_wetland, w_table_cum, w_table_min, cti_lim
      real(wp) :: t_skin_veg, flx_g_veg, dflxg_dT_veg, flx_melt_veg, t_2m
      real(wp) :: f_lake_ice
@@ -167,6 +172,9 @@ module lnd_def
      real(wp), allocatable, dimension(:,:) :: w_w_iso_old, w_i_iso_old              ! (nl,nwiso) [kg/m2]
      real(wp), allocatable, dimension(:,:) :: w_w_lake_iso, w_i_lake_iso            ! (nl_l,nwiso) [kg/m2]
      real(wp), allocatable, dimension(:)   :: infiltration_iso                      ! (nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:)   :: w_gw_iso                              ! (nwiso) [kg/m2]
+     real(wp), allocatable, dimension(:)   :: runoff_gw_iso                         ! (nwiso) [kg/m2/s]
+     real(wp), allocatable, dimension(:)   :: runoff_exc_iso                        ! (nwiso) [kg/m2/s]
      real(wp), allocatable, dimension(:,:) :: water_iso_cons                        ! (nsoil,nwiso) conservation residual
      real(wp), allocatable, dimension(:) :: ftemp, fmoist, fdepth
      real(wp), allocatable, dimension(:) :: k_litter, k_fast, k_slow, k_litter_wet, k_fast_wet, k_slow_wet, diff_soilc, adv_soilc
@@ -201,7 +209,7 @@ module lnd_def
       integer :: ncells
       integer, allocatable :: id_map(:,:)
       integer, allocatable :: ij_1d(:,:)
-      real(wp), dimension(nl_l) :: z_lake
+      real(wp), allocatable, dimension(:) :: z_lake   ! (nl_l)
       type(lnd_2d_class), allocatable :: l2d(:,:)
       type(lnd_0d_class) :: l0d
     end type

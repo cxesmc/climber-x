@@ -29,8 +29,8 @@ module surface_par_lnd
   !use constants, only : karman, g, pi, T0, z_sfl, frac_vu
   use constants, only : karman, g, pi, T0, frac_vu
   use lnd_grid, only : i_ice, i_lake, i_bare, i_trees, i_grass, i_shrub, is_veg, is_ice, is_lake, flag_pft, flag_veg
-  use lnd_grid, only : npft, nsurf, nsoil, ngrass, ntrees, nshrub, nl, dz
-  use lnd_params, only : l_neutral, i_racan, p_cdense, z_sfl
+  use lnd_grid, only : npft, nsurf, nsoil, ngrass, ntrees, nshrub, nl, z
+  use lnd_params, only : l_neutral, c_racan_1, c_racan_2, z_sfl
   use lnd_params, only : pft_par, snow_par, hydro_par, surf_par, veg_par 
 
   implicit none
@@ -832,23 +832,15 @@ contains
         ! aerodynamic resistance
         r_a(n) = 1._wp / (Ch(n) * wind(n))
 
-        ! aerodynamic resistance for ground below canopy
-        if( flag_pft(n) .eq. 1 ) then
-          if (i_racan.eq.1) then
-            r_a_can(n) = 1._wp/(p_cdense*wind(n)) 
-          else if (i_racan.eq.2) then
-            r_a_can(n) = (1._wp-exp(-(lai(n)+10._wp*sai(n))))/(p_cdense*wind(n)) 
-          endif
-        endif
-
       endif
     enddo
 
-    if (i_racan.eq.3) then
-      do n=1,npft
-        r_a_can(n) = r_a(i_bare)
-      enddo
-    endif
+    ! Aerodynamic resistance for the ground below the canopy: the bare soil resistance scaled
+    ! by canopy density.  r_a_can -> 0 for an open canopy, so that the ground below then sees
+    ! only r_a(n), and -> c_racan_1*r_a(i_bare) for a closed canopy.
+    do n=1,npft
+      r_a_can(n) = c_racan_1 * (1._wp-exp(-c_racan_2*(lai(n)+sai(n)))) * r_a(i_bare)
+    enddo
 
     return
 
@@ -859,12 +851,12 @@ contains
   !   Subroutine :  r e s i s t _ s u r 
   !   Purpose    :  compute surface resistance to evapotranspiration
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine resist_sur(frac_surf,mask_snow,w_snow,theta_w,g_can,beta_s,r_s,beta_s_can,r_s_can)
+  subroutine resist_sur(frac_surf,mask_snow,theta_w, g_can, &
+                        beta_s,r_s,beta_s_can,r_s_can)
 
     implicit none
 
     integer,  dimension(:), intent(in) :: mask_snow
-    real(wp), dimension(:), intent(in) :: w_snow
     real(wp), dimension(:), intent(in) :: frac_surf
     real(wp), dimension(:), intent(in) :: theta_w
     real(wp), dimension(:), intent(in) :: g_can
@@ -872,40 +864,25 @@ contains
     real(wp), dimension(:), intent(out) :: beta_s_can, r_s_can
 
     integer :: n
-    real(wp) :: f_snow, beta_soil, beta_snow
+    real(wp) :: f_snow, beta_soil, beta_snow, r_soil
 
 
-    ! bare soil, use resistance OR beta factor
+    ! bare soil, use beta factor
     r_s(i_bare) = 0._wp
     beta_snow = 1._wp
-    if (hydro_par%i_evp_soil.eq.1) then
-      ! CLM, Lee and Pielke 1992 
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = 0.25_wp * (1._wp - cos(pi * theta_w(1) / hydro_par%theta_crit_evp))**2
-      else
-        beta_soil = 1._wp
-      endif
-    else if (hydro_par%i_evp_soil.eq.2) then
-      ! CLIMBER-2
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
-      else
-        beta_soil = 1._wp
-      endif
+    ! CLIMBER-2
+    if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
+      beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
+    else
+      beta_soil = 1._wp
     endif
-!    if (w_snow(is_veg).gt.snow_par%w_snow_crit) then
-!      beta_s(i_bare) = beta_snow
-!    else
-!      f_snow = w_snow(is_veg)/snow_par%w_snow_crit
-!      beta_s(i_bare) = f_snow*beta_snow + (1._wp-f_snow)*beta_soil
-!    endif
     if (mask_snow(is_veg).eq.0) then
       beta_s(i_bare) = beta_soil
     else
+      ! snow covered, sublimation from the snow surface is not limited by the soil
       beta_s(i_bare) = beta_snow
+      r_s(i_bare) = 0._wp
     endif
-    ! scale to account for fraction of top layer from which evaporation can occur
-    beta_s(i_bare) = hydro_par%dz_evp/dz(1) * beta_s(i_bare)
 
     ! lake
     if( frac_surf(i_lake) .gt. 0._wp ) then
