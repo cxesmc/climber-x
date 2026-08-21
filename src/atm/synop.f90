@@ -30,6 +30,7 @@ module synop_mod
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, c_syn_8, windmin, synsurmin, c_wind_ele
+  use atm_params, only : tau_fac
   use atm_params, only : c_diff_dse, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
@@ -50,7 +51,7 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, cos_acbar, sam, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, wsyn)
 
     implicit none
@@ -68,7 +69,6 @@ contains
     real(wp), intent(in   ) :: cda(:,:)
     real(wp), intent(in   ) :: cd(:,:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
-    real(wp), intent(in   ) :: cos_acbar(:,:,:)
 
     real(wp), intent(inout) :: sam(:,:)
     real(wp), intent(inout) :: cdif(:,:)
@@ -265,7 +265,7 @@ contains
         do n=1,nm
 
           ! synoptic surface wind
-          synsur(i,j,n) = c_syn_6*sqsam*epsa(i,j,n)*cos_acbar(i,j,n) 
+          synsur(i,j,n) = c_syn_6*sqsam*epsa(i,j,n)
           synsur(i,j,n) = max(synsur(i,j,n),synsurmin)
 
           ! total surface wind
@@ -275,8 +275,8 @@ contains
           endif
 
           ! wind stress 
-          taux(i,j,n) = cd(i,j,n)*ra*us(i,j,n)*wind(i,j,n)
-          tauy(i,j,n) = cd(i,j,n)*ra*vs(i,j,n)*wind(i,j,n)
+          taux(i,j,n) = tau_fac*cd(i,j,n)*ra*us(i,j,n)*wind(i,j,n)
+          tauy(i,j,n) = tau_fac*cd(i,j,n)*ra*vs(i,j,n)*wind(i,j,n)
 
         enddo
 

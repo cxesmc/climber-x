@@ -32,24 +32,27 @@
   cd0_ocn = 1.3e-3              ! drag coefficient for momentum over ocean, realistic values : 1.2e-3 - 1.5e-3
   cd0_sic = 1.63e-3             ! drag coefficient for momentum over sea ice, 1.63e-3 in Large and Yaeger 2004
   i_zoro = 3                    ! parameterisation of topographic roughness
-  i_acbar = 2
+  i_acbar = 1                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
+                                ! equivalently tan(a) = R/(1+R), and differ only in R:
+                                !   1 = R = cd/sqrt(|f|), the original
+                                !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**2), phi = |f|/f_45
   acbar_max = 0.5               ! maximum cross-isobar angle
   acbar_scale = 1.              ! scaling factor of cross-isobar angle
+  c_acbar_0 = 3.1713e-3         ! equatorial denominator of the cross-isobar angle (i_acbar=2). Larger means a smaller angle everywhere, most strongly in the tropics.
+  c_acbar_f = 1.0132e-2         ! Coriolis term of the same denominator (i_acbar=2). Sets how fast the angle falls with latitude.
+  c_acbar_wind = 1.6            ! factor on the cross-isobar angle used to ROTATE the surface wind in usur.
 
   !-----------------------------------------------------------
   ! zonal mean overturning circulation parameters
   !-----------------------------------------------------------
-  i_mmc = 1                     ! meridional temperature gradients:
-                                ! 1 = assuming fixed position of cell borders
-                                ! 2 = following borders of the cells
-  c_mmc_had = 0.35              ! parameter for strength of Hadley cells
-  c_mmc_fer = 0.06 !0.05              ! parameter for strength of Ferrel cells
+  i_mmc_fer = 2                 ! Ferrel cell amplitude: 1 = meridional tslz contrast across the cell, 2 = transient eddy DSE flux
+  c_mmc_had = 0.3               ! parameter for strength of Hadley cells
+  c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
-  c_mmc_1 = 5.                  ! 
-  c_mmc_2 = 0.025               ! 1/K
-  c_mmc_3 = 90.                 ! K
-  c_mmc_4 = 195. !200.                ! K 
-  c_mmc_z = 750.                ! m 
+  c_mmc_1 = 5.                  ! shape factor 
+  c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
+  c_mmc_dt0 = 70.               ! deg, total Hadley width at zero tropical contrast, used only if i_mmc_2=2
+  c_mmc_dt1 = 2.0               ! deg/K, Hadley cell narrowing per K of tropical contrast, used only if i_mmc_2=2
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
   dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
@@ -157,12 +160,13 @@
   c_syn_3 = 8.e-7               ! 1/m, background synoptic energy dissipation rate
   c_syn_4 = 1.e-4               ! 1/m, synoptic energy dissipation parameter
   c_syn_5 = 2.3e5               ! effective macrodiffusive coefficient parameter
-  c_syn_6 = 0.7                 ! scaling from synoptic kinetic energy to synoptic wind
+  c_syn_6 = 0.6                 ! scaling from synoptic kinetic energy to synoptic wind
   c_syn_7 = 1.e-3               ! scaling for synoptic vertical velocity at ~700 hPa
   c_syn_8 = 0. !1.
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
   c_wind_ele = 0.               ! m/s / m, elevation gradient of surface wind speed
+  tau_fac = 1.2                 ! scaling factor on the surface wind stress taux/tauy
   c_diff_dse = 2.e5             ! m, factor for macro-diffusion of dry static energy
   i_diff_wtr = 1                ! 
   c_diff_wtr = 1.6e4            ! s, factor for macro-diffusion of moisture

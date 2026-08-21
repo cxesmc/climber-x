@@ -57,15 +57,14 @@ module atm_params
   real(wp) :: r_so4
   real(wp) :: N_so4_nat
 
-  integer :: i_mmc
+  integer :: i_mmc_fer
   real(wp) :: c_mmc_had
   real(wp) :: c_mmc_fer
   real(wp) :: c_mmc_pol
-  real(wp) :: c_mmc_z
   real(wp) :: c_mmc_1
   real(wp) :: c_mmc_2
-  real(wp) :: c_mmc_3
-  real(wp) :: c_mmc_4
+  real(wp) :: c_mmc_dt0
+  real(wp) :: c_mmc_dt1
   real(wp) :: pblp 
   real(wp) :: pble
 
@@ -150,6 +149,7 @@ module atm_params
   real(wp) :: windmin 
   real(wp) :: synsurmin
   real(wp) :: c_wind_ele 
+  real(wp) :: tau_fac
   real(wp) :: c_diff_dse
   integer :: i_diff_wtr
   real(wp) :: c_diff_wtr
@@ -167,6 +167,9 @@ module atm_params
   integer :: i_acbar
   real(wp) :: acbar_max
   real(wp) :: acbar_scale
+  real(wp) :: c_acbar_0
+  real(wp) :: c_acbar_f
+  real(wp) :: c_acbar_wind
 
   real(wp) :: c_cld_1
   real(wp) :: c_cld_2
@@ -289,15 +292,14 @@ contains
     call nml_read(filename,"atm_par","b2_w",b2_w)
     call nml_read(filename,"atm_par","c_itf_c",c_itf_c)
     call nml_read(filename,"atm_par","c_itf_cc",c_itf_cc)
-    call nml_read(filename,"atm_par","i_mmc",i_mmc)
+    call nml_read(filename,"atm_par","i_mmc_fer",i_mmc_fer)
     call nml_read(filename,"atm_par","c_mmc_had",c_mmc_had)
     call nml_read(filename,"atm_par","c_mmc_fer",c_mmc_fer)
     call nml_read(filename,"atm_par","c_mmc_pol",c_mmc_pol)
-    call nml_read(filename,"atm_par","c_mmc_z",c_mmc_z)
     call nml_read(filename,"atm_par","c_mmc_1",c_mmc_1)
     call nml_read(filename,"atm_par","c_mmc_2",c_mmc_2)
-    call nml_read(filename,"atm_par","c_mmc_3",c_mmc_3)
-    call nml_read(filename,"atm_par","c_mmc_4",c_mmc_4)
+    call nml_read(filename,"atm_par","c_mmc_dt0",c_mmc_dt0)
+    call nml_read(filename,"atm_par","c_mmc_dt1",c_mmc_dt1)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
     call nml_read(filename,"atm_par","l_mass_com_topo",l_mass_com_topo)
@@ -376,6 +378,7 @@ contains
     call nml_read(filename,"atm_par","windmin",windmin)
     call nml_read(filename,"atm_par","synsurmin",synsurmin)
     call nml_read(filename,"atm_par","c_wind_ele",c_wind_ele)
+    call nml_read(filename,"atm_par","tau_fac",tau_fac)
     call nml_read(filename,"atm_par","c_diff_dse",c_diff_dse)
     call nml_read(filename,"atm_par","i_diff_wtr",i_diff_wtr)
     call nml_read(filename,"atm_par","c_diff_wtr",c_diff_wtr)
@@ -391,6 +394,9 @@ contains
     call nml_read(filename,"atm_par","i_acbar",i_acbar)
     call nml_read(filename,"atm_par","acbar_max",acbar_max)
     call nml_read(filename,"atm_par","acbar_scale",acbar_scale)
+    call nml_read(filename,"atm_par","c_acbar_0",c_acbar_0)
+    call nml_read(filename,"atm_par","c_acbar_f",c_acbar_f)
+    call nml_read(filename,"atm_par","c_acbar_wind",c_acbar_wind)
     call nml_read(filename,"atm_par","c_cld_1",c_cld_1)
     call nml_read(filename,"atm_par","c_cld_2",c_cld_2)
     call nml_read(filename,"atm_par","c_cld_3",c_cld_3)

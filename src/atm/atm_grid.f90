@@ -104,6 +104,8 @@ module atm_grid
   integer :: k700
   integer :: k500
   integer :: k300
+  integer :: k_dse_lo
+  integer :: k_dse_up
 
   real(wp), allocatable :: pl(:)
   real(wp), allocatable :: dpl(:)
@@ -286,12 +288,20 @@ contains
     k500  = minloc(abs(pl-0.5_wp),1)
     k300  = minloc(abs(pl-0.3_wp),1)
 
+    ! layer centres nearest the lower and upper branch of the Ferrel cell (~1300 and ~7300 m,
+    ! i.e. roughly 850 and 400 hPa); zc, not zl, because t3 is carried at layer centres.
+    ! Used by the i_mmc_fer=2/3 closure in slp_mod::zslp
+    k_dse_lo = minloc(abs(zc-1300._wp),1)
+    k_dse_up = minloc(abs(zc-7300._wp),1)
+
     print *,'k 1000 hPa',k1000, ', z 1000 hPa',zl(k1000)
     print *,'k 900  hPa',k900,  ', z 900  hPa',zl(k900)
     print *,'k 850  hPa',k850,  ', z 850  hPa',zl(k850)
     print *,'k 700  hPa',k700,  ', z 700  hPa',zl(k700)
     print *,'k 500  hPa',k500,  ', z 500  hPa',zl(k500)
     print *,'k 300  hPa',k300,  ', z 500  hPa',zl(k300)
+    print *,'k dse lo  ',k_dse_lo, ', zc      ',zc(k_dse_lo)
+    print *,'k dse up  ',k_dse_up, ', zc      ',zc(k_dse_up)
 
     ! initialize, needed by vesta
     kweff(:,:) = 4

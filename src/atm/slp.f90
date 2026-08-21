@@ -30,10 +30,14 @@ module slp_mod
   use atm_params, only : ra, p0, hatm
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
   use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
-  use atm_params, only : i_mmc, c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_z, c_mmc_1, c_mmc_2, c_mmc_3, c_mmc_4
+  use atm_params, only : cp
+  use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2
+  use atm_params, only : i_mmc_fer
+  use atm_params, only : c_mmc_dt0, c_mmc_dt1
   use atm_params, only : nsmooth_aslp, nsmooth_aslp_topo
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, i_ice
   use atm_grid, only : fcorua, sint, cost, fiu, fit
+  use atm_grid, only : zc, k_dse_lo, k_dse_up
   use smooth_atm_mod, only : smooth2_m, zona
   !$ use omp_lib
 
@@ -245,46 +249,48 @@ contains
   !   Subroutine :  zslp
   !   Purpose    :  compute zonally averaged sea level pressure component
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine zslp(zsa, sin_cos_acbar, tsl, aslp, &
+  subroutine zslp(sin_cos_acbar, tsl, aslp, zsa, fdydse, t3, &
           slp, had_fi, had_width)
 
     implicit none
 
-    real(wp), intent(in ) :: zsa(:,:)
     real(wp), intent(in ) :: sin_cos_acbar(:,:)
     real(wp), intent(in ) :: tsl(:,:)
     real(wp), intent(in ) :: aslp(:,:)
+    real(wp), intent(in ) :: zsa(:,:)
+    real(wp), intent(in ) :: fdydse(:,:)
+    real(wp), intent(in ) :: t3(:,:,:)
 
     real(wp), intent(out) :: slp(:,:)
     real(wp), intent(out) :: had_fi
     real(wp), intent(out) :: had_width
 
     real(wp), parameter :: p6=pi/6._wp
+    real(wp), parameter :: dse_min=1.e3_wp   !! J/kg, floor on the branch DSE contrast
+    real(wp), parameter :: fi_dt_eq =10._wp*pi/180._wp  !! equatorial band, |fi| below this
+    real(wp), parameter :: fi_dt_s1 =25._wp*pi/180._wp  !! subtropical band, equatorward limit
+    real(wp), parameter :: fi_dt_s2 =35._wp*pi/180._wp  !! subtropical band, poleward limit
 
     integer :: i, j
     integer :: jc, jtn1, jtn2, jpn1, jpn2, jts1, jts2, jps1, jps2
     real(wp) :: wtn1, wtn2, wpn1, wpn2, wts1, wts2, wps1, wps2
     real(wp) :: tnh, tsh, scosh
-    real(wp) :: ttrp, dtpn, dtps, dtfn, dtfs, ficz, ttrpmx, tbhn, tbhs, dthn, dths
+    real(wp) :: dtpn, dtps, dtfn, dtfs, ficz, ttrpmx, tbhn, tbhs, dthn, dths, cocfn, cocfs
     real(wp) :: hadwidsc
+    real(wp) :: dttrp, hadwid, teqsum, tsubsum, weqsum, wsubsum
     real(wp) :: ff, coc, psum, csum
-   
-    real(wp) :: fisu(jmc), fist(jm), vsz(jmc), tslz(jm), psz(jmc), acbarz(jm), zsaz(jm), fzsa(jm)
+    real(wp) :: dzdse, aferzn, aferzs
+
+    real(wp) :: fisu(jmc), fist(jm), vsz(jmc), tslz(jm), psz(jmc), acbarz(jm)
+    real(wp) :: dsez(jm), fedz(jmc), aferz(jm)
 
 
-    ! zonal mean sea level temperature and topography 
+    ! zonal mean sea level temperature and topography
     tslz(:) = 0._wp
-    zsaz(:) = 0._wp
     do j=1,jm 
       do i=1,im
         tslz(j) = tslz(j) + tsl(i,j)*aim 
-        zsaz(j) = zsaz(j) + zsa(i,j)*aim 
       enddo        
-    enddo
-
-    ! factor to account for zonal mean topography in the PBL
-    do j=1,jm 
-      fzsa(j) = 1._wp-min(1._wp,max(0._wp,0.5_wp*(zsaz(max(1,j-1))+zsaz(j))/c_mmc_z))
     enddo
 
     ! NH and SH mean sea level temperatures
@@ -312,9 +318,7 @@ contains
       enddo
     enddo
 
-    ! tropical temperature  
-    ttrp = zona(tslz,cost,jtn+1,jts)
-    ttrp = max(ttrp,c_mmc_4+50._wp)
+    ! maximum tropical sea level temperature, drives the Hadley branches
     ttrpmx = 0._wp
     do j=jtn,jts+1
       ttrpmx = max(ttrpmx,tslz(j))
@@ -324,10 +328,25 @@ contains
 
     ficz = c_mmc_2*(tnh-tsh)
 
-    ! width of Hadley cell, increases with tropical temperature 
+    ! Width of the Hadley cells
 
-    ! scaling of Hadley cell width
-    hadwidsc = c_mmc_3/(ttrp-c_mmc_4)
+    teqsum  = 0._wp; weqsum  = 0._wp
+    tsubsum = 0._wp; wsubsum = 0._wp
+    do j=1,jm
+      if (abs(fit(j)).lt.fi_dt_eq) then
+        teqsum  = teqsum  + tslz(j)*cost(j)
+        weqsum  = weqsum  + cost(j)
+      else if (abs(fit(j)).gt.fi_dt_s1 .and. abs(fit(j)).lt.fi_dt_s2) then
+        tsubsum = tsubsum + tslz(j)*cost(j)
+        wsubsum = wsubsum + cost(j)
+      endif
+    enddo
+    dttrp = teqsum/max(weqsum,1.e-20_wp) - tsubsum/max(wsubsum,1.e-20_wp)
+
+    ! total width in degrees, then hadwidsc from width = 180/(3*hadwidsc) deg
+    hadwid   = c_mmc_dt0 - c_mmc_dt1*dttrp
+    hadwidsc = 60._wp/max(hadwid,1._wp)
+
     hadwidsc = max(hadwidsc,0.5_wp)
     hadwidsc = min(hadwidsc,1.5_wp)       
 
@@ -396,37 +415,78 @@ contains
     had_fi = 0.5_wp*((wtn1*fit(jtn1)+wtn2*fit(jtn2)) + (wts1*fit(jts1)+wts2*fit(jts2)))
     had_width = (wtn1*fit(jtn1)+wtn2*fit(jtn2)) - (wts1*fit(jts1)+wts2*fit(jts2)) 
 
-    if (i_mmc.eq.1) then
+    ! Sea level temperature contrasts across the cells
 
-      ! temperature gradients in the polar cells
-      dtpn = (0.5_wp*tslz(jpn)+0.5_wp*tslz(jpn+1)) - tslz(1)
-      dtps = (0.5_wp*tslz(jps)+0.5_wp*tslz(jps+1)) - tslz(jm)
+    ! temperature gradients in the polar cells
+    dtpn = (0.5_wp*tslz(jpn)+0.5_wp*tslz(jpn+1)) - tslz(1)
+    dtps = (0.5_wp*tslz(jps)+0.5_wp*tslz(jps+1)) - tslz(jm)
 
-      ! temperature gradients in the ferrel cells
-      dtfn = (0.5*tslz(jtn)+0.5*tslz(jtn+1)) - (0.5*tslz(jpn)+0.5*tslz(jpn+1))
-      dtfs = (0.5*tslz(jts)+0.5*tslz(jts+1)) - (0.5*tslz(jps)+0.5*tslz(jps+1))
+    ! temperature gradients in the ferrel cells
+    dtfn = (0.5*tslz(jtn)+0.5*tslz(jtn+1)) - (0.5*tslz(jpn)+0.5*tslz(jpn+1))
+    dtfs = (0.5*tslz(jts)+0.5*tslz(jts+1)) - (0.5*tslz(jps)+0.5*tslz(jps+1))
 
-      ! temperature gradients in Hadley cells    
-      tbhn = 0.5*tslz(jtn)+0.5*tslz(jtn+1)
-      tbhs = 0.5*tslz(jts)+0.5*tslz(jts+1)
-      dthn = max(0._wp,ttrpmx-tbhn)
-      dths = max(0._wp,ttrpmx-tbhs)
+    ! temperature gradients in Hadley cells    
+    tbhn = 0.5*tslz(jtn)+0.5*tslz(jtn+1)
+    tbhs = 0.5*tslz(jts)+0.5*tslz(jts+1)
 
-    else if (i_mmc.eq.2) then
+    dthn = max(0._wp,ttrpmx-tbhn)
+    dths = max(0._wp,ttrpmx-tbhs)
 
-      ! temperature gradients in the polar cells
-      dtpn = (wpn1*tslz(jpn1)+wpn2*tslz(jpn2)) - tslz(1)
-      dtps = (wps1*tslz(jps1)+wps2*tslz(jps2)) - tslz(jm)
+    ! Amplitude of the Ferrel branches, selected by i_mmc_fer
+    !
+    ! i_mmc_fer = 1  The amplitude is proportional to the meridional sea level temperature contrast ACROSS the cell,
+    !                  psi_F = c_mmc_fer * dtf,   dtf = tslz(Hadley edge) - tslz(polar edge)
+    !
+    ! i_mmc_fer = 2  Transformed Eulerian mean form, resolved in latitude.  The Ferrel cell is the Eulerian residue of the baroclinic eddy fluxes,
+    !                  psi_F ~ -(2 pi a cos(fi)/g) [v'th'] / (dth/dp),
+    !                i.e. the mass circulation that returns, against the mean dry static energy gradient, the DSE the synoptic eddies transport poleward.  
+    !                Written as a bulk balance over the depth of the cell that is
+    !                  psi_F(j) = c_mmc_fer * |F_eddy(j)| / Ds(j),
+    !                with F_eddy the zonally integrated synoptic eddy DSE flux (W) and Ds the DSE contrast between the two branches (J/kg).
 
-      ! temperature gradients in the ferrel cells
-      dtfn = (wtn1*tslz(jtn1)+wtn2*tslz(jtn2)) - (wpn1*tslz(jpn1)+wpn2*tslz(jpn2))
-      dtfs = (wts1*tslz(jts1)+wts2*tslz(jts2)) - (wps1*tslz(jps1)+wps2*tslz(jps2))
+    if (i_mmc_fer.eq.1) then
 
-      ! temperature gradients in Hadley cells    
-      tbhn = wtn1*tslz(jtn1)+wtn2*tslz(jtn2)
-      tbhs = wts1*tslz(jts1)+wts2*tslz(jts2)
-      dthn = max(0._wp,ttrpmx-tbhn)
-      dths = max(0._wp,ttrpmx-tbhs)
+      cocfn = c_mmc_fer*dtfn
+      cocfs = c_mmc_fer*dtfs
+
+    else if (i_mmc_fer.eq.2) then
+
+      ! Bulk dry static energy contrast between the lower and the upper branch of the cells.
+      ! It is the denominator of the Ferrel amplitude below. 
+      dzdse = zc(k_dse_up)-zc(k_dse_lo)
+      do j=1,jm
+        dsez(j) = 0._wp
+        do i=1,im
+          dsez(j) = dsez(j) + (cp*(t3(i,j,k_dse_up)-t3(i,j,k_dse_lo)) + g*dzdse)*aim
+        enddo
+        dsez(j) = max(dsez(j),dse_min)
+      enddo
+
+      ! zonally integrated transient eddy DSE flux, W (fdydse carries kg/s*K)
+      fedz(:) = 0._wp
+      do j=1,jmc
+        do i=1,im
+          fedz(j) = fedz(j) + fdydse(i,j)*cp
+        enddo
+      enddo
+
+      do j=2,jm
+        aferz(j) = c_mmc_fer * abs(fedz(j))/(0.5_wp*(dsez(j-1)+dsez(j))) * 1.e-10_wp
+      enddo
+
+      ! average over latitudinal belt
+      aferzn = 0._wp
+      do j=jpn+1,jtn
+        aferzn = aferzn + aferz(j)/real(jtn-jpn,wp)
+      enddo
+      aferzs = 0._wp
+      do j=jts+1,jps
+        aferzs = aferzs + aferz(j)/real(jps-jts,wp)
+      enddo
+      do j=2,jm
+        cocfn = aferzn
+        cocfs = aferzs
+      enddo
 
     endif
 
@@ -440,13 +500,13 @@ contains
 
       coc = 0._wp
 
-      if (ff.ge.0._wp .and. ff.lt.pi)              coc = c_mmc_had*dthn * fzsa(j) 
-      if (ff.ge.pi .and. ff.lt.2._wp*pi)           coc = c_mmc_fer*dtfn * fzsa(j) 
-      if (ff.ge.2._wp*pi .and. ff.lt.3._wp*pi)     coc = c_mmc_pol*dtpn * fzsa(j) 
+      if (ff.ge.0._wp .and. ff.lt.pi)              coc = c_mmc_had*dthn
+      if (ff.ge.pi .and. ff.lt.2._wp*pi)           coc = cocfn
+      if (ff.ge.2._wp*pi .and. ff.lt.3._wp*pi)     coc = c_mmc_pol*dtpn
 
-      if (-ff.gt.0._wp .and. (-ff).le.pi)          coc = c_mmc_had*dths * fzsa(j) 
-      if (-ff.gt.pi .and. (-ff).le.2._wp*pi)       coc = c_mmc_fer*dtfs * fzsa(j) 
-      if (-ff.gt.2._wp*pi .and. (-ff).le.3._wp*pi) coc = c_mmc_pol*dtps * fzsa(j) 
+      if (-ff.gt.0._wp .and. (-ff).le.pi)          coc = c_mmc_had*dths
+      if (-ff.gt.pi .and. (-ff).le.2._wp*pi)       coc = cocfs
+      if (-ff.gt.2._wp*pi .and. (-ff).le.3._wp*pi) coc = c_mmc_pol*dtps
 
       vsz(j) = -coc*sin(ff) 
 

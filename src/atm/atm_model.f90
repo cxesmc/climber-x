@@ -221,7 +221,10 @@ contains
     !-------------------------------------------------
     ! zonal sea level pressure and total sea level pressure
     !$ time1 = omp_get_wtime()
-    call zslp(atm%zsa, atm%sin_cos_acbar, atm%tsl, atm%aslp, & ! in
+    ! fdydse and t3 are from the previous step: adifa and vesta run further down, see
+    ! slp_mod::zslp.
+    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, atm%zsa, & ! in
+      atm%fdydse, atm%t3, & ! in
       atm%slp, atm%had_fi, atm%had_width)  ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'zslp',(time2-time1)
@@ -329,7 +332,7 @@ contains
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
         call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
-          atm%zsa, atm%cda, atm%cd, atm%epsa, atm%cos_acbar, &    ! in
+          atm%zsa, atm%cda, atm%cd, atm%epsa, &    ! in
           atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
           atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst, atm%wsyn)    ! out
@@ -347,7 +350,7 @@ contains
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
-        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2)   ! out
+        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2)    ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'adifa',(time2-time1)*nstep_fast
 
@@ -842,6 +845,8 @@ contains
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
+     ! zslp reads fdydse, and adifa, which fills it, runs later in the step
+     atm%fdydse(:,:) = 0._wp
      allocate(atm%fdywtr(im,jmc))
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
