@@ -67,6 +67,8 @@
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
+  l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  c_aslp_temp_tau = 0.5         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
   c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 

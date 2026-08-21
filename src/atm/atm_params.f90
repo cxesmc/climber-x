@@ -29,7 +29,7 @@ module atm_params
   use nml, only : nml_read
   use constants, only : Le, Ls, g, Rd, T0
   use control, only : out_dir, flag_dust, flag_co2
-  use timer, only : dt_atm
+  use timer, only : dt_atm, sec_day
 
   implicit none
 
@@ -77,6 +77,8 @@ module atm_params
   real(wp) :: c_slp_3
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
+  logical :: l_aslp_temp_adv
+  real(wp) :: c_aslp_temp_tau
   logical :: l_aslp_topo
   real(wp) :: c_aslp_topo_1
   real(wp) :: c_aslp_topo_2
@@ -310,6 +312,9 @@ contains
     call nml_read(filename,"atm_par","c_slp_3",c_slp_3)
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
+    call nml_read(filename,"atm_par","l_aslp_temp_adv",l_aslp_temp_adv)
+    call nml_read(filename,"atm_par","c_aslp_temp_tau",c_aslp_temp_tau)
+    c_aslp_temp_tau = c_aslp_temp_tau * sec_day
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
     call nml_read(filename,"atm_par","c_aslp_topo_1",c_aslp_topo_1)
     call nml_read(filename,"atm_par","c_aslp_topo_2",c_aslp_topo_2)

@@ -29,6 +29,7 @@ module slp_mod
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use atm_params, only : ra, p0, hatm
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
+  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
   use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
   use atm_params, only : cp
   use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2
@@ -84,12 +85,15 @@ contains
     real(wp) :: u500(jm)
     real(wp) :: dz500o(im)
     type(C_PTR) :: plan_r2c, plan_c2r
+    type(C_PTR) :: plan_r2c_temp, plan_c2r_temp
     real(wp), dimension(im) :: eps, Kn2
     real(wp) :: zsa_smooth(im,jm)
     real(dp) :: zsa_smooth_dp(im,jm)
     real(dp), dimension(im) :: psi
     complex(dp), dimension(im/2+1) :: zsa_fft
     complex(dp), dimension(im/2+1) :: psi_fft
+    real(dp), dimension(im) :: aslp_temp_dp
+    complex(dp), dimension(im/2+1) :: aslp_temp_fft
 
 
     ! smooth zonal mean 500 hPa zonal wind
@@ -140,6 +144,61 @@ contains
 
     enddo
     !$omp end parallel do
+
+
+    !------------------------------------------------
+    ! upstream displacement of temperature related azonal sea level pressure
+    !------------------------------------------------
+
+    ! The hydrostatic surface pressure anomaly is set by the depth-integrated cooling of
+    ! the air column, not by the local sea level temperature. Air crossing a cold continent
+    ! in the mean westerly flow keeps cooling as it goes, so the temperature minimum
+    ! accumulates at the downstream edge while the cooling that drives the surface high is
+    ! centred upstream of it. atsl therefore lags the pressure anomaly: in ERA-Interim the
+    ! DJF azonal sea level pressure correlates best with the azonal sea level temperature
+    ! displaced 15-20 deg to the east (r=-0.83 over 40-75N, r=-0.93 over North America,
+    ! against only -0.70 and -0.54 at zero lag).
+    ! The equilibrium thermal pressure anomaly is therefore displaced upstream, as the
+    ! steady state of
+    !   -uz*d(aslp_temp)/dx = (aslp_temp_eq-aslp_temp)/c_aslp_temp_tau ,
+    ! solved in Fourier space, where each zonal wavenumber n is shifted upstream by the
+    ! phase angle atan(k*n*uz*c_aslp_temp_tau) and damped by 1/sqrt(1+(k*n*uz*tau)**2).
+
+    if (l_aslp_temp_adv) then
+
+      ! Make forward and backward plans for the FFT
+      plan_r2c_temp = fftw_plan_dft_r2c_1d(im, aslp_temp_dp, aslp_temp_fft, FFTW_ESTIMATE)
+      plan_c2r_temp = fftw_plan_dft_c2r_1d(im, aslp_temp_fft, aslp_temp_dp, FFTW_ESTIMATE)
+
+      ! azonal SLP vanishes at the Poles, nothing to displace there
+      do j=2,jm-1
+
+        k = 2._wp*pi/(2._wp*pi*r_earth*cost(j))      ! lowest zonal wavenumber
+        uz = max(0.1_wp,uz500s(j))                   ! advecting wind, westerly only
+
+        aslp_temp_dp(:) = aslp_temp(:,j)
+
+        !  forward transform the data
+        call fftw_execute_dft_r2c(plan_r2c_temp, aslp_temp_dp, aslp_temp_fft)
+
+        ! negative imaginary part = displacement upstream (to the west) for westerly uz
+        do i=1,im/2+1
+          aslp_temp_fft(i) = aslp_temp_fft(i) &
+            / cmplx(1._dp, -real(k*(i-1)*uz*c_aslp_temp_tau,dp), dp)
+        enddo
+
+        ! backward transform the data
+        call fftw_execute_dft_c2r(plan_c2r_temp, aslp_temp_fft, aslp_temp_dp)
+
+        aslp_temp(:,j) = aslp_temp_dp(:) * aim   ! aim accounts for the FFTW normalisation
+
+      enddo
+
+      ! destroy FFT plans
+      call fftw_destroy_plan(plan_r2c_temp)
+      call fftw_destroy_plan(plan_c2r_temp)
+
+    endif
 
 
     !------------------------------------------------
