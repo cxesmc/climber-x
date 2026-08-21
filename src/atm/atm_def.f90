@@ -211,6 +211,15 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: fay
       real(wp), allocatable, dimension(:,:,:) :: fayo
       real(wp), allocatable, dimension(:,:) :: fac
+      real(wp), allocatable, dimension(:,:) :: fac_topo
+      real(wp), allocatable, dimension(:,:) :: psi
+      real(wp), allocatable, dimension(:,:) :: psi_topo
+      real(wp), allocatable, dimension(:,:,:) :: fax_psi
+      real(wp), allocatable, dimension(:,:,:) :: fay_psi
+      real(wp), allocatable, dimension(:,:,:) :: fax_psi_topo
+      real(wp), allocatable, dimension(:,:,:) :: fay_psi_topo
+      real(wp), allocatable, dimension(:,:) :: convdse_psi
+      real(wp), allocatable, dimension(:,:) :: convdse_psi_topo
       real(wp), allocatable, dimension(:,:,:) :: w3
 
       real(wp), allocatable, dimension(:,:) :: convdse

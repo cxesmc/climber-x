@@ -70,7 +70,9 @@ module atm_params
 
   real(wp) :: c_uter_pol
   real(wp) :: c_uter_eq
-  logical :: l_mass_com_topo
+  integer :: i_mass_com_topo
+  real(wp) :: dps_com_topo
+  integer :: i_mass_com_vert
 
   real(wp) :: c_slp_1
   real(wp) :: c_slp_2
@@ -87,8 +89,8 @@ module atm_params
 
   real(wp) :: zmax
   real(wp) :: dpc
-  real(wp) :: pcmin
-  real(wp) :: pcmax
+  real(wp) :: dp_com
+  real(wp) :: ptop_com
   real(wp) :: ptopdyn
 
   real(wp) :: hcld_base
@@ -180,6 +182,7 @@ module atm_params
   real(wp) :: c_cld_5
   real(wp) :: c_cld_55
   real(wp) :: c_cld_6
+  real(wp) :: c_cld_6_ocn
   real(wp) :: c_cld_7
   logical :: l_cld_low_ice
   real(wp) :: cld_max
@@ -304,7 +307,9 @@ contains
     call nml_read(filename,"atm_par","c_mmc_dt1",c_mmc_dt1)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
-    call nml_read(filename,"atm_par","l_mass_com_topo",l_mass_com_topo)
+    call nml_read(filename,"atm_par","i_mass_com_topo",i_mass_com_topo)
+    call nml_read(filename,"atm_par","dps_com_topo",dps_com_topo)
+    call nml_read(filename,"atm_par","i_mass_com_vert",i_mass_com_vert)
     call nml_read(filename,"atm_par","l_p0_var",l_p0_var)
     call nml_read(filename,"atm_par","p0",p0)
     call nml_read(filename,"atm_par","c_slp_1",c_slp_1)
@@ -322,8 +327,8 @@ contains
     call nml_read(filename,"atm_par","c_aslp_topo_4",c_aslp_topo_4)
     call nml_read(filename,"atm_par","zmax",zmax)
     call nml_read(filename,"atm_par","dpc",dpc)
-    call nml_read(filename,"atm_par","pcmin",pcmin)
-    call nml_read(filename,"atm_par","pcmax",pcmax)
+    call nml_read(filename,"atm_par","dp_com",dp_com)
+    call nml_read(filename,"atm_par","ptop_com",ptop_com)
     call nml_read(filename,"atm_par","ptopdyn",ptopdyn)
     call nml_read(filename,"atm_par","pblp",pblp)
     call nml_read(filename,"atm_par","pble",pble)
@@ -409,6 +414,7 @@ contains
     call nml_read(filename,"atm_par","c_cld_5",c_cld_5)
     call nml_read(filename,"atm_par","c_cld_55",c_cld_55)
     call nml_read(filename,"atm_par","c_cld_6",c_cld_6)
+    call nml_read(filename,"atm_par","c_cld_6_ocn",c_cld_6_ocn)
     call nml_read(filename,"atm_par","c_cld_7",c_cld_7)
     call nml_read(filename,"atm_par","l_cld_low_ice",l_cld_low_ice)
     call nml_read(filename,"atm_par","c_hcld_1",c_hcld_1)

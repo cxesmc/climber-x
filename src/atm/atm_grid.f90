@@ -464,6 +464,10 @@ contains
       enddo
     enddo    
 
+    ! periodic closure: face imc is the same physical face as face 1
+    plx(imc,:)      = plx(1,:)
+    plx_trop(imc,:) = plx_trop(1,:)
+
 
     do i=1,im
       do j=2,jm
@@ -492,6 +496,9 @@ contains
     enddo
     dply(:,1,:) = 0._wp
     dplyo(:,1,:) = 0._wp
+    ! no flux through the poles
+    ply(:,1)     = 0._wp
+    ply(:,jmc)   = 0._wp
     ply_trop(:,1)   = 0._wp
     ply_trop(:,jmc) = 0._wp
 

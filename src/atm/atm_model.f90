@@ -254,7 +254,8 @@ contains
       !$ time1 = omp_get_wtime()
       call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, & ! in
         atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%uz500, &  ! out   
-        atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac)  ! out
+        atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac, atm%fac_topo, atm%psi, atm%psi_topo, &  ! out
+        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'u3d1',(time2-time1)*nstep_fast
       !$ if(l_write_timer .and. niter.eq.2) print *,'u3d2',(time2-time1)*nstep_fast
@@ -344,13 +345,16 @@ contains
       ! advection-diffusion
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%d3, atm%cam, &
+      call adifa(atm%fax, atm%fay, &
+        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, &   ! in
+        atm%tp, atm%q3, atm%d3, atm%cam, &
         atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst,  &   ! in
         atm%convdse, atm%convwtr_adv, atm%convwtr_dif, atm%convdst, atm%convco2, &   ! out 
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
-        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2)    ! out
+        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &  ! out
+        atm%convdse_psi, atm%convdse_psi_topo)             ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'adifa',(time2-time1)*nstep_fast
 
@@ -373,6 +377,12 @@ contains
       ! grid-scale (2dx) checkerboard control on the convergences
       !-------------------------------------------------
       if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdse, sqr, c_filt_conv, nord_filt_conv)
+      ! the same linear filter on the diagnostic parts, so that they stay comparable
+      ! with the filtered convdse they are a part of
+      if (c_filt_conv.gt.0._wp) then
+        call shapiro2dx(atm%convdse_psi, sqr, c_filt_conv, nord_filt_conv)
+        call shapiro2dx(atm%convdse_psi_topo, sqr, c_filt_conv, nord_filt_conv)
+      endif
       if (l_diff_impl) then
         ! implicit: filter the advective convergence AND the implicit diffusive convergence. 
         if (c_filt_conv.gt.0._wp) then
@@ -596,6 +606,10 @@ contains
          atm%convwtr(i,j) = 0._wp
          atm%convwtr_adv(i,j) = 0._wp
          atm%convdse(i,j) = 0._wp
+         atm%psi(i,j) = 0._wp
+         atm%psi_topo(i,j) = 0._wp
+         atm%convdse_psi(i,j) = 0._wp
+         atm%convdse_psi_topo(i,j) = 0._wp
 
          atm%dam(i,j) = 0._wp
          atm%hdust(i,j) = 2000._wp
@@ -824,6 +838,15 @@ contains
      allocate(atm%fay(im,jmc,km))
      allocate(atm%fayo(im,jmc,km))
      allocate(atm%fac(im,jm))
+     allocate(atm%fac_topo(im,jm))
+     allocate(atm%psi(im,jm))
+     allocate(atm%psi_topo(im,jm))
+     allocate(atm%fax_psi(imc,jm,km))
+     allocate(atm%fay_psi(im,jmc,km))
+     allocate(atm%fax_psi_topo(imc,jm,km))
+     allocate(atm%fay_psi_topo(im,jmc,km))
+     allocate(atm%convdse_psi(im,jm))
+     allocate(atm%convdse_psi_topo(im,jm))
      allocate(atm%w3(im,jm,kmc))
 
      allocate(atm%convdse(im,jm))
@@ -1086,6 +1109,15 @@ contains
      deallocate(atm%fay)
      deallocate(atm%fayo)
      deallocate(atm%fac)
+     deallocate(atm%fac_topo)
+     deallocate(atm%psi)
+     deallocate(atm%psi_topo)
+     deallocate(atm%fax_psi)
+     deallocate(atm%fay_psi)
+     deallocate(atm%fax_psi_topo)
+     deallocate(atm%fay_psi_topo)
+     deallocate(atm%convdse_psi)
+     deallocate(atm%convdse_psi_topo)
      deallocate(atm%diffxdse)
      deallocate(atm%diffydse)
      deallocate(atm%diffxwtr)

@@ -199,6 +199,10 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: prcw       !! rain(kg m-2 s-1)
     real(wp), allocatable, dimension(:,:) :: prcs       !! snowfall(kg m-2 s-1)
     real(wp), allocatable, dimension(:,:) :: prc_conv
+    real(wp), allocatable, dimension(:,:) :: psi
+    real(wp), allocatable, dimension(:,:) :: psi_topo
+    real(wp), allocatable, dimension(:,:) :: convdse_psi
+    real(wp), allocatable, dimension(:,:) :: convdse_psi_topo
     real(wp), allocatable, dimension(:,:) :: prc_wcon
     real(wp), allocatable, dimension(:,:) :: prc_over
     real(wp), allocatable, dimension(:,:) :: hcld       !! cloud height (m)
@@ -303,6 +307,7 @@ module atm_out
     real(wp), allocatable, dimension(:,:,:) :: fay
     real(wp), allocatable, dimension(:,:,:) :: fayo
     real(wp), allocatable, dimension(:,:) :: fac
+    real(wp), allocatable, dimension(:,:) :: fac_topo
 
     real(wp), allocatable, dimension(:,:) :: xz
 
@@ -475,6 +480,10 @@ contains
      allocate(ann_a%prcw(im,jm))
      allocate(ann_a%prcs(im,jm))
      allocate(ann_a%prc_conv(im,jm))
+     allocate(ann_a%psi(im,jm))
+     allocate(ann_a%psi_topo(im,jm))
+     allocate(ann_a%convdse_psi(im,jm))
+     allocate(ann_a%convdse_psi_topo(im,jm))
      allocate(ann_a%prc_wcon(im,jm))
      allocate(ann_a%prc_over(im,jm))
      allocate(ann_a%hcld(im,jm))
@@ -579,6 +588,7 @@ contains
        allocate(ann_a%fay(im,jmc,km))
        allocate(ann_a%fayo(im,jmc,km))
        allocate(ann_a%fac(im,jm))
+       allocate(ann_a%fac_topo(im,jm))
      endif
 
      allocate(ann_a%xz(jmc,kmc))
@@ -701,6 +711,10 @@ contains
      allocate(mon_a(k)%prcw(im,jm))
      allocate(mon_a(k)%prcs(im,jm))
      allocate(mon_a(k)%prc_conv(im,jm))
+     allocate(mon_a(k)%psi(im,jm))
+     allocate(mon_a(k)%psi_topo(im,jm))
+     allocate(mon_a(k)%convdse_psi(im,jm))
+     allocate(mon_a(k)%convdse_psi_topo(im,jm))
      allocate(mon_a(k)%prc_wcon(im,jm))
      allocate(mon_a(k)%prc_over(im,jm))
      allocate(mon_a(k)%hcld(im,jm))
@@ -805,6 +819,7 @@ contains
        allocate(mon_a(k)%fay(im,jmc,km))
        allocate(mon_a(k)%fayo(im,jmc,km))
        allocate(mon_a(k)%fac(im,jm))
+       allocate(mon_a(k)%fac_topo(im,jm))
      endif
 
      allocate(mon_a(k)%xz(jmc,kmc))
@@ -1486,6 +1501,10 @@ contains
           mon_a(m)%prcw        = 0. 
           mon_a(m)%prcs        = 0. 
           mon_a(m)%prc_conv    = 0.
+          mon_a(m)%psi         = 0.
+          mon_a(m)%psi_topo    = 0.
+          mon_a(m)%convdse_psi = 0.
+          mon_a(m)%convdse_psi_topo = 0.
           mon_a(m)%prc_wcon    = 0.
           mon_a(m)%prc_over    = 0.
           mon_a(m)%hcld        = 0. 
@@ -1568,6 +1587,7 @@ contains
             mon_a(m)%fay        = 0. 
             mon_a(m)%fayo       = 0. 
             mon_a(m)%fac        = 0. 
+            mon_a(m)%fac_topo   = 0. 
           endif
           mon_a(m)%diffxdse    = 0. 
           mon_a(m)%diffydse    = 0. 
@@ -1696,6 +1716,10 @@ contains
       mon_a(mon)%prcw        = mon_a(mon)%prcw        + mon_avg * sum(atm%prcw*atm%frst,3)*sec_day
       mon_a(mon)%prcs        = mon_a(mon)%prcs        + mon_avg * sum(atm%prcs*atm%frst,3)*sec_day
       mon_a(mon)%prc_conv    = mon_a(mon)%prc_conv    + mon_avg * atm%prc_conv*sec_day
+      mon_a(mon)%psi         = mon_a(mon)%psi         + mon_avg * atm%psi
+      mon_a(mon)%psi_topo    = mon_a(mon)%psi_topo    + mon_avg * atm%psi_topo
+      mon_a(mon)%convdse_psi      = mon_a(mon)%convdse_psi      + mon_avg * atm%convdse_psi
+      mon_a(mon)%convdse_psi_topo = mon_a(mon)%convdse_psi_topo + mon_avg * atm%convdse_psi_topo
       mon_a(mon)%prc_wcon    = mon_a(mon)%prc_wcon    + mon_avg * atm%prc_wcon*sec_day
       mon_a(mon)%prc_over    = mon_a(mon)%prc_over    + mon_avg * atm%prc_over*sec_day
       mon_a(mon)%hcld        = mon_a(mon)%hcld        + mon_avg * atm%hcld
@@ -1778,6 +1802,7 @@ contains
         mon_a(mon)%fay        = mon_a(mon)%fay        + mon_avg * atm%fay
         mon_a(mon)%fayo       = mon_a(mon)%fayo       + mon_avg * atm%fayo
         mon_a(mon)%fac        = mon_a(mon)%fac        + mon_avg * atm%fac
+        mon_a(mon)%fac_topo   = mon_a(mon)%fac_topo   + mon_avg * atm%fac_topo
       endif
       mon_a(mon)%diffxdse    = mon_a(mon)%diffxdse        + mon_avg * atm%diffxdse
       mon_a(mon)%diffydse    = mon_a(mon)%diffydse        + mon_avg * atm%diffydse
@@ -2874,6 +2899,14 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="SO4 optical thickness",units="1",ncid=ncid)
 
     if (l_output_extended) then
+    call nc_write(fnm,"psi        ", sngl(vars%psi       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the column mass correction, F_c = grad(psi)",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"psi_topo   ", sngl(vars%psi_topo  (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the topographic part of the column mass correction, zero unless i_mass_com_topo=1",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"convdse_psi", sngl(vars%convdse_psi(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="excess dry static energy convergence from the level at which the grad(psi) mass correction is applied, relative to spreading it through the troposphere by layer mass",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"convdse_psi_topo", sngl(vars%convdse_psi_topo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="excess dry static energy convergence from the level at which the grad(psi_topo) mass correction is applied, relative to spreading it through the troposphere by layer mass; zero unless i_mass_com_topo=1",units="W/m2",ncid=ncid)
     call nc_write(fnm,"dtamdt     ", sngl(vars%dtamdt    (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="tendency of atmospheric temperature",units="K/day",ncid=ncid)
     call nc_write(fnm,"prc_conv   ", sngl(vars%prc_conv  (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2905,6 +2938,8 @@ contains
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fac       ", sngl(vars%fac       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    call nc_write(fnm,"fac_topo  ", sngl(vars%fac_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="topographic part of the column convergence, -V.grad(p_s), zero unless i_mass_com_topo=1",units="kg/s",ncid=ncid)
       endif
     call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic zonal wind",units="m/s",ncid=ncid)
@@ -3082,6 +3117,10 @@ contains
     ave%prcw        = 0._wp
     ave%prcs        = 0._wp
     ave%prc_conv    = 0._wp
+    ave%psi         = 0._wp
+    ave%psi_topo    = 0._wp
+    ave%convdse_psi = 0._wp
+    ave%convdse_psi_topo = 0._wp
     ave%prc_wcon    = 0._wp
     ave%prc_over    = 0._wp
     ave%hcld        = 0._wp
@@ -3164,6 +3203,7 @@ contains
       ave%fay        = 0._wp
       ave%fayo       = 0._wp
       ave%fac        = 0._wp
+      ave%fac_topo   = 0._wp
     endif
     ave%xz          = 0._wp
     ave%diffxdse    = 0._wp
@@ -3293,6 +3333,10 @@ contains
        ave%prcw        = ave%prcw        + d(k)%prcw        / div
        ave%prcs        = ave%prcs        + d(k)%prcs        / div
        ave%prc_conv    = ave%prc_conv    + d(k)%prc_conv    / div
+       ave%psi         = ave%psi         + d(k)%psi         / div
+       ave%psi_topo    = ave%psi_topo    + d(k)%psi_topo    / div
+       ave%convdse_psi      = ave%convdse_psi      + d(k)%convdse_psi      / div
+       ave%convdse_psi_topo = ave%convdse_psi_topo + d(k)%convdse_psi_topo / div
        ave%prc_wcon    = ave%prc_wcon    + d(k)%prc_wcon    / div
        ave%prc_over    = ave%prc_over    + d(k)%prc_over    / div
        ave%hcld        = ave%hcld        + d(k)%hcld        / div
@@ -3375,6 +3419,7 @@ contains
          ave%fay        = ave%fay        + d(k)%fay        / div
          ave%fayo       = ave%fayo       + d(k)%fayo       / div
          ave%fac        = ave%fac        + d(k)%fac        / div
+         ave%fac_topo   = ave%fac_topo   + d(k)%fac_topo   / div
        endif
        ave%xz          = ave%xz          + d(k)%xz          / div
        ave%diffxdse        = ave%diffxdse        + d(k)%diffxdse        / div
