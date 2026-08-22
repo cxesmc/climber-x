@@ -180,9 +180,10 @@ module atm_params
   real(wp) :: c_cld_3
   real(wp) :: c_cld_4
   real(wp) :: c_cld_5
-  real(wp) :: c_cld_55
   real(wp) :: c_cld_6
   real(wp) :: c_cld_6_ocn
+  real(wp) :: c_cld_60
+  real(wp) :: c_cld_60_ocn
   real(wp) :: c_cld_7
   logical :: l_cld_low_ice
   real(wp) :: cld_max
@@ -412,9 +413,10 @@ contains
     call nml_read(filename,"atm_par","c_cld_3",c_cld_3)
     call nml_read(filename,"atm_par","c_cld_4",c_cld_4)
     call nml_read(filename,"atm_par","c_cld_5",c_cld_5)
-    call nml_read(filename,"atm_par","c_cld_55",c_cld_55)
     call nml_read(filename,"atm_par","c_cld_6",c_cld_6)
     call nml_read(filename,"atm_par","c_cld_6_ocn",c_cld_6_ocn)
+    call nml_read(filename,"atm_par","c_cld_60",c_cld_60)
+    call nml_read(filename,"atm_par","c_cld_60_ocn",c_cld_60_ocn)
     call nml_read(filename,"atm_par","c_cld_7",c_cld_7)
     call nml_read(filename,"atm_par","l_cld_low_ice",l_cld_low_ice)
     call nml_read(filename,"atm_par","c_hcld_1",c_hcld_1)

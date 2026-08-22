@@ -27,11 +27,11 @@ module clouds_mod
 
   use atm_params, only : wp
   use constants, only : T0, pi
-  use atm_params, only : c_cld_1, c_cld_2, c_cld_3, c_cld_4, c_cld_5, c_cld_55, c_cld_6, c_cld_7, l_cld_low_ice, cld_max, nsmooth_cld
+  use atm_params, only : c_cld_1, c_cld_2, c_cld_3, c_cld_4, c_cld_5, c_cld_6, c_cld_6_ocn, c_cld_60, c_cld_60_ocn, c_cld_7, l_cld_low_ice, cld_max, nsmooth_cld
   use atm_params, only : c_hcld_1, c_hcld_2, c_hcld_3, c_hcld_4
   use atm_params, only : c_clot_1, c_clot_2, c_clot_3, c_clot_4
   use atm_params, only : l_so4_ie, r_so4, N_so4_nat
-  use atm_grid, only : im, jm, i_ice
+  use atm_grid, only : im, jm, i_ocn, i_sic, i_ice
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
@@ -72,7 +72,7 @@ contains
     real(wp), intent(inout) :: clot(:,:)
 
     integer :: i, j
-    real(wp) :: dr, fr, f_freezedry
+    real(wp) :: dr, fr, f_freezedry, f_sea, dr_0, dr_w
     real(wp) :: cldn, hcldl, clotl, tcldm, ftemp
     real(wp) :: L_so4_ant, N_so4_ant_0, N_so4, f_mod
 
@@ -82,7 +82,7 @@ contains
     real(wp), parameter :: H_so4 = 1500._wp        ! m, sulfate aerosol height scale
 
 
-    !$omp parallel do collapse(2) private(i, j, dr, fr, f_freezedry, hcldl, clotl, tcldm, ftemp) &
+    !$omp parallel do collapse(2) private(i, j, dr, fr, f_freezedry, f_sea, dr_0, dr_w, hcldl, clotl, tcldm, ftemp) &
     !$omp private(L_so4_ant, N_so4_ant_0, N_so4, f_mod)
     do j=1,jm
       do i=1,im
@@ -94,21 +94,30 @@ contains
         ! cloud fraction
         !--------------------------------------------
 
-        ! near-surface relative humidity gradient, a measure of surface inversion
-        dr = rskina(i,j)-ram(i,j)
-        dr = min(dr,c_cld_6)
-        dr = max(dr,-c_cld_6)
+        ! near-surface relative humidity gradient, a measure of surface inversion,
+        ! normalised by a window of half-width dr_w centred on dr_0.
+        ! Centre and width are given separately for ocean+sea ice (c_cld_60_ocn, c_cld_6_ocn)
+        ! and for land+ice sheets (c_cld_60, c_cld_6), blended with the sea fraction to avoid
+        ! a discontinuity at the coast. Over the ocean the column is close to saturated and
+        ! rskina-ram is negative almost everywhere, so a window centred on dr=0 with the land
+        ! width switches the low clouds off over most of the ocean.
+        f_sea = frst(i,j,i_ocn)+frst(i,j,i_sic)
+        dr_0 = c_cld_60 + f_sea*(c_cld_60_ocn-c_cld_60)
+        dr_w = c_cld_6  + f_sea*(c_cld_6_ocn -c_cld_6 )
+        dr = (rskina(i,j)-ram(i,j)-dr_0)/(dr_w+1.e-20_wp)
+        dr = min(dr, 1._wp)
+        dr = max(dr,-1._wp)
 
         ! low clouds related to surface inversion
         ! 'freezedry' reduction of cloud cover, Vavrus & Walliser (2008)
         f_freezedry = 0.1_wp+0.9_wp*qam(i,j)/(c_cld_7+1.e-20_wp)
         f_freezedry = min(1._wp,f_freezedry)
-        ! relative weight of low clouds 
-        fr = f_freezedry*(dr+c_cld_6)/(2._wp*c_cld_6+1.e-20_wp) 
+        ! relative weight of low clouds, linear in the normalised dr
+        fr = f_freezedry*0.5_wp*(1._wp+dr)
         if (l_cld_low_ice) then
-          cld_low(i,j) = c_cld_5*fr*ram(i,j)**c_cld_55
+          cld_low(i,j) = c_cld_5*fr
         else
-          cld_low(i,j) = (1._wp-frst(i,j,i_ice))*c_cld_5*fr*ram(i,j)**c_cld_55
+          cld_low(i,j) = (1._wp-frst(i,j,i_ice))*c_cld_5*fr
         endif
 
         ! clouds related to large scale atmospheric relative humidity

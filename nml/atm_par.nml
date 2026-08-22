@@ -210,13 +210,15 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.46                !
+  c_cld_1 = 0.4                 !
   c_cld_2 = 0.5                 !
   c_cld_3 = 200.                !
   c_cld_4 = 1.5                 !
-  c_cld_5 = 0.75                !
-  c_cld_55 = 0.                 !
-  c_cld_6 = 0.1                 !
+  c_cld_5 = 1.0                 !
+  c_cld_6 = 0.1                 ! half-width of the inversion window (rskina-ram) over land and ice sheets
+  c_cld_6_ocn = 0.1             ! half-width of the inversion window (rskina-ram) over ocean and sea ice
+  c_cld_60 = 0.0                ! centre of the inversion window (rskina-ram) over land and ice sheets
+  c_cld_60_ocn = 0.0            ! centre of the inversion window (rskina-ram) over ocean and sea ice.
   c_cld_7 = 0.003               ! kg/kg, critical specific humidity for 'freezedry' reduction in cloud fraction
   l_cld_low_ice = F
   cld_max = 0.95                ! maximum cloud fraction
