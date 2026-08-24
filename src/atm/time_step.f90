@@ -27,13 +27,14 @@ module time_step_mod
 
   use atm_params, only : wp
   use precision, only : dp
-  use constants, only : T0, fqsat, q_sat_w, q_sat_i
+  use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
   use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, l_diff_impl, rh_max, rskin_ocn_min, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, z_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
   use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3
+  use atm_params, only : i_q2_ocn, z_q2_ocn, c_q2_ocn, i_q2, z_q2, c_q2, c_t2, p0
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr
-  use vesta_mod, only : t_prof
+  use vesta_mod, only : t_prof, rh_prof
   !$ use omp_lib
 
   implicit none
@@ -48,7 +49,8 @@ contains
   !   Purpose    :  time integration of equations for temperature, humidity and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, convwtr_adv, wcon, A_trop, W_strat, sam, eke, &
-      tskin, convdse, rb_atm, sha, gams, gamb, gamt, &
+      tskin, convdse, rb_atm, sha, gams, gamb, gamt, hrm, htrop, &
+      evp, wind, &
       convdst, dust_emis, dust_dep, hdust, &
       convco2, co2flx, &
       tam, qam, dam, cam, prc, prcw, prcs, prc_conv, prc_wcon, prc_over, &
@@ -78,6 +80,10 @@ contains
     real(wp), intent(in   ) :: gams(:,:)
     real(wp), intent(in   ) :: gamb(:,:)
     real(wp), intent(in   ) :: gamt(:,:)
+    real(wp), intent(in   ) :: hrm(:,:)
+    real(wp), intent(in   ) :: htrop(:,:)
+    real(wp), intent(in   ) :: evp(:,:,:)    ! evaporation per surface type, kg/m2/s
+    real(wp), intent(in   ) :: wind(:,:,:)   ! surface wind speed per surface type, m/s
     real(wp), intent(in   ) :: convdst(:,:)
     real(wp), intent(in   ) :: dust_emis(:,:)
     real(wp), intent(in   ) :: dust_dep(:,:)
@@ -113,6 +119,7 @@ contains
     integer :: i, j, n
     real(wp) :: dwdt, q2sat, qsat, rr, deba, dtdt, dddt, dcdt, frsnw, heff, rh, tam_zs
     real(wp) :: convwtr_slope, convwtr_bdg
+    real(wp) :: z_ab, t_ab, r_ab, q_ab, rho_ab
     real(wp) :: prc_tmp, prcw_tmp, prcs_tmp
     real(wp) :: prc_ocn, prc_ocn_conv, prc_ocn_wcon
     real(wp) :: prc_lnd, prc_lnd_conv, prc_lnd_wcon
@@ -120,6 +127,8 @@ contains
     real(wp) :: frocn
     real(wp), dimension(nm) :: rskin
 
+    real(wp), parameter :: q2_min = 1.e-6_wp        ! kg/kg, same floor the qam cap uses
+    real(wp), parameter :: wind_q2_min = 0.5_wp     ! m/s, guard for the i_q2=1 division only
     real(wp), parameter :: A_trop_min = 1.e-3_wp   ! safeguard against division by ~0 in extreme cold profile
     real(wp), parameter :: water_check_tol = 1.e-9_wp  ! kg/m2 per fast step; anything above is real, not round-off
     real(wp), parameter :: atm_heat_tol = 1.e-3_wp     ! W/m2, max allowed atmospheric energy imbalance
@@ -133,7 +142,7 @@ contains
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
     !$omp parallel do private(i,j,n,rr,convwtr_slope,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
-    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin,tam_old_loc) &
+    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin,tam_old_loc,z_ab,t_ab,r_ab,q_ab,rho_ab) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
       do i=1,im
@@ -320,8 +329,12 @@ contains
             ! atmospheric temperature at the elevation of each surface type
             tam_zs = t_prof(zsa(i,j), zs(i,j,n), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
 
-            ! 2m temperature
-            t2(i,j,n) = 0.5_wp*(tskin(i,j,n)+tam_zs)
+            ! 2m temperature.  This is the temperature flux form already: sensible heat is
+            ! never supply-limited, so SH = rho*cp*Cdh*wind*(tskin-t2) holds over every
+            ! surface type, and substituting it into t2 = tam_zs + SH/(rho*cp*Ch*wind) gives
+            ! the mixing line below with c_t2 = Cdh/(Cdh+Ch).  c_t2 = 0.5 (i.e. Ch = Cdh) is
+            ! the original hard-coded closure.
+            t2(i,j,n) = tam_zs + c_t2*(tskin(i,j,n)-tam_zs)
 
             if (n.eq.i_ocn .or. tskin(i,j,n).gt.T0) then
               ! saturation over water
@@ -339,13 +352,59 @@ contains
               rskin(n) = max(rskin(n),rskin_ocn_min)
             endif
 
-            ! rh as average between ram and rskina
-!            if (n.eq.i_ocn) then
-!              rh = 0.5_wp*(rh_max+rskin(n)) 
-!            else
-              rh = 0.5_wp*(ram(i,j)+rskin(n)) 
-!            endif
-            q2(i,j,n) = rh*q2sat
+            if ((n.eq.i_ocn .and. i_q2_ocn.eq.1) .or. (n.ne.i_ocn .and. i_q2.eq.1)) then
+
+              ! Surface-layer moisture closure.  The default branch below collapses to
+              ! q2 = qam, because qsat(t2)^2 ~ qsat(tam)*qsat(tskin), and so carries no
+              ! surface-layer physics at all.  Here the near-surface air is instead a blend
+              ! of air conditioned by the surface and drier air mixed down from z_ab above
+              ! it.  The general form is the flux closure
+              !     q2 = q_ab + E/(rho*Cq*wind)
+              ! the surface-layer humidity excess over the air aloft being the surface
+              ! moisture flux divided by the ventilation rate.
+              !
+              ! z_ab is measured from the surface of THIS type, not from sea level, so the
+              ! endpoint sits a fixed depth above the ground over orography.
+              z_ab = zs(i,j,n) + merge(z_q2_ocn, z_q2, n.eq.i_ocn)
+              t_ab = t_prof(zsa(i,j), z_ab, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1)
+              r_ab = rh_prof(zsa(i,j), z_ab, ram(i,j), hrm(i,j), htrop(i,j))
+              ! fqsat, not q_sat_w: the air at z_ab is often below freezing even over open
+              ! water, and this has to match how q3 is reconstructed in atm_out.f90
+              q_ab = r_ab * fqsat(t_ab, p0*exp(-z_ab/hatm))
+
+              if (n.eq.i_ocn) then
+                ! Over open water the surface is a SATURATED source, so E itself is
+                ! E = Le*rho*Cde*wind*(qsat-q2); substituting it into the flux closure and
+                ! solving for q2 gives the analytic mixing line below, with
+                ! c_q2_ocn = gamma/(1+gamma) and gamma = Cde/Cq.  c_q2_ocn ~ 0.5 means
+                ! Cq ~ Cde.  This avoids the implicitness that remains over land.
+                q2(i,j,n) = q_ab + c_q2_ocn*(qsat-q_ab)
+              else
+                ! Land, sea ice, ice sheets and lakes are supply-limited, not saturated, so
+                ! the saturation endpoint does not apply and the flux form has to be used
+                ! directly.  evp is lagged by one coupling step, which is what makes this
+                ! explicit rather than implicit.
+                ! the explicit `windmin` floor in synop.f90 is applied over OCEAN ONLY, so
+                ! this division needs its own guard; with the default synsurmin = 1 m/s the
+                ! floor below is never reached, but synsurmin is a namelist parameter
+                rho_ab = ps(i,j,n)/(Rd*t2(i,j,n))
+                q2(i,j,n) = q_ab + evp(i,j,n)/(rho_ab*c_q2*max(wind(i,j,n),wind_q2_min))
+              endif
+
+              ! keep the result physical: subsaturated, and positive under strong dew
+              q2(i,j,n) = min(max(q2(i,j,n), q2_min), q2sat)
+
+            else
+
+              ! rh as average between ram and rskina
+!              if (n.eq.i_ocn) then
+!                rh = 0.5_wp*(rh_max+rskin(n)) 
+!              else
+                rh = 0.5_wp*(ram(i,j)+rskin(n)) 
+!              endif
+              q2(i,j,n) = rh*q2sat
+
+            endif
 
             r2(i,j,n) = q2(i,j,n)/q2sat
 

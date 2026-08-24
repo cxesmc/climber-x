@@ -210,6 +210,16 @@ module atm_params
   real(wp) :: rskin_ocn_min
   real(wp) :: rh_strat
 
+  integer  :: i_q2_ocn
+  real(wp) :: z_q2_ocn
+  real(wp) :: c_q2_ocn
+
+  integer  :: i_q2
+  real(wp) :: z_q2
+  real(wp) :: c_q2
+
+  real(wp) :: c_t2
+
   logical :: l_dust
   logical :: l_dust_rad
   real(wp) :: c_dhs_1
@@ -432,6 +442,13 @@ contains
     call nml_read(filename,"atm_par","rh_max",rh_max)
     call nml_read(filename,"atm_par","rskin_ocn_min",rskin_ocn_min)
     call nml_read(filename,"atm_par","rh_strat",rh_strat)
+    call nml_read(filename,"atm_par","i_q2_ocn",i_q2_ocn)
+    call nml_read(filename,"atm_par","z_q2_ocn",z_q2_ocn)
+    call nml_read(filename,"atm_par","c_q2_ocn",c_q2_ocn)
+    call nml_read(filename,"atm_par","i_q2",i_q2)
+    call nml_read(filename,"atm_par","z_q2",z_q2)
+    call nml_read(filename,"atm_par","c_q2",c_q2)
+    call nml_read(filename,"atm_par","c_t2",c_t2)
     call nml_read(filename,"atm_par","c_trop_1",c_trop_1)
     call nml_read(filename,"atm_par","c_trop_2",c_trop_2)
     call nml_read(filename,"atm_par","c_trop_3",c_trop_3)

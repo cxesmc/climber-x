@@ -401,7 +401,8 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, &   ! in
-        atm%tskin, atm%convdse, atm%rb_atm, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
+        atm%tskin, atm%convdse, atm%rb_atm, atm%sha, atm%gams, atm%gamb, atm%gamt, atm%hrm, atm%htrop, &     ! in
+        atm%evp, atm%wind, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
@@ -569,6 +570,7 @@ contains
          atm%prcs(i,j,:) = 0._wp
          atm%prcw(i,j,:) = 0._wp
          atm%evpa(i,j) = 0._wp
+         atm%evp(i,j,:) = 0._wp
          atm%cld(i,j) = 0.5_wp
          atm%cld_rh(i,j) = 0.5_wp
          atm%cld_low(i,j) = 0._wp
@@ -782,6 +784,7 @@ contains
      atm%sha(:,:) = 0._wp
      allocate(atm%lha(im,jm))
      allocate(atm%evpa(im,jm))
+     allocate(atm%evp(im,jm,nm))
      allocate(atm%tskina(im,jm))
      allocate(atm%t2a(im,jm))
      allocate(atm%q2a(im,jm))
@@ -1052,6 +1055,7 @@ contains
      deallocate(atm%sha)
      deallocate(atm%lha)
      deallocate(atm%evpa)
+     deallocate(atm%evp)
      deallocate(atm%tskina)
      deallocate(atm%t2a)
      deallocate(atm%q2a)

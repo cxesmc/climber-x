@@ -154,6 +154,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: sha
       real(wp), allocatable, dimension(:,:) :: lha
       real(wp), allocatable, dimension(:,:) :: evpa
+      real(wp), allocatable, dimension(:,:,:) :: evp   !! evaporation from each surface type (kg m-2 s-1)
       real(wp), allocatable, dimension(:,:) :: tskina
       real(wp), allocatable, dimension(:,:) :: t2a
       real(wp), allocatable, dimension(:,:) :: q2a

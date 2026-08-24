@@ -490,6 +490,9 @@ contains
             atm%flwr_up_sur(i,j,n) = sum(cmn%lwu(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
             ! skin temperature 
             atm%tskin(i,j,n) = sum(cmn%t_skin(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
+            ! evaporation, per unit area of the macro surface type (i_q2=1 needs it per type,
+            ! not just the grid-cell mean evpa below)
+            atm%evp(i,j,n) = sum(cmn%evp(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
           else
             atm%alb_vu_s(i,j,n) = 0._wp 
             atm%alb_vu_c(i,j,n) = 0._wp
@@ -497,6 +500,7 @@ contains
             atm%alb_ir_c(i,j,n) = 0._wp
             atm%flwr_up_sur(i,j,n) = 0._wp
             atm%tskin(i,j,n) = 0._wp 
+            atm%evp(i,j,n) = 0._wp
           endif
 
         enddo

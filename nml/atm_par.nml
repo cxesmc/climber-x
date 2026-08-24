@@ -78,7 +78,7 @@
   !-----------------------------------------------------------
   ! additional dynamics parameters 
   !-----------------------------------------------------------
-  i_mass_com_topo = 1           ! treatment of the topographic part of the column convergence, V.grad(p_s):
+  i_mass_com_topo = 0           ! treatment of the topographic part of the column convergence, V.grad(p_s):
                                 ! 0 = not separated, corrected together with the rest of the column mass
                                 !     correction, in a band of depth dp_com below the tropopause
                                 ! 1 = corrected separately, with its own flux potential, in a terrain following
@@ -172,6 +172,13 @@
   rh_max = 0.95                 ! maximum relative humidity
   rskin_ocn_min = 0.7 !0.
   rh_strat = 0.05               ! relative humidity in stratosphere
+  i_q2_ocn = 1                  ! near-surface humidity over open ocean: 0 = 0.5*(ram+rskin), 1 = mixing line against the air aloft
+  z_q2_ocn = 1300.              ! m, height above the surface of the air the surface layer mixes with (i_q2_ocn=1)
+  c_q2_ocn = 0.5                ! mixing fraction towards surface saturation (i_q2_ocn=1)
+  i_q2 = 0                      ! near-surface humidity over NON-ocean types: 0 = 0.5*(ram+rskin), 1 = flux form
+  z_q2 = 1300.                  ! m, height above the surface of the air the surface layer mixes with (i_q2=1)
+  c_q2 = 2.5e-3                 ! moisture ventilation exchange coefficient Cq (i_q2=1)
+  c_t2 = 0.5                    ! weight of the skin temperature in the 2m temperature, Cdh/(Cdh+Ch); 0.5 reproduces the original closure
 
   !-----------------------------------------------------------
   ! water residence time parameters
