@@ -26,12 +26,12 @@
 module synop_mod
 
   use atm_params, only : wp
-  use constants, only : g, omega
-  use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost 
+  use constants, only : g, omega, pi
+  use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost, fit 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, c_syn_8, windmin, synsurmin, c_wind_ele
   use atm_params, only : tau_fac
-  use atm_params, only : c_diff_dse, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
+  use atm_params, only : c_diff_dse, c_diff_dse_eq, fi_diff_dse_eq, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
@@ -97,6 +97,7 @@ contains
     real(wp) :: dudz, dvdz
     real(wp) :: ugrad, Nfreq
     real(wp) :: diffxmx(jm)
+    real(wp) :: fdiff_eq(jm)   ! tropical amplification of the zonal DSE diffusivity
     real(wp) :: sam_sqrt(im,jm)
     ! implicit (ADI) solve of the synoptic-energy (sam) equation
     real(wp) :: kdiss(im,jm), samx(im,jm)
@@ -108,6 +109,8 @@ contains
     do j=1,jm
       ! maximum zonal diffusion coefficient for CFL stability 
       diffxmx(j) = 0.5_wp*dxt(j)**2/tstep 
+      ! tropical amplification of the zonal DSE diffusivity, gaussian in latitude
+      fdiff_eq(j) = 1._wp + (c_diff_dse_eq-1._wp)*exp(-(fit(j)*180._wp/pi/fi_diff_dse_eq)**2)
     enddo 
 
     !-----------------------------------------------
@@ -136,6 +139,10 @@ contains
         dudz = (ut3f(i,j,k500)-ut3f(i,j,k850))/(zl(k500)-zl(k850))
         dvdz = (vt3f(i,j,k500)-vt3f(i,j,k850))/(zl(k500)-zl(k850)) * cost(j)
         ugrad = sqrt(dudz**2+dvdz**2)
+        ! Note that the 1/f of the thermal wind inside ugrad cancels the 2*omega*|sin|
+        ! in front, so away from the fcort floor the production is proportional to the
+        ! horizontal temperature gradient with no Coriolis suppression of its own. The
+        ! only equatorial cut-off is the c_uter_eq factor already carried by ut3f/vt3f.
         synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad * (1._wp-c_syn_8*zsa(i,j)/3000._wp)
         synprod(i,j) = max(0._wp,synprod(i,j))
 
@@ -297,7 +304,15 @@ contains
       if (imi.lt.1) imi=im
       do j=1,jm
         ! diffusivity for dry static energy, proportional to sqrt(EKE)
-        diffxdse(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        ! The zonal DSE diffusivity is amplified in the tropics. This replaces, explicitly
+        ! and controllably, the damping that the first order upstream advection used to
+        ! supply through its truncation error: with i_adv=2 that damping is gone, and the
+        ! tam <-> wind coupling then carries a 3*dt_atm computational mode at the equator,
+        ! where the eddy-driven diffusivity is at its smallest. Only the ZONAL component is
+        ! raised - the mode is zonal wavenumber 9-10 and about three times broader in
+        ! latitude, so zonal diffusion damps it ~3x more efficiently per unit diffusivity,
+        ! and diffydse is left to set the poleward energy transport as before.
+        diffxdse(i,j) = c_diff_dse * fdiff_eq(j) * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
         ! diffusivity for water vapor, proportional to EKE (e.g. Caballero & Hanley, 2012)
         if (i_diff_wtr.eq.1) then
           diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 

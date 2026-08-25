@@ -29,15 +29,24 @@ module adifa_mod
   use atm_params, only : wp
   use atm_params, only : cp
   use atm_params, only : tstep
-  use atm_params, only : l_diff_impl
+  use atm_params, only : l_diff_impl, l_dust, i_adv
+  use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplx, dply, dy, dxt, dxu, sqr
+  use atm_grid, only : dplt, dplx, dply, dy, dxt, dxu, sqr
+  use adv_fct_mod, only : fct_ratios
   !$ use omp_lib
 
   implicit none
 
   private
   public :: adifa
+
+  ! flux corrected transport (i_adv=2) work space, allocated on first use.
+  ! rx/ry are the antidiffusive limiter ratios on the u- and v-faces; the CO2
+  ! ones carry a single level because cam is uniform over the column.
+  real(wp), allocatable, dimension(:,:,:) :: rx_dse, rx_wtr, rx_dst, rx_co2
+  real(wp), allocatable, dimension(:,:,:) :: ry_dse, ry_wtr, ry_dst, ry_co2
+  real(wp), allocatable, dimension(:,:,:) :: fmx_col, fmy_col, dm_col, cam_col
 
 contains
     
@@ -111,10 +120,54 @@ contains
     real(wp) :: fdivdse, fdivwtr, fdivdst, fdivco2
     real(wp) :: cmass, ctp, mc_psi, mc_psi_topo, m_k
     integer :: ipl
+    integer :: idg_dse, idg_wtr
     real(wp), dimension(imc,jm) :: faxdse_psi, faxdse_psi_topo
     ! tropospheric mass weighted mean of tp, the reference the parts are measured against
     real(wp), dimension(im,jm) :: tp_col
     real(wp), dimension(im,jmc) :: faydse_psi, faydse_psi_topo
+
+
+    !-----------------------------------
+    ! flux corrected transport: antidiffusive limiter ratios
+    !-----------------------------------
+    ! Computed here, before the flux loop, because the limiter needs the whole
+    ! horizontal field of a level at once. They are then applied face by face
+    ! below, where they shift the face value from upstream towards centred.
+    if (i_adv.eq.2) then
+
+      if (.not.allocated(rx_dse)) then
+        allocate(rx_dse(imc,jm,km), ry_dse(im,jmc,km))
+        allocate(rx_wtr(imc,jm,km), ry_wtr(im,jmc,km))
+        allocate(rx_dst(imc,jm,km), ry_dst(im,jmc,km))
+        allocate(rx_co2(imc,jm,1),  ry_co2(im,jmc,1))
+        allocate(fmx_col(imc,jm,1), fmy_col(im,jmc,1))
+        allocate(dm_col(im,jm,1),   cam_col(im,jm,1))
+        rx_dst = 0._wp
+        ry_dst = 0._wp
+      endif
+
+      ! the limiter activity diagnostics ride along with the rest of the timer
+      ! output; without it fct_ratios does no book keeping at all
+      idg_dse = 0
+      idg_wtr = 0
+      if (l_write_timer) then
+        idg_dse = 1
+        idg_wtr = 2
+      endif
+
+      call fct_ratios(km, fax, fay, dplt, tp, rx_dse, ry_dse, idg_dse)
+      call fct_ratios(km, fax, fay, dplt, q3, rx_wtr, ry_wtr, idg_wtr)
+      if (l_dust) call fct_ratios(km, fax, fay, dplt, d3, rx_dst, ry_dst, 0)
+
+      ! CO2 is uniform over the column, so its limiter is a single level problem
+      ! carried by the column integrated mass flux and the column mass
+      fmx_col(:,:,1) = sum(fax(1:imc,1:jm,1:km),dim=3)
+      fmy_col(:,:,1) = sum(fay(1:im,1:jmc,1:km),dim=3)
+      dm_col(:,:,1)  = sum(dplt(1:im,1:jm,1:km),dim=3)
+      cam_col(:,:,1) = cam(1:im,1:jm)
+      call fct_ratios(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, 0)
+
+    endif
 
 
     !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
@@ -209,6 +262,15 @@ contains
             dup  = d3_ijk
             cup  = c3_ij
           endif
+          if (i_adv.eq.2) then
+            ! move the face value from upstream towards centred by the limiter
+            ! ratio; the same face value multiplies fax, fax_psi and fax_psi_topo
+            ! below, so the three still add up to the total advective flux
+            tpup = tpup + rx_dse(i,j,k)*(0.5_wp*(tp_ijk+tp_i1jk)-tpup)
+            qup  = qup  + rx_wtr(i,j,k)*(0.5_wp*(q3_ijk+q3_i1jk)-qup)
+            dup  = dup  + rx_dst(i,j,k)*(0.5_wp*(d3_ijk+d3_i1jk)-dup)
+            cup  = cup  + rx_co2(i,j,1)*(0.5_wp*(c3_ij+c3_i1j)-cup)
+          endif
           faxdse(i,j) = faxdse(i,j) + fax_ijk*tpup ! kg/s * K
           faxdse_psi(i,j)      = faxdse_psi(i,j)      + fax_psi(i,j,k)*tpup
           faxdse_psi_topo(i,j) = faxdse_psi_topo(i,j) + fax_psi_topo(i,j,k)*tpup
@@ -225,12 +287,18 @@ contains
             qup  = q3_ijk
             dup  = d3_ijk
             cup  = c3_ij
-          else    
+          else
             tpup = tp_ij1k
             qup  = q3_ij1k
             dup  = d3_ij1k
             cup  = c3_ij1
-          endif 
+          endif
+          if (i_adv.eq.2) then
+            tpup = tpup + ry_dse(i,j,k)*(0.5_wp*(tp_ijk+tp_ij1k)-tpup)
+            qup  = qup  + ry_wtr(i,j,k)*(0.5_wp*(q3_ijk+q3_ij1k)-qup)
+            dup  = dup  + ry_dst(i,j,k)*(0.5_wp*(d3_ijk+d3_ij1k)-dup)
+            cup  = cup  + ry_co2(i,j,1)*(0.5_wp*(c3_ij+c3_ij1)-cup)
+          endif
           faydse(i,j) = faydse(i,j) + fay_ijk*tpup ! kg/s * K
           faydse_psi(i,j)      = faydse_psi(i,j)      + fay_psi(i,j,k)*tpup
           faydse_psi_topo(i,j) = faydse_psi_topo(i,j) + fay_psi_topo(i,j,k)*tpup

@@ -41,17 +41,18 @@ module atm_model
     use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
-    use atm_params, only : l_diff_impl
+    use atm_params, only : l_diff_impl, i_adv
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
-    use atm_grid, only : dxt, dy, fit, sqr
+    use atm_grid, only : dxt, dy, fit, sqr, dplt
     use atm_params, only : tstep
     use constants, only : pi
     use atm_def, only : atm_class
+    use adv_fct_mod, only : fct_acc, fct_diag_reset
 
     use lw_radiation_mod, only : lw_radiation
     use sw_radiation_mod, only : sw_radiation
@@ -412,8 +413,10 @@ contains
 
       if (atm%error) exit
 
-      ! CFL / diffusion stability diagnostic (per latitude; prints running max on the last sub-step)
-      if (l_write_timer) call cfl_diag(niter.eq.nstep_fast, atm%u3, atm%v3, &
+      ! CFL / diffusion stability diagnostic (per latitude; prints running max on the last sub-step).
+      ! Always on with the flux corrected transport: its low order leg is donor cell, so the
+      ! monotonicity of the limiter rests on the mass Courant number staying below 1.
+      if (l_write_timer .or. i_adv.eq.2) call cfl_diag(l_write_timer.and.niter.eq.nstep_fast, atm%u3, atm%v3, atm%fax, atm%fay, &
         atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst)
 
     enddo
@@ -444,51 +447,127 @@ contains
   !   Purpose    :  per-latitude running-max advective Courant and diffusion
   !              :  stability numbers, to find which rows limit the fast time step
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine cfl_diag(do_print, u3, v3, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst)
+  subroutine cfl_diag(do_print, u3, v3, fax, fay, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst)
 
     implicit none
 
     logical,  intent(in) :: do_print
     real(wp), intent(in) :: u3(:,:,:), v3(:,:,:)
+    real(wp), intent(in) :: fax(:,:,:), fay(:,:,:)
     real(wp), intent(in) :: diffxdse(:,:), diffydse(:,:)
     real(wp), intent(in) :: diffxwtr(:,:), diffywtr(:,:)
     real(wp), intent(in) :: diffxdst(:,:), diffydst(:,:)
 
     integer :: i, j, k
-    real(wp) :: umax, vmax, dxmax, dymax
+    real(wp) :: umax, vmax, dxmax, dymax, cimax, comax, fin, fout, mass
+    real(wp) :: rdse, rwtr, fbad
+    logical  :: do_print_fct
     real(wp), save :: cx_max(jm) = 0._wp   ! running-max zonal advective Courant per latitude
     real(wp), save :: cy_max(jm) = 0._wp   ! running-max meridional advective Courant
+    real(wp), save :: ci_max(jm) = 0._wp   ! running-max INFLOW mass Courant, dt*(mass entering the cell)/(cell mass)
+    real(wp), save :: co_max(jm) = 0._wp   ! running-max OUTFLOW mass Courant, for reference only
     real(wp), save :: dx_max(jm) = 0._wp   ! running-max zonal diffusion number
     real(wp), save :: dy_max(jm) = 0._wp   ! running-max meridional diffusion number
+    real(wp), save :: cm_warned = 1._wp    ! largest inflow mass Courant already warned about
+    integer,  save :: ncall = 0            ! sub-steps since the FCT diagnostic was last reported
+    integer,  save :: nrep  = 0            ! annual FCT reports issued so far
 
     ! update the per-latitude running maxima from the current sub-step
     do j=1,jm
-      umax = 0._wp; vmax = 0._wp; dxmax = 0._wp; dymax = 0._wp
+      umax = 0._wp; vmax = 0._wp; dxmax = 0._wp; dymax = 0._wp; cimax = 0._wp; comax = 0._wp
       do i=1,im
         do k=1,km
           umax = max(umax, abs(u3(i,j,k)))
           vmax = max(vmax, abs(v3(i,j,k)))
+          ! mass entering cell (i,j,k) through its four faces; this, not u*dt/dx and not
+          ! the outflow, is the condition the advective-form donor-cell update (and with
+          ! it the FCT limiter) actually needs. The outflow is carried alongside because
+          ! the two differ by the level's horizontal mass divergence, which is large.
+          mass = dplt(i,j,k)*sqr(i,j)
+          if (mass.gt.0._wp) then
+            fin  = max(0._wp,fax(i,j,k)) + max(0._wp,-fax(i+1,j,k)) &
+                 + max(0._wp,fay(i,j+1,k)) + max(0._wp,-fay(i,j,k))
+            fout = max(0._wp,-fax(i,j,k)) + max(0._wp,fax(i+1,j,k)) &
+                 + max(0._wp,-fay(i,j+1,k)) + max(0._wp,fay(i,j,k))
+            cimax = max(cimax, tstep*fin/mass)
+            comax = max(comax, tstep*fout/mass)
+          endif
         enddo
         dxmax = max(dxmax, diffxdse(i,j), diffxwtr(i,j), diffxdst(i,j))   ! worst diffusivity over tracers
         dymax = max(dymax, diffydse(i,j), diffywtr(i,j), diffydst(i,j))
       enddo
       cx_max(j) = max(cx_max(j), umax*tstep/dxt(j))
       cy_max(j) = max(cy_max(j), vmax*tstep/dy)
+      ci_max(j) = max(ci_max(j), cimax)
+      co_max(j) = max(co_max(j), comax)
       dx_max(j) = max(dx_max(j), dxmax*tstep/dxt(j)**2)
       dy_max(j) = max(dy_max(j), dymax*tstep/dy**2)
     enddo
+
+    ! with FCT, warn as soon as the inflow mass Courant passes 1 - beyond it the low
+    ! order leg is no longer a convex combination and the limiter silently falls back
+    ! to upstream in the offending cells. Reported once per 5% increase, not every step.
+    if (i_adv.eq.2 .and. maxval(ci_max).gt.cm_warned) then
+      print '(a,f7.2,a,i3,a)', ' WARNING atm FCT: inflow mass Courant number =',maxval(ci_max), &
+        ' > 1 at j =',maxloc(ci_max,1),' ; those cells revert to upstream. Increase nstep_fast.'
+      cm_warned = maxval(ci_max)*1.05_wp
+    endif
+
+    ! how much of the available antidiffusion the limiter actually lets through:
+    ! 1 is centred differencing, 0 is plain upstream, so 1-r is the share of the
+    ! upstream numerical diffusion that FCT has failed to remove. Reported once a
+    ! year, then the accumulators are reset. Part of the timer output: adifa only
+    ! fills fct_acc when l_write_timer is set. The mass Courant warning above is
+    ! not gated - it is the safety net that says the limiter is degrading.
+    ncall = ncall + 1
+    do_print_fct = l_write_timer .and. i_adv.eq.2 .and. ncall.ge.nday_year*nstep_fast
+    if (do_print_fct) then
+      rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+      if (sum(fct_acc(2,:,1)).gt.0._wp) rdse = sum(fct_acc(1,:,1))/sum(fct_acc(2,:,1))
+      if (sum(fct_acc(2,:,2)).gt.0._wp) rwtr = sum(fct_acc(1,:,2))/sum(fct_acc(2,:,2))
+      if (sum(fct_acc(4,:,1)).gt.0._wp) fbad = sum(fct_acc(3,:,1))/sum(fct_acc(4,:,1))
+      print '(a,f6.3,a,f6.3,a,f6.2,a)', ' atm FCT (annual mean): antidiffusion admitted, dse =',rdse, &
+        ' , water =',rwtr,' ; cells at the CFL fallback =',100._wp*fbad,' %'
+      ! the latitudinal structure once, in the first year: enough to tell a fallback
+      ! confined to a few orographic columns from one that has spread over the domain
+      if (nrep.eq.0) then
+        print '(a)', '       j   lat[deg]      C_in     C_out      r_dse     r_wtr    fCFL[%]'
+        do j=1,jm
+          rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+          if (fct_acc(2,j,1).gt.0._wp) rdse = fct_acc(1,j,1)/fct_acc(2,j,1)
+          if (fct_acc(2,j,2).gt.0._wp) rwtr = fct_acc(1,j,2)/fct_acc(2,j,2)
+          if (fct_acc(4,j,1).gt.0._wp) fbad = 100._wp*fct_acc(3,j,1)/fct_acc(4,j,1)
+          print '(i8,f9.1,5f11.3)', j, fit(j)*180._wp/pi, ci_max(j), co_max(j), rdse, rwtr, fbad
+        enddo
+        print *
+      endif
+      nrep = nrep + 1
+      call fct_diag_reset
+      ncall = 0
+    endif
 
     if (.not.do_print) return
 
     print *
     print '(a,es10.3,a)', ' ===== atm CFL / diffusion stability (running max over run), tstep =',tstep,' s ====='
     print '(a)',          '   donor-cell advection stable if Courant < 1 ; explicit diffusion stable if (Dx+Dy) < 0.5'
-    print '(a,f7.2,a,i3)','   global max Courant_x =',maxval(cx_max),'   at j =',maxloc(cx_max,1)
-    print '(a,f7.2,a,i3)','   global max Courant_y =',maxval(cy_max),'   at j =',maxloc(cy_max,1)
-    print '(a,f7.3,a,i3)','   global max (Dx+Dy)   =',maxval(dx_max+dy_max),'   at j =',maxloc(dx_max+dy_max,1)
-    print '(a)',          '       j   lat[deg]    Cadv_x    Cadv_y     Ddif_x    Ddif_y     Dx+Dy'
+    print '(a)',          '   C_in is the condition the FCT limiter needs; C_out is shown only to expose the'
+    print '(a)',          '   per-level horizontal mass divergence, which is balanced by the vertical mass flux.'
+    print '(a)',          '   r_dse, r_wtr = share of the available antidiffusion admitted (1 = centred, 0 = upstream),'
+    print '(a)',          '   fCFL = share of cells whose limiter was zeroed by the CFL fallback; all three annual means.'
+    print '(a,f7.2,a,i3)','   global max Courant_x   =',maxval(cx_max),'   at j =',maxloc(cx_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_y   =',maxval(cy_max),'   at j =',maxloc(cy_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_in  =',maxval(ci_max),'   at j =',maxloc(ci_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_out =',maxval(co_max),'   at j =',maxloc(co_max,1)
+    print '(a,f7.3,a,i3)','   global max (Dx+Dy)     =',maxval(dx_max+dy_max),'   at j =',maxloc(dx_max+dy_max,1)
+    print '(a)',          '       j   lat[deg]    Cadv_x    Cadv_y      C_in     C_out     Ddif_x    Ddif_y     Dx+Dy      r_dse     r_wtr    fCFL[%]'
     do j=1,jm
-      print '(i8,f9.1,5f11.3)', j, fit(j)*180._wp/pi, cx_max(j), cy_max(j), dx_max(j), dy_max(j), dx_max(j)+dy_max(j)
+      rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+      if (fct_acc(2,j,1).gt.0._wp) rdse = fct_acc(1,j,1)/fct_acc(2,j,1)
+      if (fct_acc(2,j,2).gt.0._wp) rwtr = fct_acc(1,j,2)/fct_acc(2,j,2)
+      if (fct_acc(4,j,1).gt.0._wp) fbad = 100._wp*fct_acc(3,j,1)/fct_acc(4,j,1)
+      print '(i8,f9.1,10f11.3)', j, fit(j)*180._wp/pi, cx_max(j), cy_max(j), ci_max(j), co_max(j), &
+        dx_max(j), dy_max(j), dx_max(j)+dy_max(j), rdse, rwtr, fbad
     enddo
     print *
 

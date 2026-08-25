@@ -203,12 +203,17 @@
   c_wind_ele = 0.               ! m/s / m, elevation gradient of surface wind speed
   tau_fac = 1.2                 ! scaling factor on the surface wind stress taux/tauy
   c_diff_dse = 2.e5             ! m, factor for macro-diffusion of dry static energy
-  i_diff_wtr = 1                ! 
-  c_diff_wtr = 1.6e4            ! s, factor for macro-diffusion of moisture
+  c_diff_dse_eq = 1.            ! amplification of the ZONAL dry static energy diffusivity at the equator, tapering as exp(-(lat/fi_diff_dse_eq)^2). 1 = off.
+  fi_diff_dse_eq = 15.          ! deg, e-folding latitude of the above
+  i_diff_wtr = 2                ! 
+  c_diff_wtr = 2.e5             ! s, factor for macro-diffusion of moisture
 
   !-----------------------------------------------------------
-  ! diffusion and stability parameters 
+  ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
+  i_adv = 1                     ! advection scheme:
+                                ! 1 = first order upstream (donor cell)
+                                ! 2 = flux corrected transport (Zalesak 1979)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
   c_diffx_pol = 2.              ! implicit scheme: max zonal diffusion number for the polar limiter on the zonal diffusivities; large value = no limit
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr) to suppress grid-scale checkerboard; 0 = off

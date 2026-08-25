@@ -111,6 +111,7 @@ module atm_grid
   real(wp), allocatable :: dpl(:)
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
+  real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
   real(wp), allocatable :: dply(:,:,:)
   real(wp), allocatable :: dplxo(:,:,:)
@@ -147,6 +148,7 @@ contains
     allocate(dpl(km))
     allocate(zl(kmc))
     allocate(zc(km))
+    allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
     allocate(dply(im,jm,km))
     allocate(dplxo(im,jm,km))
@@ -445,6 +447,19 @@ contains
 
         plx(i,j) = 0._wp
         plx_trop(i,j) = 0._wp
+
+        ! layer mass at the T-point itself, the cell mass of the advection.
+        ! Built from pzsa(i,j) rather than from the face average px, so that the
+        ! cell mass is consistent with where the tracer is carried.
+        do k=1,km
+          if (pzsa(i,j).le.pl(k+1)) then
+            dplt(i,j,k) = 0._wp
+          elseif (pzsa(i,j).lt.pl(k)) then
+            dplt(i,j,k) = (pzsa(i,j)-pl(k+1))*amas
+          else
+            dplt(i,j,k) = (pl(k)-pl(k+1))*amas
+          endif
+        enddo
 
         do k=1,km
           if (px.le.pl(k+1))then

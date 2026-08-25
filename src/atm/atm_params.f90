@@ -155,8 +155,11 @@ module atm_params
   real(wp) :: c_wind_ele 
   real(wp) :: tau_fac
   real(wp) :: c_diff_dse
+  real(wp) :: c_diff_dse_eq   !! amplification of the ZONAL dry static energy diffusivity at the equator, tapering with latitude; 1 = off
+  real(wp) :: fi_diff_dse_eq  !! deg, e-folding latitude of that amplification
   integer :: i_diff_wtr
   real(wp) :: c_diff_wtr
+  integer :: i_adv         !! advection scheme: 1 = first order upstream (donor cell), 2 = flux corrected transport (Zalesak 1979)
   logical :: l_diff_impl   !! use implicit (unconditionally stable ADI) horizontal diffusion? otherwise original explicit
   real(wp) :: c_diffx_pol  !! implicit scheme: max zonal diffusion number (diffx*tstep/dxt^2) for the polar limiter on the zonal diffusivities; bounds the ~1/dxt polar conductance
   real(wp) :: c_filt_conv  !! strength [0..1] of the conservative high-order 2dx (Shapiro) filter applied to the convergences (convdse/convwtr) to suppress the grid-scale checkerboard; 0 = off
@@ -401,8 +404,11 @@ contains
     call nml_read(filename,"atm_par","c_wind_ele",c_wind_ele)
     call nml_read(filename,"atm_par","tau_fac",tau_fac)
     call nml_read(filename,"atm_par","c_diff_dse",c_diff_dse)
+    call nml_read(filename,"atm_par","c_diff_dse_eq",c_diff_dse_eq)
+    call nml_read(filename,"atm_par","fi_diff_dse_eq",fi_diff_dse_eq)
     call nml_read(filename,"atm_par","i_diff_wtr",i_diff_wtr)
     call nml_read(filename,"atm_par","c_diff_wtr",c_diff_wtr)
+    call nml_read(filename,"atm_par","i_adv",i_adv)
     call nml_read(filename,"atm_par","l_diff_impl",l_diff_impl)
     call nml_read(filename,"atm_par","c_diffx_pol",c_diffx_pol)
     call nml_read(filename,"atm_par","c_filt_conv",c_filt_conv)
