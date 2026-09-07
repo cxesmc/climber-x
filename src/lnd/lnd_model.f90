@@ -2403,6 +2403,13 @@ end subroutine lnd_update
    call nc_write(fnm,"Cd",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="exchange coefficient for heat",units="1",ncid=ncid)
    do i=1,nx
      do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%Ri(:)
+     enddo
+   enddo
+   ! Ri is a prognostic state (relaxed over tau_Ri in resist_aer), not a diagnostic
+   call nc_write(fnm,"Ri",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="Richardson number",units="1",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
        var_n(:,i,j) = lnd(i,j)%albedo(:)
      enddo
    enddo
@@ -3072,6 +3079,11 @@ end subroutine lnd_update
         call nc_read(fnm,"rough_m",lnd(i,j)%rough_m,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"rough_h",lnd(i,j)%rough_h,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"Cd",lnd(i,j)%Ch,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+        if (nc_exists_var(fnm,"Ri")) then
+          call nc_read(fnm,"Ri",lnd(i,j)%Ri,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+        else
+          lnd(i,j)%Ri = 0._wp   ! restarts predating the relaxed Ri: start neutral, spins up over tau_Ri
+        endif
         call nc_read(fnm,"albedo",lnd(i,j)%albedo,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"w_can",lnd(i,j)%w_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"s_can",lnd(i,j)%s_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)

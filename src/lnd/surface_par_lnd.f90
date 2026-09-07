@@ -32,6 +32,7 @@ module surface_par_lnd
   use lnd_grid, only : npft, nsurf, nsoil, ngrass, ntrees, nshrub, nl, z
   use lnd_params, only : l_neutral, c_racan_1, c_racan_2, z_sfl
   use lnd_params, only : pft_par, snow_par, hydro_par, surf_par, veg_par 
+  use timer, only : dt_lnd, sec_day
 
   implicit none
 
@@ -745,16 +746,26 @@ contains
     real(wp), dimension(:), intent(in) :: h_snow
     real(wp), dimension(:), intent(in) :: wind
     real(wp), dimension(:), intent(inout) :: z0m, rough_m, rough_h
-    real(wp), dimension(:), intent(out) :: Ch, r_a, Ri
+    real(wp), dimension(:), intent(out) :: Ch, r_a
+    ! Ri is a state: it is relaxed in time rather than diagnosed anew each step (see below)
+    real(wp), dimension(:), intent(inout) :: Ri
     real(wp), dimension(:), intent(out) :: r_a_can
 
     integer :: n
     real(wp) :: fsnow, hsnow
     real(wp) :: u_star, Re
     real(wp) :: log_m, log_h, Ch_neutral
+    real(wp) :: Ri_new, w_Ri
     
     real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
 
+
+    ! weight of the instantaneous Richardson number in the relaxation below
+    if (surf_par%tau_Ri.gt.0._wp) then
+      w_Ri = min(dt_lnd/(surf_par%tau_Ri*sec_day), 1._wp)
+    else
+      w_Ri = 1._wp
+    endif
 
     do n=1,nsurf
 
@@ -814,8 +825,9 @@ contains
         ! neutral heat exchange coefficient
         Ch_neutral = log_m * log_h 
 
-        ! Richardson number
-        Ri(n) = g * 100._wp * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2 
+        ! Richardson number.  Relaxed towards its instantaneous value over tau_Ri rather than reset every step, needed for stability 
+        Ri_new = g * z_sfl * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2 
+        Ri(n) = Ri(n) + w_Ri*(Ri_new - Ri(n))
 
         if( l_neutral ) then
           ! neutral stratification

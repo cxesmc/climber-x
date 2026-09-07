@@ -169,6 +169,7 @@ module lnd_params
 
     real(wp) :: f_Ri_unstab
     real(wp) :: f_Ri_stab
+    real(wp) :: tau_Ri
 
     ! longwave emissivity, Jin 2006, Walters 2014           BL     NL     C3     C4     SH    BARE  WATER  ICE
     real(wp), dimension(nsurf) :: emissivity = (/ 0.96_wp,0.96_wp,0.96_wp,0.96_wp,0.96_wp,0.96_wp,0.98_wp,0.99_wp /)
@@ -721,6 +722,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","zm_to_zh_const",surf_par%zm_to_zh_const)
     call nml_read(filename,"lnd_par","f_Ri_unstab",surf_par%f_Ri_unstab)
     call nml_read(filename,"lnd_par","f_Ri_stab",surf_par%f_Ri_stab)
+    call nml_read(filename,"lnd_par","tau_Ri",surf_par%tau_Ri)
 
     call nml_read(filename,"lnd_par","K_eddy_lake_bg",K_eddy_lake_bg)
     call nml_read(filename,"lnd_par","K_eddy_lake_max",K_eddy_lake_max)
