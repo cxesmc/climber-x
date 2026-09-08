@@ -40,7 +40,7 @@
     !------------------------------------------------------------------------------------
     l_diurnal_cycle = F         ! use parameterisation of diurnal cycle for snowmelt?
     l_neutral = F               ! assume neutral stratification?
-    z_sfl = 50.                 ! m, reference height for turbulent heat fluxes
+    z_sfl = 10.                 ! m, reference height for turbulent heat fluxes
     c_racan_1 = 20.0            ! below canopy resistance for a closed canopy, in units of the bare soil
                                 ! resistance, TUNABLE
     c_racan_2 = 0.1             ! leaf area scale of the approach to the closed canopy limit, 1/(lai+sai),
@@ -60,8 +60,9 @@
                                 ! 3 .. roughness Reynolds number dependence from Zilitinkevich 1995 
                                 ! 4 .. same as 3, but with Yang 2008 for non-vegetated surfaces 
     zm_to_zh_const = 0.1353353  ! constant ratio between roughness length for momentum and heat, used only if i_z0h==1
-    f_Ri_unstab = 2.            ! Richardson number factor for unstable stratification
+    f_Ri_unstab = 10.           ! Richardson number factor for unstable stratification
     f_Ri_stab = 0.              ! Richardson number factor for stable stratification
+    tau_Ri = 4.                 ! relaxation timescale of the Richardson number [days], 0 = no relaxation
 
     !------------------------------------------------------------------------------------
     ! water isotopes (phase 1: passive tracer, land-only, no fractionation)
@@ -134,7 +135,7 @@
     !------------------------------------------------------------------------------------
     ! dust emissions params
     !------------------------------------------------------------------------------------
-    b0 = 6.e-9                  ! dust emission flux constant [kg s^2 m^-5]
+    b0 = 4.e-9                  ! dust emission flux constant [kg s^2 m^-5]
     qd = 0.01                   ! desert dust source scaling constant
     qg = 0.005                  ! grass dust source scaling constant
     wind_gust_fac = 0.          ! 1/(1000 m), factor to scale wind to account for topographic roughness-dependent wind gusts
@@ -247,16 +248,16 @@
     ich4_ftemp       = 2        ! temperature dependence of ch4 emission fraction. 1=Arrhenius, 2=q10
     Ea_ch4           = 0.96     ! eV, activation energy for temperature dependence of ch4 emission fraction, 0.96 in Yvon-Durocher 2014 (only for ich4_ftemp=1)
     q10_ch4          = 1.8      ! q10 for temperature dependence of ch4 emission fraction (only for ich4_ftemp==2)
-    ch4_frac_wet     = 0.082    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
+    ch4_frac_wet     = 0.044    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
     ch4_frac_shelf   = 0.0      ! fraction of carbon emitted as methane from ocean shelf
-    ch4_frac_peat    = 0.082    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
+    ch4_frac_peat    = 0.044    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------
     ! N2O emission params
     !------------------------------------------------------------------------------------
-    k_n2o_nit        = 4.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
-    k_n2o_denit      = 5.e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
+    k_n2o_nit        = 2.7e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
+    k_n2o_denit      = 3.4e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
     q10_n2o          = 1.0      ! q10 for temperature dependence of N2O emission
     wfps_crit_denit  = 0.7      ! critical water filled pore space for denitrification
 
@@ -365,7 +366,7 @@
     theta_sat_u  = 0.43         ! m3/m3, uniform porosity, 0.43 (0.37 - 0.49)
     theta_field_u= 0.25         ! m3/m3, uniform field capacity, 0.25 (0.15 - 0.38)
                                 ! theta_sat*(psi_fc/psi_sat)**(-1/b_u) at psi_fc = -3.3 m (-1/3 bar)
-    theta_wilt_u = 0.1          ! m3/m3, uniform wilting point, 0.14 (0.05 - 0.3)
+    theta_wilt_u = 0.15         ! m3/m3, uniform wilting point, 0.14 (0.05 - 0.3)
                                 ! theta_sat*(p_psi_min/psi_sat)**(-1/b_u) at p_psi_min = -150 m (-15 bar)
     psi_sat_u    = -0.2         ! m, uniform matric potential at saturation, -0.19 (-0.71 - -0.05)
     k_sat_u      = 100          ! kg/m2/day, uniform hydraulic conductivity at saturation, 520 (86 - 1900)

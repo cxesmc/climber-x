@@ -1042,9 +1042,11 @@ contains
         if (lnd%f_veg.gt.0._wp) then
           soil_resp = lnd%soil_resp(ic_min)*(lnd%f_veg-lnd%f_peat)+lnd%soil_resp(ic_peat)*lnd%f_peat
           call n2o_emission(soil_resp, lnd%t_soil(1), lnd%theta_w(1), lnd%theta_field(1), lnd%theta_sat(1), &
-                            lnd%n2o_emis)
+                            lnd%n2o_emis, lnd%n2o_emis_nit, lnd%n2o_emis_denit)
         else
           lnd%n2o_emis = 0._wp
+          lnd%n2o_emis_nit = 0._wp
+          lnd%n2o_emis_denit = 0._wp
         endif
 
 

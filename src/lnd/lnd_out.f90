@@ -74,7 +74,7 @@ module lnd_out
     real(wp) :: soilc1m, soilc60N1m, minc1m, peatc1m, icec1m, shelfc1m, lakec1m, permc1m, soilc1m_pimask
     real(wp) :: soilc3m, minc3m, peatc3m, icec3m, shelfc3m, lakec3m, permc3m, soilc3m_pimask
     real(wp) :: ch4, ch4trop, ch4shelf, ch4lake,  ch4extrop, d13ch4
-    real(wp) :: n2o, n2otrop, n2oextrop
+    real(wp) :: n2o, n2o_nit, n2o_denit, n2otrop, n2oextrop
     real(wp) :: dust_e
     real(wp) :: weath_carb, weath_sil, weath_loess
     real(wp) :: doc_export, poc_export
@@ -580,7 +580,7 @@ contains
     real(wp) :: global_minc1m, global_peatc1m, global_permc1m, global_soilc1m_pimask, global_icec1m, global_shelfc1m, global_lakec1m
     real(wp) :: global_minc3m, global_peatc3m, global_permc3m, global_soilc3m_pimask, global_icec3m, global_shelfc3m, global_lakec3m
     real(wp) :: global_ch4, global_ch4trop, global_ch4shelf, global_ch4lake, global_ch4extrop, global_c13h4
-    real(wp) :: global_n2o, global_n2otrop, global_n2oextrop
+    real(wp) :: global_n2o, global_n2o_nit, global_n2o_denit, global_n2otrop, global_n2oextrop
     real(wp) :: global_dust_e
     real(wp) :: npp_ij, npp13_ij, npp14_ij, sresp_ij, sresp13_ij, sresp14_ij
     real(wp) :: sum_frac
@@ -768,6 +768,8 @@ contains
       global_ch4extrop= 0._wp
       global_c13h4  = 0._wp
       global_n2o    = 0._wp
+      global_n2o_nit= 0._wp
+      global_n2o_denit= 0._wp
       global_n2otrop= 0._wp
       global_n2oextrop= 0._wp
 
@@ -780,7 +782,7 @@ contains
       !$omp reduction(+:global_minc,global_peatc,global_icec,global_shelfc,global_lakec,global_permc,global_soilc_pimask,global_inertc) &
       !$omp reduction(+:global_minc1m,global_peatc1m,global_icec1m,global_shelfc1m,global_lakec1m,global_permc1m,global_soilc1m_pimask) &
       !$omp reduction(+:global_minc3m,global_peatc3m,global_icec3m,global_shelfc3m,global_lakec3m,global_permc3m,global_soilc3m_pimask) &
-      !$omp reduction(+:global_n2o,global_n2otrop,global_n2oextrop) 
+      !$omp reduction(+:global_n2o,global_n2o_nit,global_n2o_denit,global_n2otrop,global_n2oextrop) 
       do i = 1, nx
         do j = 1, ny
           if( lnd(i,j)%f_land.gt.0._wp ) then
@@ -863,6 +865,8 @@ contains
             ! N2O
             tmp = lnd(i,j)%n2o_emis*lnd(i,j)%f_veg * area(i,j) * sec_year * 1.d-9   ! TgN2O-N
             global_n2o = global_n2o + tmp
+            global_n2o_nit = global_n2o_nit + lnd(i,j)%n2o_emis_nit*lnd(i,j)%f_veg * area(i,j) * sec_year * 1.d-9   ! TgN2O-N
+            global_n2o_denit = global_n2o_denit + lnd(i,j)%n2o_emis_denit*lnd(i,j)%f_veg * area(i,j) * sec_year * 1.d-9   ! TgN2O-N
             ! tropical N2O
             if (lat(j).ge.-30.and.lat(j).le.30) then
               global_n2otrop = global_n2otrop + tmp
@@ -1097,6 +1101,8 @@ contains
         mon_ts(y,mon)%d13ch4   = 0._wp
       endif
       mon_ts(y,mon)%n2o       = global_n2o
+      mon_ts(y,mon)%n2o_nit   = global_n2o_nit
+      mon_ts(y,mon)%n2o_denit = global_n2o_denit
       mon_ts(y,mon)%n2otrop   = global_n2otrop
       mon_ts(y,mon)%n2oextrop = global_n2oextrop
 
@@ -2219,15 +2225,17 @@ contains
     call nc_write(fnm,"Apeat",    sngl(vars%peat),   dim1=dim_time,start=[ndat],count=[y],long_name="peatland area",units="mln km^2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Apeatpot", sngl(vars%peatpot),   dim1=dim_time,start=[ndat],count=[y],long_name="potential peatland area",units="mln km^2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"Aperm",    sngl(vars%perm),   dim1=dim_time,start=[ndat],count=[y],long_name="permafrost area",units="mln km^2",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ch4",     sngl(vars%ch4),    dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ch4trop",  sngl(vars%ch4trop), dim1=dim_time,start=[ndat],count=[y],long_name="tropical methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ch4extrop", sngl(vars%ch4extrop),dim1=dim_time,start=[ndat],count=[y],long_name="extratropical methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ch4shelf",sngl(vars%ch4shelf), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from ocean shelf",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ch4lake",sngl(vars%ch4lake), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from lakes",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"d13ch4",  sngl(vars%d13ch4), dim1=dim_time,start=[ndat],count=[y],long_name="d13C of methane emissions",units="permil",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"n2o",     sngl(vars%n2o),    dim1=dim_time,start=[ndat],count=[y],long_name="N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"n2otrop",  sngl(vars%n2otrop), dim1=dim_time,start=[ndat],count=[y],long_name="tropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"n2oextrop", sngl(vars%n2oextrop),dim1=dim_time,start=[ndat],count=[y],long_name="extratropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ch4_e",     sngl(vars%ch4),    dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ch4_e_trop",  sngl(vars%ch4trop), dim1=dim_time,start=[ndat],count=[y],long_name="tropical methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ch4_e_extrop", sngl(vars%ch4extrop),dim1=dim_time,start=[ndat],count=[y],long_name="extratropical methane emissions",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ch4_e_shelf",sngl(vars%ch4shelf), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from ocean shelf",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ch4_e_lake",sngl(vars%ch4lake), dim1=dim_time,start=[ndat],count=[y],long_name="methane emissions from lakes",units="TgCH4/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"d13ch4_e",  sngl(vars%d13ch4), dim1=dim_time,start=[ndat],count=[y],long_name="d13C of methane emissions",units="permil",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o_e",     sngl(vars%n2o),    dim1=dim_time,start=[ndat],count=[y],long_name="N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o_nit_e", sngl(vars%n2o_nit),  dim1=dim_time,start=[ndat],count=[y],long_name="N2O emissions from nitrification",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o_denit_e", sngl(vars%n2o_denit),dim1=dim_time,start=[ndat],count=[y],long_name="N2O emissions from denitrification",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o_e_trop",  sngl(vars%n2otrop), dim1=dim_time,start=[ndat],count=[y],long_name="tropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"n2o_e_extrop", sngl(vars%n2oextrop),dim1=dim_time,start=[ndat],count=[y],long_name="extratropical N2O emissions",units="TgN2O-N/yr",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"dust_e",  sngl(vars%dust_e), dim1=dim_time,start=[ndat],count=[y],long_name="total dust emission",units="Tg/yr",missing_value=missing_value,ncid=ncid)
 
     call nc_write(fnm,"doc_export",  sngl(vars%doc_export), dim1=dim_time,start=[ndat],count=[y],long_name="dissolved organic carbon export through rivers",units="PgC/yr",missing_value=missing_value,ncid=ncid)
@@ -2329,6 +2337,8 @@ contains
     ave%ch4extrop = 0._wp
     ave%d13ch4  = 0._wp
     ave%n2o     = 0._wp
+    ave%n2o_nit = 0._wp
+    ave%n2o_denit = 0._wp
     ave%n2otrop = 0._wp
     ave%n2oextrop = 0._wp
     ave%dust_e = 0._wp
@@ -2405,6 +2415,8 @@ contains
      ave%ch4extrop = ave%ch4extrop    + d(k)%ch4extrop/ div
      ave%d13ch4  = ave%d13ch4     + d(k)%d13ch4/ div
      ave%n2o     = ave%n2o        + d(k)%n2o / div
+     ave%n2o_nit = ave%n2o_nit    + d(k)%n2o_nit / div
+     ave%n2o_denit = ave%n2o_denit + d(k)%n2o_denit / div
      ave%n2otrop = ave%n2otrop        + d(k)%n2otrop / div
      ave%n2oextrop = ave%n2oextrop    + d(k)%n2oextrop / div
      ave%dust_e  = ave%dust_e     + d(k)%dust_e

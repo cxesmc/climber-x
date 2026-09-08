@@ -81,7 +81,7 @@ module lnd_def
      real(wp) :: f_peat, f_peat_pot, acro_h, cato_h, peat_c_ini_year, dCpeat_dt
      real(wp) :: ch4_emis_wetland, ch4_emis_shelf, ch4_emis_peat, ch4_emis_lake
      real(wp) :: c13h4_emis_wetland, c13h4_emis_shelf, c13h4_emis_peat, c13h4_emis_lake
-     real(wp) :: n2o_emis
+     real(wp) :: n2o_emis, n2o_emis_nit, n2o_emis_denit
      real(wp) :: dust_emis_d, dust_emis_g, dust_emis_s, dust_emis
      real(wp) :: dust_dep
      real(wp) :: runoff_ann
