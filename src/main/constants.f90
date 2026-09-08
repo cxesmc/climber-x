@@ -74,7 +74,7 @@ module constants
  
   real(wp), parameter :: k_boltz = 8.62e-5_wp     !! Boltzmann constant for Arrhenius function (eV/K) 
 
-  real(wp), parameter :: z_sfl = 100._wp        !! surface layer height (m) 
+  real(wp), parameter :: z_sfl = 10._wp        !! surface layer height (m) 
 
   real(wp), parameter :: frac_vu = 0.45_wp      !! fraction of solar spectrum in visible and ultraviolet
 

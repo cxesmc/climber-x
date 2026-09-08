@@ -83,6 +83,8 @@ module timer
   logical :: time_soy_bmb, time_eoy_bmb, time_som_bmb, time_eom_bmb, time_sod_bmb, time_eod_bmb
   logical :: time_soy_bnd
   logical :: time_feedback_save, time_feedback_analysis
+  logical :: time_feedback_save_tg, time_feedback_analysis_tg
+  integer, parameter :: nyear_feedback_avg = 30
   logical :: time_spinup_cc_1, time_spinup_cc_2, time_call_daily_input_save, time_use_daily_input_save
   logical :: time_write_restart
 
@@ -315,8 +317,11 @@ contains
       time_eom_atm = (mod(doy,nday_mon) .eq. 0) .and. time_eod_atm
       time_eoy_atm = (mod(doy,nday_year) .eq. 0) .and. time_eod_atm
       time_out_atm = (mod(year,nyout_atm) .eq. 0) .and. year_now.ge.year_out_start
-      time_feedback_save     = year.eq.nyears/2  ! save fields 
-      time_feedback_analysis = year.eq.nyears    ! do feedback analysis 
+      time_feedback_save     = year.eq.nyears/2  ! save fields
+      time_feedback_analysis = year.eq.nyears    ! do feedback analysis
+      ! windows over which the global mean temperature of the two climate states is averaged
+      time_feedback_save_tg     = year.gt.max(0,nyears/2-nyear_feedback_avg) .and. year.le.nyears/2
+      time_feedback_analysis_tg = year.gt.max(nyears/2,nyears-nyear_feedback_avg) .and. year.le.nyears
     else
       time_call_atm =.false. 
       time_soy_atm = .false.
@@ -325,8 +330,10 @@ contains
       time_eom_atm = .false.
       time_eoy_atm = .false.
       time_out_atm = .false.
-      time_feedback_save = .false. 
+      time_feedback_save = .false.
       time_feedback_analysis = .false.
+      time_feedback_save_tg = .false.
+      time_feedback_analysis_tg = .false.
     endif
 
     if (flag_ocn .and. year_call_accel) then
