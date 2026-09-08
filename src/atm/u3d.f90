@@ -32,7 +32,7 @@ module u3d_mod
   use atm_params, only : c_uter_pol, c_uter_eq
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
   use atm_grid, only : fcort, cost, sint
-  use atm_grid, only : pl, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
+  use atm_grid, only : pl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
 
   implicit none
   
@@ -148,7 +148,7 @@ contains
   !   Purpose    :  computation of 3D wind field and advective mass fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine u3d(niter, pzsa, ptrop, ugb, vgb, uab, vab, t3, &
-        ua, va, uter, vter, uterf, vterf, u3, v3, w3, uz500, &
+        ua, va, uter, vter, uterf, vterf, u3, v3, w3, w3_nt, uz500, &
         fax, faxo, fay, fayo, fac, fac_topo, psi, psi_topo, &
         fax_psi, fay_psi, fax_psi_topo, fay_psi_topo)
 
@@ -172,6 +172,7 @@ contains
     real(wp), intent(inout) :: u3(:,:,:)
     real(wp), intent(inout) :: v3(:,:,:)
     real(wp), intent(inout) :: w3(:,:,:)
+    real(wp), intent(inout) :: w3_nt(:,:,:)
     real(wp), intent(inout) :: uz500(:)
     real(wp), intent(out  ) :: fax(:,:,:)
     real(wp), intent(out  ) :: faxo(:,:,:)
@@ -193,7 +194,7 @@ contains
 
     integer :: i, j, k, n, ipl, imi, jmi, kpl
     real(wp) :: pzx, pzy, dp_c, pbl_t, pbl_u, dp, pc1, pc2, dp_l, pl1, pl2, fxpbl, fypbl, uabc, vabc, ctv
-    real(wp) :: faz
+    real(wp) :: faz, faz_nt, fxw, fxe, fys, fyn
     real(wp) :: fcx, fcy, fcxt, fcyt, fmean, fmean_topo, divbar, ptrx, ptry
     real(wp) :: dfx, dfy, ftrop, fsum
     real(wp) :: fcx_geo, fcx_ter, fcy_geo, fcy_ter, fmean_geo, fmean_ter
@@ -895,7 +896,7 @@ contains
 
       ! total 3-D wind on T-points, interpolate to levels
 
-      !$omp parallel do collapse(2) private(i,j,ipl,k,kpl,ug_b,vg_b,u3k,v3k,u3kp1,v3kp1,faz)
+      !$omp parallel do collapse(2) private(i,j,ipl,k,kpl,ug_b,vg_b,u3k,v3k,u3kp1,v3kp1,faz,faz_nt,fxw,fxe,fys,fyn)
       do j=1,jm
         do i=1,im
 
@@ -916,14 +917,45 @@ contains
 
           ! z-component and vertical velocity        
 
+          ! w3 is the mass flux convergence accumulated from the surface upward, so at
+          ! any level it carries the convergence of every layer below it, including the
+          ! layers the terrain cuts through. Writing the convergence of a single layer as
+          ! div(U*dp) = dp*div(U) + U*grad(dp), the second term is the level-wise form of
+          ! the topographic term V.grad(p_s) that is split off as fac_topo above: a wind
+          ! crossing an elevation gradient carries a different layer mass in than out. It
+          ! is non-zero only where the surface cuts the layer, which is always below the
+          ! cloud level kweff, and it is the dominant signal in w3 just above sloping
+          ! terrain. w3_nt keeps the dp*div(U) term alone
+
           faz = 0._wp
+          faz_nt = 0._wp
           w3(i,j,1) = 0._wp
+          w3_nt(i,j,1) = 0._wp
 
           do k=1,km 
             kpl = min(k+1,km)
             faz = faz + fax(i,j,k)-fax(i+1,j,k) + fay(i,j+1,k)-fay(i,j,k)
             ! vertical velocity
             w3(i,j,k+1) = faz/(sqr(i,j)*ra*pl(kpl))    ! kg/s /m2 *m3/kg = m/s
+            ! face winds, m2/s; a face with no air carries no flux either. ipl is the
+            ! index of face i+1 in the face arrays, which are dimensioned im and closed
+            ! periodically, so it also covers the face imc = 1
+            fxw = 0._wp
+            fxe = 0._wp
+            fys = 0._wp
+            fyn = 0._wp
+            if (dplx(i,j,k).gt.0._wp)   fxw = (fax(i,j,k)  -fax_psi_topo(i,j,k))  /dplx(i,j,k)
+            if (dplx(ipl,j,k).gt.0._wp) fxe = (fax(i+1,j,k)-fax_psi_topo(i+1,j,k))/dplx(ipl,j,k)
+            ! no flux through the poles, and dply is not defined there
+            if (j.gt.1) then
+              if (dply(i,j,k).gt.0._wp) fys = (fay(i,j,k)-fay_psi_topo(i,j,k))/dply(i,j,k)
+            endif
+            if (j.lt.jm) then
+              if (dply(i,j+1,k).gt.0._wp) fyn = (fay(i,j+1,k)-fay_psi_topo(i,j+1,k))/dply(i,j+1,k)
+            endif
+            faz_nt = faz_nt + dplt(i,j,k)*(fxw-fxe+fyn-fys)   ! kg/m2 *m2/s = kg/s
+            ! vertical velocity without the topographically induced part
+            w3_nt(i,j,k+1) = faz_nt/(sqr(i,j)*ra*pl(kpl))
           enddo
 
         enddo

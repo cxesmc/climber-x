@@ -29,9 +29,9 @@ module synop_mod
   use constants, only : g, omega, pi
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost, fit 
   use atm_params, only : tstep, ra
-  use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, c_syn_8, windmin, synsurmin, c_wind_ele
+  use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin
   use atm_params, only : tau_fac
-  use atm_params, only : c_diff_dse, c_diff_dse_eq, fi_diff_dse_eq, i_diff_wtr, c_diff_wtr, l_diff_impl, c_diffx_pol
+  use atm_params, only : c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl, c_diffx_pol
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
@@ -52,7 +52,7 @@ contains
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
-      synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, wsyn)
+      synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffx, diffy, wsyn)
 
     implicit none
 
@@ -82,16 +82,14 @@ contains
     real(wp), intent(out  ) :: wind(:,:,:)
     real(wp), intent(out  ) :: taux(:,:,:)
     real(wp), intent(out  ) :: tauy(:,:,:)
-    real(wp), intent(out  ) :: diffxdse(:,:)
-    real(wp), intent(out  ) :: diffydse(:,:)
-    real(wp), intent(out  ) :: diffxwtr(:,:)
-    real(wp), intent(out  ) :: diffywtr(:,:)
-    real(wp), intent(out  ) :: diffxdst(:,:)
-    real(wp), intent(out  ) :: diffydst(:,:)
+    real(wp), intent(out  ) :: diffx(:,:)
+    real(wp), intent(out  ) :: diffy(:,:)
     real(wp), intent(out  ) :: wsyn(:,:)
 
     integer :: i, j, k, n, imi, ipl, jmi, jpl
     real(wp) :: dsdt, sqsam
+
+    real(wp), parameter :: sin45 = 0.7071067811865476_wp
     real(wp) :: sxadv, syadv, sxdif, sydif
     real(wp) :: uef, vef
     real(wp) :: dudz, dvdz
@@ -143,7 +141,7 @@ contains
         ! in front, so away from the fcort floor the production is proportional to the
         ! horizontal temperature gradient with no Coriolis suppression of its own. The
         ! only equatorial cut-off is the c_uter_eq factor already carried by ut3f/vt3f.
-        synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad * (1._wp-c_syn_8*zsa(i,j)/3000._wp)
+        synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad 
         synprod(i,j) = max(0._wp,synprod(i,j))
 
         !-----------------------------------------------
@@ -276,7 +274,7 @@ contains
           synsur(i,j,n) = max(synsur(i,j,n),synsurmin)
 
           ! total surface wind
-          wind(i,j,n) = sqrt(us(i,j,n)**2+vs(i,j,n)**2+synsur(i,j,n)**2) + c_wind_ele*zs(i,j,n)
+          wind(i,j,n) = sqrt(us(i,j,n)**2+vs(i,j,n)**2+synsur(i,j,n)**2) 
           if (n.eq.i_ocn) then
             wind(i,j,n) = max(wind(i,j,n),windmin)
           endif
@@ -289,8 +287,9 @@ contains
 
         winda(i,j) = sum(wind(i,j,:)*frst(i,j,:))
 
-        ! synoptic vertical velocity at ~700 hPa
-        wsyn(i,j) = c_syn_7*sqsam
+        ! Synoptic vertical velocity at ~700 hPa. Continuity gives w' ~ V'*H/L for an eddy of horizontal scale L and depth H, 
+        ! and L is the deformation radius N*H/|f|, so the conversion from the eddy speed V'=sqrt(sam) to the eddy vertical velocity scales with |f| 
+        wsyn(i,j) = c_syn_7*sqsam*abs(sint(j))/sin45
 
       enddo
     enddo
@@ -303,67 +302,33 @@ contains
       imi=i-1
       if (imi.lt.1) imi=im
       do j=1,jm
-        ! diffusivity for dry static energy, proportional to sqrt(EKE)
-        ! The zonal DSE diffusivity is amplified in the tropics. This replaces, explicitly
-        ! and controllably, the damping that the first order upstream advection used to
-        ! supply through its truncation error: with i_adv=2 that damping is gone, and the
-        ! tam <-> wind coupling then carries a 3*dt_atm computational mode at the equator,
-        ! where the eddy-driven diffusivity is at its smallest. Only the ZONAL component is
-        ! raised - the mode is zonal wavenumber 9-10 and about three times broader in
-        ! latitude, so zonal diffusion damps it ~3x more efficiently per unit diffusivity,
-        ! and diffydse is left to set the poleward energy transport as before.
-        diffxdse(i,j) = c_diff_dse * fdiff_eq(j) * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
-        ! diffusivity for water vapor, proportional to EKE (e.g. Caballero & Hanley, 2012)
-        if (i_diff_wtr.eq.1) then
-          diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam(imi,j)+sam(i,j)) 
-        else if (i_diff_wtr.eq.2) then
-          diffxwtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
-        endif
-        ! diffusivity for dust
-        diffxdst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        ! macro diffusivity, proportional to sqrt(EKE)
+        diffx(i,j) = c_diff * fdiff_eq(j) * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
         ! limit the zonal diffusivities. Explicit scheme: CFL stability requires the
         ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
         ! Implicit scheme: unconditionally stable, but near the pole (dxt->0) the
         ! zonal conductance ~1/dxt becomes very large => limit
         if (.not.l_diff_impl) then
-          diffxdse(i,j) = min(diffxdse(i,j),diffxmx(j))
-          diffxwtr(i,j) = min(diffxwtr(i,j),diffxmx(j))
-          diffxdst(i,j) = min(diffxdst(i,j),diffxmx(j))
+          diffx(i,j) = min(diffx(i,j),diffxmx(j))
         else
-          diffxdse(i,j) = min(diffxdse(i,j),2._wp*c_diffx_pol*diffxmx(j))
-          diffxwtr(i,j) = min(diffxwtr(i,j),2._wp*c_diffx_pol*diffxmx(j))
-          diffxdst(i,j) = min(diffxdst(i,j),2._wp*c_diffx_pol*diffxmx(j))
+          diffx(i,j) = min(diffx(i,j),2._wp*c_diffx_pol*diffxmx(j))
         endif
       enddo
     enddo 
     do j=1,jm
-      diffxdse(imc,j) = diffxdse(1,j)
-      diffxwtr(imc,j) = diffxwtr(1,j)
-      diffxdst(imc,j) = diffxdst(1,j)
+      diffx(imc,j) = diffx(1,j)
     enddo
 
     do j=2,jm
       jmi=j-1
       if (jmi.lt.1) jmi=1
       do i=1,im
-        ! diffusivity for dry static energy, proportional to sqrt(EKE)
-        diffydse(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
-        ! diffusivity for water vapor, proportional to EKE (e.g. Caballero & Hanley, 2012)
-        if (i_diff_wtr.eq.1) then
-          diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam(i,jmi)+sam(i,j)) 
-        else if (i_diff_wtr.eq.2) then
-          diffywtr(i,j) = c_diff_wtr * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
-        endif
-        ! diffusivity for dust 
-        diffydst(i,j) = c_diff_dse * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
+        ! macro diffusivity, proportional to sqrt(EKE)
+        diffy(i,j) = c_diff * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
       enddo
     enddo
-    diffydse(:,1)   = 0._wp
-    diffydse(:,jmc) = 0._wp
-    diffywtr(:,1)   = 0._wp
-    diffywtr(:,jmc) = 0._wp
-    diffydst(:,1)   = 0._wp
-    diffydst(:,jmc) = 0._wp
+    diffy(:,1)   = 0._wp
+    diffy(:,jmc) = 0._wp
 
 
     return

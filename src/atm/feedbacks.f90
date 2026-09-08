@@ -28,7 +28,7 @@ module feedbacks_mod
   use atm_params, only : wp
   use constants, only : sigma
   use control, only : out_dir
-  use timer, only : doy, nday_year, time_eoy_atm
+  use timer, only : doy, nday_year, time_eoy_atm, nyear_feedback_avg
   use climber_grid, only : lon, lat
   use ncio
   use atm_grid, only : im, jm, nm, sqr, esqr
@@ -84,8 +84,16 @@ module feedbacks_mod
     real(wp) :: delta_t
     real(wp) :: rf_top_ave
     real(wp) :: rf_trop_ave
+    real(wp) :: rf_trop_inst_ave
+    real(wp) :: rf_top_adj_ave
+    real(wp) :: rf_top_cs_ave
+    real(wp) :: rf_trop_cs_ave
     real(wp), dimension(:,:), allocatable :: rf_top
     real(wp), dimension(:,:), allocatable :: rf_trop
+    real(wp), dimension(:,:), allocatable :: rf_trop_inst
+    real(wp), dimension(:,:), allocatable :: rf_top_adj
+    real(wp), dimension(:,:), allocatable :: rf_top_cs
+    real(wp), dimension(:,:), allocatable :: rf_trop_cs
     real(wp), dimension(:,:), allocatable :: dhtrop_rf
     real(wp), dimension(:,:,:), allocatable :: flwr_top
     real(wp), dimension(:,:,:), allocatable :: fswr_top
@@ -100,7 +108,7 @@ module feedbacks_mod
   end type 
 
   private
-  public :: feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write
+  public :: feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write, feedback_tg
 
 contains
 
@@ -142,6 +150,10 @@ contains
 
     allocate(fb%rf_top(im,jm))
     allocate(fb%rf_trop(im,jm))
+    allocate(fb%rf_trop_inst(im,jm))
+    allocate(fb%rf_top_adj(im,jm))
+    allocate(fb%rf_top_cs(im,jm))
+    allocate(fb%rf_trop_cs(im,jm))
     allocate(fb%dhtrop_rf(im,jm))
     allocate(fb%flwr_top(im,jm,0:nfb))
     allocate(fb%fswr_top(im,jm,0:nfb))
@@ -151,6 +163,10 @@ contains
 
     fb%rf_top   = 0._wp
     fb%rf_trop  = 0._wp
+    fb%rf_trop_inst = 0._wp
+    fb%rf_top_adj   = 0._wp
+    fb%rf_top_cs    = 0._wp
+    fb%rf_trop_cs   = 0._wp
     fb%dhtrop_rf  = 0._wp
     fb%flwr_top = 0._wp
     fb%fswr_top = 0._wp
@@ -163,7 +179,30 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  f e e d b a c k _ s a v e 
+  !   Subroutine :  f e e d b a c k _ t g
+  !   Purpose    :  accumulate the global mean near-surface air temperature of the two
+  !                 climate states used by the feedback analysis
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine feedback_tg(t2, frst, n, fb)
+
+    implicit none
+
+    real(wp), intent(in) :: t2(:,:,:)
+    real(wp), intent(in) :: frst(:,:,:)
+    integer,  intent(in) :: n     ! 1 = perturbed (2xCO2) state, 2 = control state
+
+    type(feedback_type), intent(inout) :: fb
+
+
+    fb%tg(n) = fb%tg(n) + sum(sum(t2*frst,3)*sqr)/(esqr*nday_year*real(nyear_feedback_avg,wp))
+
+    return
+
+  end subroutine feedback_tg
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  f e e d b a c k _ s a v e
   !   Purpose    :  save variables needed for feedback analysis
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine feedback_save(co2, tam, cld, hcld, clot, gams, gamb, gamt, htrop, ttrop, ram, hrm, hqeff, q2, aerosol_ot, aerosol_im, so4, &
@@ -235,7 +274,7 @@ contains
       enddo
     enddo
 
-    fb%tg(1) = fb%tg(1) + sum(sum(t2*frst,3)*sqr)/(esqr*nday_year)
+    ! fb%tg(1) is accumulated separately in feedback_tg over nyear_feedback_avg years
 
     if (time_eoy_atm) then
       fb%co2         = co2          
@@ -348,16 +387,26 @@ contains
     real(wp), dimension(:,:,:), allocatable :: fswr_sur
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cs
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cld
+    real(wp), dimension(:,:), allocatable :: lwr_tro_cs
     real(wp), dimension(:,:), allocatable :: flwr_trop_control
     real(wp), dimension(:,:), allocatable :: flwr_top_control
-    real(wp), dimension(:,:), allocatable :: rb_str 
+    real(wp), dimension(:,:), allocatable :: flwr_trop_cs_control
+    real(wp), dimension(:,:), allocatable :: flwr_top_cs_control
+    real(wp), dimension(:,:), allocatable :: rb_str
+    real(wp), dimension(:,:), allocatable :: rb_str_control
     real(wp), dimension(:,:), allocatable :: fb_htrop
+    real(wp), dimension(:,:), allocatable :: fb_htrop_old
     real(wp), dimension(:), allocatable :: fb_ptrop
     real(wp), dimension(:,:), allocatable :: fb_ttrop
     real(wp), dimension(:,:,:), allocatable :: fb_flwr_up_sur
 
     integer :: i, j, n
     real(wp) :: co2e
+
+    ! maximum number of iterations for the stratospheric adjustment of the tropopause
+    ! height and convergence criterion on the tropopause height change (m)
+    integer,  parameter :: n_iter_trop = 20
+    real(wp), parameter :: dhtrop_tol  = 1._wp
 
 
     allocate(lwr_sur(im,jm))
@@ -377,10 +426,15 @@ contains
     allocate(fswr_sur   (im,jm,nm))
     allocate(fswr_sur_cs (im,jm,nm))
     allocate(fswr_sur_cld (im,jm,nm))
+    allocate(lwr_tro_cs(im,jm))
     allocate(flwr_trop_control(im,jm))
     allocate(flwr_top_control(im,jm))
+    allocate(flwr_trop_cs_control(im,jm))
+    allocate(flwr_top_cs_control(im,jm))
     allocate(rb_str(im,jm))
+    allocate(rb_str_control(im,jm))
     allocate(fb_htrop(im,jm))
+    allocate(fb_htrop_old(im,jm))
     allocate(fb_ptrop(jm))
     allocate(fb_ttrop(im,jm))
     allocate(fb_flwr_up_sur(im,jm,nm))
@@ -393,40 +447,73 @@ contains
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
-      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
+      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
+      lwr_tro_cs=lwr_tro_cs)   ! out
     fb%flwr_top(:,:,i_control) = fb%flwr_top(:,:,i_control) + lwr_top/nday_year
     flwr_top_control = lwr_top     ! net flux at TOA, positive down
     flwr_trop_control = lwr_tro    ! net flux at tropopause, positive down
+    flwr_top_cs_control = lwr_top_cs    ! clear-sky net flux at TOA, positive down
+    flwr_trop_cs_control = lwr_tro_cs   ! clear-sky net flux at tropopause, positive down
+    ! stratosphere radiative balance of the control climate
+    rb_str_control = lwr_top-lwr_tro
 
     ! radiative forcing
-    ! longwave radiation with 2xCO2 to diagnose stratosphere fluxes 
+    ! longwave radiation with 2xCO2, stratosphere unchanged
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &    ! in
       fb%co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
-      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
-    ! radiative forcing at the top of atmosphere 
-    fb%rf_top(:,:) = fb%rf_top(:,:) + (lwr_top-flwr_top_control)/nday_year
-    ! stratosphere radiative balance for 2xCO2
-    rb_str = lwr_top-lwr_tro
-    ! compute implied new tropopause height
+      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
+      lwr_tro_cs=lwr_tro_cs)   ! out
+    ! instantaneous radiative forcing at the top of atmosphere, all-sky and clear-sky
+    fb%rf_top(:,:)    = fb%rf_top(:,:)    + (lwr_top   -flwr_top_control )/nday_year
+    fb%rf_top_cs(:,:) = fb%rf_top_cs(:,:) + (lwr_top_cs-flwr_top_cs_control)/nday_year
+    ! instantaneous radiative forcing at the tropopause, all-sky and clear-sky.
+    ! This is the quantity that isolates the stratospheric adjustment, which is then
+    ! rf_trop-rf_trop_inst, and the one directly comparable to line-by-line calculations.
+    fb%rf_trop_inst(:,:) = fb%rf_trop_inst(:,:) + (lwr_tro   -flwr_trop_control )/nday_year
+    fb%rf_trop_cs(:,:)   = fb%rf_trop_cs(:,:)   + (lwr_tro_cs-flwr_trop_cs_control)/nday_year
+
+    ! stratosphere-adjusted radiative forcing.
+    ! The only stratospheric degree of freedom of the model is the tropopause height,
+    ! which sets the temperature of the isothermal stratosphere through ttrop. The
+    ! tropopause is relaxed, at fixed dynamical heating, until the stratospheric
+    ! radiative balance under 2xCO2 is back to its control value. tropoheight performs
+    ! one relaxation step only, so the stratospheric balance has to be re-diagnosed from
+    ! the radiation code after each step for the iteration to converge.
     fb_htrop = htrop
-    do n=1,10
-      call tropoheight(had_fi, had_width, rb_str, hcld, fb_htrop, fb_ptrop)
+    fb_ttrop = ttrop
+    do n=1,n_iter_trop
+      ! stratosphere radiative balance for 2xCO2 and the current adjusted tropopause
+      rb_str = lwr_top-lwr_tro
+      ! one relaxation step towards the control stratospheric radiative balance
+      fb_htrop_old = fb_htrop
+      call tropoheight(had_fi, had_width, rb_str, hcld, fb_htrop, fb_ptrop, rb_str_control)
+      ! compute ttrop for new tropopause height
+      do i=1,im
+        do j=1,jm
+          fb_ttrop(i,j) = t_prof(zsa(i,j), fb_htrop(i,j), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), fb_htrop(i,j), 1)
+        enddo
+      enddo
+      ! longwave radiation with 2xCO2 and adjusted stratosphere (htrop and ttrop),
+      ! moisture profile kept at its control value
+      call lw_radiation(1._wp, frst, zsa, zs, fb_htrop, hcld, ra2, &   ! in
+        gams, gamb, gamt, tam, ram, hrm, fb_ttrop, cld, clot, & ! in
+        fb%co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
+        lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &   ! out
+        gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      if (maxval(abs(fb_htrop-fb_htrop_old)).lt.dhtrop_tol) exit
+      if (n.eq.n_iter_trop) then
+        print *,'WARNING: stratospheric adjustment for the radiative forcing not converged, doy = ',doy, &
+          ', max |dhtrop| = ',maxval(abs(fb_htrop-fb_htrop_old)),' m'
+      endif
     enddo
     fb%dhtrop_rf(:,:) = fb%dhtrop_rf(:,:) + (fb_htrop-htrop)/nday_year
-    ! compute ttrop for new tropopause height
-    do i=1,im
-      do j=1,jm
-        fb_ttrop(i,j) = t_prof(zsa(i,j), fb_htrop(i,j), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), fb_htrop(i,j), 1)
-      enddo
-    enddo
-    ! longwave radiation with 2xCO2 and adjusted stratospheric temperature (htrop and ttrop)
-    call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      gams, gamb, gamt, tam, ram, hrm, fb_ttrop, cld, clot, & ! in
-      fb%co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
-      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &   ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
     fb%rf_trop(:,:) = fb%rf_trop(:,:) + (lwr_tro-flwr_trop_control)/nday_year
+    ! Stratosphere-adjusted radiative forcing at the top of the atmosphere. Once the
+    ! stratospheric radiative balance is back to its control value the flux change at TOA
+    ! equals the one at the tropopause by construction, so rf_top_adj must come out equal
+    ! to rf_trop. Any difference measures how far the iteration above is from convergence.
+    fb%rf_top_adj(:,:) = fb%rf_top_adj(:,:) + (lwr_top-flwr_top_control)/nday_year
 
     ! Planck feedback
     fb_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + (fb%tskin(:,:,:,doy)-tskin))**4
@@ -589,7 +676,7 @@ contains
 
 
     ! global mean temperature
-    fb%tg(2) = fb%tg(2) + sum(sum(t2*frst,3)*sqr)/(esqr*nday_year)
+    ! fb%tg(2) is accumulated separately in feedback_tg over nyear_feedback_avg years
 
 
     if (time_eoy_atm) then
@@ -598,6 +685,10 @@ contains
 
       fb%rf_top_ave = sum(fb%rf_top(:,:)*sqr)/esqr
       fb%rf_trop_ave = sum(fb%rf_trop(:,:)*sqr)/esqr
+      fb%rf_trop_inst_ave = sum(fb%rf_trop_inst(:,:)*sqr)/esqr
+      fb%rf_top_adj_ave = sum(fb%rf_top_adj(:,:)*sqr)/esqr
+      fb%rf_top_cs_ave = sum(fb%rf_top_cs(:,:)*sqr)/esqr
+      fb%rf_trop_cs_ave = sum(fb%rf_trop_cs(:,:)*sqr)/esqr
 
       do n=0,nfb
         fb%flwr_top_ave(n) = sum(fb%flwr_top(:,:,n)*sqr)/esqr
@@ -634,10 +725,15 @@ contains
     deallocate(fswr_sur   )
     deallocate(fswr_sur_cs   )
     deallocate(fswr_sur_cld   )
+    deallocate(lwr_tro_cs)
     deallocate(flwr_trop_control)
     deallocate(flwr_top_control)
+    deallocate(flwr_trop_cs_control)
+    deallocate(flwr_top_cs_control)
     deallocate(rb_str)
+    deallocate(rb_str_control)
     deallocate(fb_htrop)
+    deallocate(fb_htrop_old)
     deallocate(fb_ttrop)
 
     return
@@ -681,9 +777,27 @@ contains
     call nc_write(fnm,'i_temp    ', i_temp    ,dims=["c"],ncid=ncid) 
     call nc_write(fnm,'i_all     ', i_all     ,dims=["c"],ncid=ncid) 
 
-    call nc_write(fnm,'ecs',fb%delta_t,dims=["c"],long_name="equilibrium climate sensitivity",units="K",ncid=ncid)
-    call nc_write(fnm,'rf_trop',fb%rf_trop_ave,dims=["c"],long_name="radiative forcing at the tropopause for 2xCO2",units="W/m2",ncid=ncid)
-    call nc_write(fnm,'rf_top',fb%rf_top_ave,dims=["c"],long_name="radiative forcing at the top of atmosphere for 2xCO2",units="W/m2",ncid=ncid)
+    call nc_write(fnm,'ecs',fb%delta_t,dims=["c"], &
+      long_name="climate sensitivity, temperature difference between the two climate states used for the feedback decomposition (not a Gregory-regression ECS)", &
+      units="K",ncid=ncid)
+    call nc_write(fnm,'rf_trop',fb%rf_trop_ave,dims=["c"], &
+      long_name="stratosphere-adjusted radiative forcing (SARF) at the tropopause for 2xCO2, longwave only, all-sky", &
+      units="W/m2",ncid=ncid)
+    call nc_write(fnm,'rf_trop_inst',fb%rf_trop_inst_ave,dims=["c"], &
+      long_name="instantaneous radiative forcing at the tropopause for 2xCO2, longwave only, all-sky; rf_trop-rf_trop_inst is the stratospheric adjustment", &
+      units="W/m2",ncid=ncid)
+    call nc_write(fnm,'rf_top',fb%rf_top_ave,dims=["c"], &
+      long_name="instantaneous radiative forcing at the top of atmosphere for 2xCO2, longwave only, all-sky", &
+      units="W/m2",ncid=ncid)
+    call nc_write(fnm,'rf_top_adj',fb%rf_top_adj_ave,dims=["c"], &
+      long_name="stratosphere-adjusted radiative forcing at the top of atmosphere for 2xCO2; equals rf_trop when the stratospheric adjustment has converged", &
+      units="W/m2",ncid=ncid)
+    call nc_write(fnm,'rf_trop_cs',fb%rf_trop_cs_ave,dims=["c"], &
+      long_name="instantaneous clear-sky radiative forcing at the tropopause for 2xCO2, longwave only", &
+      units="W/m2",ncid=ncid)
+    call nc_write(fnm,'rf_top_cs',fb%rf_top_cs_ave,dims=["c"], &
+      long_name="instantaneous clear-sky radiative forcing at the top of atmosphere for 2xCO2, longwave only", &
+      units="W/m2",ncid=ncid)
     call nc_write(fnm,'fb_glob',fb%d_f_top_ave(1:nfb),dims=["fb"],long_name="global feedback factors [PLANCK,WV,CLD,LR,ALB]",units="W/m2/K",ncid=ncid)
     call nc_write(fnm,'fb_glob_lw',fb%d_flwr_top_ave(1:nfb),dims=["fb"], &
       long_name="global longwave feedback factors [PLANCK,WV,CLD,LR,ALB]",units="W/m2/K",ncid=ncid)
@@ -691,11 +805,19 @@ contains
       long_name="global shortwave feedback factors [PLANCK,WV,CLD,LR,ALB]",units="W/m2/K",ncid=ncid)
 
     call nc_write(fnm,"dhtrop_rf_2d", sngl(fb%dhtrop_rf(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
-      long_name="change in tropopause height due to CO2 radiative forcing",units="W/m2",ncid=ncid)
+      long_name="change in tropopause height due to the stratospheric adjustment to CO2",units="m",ncid=ncid)
     call nc_write(fnm,"rf_trop_2d", sngl(fb%rf_trop(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
-      long_name="radiative forcing at the tropopause",units="W/m2",ncid=ncid)
+      long_name="stratosphere-adjusted radiative forcing at the tropopause",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_trop_inst_2d", sngl(fb%rf_trop_inst(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
+      long_name="instantaneous radiative forcing at the tropopause",units="W/m2",ncid=ncid)
     call nc_write(fnm,"rf_top_2d", sngl(fb%rf_top(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
-      long_name="radiative forcing at the top of atmosphere",units="W/m2",ncid=ncid)
+      long_name="instantaneous radiative forcing at the top of atmosphere",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_top_adj_2d", sngl(fb%rf_top_adj(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
+      long_name="stratosphere-adjusted radiative forcing at the top of atmosphere",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_trop_cs_2d", sngl(fb%rf_trop_cs(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
+      long_name="instantaneous clear-sky radiative forcing at the tropopause",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_top_cs_2d", sngl(fb%rf_top_cs(:,jm:1:-1)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
+      long_name="instantaneous clear-sky radiative forcing at the top of atmosphere",units="W/m2",ncid=ncid)
 
     call nc_write(fnm,"fb2d_pl", sngl(fb%d_f_top(:,jm:1:-1,i_pl)), dims=["lon","lat"],start=[1,1],count=[im,jm], &
       long_name="Planck feedback",units="W/m2/K",ncid=ncid)

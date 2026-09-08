@@ -12,7 +12,7 @@ obj_version = $(patsubst %, $(objdir)/%, $(tmp_version) )
 # atmospheric model related source files
 dir_atm = $(srcdir)/atm/
 files_atm = atm_params.f90 atm_def.f90 atm_grid.f90 smooth_atm.f90 \
-						adv_fct.f90 adifa.f90 diffuse_impl.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
+						adv_fct.f90 adifa.f90 diffuse_impl.f90 synop.f90 wvel.f90 vesta.f90 clouds.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
 						time_step.f90 lwr.f90 swr.f90 feedbacks.f90 rad_kernels.f90 dust.f90 \
 						atm_model.f90 atm_out.f90
 tmp_atm = $(patsubst %.f90, %.o, $(files_atm) )
@@ -355,7 +355,7 @@ $(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid
 $(objdir)/wvel.o : $(dir_atm)wvel.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/vesta.o : $(dir_atm)vesta.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
@@ -578,7 +578,7 @@ $(objdir)/lake_rho.o : $(dir_lnd)lake_rho.f90 $(objdir)/lnd_grid.o $(objdir)/lnd
 $(objdir)/shelf_par.o : $(dir_lnd)shelf_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o 
+$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/photosynthesis.o : $(dir_lnd)photosynthesis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o

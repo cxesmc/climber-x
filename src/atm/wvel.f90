@@ -42,12 +42,12 @@ contains
   !   Function   :  w v e l
   !   Purpose    :  vertical velocities for parameterisations
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine wvel(w3, wsyn, wind, sigoro, &
+  subroutine wvel(w3_nt, wsyn, wind, sigoro, &
       wcld, woro, weff)
 
     implicit none
 
-    real(wp), intent(in ) :: w3(:,:,:)
+    real(wp), intent(in ) :: w3_nt(:,:,:)
     real(wp), intent(in ) :: wsyn(:,:)
     real(wp), intent(in ) :: wind(:,:)
     real(wp), intent(in ) :: sigoro(:,:)
@@ -62,14 +62,14 @@ contains
     do j=1,jm
       do i=1,im
 
-        ! large scale mean vertical velocity at cloud level
-        wcld(i,j) = w3(i,j,kweff(i,j))
+        ! large scale mean vertical velocity at cloud level, with or without contribution by topography 
+        wcld(i,j) = w3_nt(i,j,kweff(i,j))
 
         ! vertical velocity due to subgrid scale orography
         woro(i,j) = c_woro*wind(i,j)*sigoro(i,j)
 
         ! effective vertical velocity at cloud level (mean + synoptic + orographic)
-        weff(i,j) = w3(i,j,kweff(i,j)) + c_weff*(wsyn(i,j)+woro(i,j))   
+        weff(i,j) = wcld(i,j) + c_weff*(wsyn(i,j)+woro(i,j))   
 
       enddo 
     enddo

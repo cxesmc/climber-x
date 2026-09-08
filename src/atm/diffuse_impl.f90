@@ -41,9 +41,9 @@
 module diffuse_impl_mod
 
   use atm_params, only : wp
-  use atm_params, only : tstep, amas, hatm, ra, cp, cv, l_dust
+  use atm_params, only : tstep, hatm, ra, cp, l_dust
   use atm_grid, only : im, jm, jmc
-  use atm_grid, only : plx_trop, ply_trop, sqr, dxt, dxu, dy
+  use atm_grid, only : plx_trop, ply_trop, sqr, dxt, dxu, dy, cheat
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   !$ use omp_lib
 
@@ -58,16 +58,14 @@ contains
   !   Subroutine :  d i f f u s e _ i m p l
   !   Purpose    :  implicit diffusion of the prognostic columns
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine diffuse_impl(diffxdse, diffxwtr, diffxdst, diffydse, diffywtr, diffydst, &  ! in
+  subroutine diffuse_impl(diffx, diffy, &  ! in
       ra2a, hdust, fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &      ! in
       tam, wcon, dam, cam, &                                                              ! inout
       convwtr_dif)                                                                        ! out
 
     implicit none
 
-    real(wp), intent(in   ) :: diffxdse(:,:), diffydse(:,:)
-    real(wp), intent(in   ) :: diffxwtr(:,:), diffywtr(:,:)
-    real(wp), intent(in   ) :: diffxdst(:,:), diffydst(:,:)
+    real(wp), intent(in   ) :: diffx(:,:), diffy(:,:)
     real(wp), intent(in   ) :: ra2a(:,:)
     real(wp), intent(in   ) :: hdust(:,:)
     real(wp), intent(in   ) :: fdxdse(:,:), fdydse(:,:)   ! adifa exact DSE diffusive fluxes (zonal/merid)
@@ -96,19 +94,23 @@ contains
     ! stiff polar grid-scale modes; it does not change what is diffused.
 
     !---------------------------------------------------------------
-    ! dry static energy: dtam = dt * cp/(amas*cv) * conv
+    ! dry static energy: dtam = dt * cp/cheat * conv.  The transport carries DSE (cp*T per
+    ! unit mass) and the reservoir is the column enthalpy cheat=pzsa*amas*cp, so the ratio
+    ! is simply 1/M, M being the local column mass.  Same conversion time_step applies to
+    ! the advective convdse (deba/cheat), so the implicit and explicit diffusion paths and
+    ! the column energy budget all use one and the same heat capacity.
     !---------------------------------------------------------------
-    fac(:,:) = cp/(amas*cv)
-    call zonal_diffuse(tam, diffxdse, fac, .true., fdxdse)
-    call merid_diffuse(tam, diffydse, fac, .true., fdydse)
+    fac(:,:) = cp/cheat(:,:)
+    call zonal_diffuse(tam, diffx, fac, .true., fdxdse)
+    call merid_diffuse(tam, diffy, fac, .true., fdydse)
 
     !---------------------------------------------------------------
     ! column water content 
     !---------------------------------------------------------------
     wcon_old(:,:) = wcon(1:im,1:jm)
     fac(:,:) = 1._wp
-    call zonal_diffuse(wcon, diffxwtr, fac, .false., fdxwtr)
-    call merid_diffuse(wcon, diffywtr, fac, .false., fdywtr)
+    call zonal_diffuse(wcon, diffx, fac, .false., fdxwtr)
+    call merid_diffuse(wcon, diffy, fac, .false., fdywtr)
     ! realized implicit diffusive moisture convergence (zonal+meridional, for precip)
     do j=1,jm
       do i=1,im
@@ -126,8 +128,8 @@ contains
           fac(i,j) = 1._wp/(heff*ra)
         enddo
       enddo
-      call zonal_diffuse(dam, diffxdst, fac, .true., fdxdst)
-      call merid_diffuse(dam, diffydst, fac, .true., fdydst)
+      call zonal_diffuse(dam, diffx, fac, .true., fdxdst)
+      call merid_diffuse(dam, diffy, fac, .true., fdydst)
     endif
 
     !---------------------------------------------------------------
@@ -138,8 +140,8 @@ contains
         fac(i,j) = 1._wp/(hatm*ra2a(i,j))
       enddo
     enddo
-    call zonal_diffuse(cam, diffxdst, fac, .true., fdxco2)
-    call merid_diffuse(cam, diffydst, fac, .true., fdyco2)
+    call zonal_diffuse(cam, diffx, fac, .true., fdxco2)
+    call merid_diffuse(cam, diffy, fac, .true., fdyco2)
 
     return
 

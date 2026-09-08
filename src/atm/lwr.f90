@@ -28,7 +28,7 @@ module lw_radiation_mod
   use atm_params, only : wp
   use constants, only : fqsat, sigma
   use control, only : co2_ref, ch4_ref, n2o_ref
-  use atm_params, only : p0, ra, hatm, hpbl
+  use atm_params, only : p0, ra, hatm, hpbl, c_hcld_dz_min
   use atm_params, only : i_lw_cld, c_lw_clot
   use atm_params, only : ak_co2, beta_co2
   use atm_params, only : ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap, rh_strat
@@ -68,7 +68,8 @@ contains
   subroutine lw_radiation(ecs_scale, frst, zsa, zs, htrop, hcld, ra2, gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &    ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &     ! out
-      gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q) ! optional input arguments for feedback analysis
+      gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q, & ! optional input arguments for feedback analysis
+      lwr_tro_cs) ! optional output, clear-sky flux at the tropopause
 
     implicit none
 
@@ -115,6 +116,9 @@ contains
     real(wp), intent(in ), optional :: ttrop_q(:,:)
     real(wp), intent(in ), optional :: htrop_q(:,:)
 
+    ! optional output needed to diagnose the clear-sky radiative forcing at the tropopause
+    real(wp), intent(out), optional :: lwr_tro_cs(:,:)
+
     ! local variables
     integer :: i, j, n
     real(wp), allocatable, dimension(:) :: zlwr
@@ -135,6 +139,7 @@ contains
     real(wp), dimension(nm) :: flwr_top_cs
     real(wp), dimension(nm) :: flwr_top_cld
     real(wp), dimension(nm) :: flwr_tro
+    real(wp), dimension(nm) :: flwr_tro_cs
     real(wp), dimension(nm) :: flwr_cld
 
     real(wp) :: co2_bar
@@ -202,7 +207,7 @@ contains
     q_co2 = co2e*1.e-6_wp * 44.0095_wp/28.97_wp ! kg/kg
 
     !$omp parallel do collapse(2) private(i, j, n, zlwr, tlwr, qlwr, O3lwr, DCS, DCL, BSB, fcl_up, fcl_dw, fcs_up, fcs_dw) &
-    !$omp private (fst, flwr_sur, flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_cld)
+    !$omp private (fst, flwr_sur, flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_tro_cs, flwr_cld)
     do i=1,im
       do j=1,jm 
 
@@ -242,7 +247,7 @@ contains
             ! total LWR fluxes 
             call lwr_total(cld(i,j), fcs_up, fcs_dw, fcl_up, fcl_dw, &
               flwr_sur(n), flwr_dw_sur(i,j,n), flwr_dw_sur_cs(i,j,n), flwr_dw_sur_cld(i,j,n), &
-              flwr_top(n), flwr_top_cs(n), flwr_top_cld(n), flwr_tro(n), flwr_cld(n))
+              flwr_top(n), flwr_top_cs(n), flwr_top_cld(n), flwr_tro(n), flwr_tro_cs(n), flwr_cld(n))
 
           else
 
@@ -254,6 +259,7 @@ contains
               flwr_top_cs(n)         = 0._wp
               flwr_top_cld(n)        = 0._wp
               flwr_tro(n)            = 0._wp
+              flwr_tro_cs(n)         = 0._wp
               flwr_cld(n)            = 0._wp
 
           endif
@@ -265,6 +271,7 @@ contains
         lwr_top_cs(i,j)  = sum(flwr_top_cs(:)*fst(:))
         lwr_top_cld(i,j) = sum(flwr_top_cld(:)*fst(:))
         lwr_tro(i,j)     = sum(flwr_tro(:)*fst(:))
+        if (present(lwr_tro_cs)) lwr_tro_cs(i,j) = sum(flwr_tro_cs(:)*fst(:))
         lwr_cld(i,j)     = sum(flwr_cld(:)*fst(:))
 
       enddo
@@ -294,8 +301,8 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine lwr_total(cld, fcs_up, fcs_dw, fcl_up, fcl_dw, &
       flwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, &
-      flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_cld)
-    
+      flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_tro_cs, flwr_cld)
+
     implicit none
 
     real(wp), intent(in ) :: cld
@@ -312,6 +319,7 @@ contains
     real(wp), intent(out) :: flwr_top_cs
     real(wp), intent(out) :: flwr_top_cld
     real(wp), intent(out) :: flwr_tro
+    real(wp), intent(out) :: flwr_tro_cs
     real(wp), intent(out) :: flwr_cld
 
     integer :: k
@@ -334,6 +342,8 @@ contains
     flwr_up_tro = (1._wp-cld)*fcs_up(k) + cld*fcl_up(k)
     flwr_dw_tro = (1._wp-cld)*fcs_dw(k) + cld*fcl_dw(k)
     flwr_tro = flwr_dw_tro-flwr_up_tro
+    ! clear-sky net flux at the tropopause, needed for the clear-sky radiative forcing
+    flwr_tro_cs = fcs_dw(k)-fcs_up(k)
 
     ! fluxes at cloud base
     k = llwr1
@@ -392,7 +402,7 @@ contains
     ! Cloud parameters
 
     z_cld_bot = zs+hpbl
-    z_cld_top = max(hcld,z_cld_bot+1000._wp)
+    z_cld_top = max(hcld,z_cld_bot+c_hcld_dz_min)
     z_cld_top = min(z_cld_top,htrop-1000._wp)
 
     ! Layers thickness

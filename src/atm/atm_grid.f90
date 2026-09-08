@@ -31,7 +31,7 @@ module atm_grid
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
   use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg
-  use atm_params, only : l_p0_var, p0, ps0, pble, pblp
+  use atm_params, only : l_p0_var, p0, ps0, pble, pblp, cp
   use smooth_atm_mod, only : smooth2
 
   implicit none
@@ -111,6 +111,7 @@ module atm_grid
   real(wp), allocatable :: dpl(:)
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
+  real(wp), allocatable :: cheat(:,:)    !! column heat capacity, J/m2/K; see atm_grid_update
   real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
   real(wp), allocatable :: dply(:,:,:)
@@ -148,6 +149,7 @@ contains
     allocate(dpl(km))
     allocate(zl(kmc))
     allocate(zc(km))
+    allocate(cheat(im,jm))
     allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
     allocate(dply(im,jm,km))
@@ -399,6 +401,10 @@ contains
     amas = p0/g ! kg/m2, average mass of atmospheric column
 
     ra = p0/(Rd*T0)     ! kg/m3, air density at pressure p0 and temperature T0
+
+    ! Column heat capacity, J/m2/K.  For a hydrostatic column the internal plus potential
+    ! energy is the enthalpy, int(cv*T + g*z)dm = int(cp*T)dm, so the reservoir is cp*M 
+    cheat = pzsa*amas*cp
 
     ! k-index of first layer above topography 
     do i=1,im

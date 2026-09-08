@@ -56,7 +56,7 @@ contains
   !              :  water and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine adifa(fax, fay, fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, &
-    tp, q3, d3, cam, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, &
+    tp, q3, d3, cam, diffx, diffy, &
     convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
     fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &
     convdse_psi, convdse_psi_topo)
@@ -74,12 +74,8 @@ contains
     real(wp), intent(in   ) :: q3(:,:,:)
     real(wp), intent(in   ) :: d3(:,:,:)
     real(wp), intent(in   ) :: cam(:,:)
-    real(wp), intent(in   ) :: diffxdse(:,:)
-    real(wp), intent(in   ) :: diffydse(:,:)
-    real(wp), intent(in   ) :: diffxwtr(:,:)
-    real(wp), intent(in   ) :: diffywtr(:,:)
-    real(wp), intent(in   ) :: diffxdst(:,:)
-    real(wp), intent(in   ) :: diffydst(:,:)
+    real(wp), intent(in   ) :: diffx(:,:)
+    real(wp), intent(in   ) :: diffy(:,:)
     
     real(wp), intent(inout) :: convdse(:,:)
     real(wp), intent(inout) :: convwtr_adv(:,:)   ! advective moisture convergence
@@ -317,18 +313,18 @@ contains
             !-----------------------------------
             ! zonal diffusive fluxes
             dpl_x = dplx(i,j,k)
-            fdxdse(i,j) = fdxdse(i,j) + diffxdse(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
-            fdxwtr(i,j) = fdxwtr(i,j) + diffxwtr(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
-            fdxdst(i,j) = fdxdst(i,j) + diffxdst(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
-            fdxco2(i,j) = fdxco2(i,j) + diffxdst(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
+            fdxdse(i,j) = fdxdse(i,j) + diffx(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
+            fdxwtr(i,j) = fdxwtr(i,j) + diffx(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
+            fdxdst(i,j) = fdxdst(i,j) + diffx(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
+            fdxco2(i,j) = fdxco2(i,j) + diffx(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
 
             !-----------------------------------
             ! meridional diffusive fluxes
             dpl_y = dply(i,j,k)
-            fdydse(i,j) = fdydse(i,j) + diffydse(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
-            fdywtr(i,j) = fdywtr(i,j) + diffywtr(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
-            fdydst(i,j) = fdydst(i,j) + diffydst(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
-            fdyco2(i,j) = fdyco2(i,j) + diffydst(i,j)*dxu(j)*dpl_y*(c3_ij-c3_ij1)/dy
+            fdydse(i,j) = fdydse(i,j) + diffy(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
+            fdywtr(i,j) = fdywtr(i,j) + diffy(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
+            fdydst(i,j) = fdydst(i,j) + diffy(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
+            fdyco2(i,j) = fdyco2(i,j) + diffy(i,j)*dxu(j)*dpl_y*(c3_ij-c3_ij1)/dy
 
           endif
 

@@ -34,7 +34,7 @@ module vesta_mod
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
-  use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc
+  use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc, i_lnd, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
@@ -49,14 +49,17 @@ contains
   !   Subroutine :  h s c a l e s
   !   Purpose    :  computation of lapse rate and height scales of moisture and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hscales(ra2a, sha, qam, wcon, wcld, had_fi, had_width, &
+  subroutine hscales(frst, ra2a, sha, tskina, tam, qam, wcon, wcld, had_fi, had_width, &
       gams, gamb, gamt, hrm, &
       hqeff, hdust)
 
     implicit none
 
+    real(wp), intent(in) :: frst(:,:,:)
     real(wp), intent(in) :: ra2a(:,:)
     real(wp), intent(in) :: sha(:,:)   !! grid mean sensible heat flux, positive upward (W/m2)
+    real(wp), intent(in) :: tskina(:,:)
+    real(wp), intent(in) :: tam(:,:)
     real(wp), intent(in) :: qam(:,:)
     real(wp), intent(in) :: wcon(:,:)
     real(wp), intent(in) :: wcld(:,:)
@@ -92,7 +95,7 @@ contains
         ! surface layer and drives gam_s towards the well mixed limit gams_max; sha < 0 is a
         ! stable, decoupled surface layer and drives it towards gams_min. sh_gams sets the flux
         ! scale over which the surface layer changes regime.
-        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams))
+        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) 
 
         ! bottom
         gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
@@ -163,7 +166,7 @@ contains
   !   Purpose    :  vertical structure of atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, dam, hdust, &
-      A_trop, W_strat, t3, q3, tp, d3, ttrop)
+      A_trop, W_strat, dtcol, t3, q3, tp, d3, ttrop)
 
     implicit none
 
@@ -180,6 +183,7 @@ contains
 
     real(wp), intent(out) :: A_trop(:,:)   
     real(wp), intent(out) :: W_strat(:,:)  
+    real(wp), intent(out) :: dtcol(:,:)    
     real(wp), intent(out) :: t3(:,:,:)
     real(wp), intent(out) :: q3(:,:,:)
     real(wp), intent(out) :: tp(:,:,:)
@@ -191,10 +195,10 @@ contains
     real(wp) :: z_sur, taml, htropl
     real(wp) :: gamsl, gambl, gamtl, z
     real(wp) :: t, rsur, hrml, rh, rh_unit, q, q_unit, qsat, A_l, W_l
-    real(wp) :: dvol
+    real(wp) :: dvol, S_num, S_den
 
 
-    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rh,rh_unit,q,q_unit,qsat,A_l,W_l,dvol,flag_strat)
+    !$omp parallel do collapse(2) private(i,j,k,z_sur,taml,htropl,gamsl,gambl,gamtl,z,t,rsur,hrml,rh,rh_unit,q,q_unit,qsat,A_l,W_l,dvol,S_num,S_den,flag_strat)
     do j=1,jm
       do i=1,im
 
@@ -213,6 +217,8 @@ contains
 
         A_l   = 0._wp   ! tropospheric coefficient ∫ g(z)·qsat·ρ dz
         W_l   = 0._wp   ! stratospheric intercept ∫ rh_strat·qsat·ρ dz
+        S_num = 0._wp   ! ∫ (t_prof - tam) dp, the shape offset of the column
+        S_den = 0._wp   ! ∫ dp
         flag_strat = .false.
         do k=1,km
 
@@ -223,7 +229,8 @@ contains
             t = t_prof(z_sur, z, taml, gamsl, gambl, gamtl, htropl, 1)
             ! derive specific humidity profile from temperature and relative humidity profiles
             rh = rh_prof(z_sur, z, rsur, hrml, htropl)
-            ! rh profile with ram=1: returns g(z) in the troposphere, rh_strat in the stratosphere
+            ! rh_prof is proportional to ram in the troposphere: rh = ram*E(z).
+            ! Evaluating it at ram = 1 recovers E(z) without duplicating the profile.
             rh_unit = rh_prof(z_sur, z, 1._wp, hrml, htropl)
             qsat = fqsat(t,p0*exp_zc(k))
             q = rh*qsat
@@ -242,7 +249,7 @@ contains
           ! vertical integral of water content split into tropospheric slope (A) and stratospheric intercept (W);
           ! the total column water wcon = ram·A_trop + W_strat is reconstructed in time_step.
           if (z.le.htropl+1._wp) then
-            ! tropospheric: q = ram·g(z)·qsat ⇒ dA = g(z)·qsat·dvol = q_unit·dvol
+            ! tropospheric: q = ram·E(z)·qsat ⇒ dA = q_unit·dvol
             A_l = A_l + q_unit*dvol
           else
             ! stratospheric: q = rh_strat·qsat ⇒ dW = q·dvol (independent of ram)
@@ -251,6 +258,15 @@ contains
 
           t3(i,j,k) = t
           q3(i,j,k) = q
+
+          ! Offset between the mass-weighted column temperature and the profile anchor tam.
+          ! The temperature budget advances tam (time_step.f90) while t_prof(zs) = tam exactly,
+          ! so the column heat content is cheat*(tam + dtcol) and NOT cheat*tam, cheat = pzsa*amas*cp
+          ! being the column enthalpy per K (atm_grid) and sum(dplt) = pzsa*amas the same mass.  Whenever
+          ! the profile shape moves - gams/gamb/gamt with qam and sha, htrop with the state -
+          ! the column's heat content changes with no term in deba.  
+          S_num = S_num + (t-taml)*dplt(i,j,k)
+          S_den = S_den + dplt(i,j,k)
 
           ! potential temperature
           tp(i,j,k) = t + gad*min(z,zmax)
@@ -264,6 +280,7 @@ contains
 
         A_trop(i,j)  = A_l
         W_strat(i,j) = W_l
+        dtcol(i,j)   = S_num/max(S_den,1.e-20_wp)
 
         ! tropopause temperature
 
@@ -339,16 +356,16 @@ contains
     real(wp), intent(in) :: zs
     real(wp), intent(in) :: z
     real(wp), intent(in) :: ram
-    real(wp), intent(in) :: h_rh
+    real(wp), intent(in) :: h_rh   !! hrm
     real(wp), intent(in) :: htrop
 
     real(wp) :: rh_prof
 
     real(wp) :: z_pbl
 
-    z_pbl = zs+c_hrs_5
+    z_pbl = max(zs+500._wp, c_hrs_5)
     if (z.le.z_pbl) then
-      rh_prof = ram      
+      rh_prof = ram
     else if (z.gt.z_pbl.and.z.le.(zs+c_hrs_4)) then
       rh_prof = ram*exp(-(z-z_pbl)/h_rh)
     else if (z.gt.(zs+c_hrs_4).and.z.le.(htrop+1.)) then
@@ -367,23 +384,31 @@ contains
   !   Purpose    :  compute height of tropopause
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine tropoheight(had_fi, had_width, rb_str, hcld, &
-      htrop, ptrop)
+      htrop, ptrop, rb_str_ref)
 
     implicit none
-    
+
     real(wp), intent(in   ) :: had_fi
     real(wp), intent(in   ) :: had_width
     real(wp), intent(in   ) :: rb_str(:,:)
     real(wp), intent(in   ) :: hcld(:,:)
     real(wp), intent(inout) :: htrop(:,:)
     real(wp), intent(out  ) :: ptrop(:)
+    ! optional reference stratospheric radiative balance, used for the feedback analysis.
+    ! If present, the tropopause is relaxed towards the state in which the stratospheric
+    ! radiative balance matches rb_str_ref instead of the balance with the prescribed
+    ! stratospheric heating sheat. The dynamical heating is then held fixed and cancels.
+    real(wp), intent(in   ), optional :: rb_str_ref(:,:)
 
     integer :: i, j
     real(wp) :: fi, fic, x, sheat, rbstr, dhtrop, htropp
+    logical :: fixed_heat
     real(wp), parameter :: x1 = asin(0.1_wp**(1._wp/8._wp))  
     real(wp), parameter :: h_trop_min = 6.e3_wp
     real(wp), parameter :: h_trop_max = 25.e3_wp
 
+
+    fixed_heat = present(rb_str_ref)
 
     do j=1,jm
       fic = had_width/2._wp
@@ -394,7 +419,11 @@ contains
       sheat = c_trop_2*(1._wp-c_trop_3*(1._wp-sin(fi)**8))
       ptrop(j) = 0._wp
       do i=1,im
-        rbstr = rb_str(i,j) + sheat 
+        if (fixed_heat) then
+          rbstr = rb_str(i,j) - rb_str_ref(i,j)
+        else
+          rbstr = rb_str(i,j) + sheat
+        endif
         dhtrop = -c_trop_1*rbstr
         htropp = htrop(i,j)+dhtrop
         htropp = max(htropp,h_trop_min) 
