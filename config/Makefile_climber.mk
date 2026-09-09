@@ -575,7 +575,7 @@ $(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90 $(objdir)/precision.o $(objdir)/co
 $(objdir)/wiso_params.o : $(dir_lnd)wiso_params.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/wiso_params.o
+$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/precision.o $(objdir)/timer.o $(objdir)/control.o $(objdir)/lnd_grid.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lnd_def.o : $(dir_lnd)lnd_def.f90 $(objdir)/precision.o $(objdir)/lnd_grid.o
@@ -870,7 +870,8 @@ $(objdir)/lndvc_grid.o : $(dir_lndvc)/lndvc_grid.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_decomp.o : $(dir_lndvc)/lndvc_decomp.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
-						$(objdir)/timer.o $(objdir)/lnd_params.o $(objdir)/precision.o
+						$(objdir)/lndvc_const.o $(objdir)/lndvc_smb_grid.o \
+						$(objdir)/timer.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_downscale.o : $(dir_lndvc)/lndvc_downscale.f90 $(objdir)/lndvc_def.o \
@@ -878,14 +879,15 @@ $(objdir)/lndvc_downscale.o : $(dir_lndvc)/lndvc_downscale.f90 $(objdir)/lndvc_d
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lndvc_aggregate.o : $(dir_lndvc)/lndvc_aggregate.f90 $(objdir)/lndvc_def.o \
+$(objdir)/lndvc_aggregate.o : $(dir_lndvc)/lndvc_aggregate.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
 						$(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_model.o : $(dir_lndvc)/lndvc_model.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
 						$(objdir)/lndvc_decomp.o $(objdir)/lndvc_downscale.o $(objdir)/lndvc_aggregate.o \
 						$(obj_lndvc_phys) \
-						$(objdir)/precision.o
+						$(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/timer.o \
+						$(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ##################################
