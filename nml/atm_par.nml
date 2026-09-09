@@ -133,7 +133,7 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 3.3e-3              ! K/m, background lapse rate
+  c_gam_1 = 3.4e-3              ! K/m, background lapse rate
   c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
   ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
