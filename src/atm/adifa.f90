@@ -29,15 +29,24 @@ module adifa_mod
   use atm_params, only : wp
   use atm_params, only : cp
   use atm_params, only : tstep
-  use atm_params, only : l_diff_impl
+  use atm_params, only : l_diff_impl, l_dust, i_adv
+  use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplx, dply, dy, dxt, dxu, sqr
+  use atm_grid, only : dplt, dplx, dply, dy, dxt, dxu, sqr
+  use adv_fct_mod, only : fct_ratios
   !$ use omp_lib
 
   implicit none
 
   private
   public :: adifa
+
+  ! flux corrected transport (i_adv=2) work space, allocated on first use.
+  ! rx/ry are the antidiffusive limiter ratios on the u- and v-faces; the CO2
+  ! ones carry a single level because cam is uniform over the column.
+  real(wp), allocatable, dimension(:,:,:) :: rx_dse, rx_wtr, rx_dst, rx_co2
+  real(wp), allocatable, dimension(:,:,:) :: ry_dse, ry_wtr, ry_dst, ry_co2
+  real(wp), allocatable, dimension(:,:,:) :: fmx_col, fmy_col, dm_col, cam_col
 
 contains
     
@@ -46,24 +55,27 @@ contains
   !   Purpose    :  compute advective and diffusive fluxes of energy, 
   !              :  water and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine adifa(fax, fay, tp, q3, d3, cam, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst, &
+  subroutine adifa(fax, fay, fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, &
+    tp, q3, d3, cam, diffx, diffy, &
     convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
-    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2)
+    fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &
+    convdse_psi, convdse_psi_topo)
 
     implicit none
 
     real(wp), intent(in   ) :: fax(:,:,:)
     real(wp), intent(in   ) :: fay(:,:,:)
+    ! the column mass correction, split into its grad(psi) and grad(psi_topo) parts
+    real(wp), intent(in   ) :: fax_psi(:,:,:)
+    real(wp), intent(in   ) :: fay_psi(:,:,:)
+    real(wp), intent(in   ) :: fax_psi_topo(:,:,:)
+    real(wp), intent(in   ) :: fay_psi_topo(:,:,:)
     real(wp), intent(in   ) :: tp(:,:,:)
     real(wp), intent(in   ) :: q3(:,:,:)
     real(wp), intent(in   ) :: d3(:,:,:)
     real(wp), intent(in   ) :: cam(:,:)
-    real(wp), intent(in   ) :: diffxdse(:,:)
-    real(wp), intent(in   ) :: diffydse(:,:)
-    real(wp), intent(in   ) :: diffxwtr(:,:)
-    real(wp), intent(in   ) :: diffywtr(:,:)
-    real(wp), intent(in   ) :: diffxdst(:,:)
-    real(wp), intent(in   ) :: diffydst(:,:)
+    real(wp), intent(in   ) :: diffx(:,:)
+    real(wp), intent(in   ) :: diffy(:,:)
     
     real(wp), intent(inout) :: convdse(:,:)
     real(wp), intent(inout) :: convwtr_adv(:,:)   ! advective moisture convergence
@@ -87,6 +99,11 @@ contains
     real(wp), intent(out  ) :: fdywtr(:,:)
     real(wp), intent(out  ) :: fdydst(:,:)
     real(wp), intent(out  ) :: fdyco2(:,:)
+    ! advective DSE convergence carried by each part of the mass correction, W/m2.
+    ! Formed with the same upstream values as convdse, so the three add up exactly:
+    ! the advective part of convdse is the sum of these two and the uncorrected flux.
+    real(wp), intent(out  ) :: convdse_psi(:,:)
+    real(wp), intent(out  ) :: convdse_psi_topo(:,:)
 
     integer :: i, j, k, imi, jmi
     real(wp) :: tpup, qup, dup, cup
@@ -97,10 +114,61 @@ contains
     real(wp) :: c3_ij, c3_i1j, c3_ij1
     real(wp) :: fax_ijk, fay_ijk
     real(wp) :: fdivdse, fdivwtr, fdivdst, fdivco2
+    real(wp) :: cmass, ctp, mc_psi, mc_psi_topo, m_k
+    integer :: ipl
+    integer :: idg_dse, idg_wtr
+    real(wp), dimension(imc,jm) :: faxdse_psi, faxdse_psi_topo
+    ! tropospheric mass weighted mean of tp, the reference the parts are measured against
+    real(wp), dimension(im,jm) :: tp_col
+    real(wp), dimension(im,jmc) :: faydse_psi, faydse_psi_topo
+
+
+    !-----------------------------------
+    ! flux corrected transport: antidiffusive limiter ratios
+    !-----------------------------------
+    ! Computed here, before the flux loop, because the limiter needs the whole
+    ! horizontal field of a level at once. They are then applied face by face
+    ! below, where they shift the face value from upstream towards centred.
+    if (i_adv.eq.2) then
+
+      if (.not.allocated(rx_dse)) then
+        allocate(rx_dse(imc,jm,km), ry_dse(im,jmc,km))
+        allocate(rx_wtr(imc,jm,km), ry_wtr(im,jmc,km))
+        allocate(rx_dst(imc,jm,km), ry_dst(im,jmc,km))
+        allocate(rx_co2(imc,jm,1),  ry_co2(im,jmc,1))
+        allocate(fmx_col(imc,jm,1), fmy_col(im,jmc,1))
+        allocate(dm_col(im,jm,1),   cam_col(im,jm,1))
+        rx_dst = 0._wp
+        ry_dst = 0._wp
+      endif
+
+      ! the limiter activity diagnostics ride along with the rest of the timer
+      ! output; without it fct_ratios does no book keeping at all
+      idg_dse = 0
+      idg_wtr = 0
+      if (l_write_timer) then
+        idg_dse = 1
+        idg_wtr = 2
+      endif
+
+      call fct_ratios(km, fax, fay, dplt, tp, rx_dse, ry_dse, idg_dse)
+      call fct_ratios(km, fax, fay, dplt, q3, rx_wtr, ry_wtr, idg_wtr)
+      if (l_dust) call fct_ratios(km, fax, fay, dplt, d3, rx_dst, ry_dst, 0)
+
+      ! CO2 is uniform over the column, so its limiter is a single level problem
+      ! carried by the column integrated mass flux and the column mass
+      fmx_col(:,:,1) = sum(fax(1:imc,1:jm,1:km),dim=3)
+      fmy_col(:,:,1) = sum(fay(1:im,1:jmc,1:km),dim=3)
+      dm_col(:,:,1)  = sum(dplt(1:im,1:jm,1:km),dim=3)
+      cam_col(:,:,1) = cam(1:im,1:jm)
+      call fct_ratios(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, 0)
+
+    endif
 
 
     !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
-    !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk)
+    !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk) &
+    !$omp private (ipl, cmass, ctp, m_k) 
     do j=1,jm
 
       jmi=max(1,j-1)
@@ -112,11 +180,15 @@ contains
 
         ! initialize vertically integrated fluxes
         faxdse(i,j) = 0._wp      
+        faxdse_psi(i,j) = 0._wp
+        faxdse_psi_topo(i,j) = 0._wp
         faxwtr(i,j) = 0._wp
         faxdst(i,j) = 0._wp
         faxco2(i,j) = 0._wp
 
         faydse(i,j) = 0._wp
+        faydse_psi(i,j) = 0._wp
+        faydse_psi_topo(i,j) = 0._wp
         faywtr(i,j) = 0._wp
         faydst(i,j) = 0._wp
         fayco2(i,j) = 0._wp
@@ -130,6 +202,20 @@ contains
         fdywtr(i,j) = 0._wp
         fdydst(i,j) = 0._wp 
         fdyco2(i,j) = 0._wp 
+
+        ipl = modulo(i,im) + 1
+        cmass = 0._wp
+        ctp   = 0._wp
+        do k=1,km-2                                    ! troposphere, as for the diffusion
+          m_k   = 0.5_wp*(dplx(i,j,k)+dplx(ipl,j,k))   ! cell layer mass
+          cmass = cmass + m_k
+          ctp   = ctp   + m_k*tp(i,j,k)
+        enddo
+        if (cmass.gt.0._wp) then
+          tp_col(i,j) = ctp/cmass
+        else
+          tp_col(i,j) = tp(i,j,1)
+        endif
 
         c3_ij  = cam(i,j)
         c3_i1j = cam(imi,j)
@@ -172,7 +258,18 @@ contains
             dup  = d3_ijk
             cup  = c3_ij
           endif
+          if (i_adv.eq.2) then
+            ! move the face value from upstream towards centred by the limiter
+            ! ratio; the same face value multiplies fax, fax_psi and fax_psi_topo
+            ! below, so the three still add up to the total advective flux
+            tpup = tpup + rx_dse(i,j,k)*(0.5_wp*(tp_ijk+tp_i1jk)-tpup)
+            qup  = qup  + rx_wtr(i,j,k)*(0.5_wp*(q3_ijk+q3_i1jk)-qup)
+            dup  = dup  + rx_dst(i,j,k)*(0.5_wp*(d3_ijk+d3_i1jk)-dup)
+            cup  = cup  + rx_co2(i,j,1)*(0.5_wp*(c3_ij+c3_i1j)-cup)
+          endif
           faxdse(i,j) = faxdse(i,j) + fax_ijk*tpup ! kg/s * K
+          faxdse_psi(i,j)      = faxdse_psi(i,j)      + fax_psi(i,j,k)*tpup
+          faxdse_psi_topo(i,j) = faxdse_psi_topo(i,j) + fax_psi_topo(i,j,k)*tpup
           faxwtr(i,j) = faxwtr(i,j) + fax_ijk*qup  ! kg/s * kg/kg
           faxdst(i,j) = faxdst(i,j) + fax_ijk*dup
           faxco2(i,j) = faxco2(i,j) + fax_ijk*cup  ! kg/s * kgCO2/kg = kgCO2/s
@@ -186,13 +283,23 @@ contains
             qup  = q3_ijk
             dup  = d3_ijk
             cup  = c3_ij
-          else    
+          else
             tpup = tp_ij1k
             qup  = q3_ij1k
             dup  = d3_ij1k
             cup  = c3_ij1
-          endif 
+          endif
+          if (i_adv.eq.2) then
+            tpup = tpup + ry_dse(i,j,k)*(0.5_wp*(tp_ijk+tp_ij1k)-tpup)
+            qup  = qup  + ry_wtr(i,j,k)*(0.5_wp*(q3_ijk+q3_ij1k)-qup)
+            dup  = dup  + ry_dst(i,j,k)*(0.5_wp*(d3_ijk+d3_ij1k)-dup)
+            cup  = cup  + ry_co2(i,j,1)*(0.5_wp*(c3_ij+c3_ij1)-cup)
+          endif
           faydse(i,j) = faydse(i,j) + fay_ijk*tpup ! kg/s * K
+          faydse_psi(i,j)      = faydse_psi(i,j)      + fay_psi(i,j,k)*tpup
+          faydse_psi_topo(i,j) = faydse_psi_topo(i,j) + fay_psi_topo(i,j,k)*tpup
+          ! the same mass flux and upstream DSE the advection uses, kept per level so that the
+          ! zonal mean part can be subtracted after the i loop
           faywtr(i,j) = faywtr(i,j) + fay_ijk*qup  ! kg/s * kg/kg
           faydst(i,j) = faydst(i,j) + fay_ijk*dup
           fayco2(i,j) = fayco2(i,j) + fay_ijk*cup
@@ -206,18 +313,18 @@ contains
             !-----------------------------------
             ! zonal diffusive fluxes
             dpl_x = dplx(i,j,k)
-            fdxdse(i,j) = fdxdse(i,j) + diffxdse(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
-            fdxwtr(i,j) = fdxwtr(i,j) + diffxwtr(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
-            fdxdst(i,j) = fdxdst(i,j) + diffxdst(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
-            fdxco2(i,j) = fdxco2(i,j) + diffxdst(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
+            fdxdse(i,j) = fdxdse(i,j) + diffx(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
+            fdxwtr(i,j) = fdxwtr(i,j) + diffx(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
+            fdxdst(i,j) = fdxdst(i,j) + diffx(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
+            fdxco2(i,j) = fdxco2(i,j) + diffx(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
 
             !-----------------------------------
             ! meridional diffusive fluxes
             dpl_y = dply(i,j,k)
-            fdydse(i,j) = fdydse(i,j) + diffydse(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
-            fdywtr(i,j) = fdywtr(i,j) + diffywtr(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
-            fdydst(i,j) = fdydst(i,j) + diffydst(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
-            fdyco2(i,j) = fdyco2(i,j) + diffydst(i,j)*dxu(j)*dpl_y*(c3_ij-c3_ij1)/dy
+            fdydse(i,j) = fdydse(i,j) + diffy(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
+            fdywtr(i,j) = fdywtr(i,j) + diffy(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
+            fdydst(i,j) = fdydst(i,j) + diffy(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
+            fdyco2(i,j) = fdyco2(i,j) + diffy(i,j)*dxu(j)*dpl_y*(c3_ij-c3_ij1)/dy
 
           endif
 
@@ -228,6 +335,8 @@ contains
       ! no-flux condition at the poles
       if (j.eq.jm) then
         faydse(:,jmc) = 0._wp              
+        faydse_psi(:,jmc) = 0._wp
+        faydse_psi_topo(:,jmc) = 0._wp
         faywtr(:,jmc) = 0._wp          
         faydst(:,jmc) = 0._wp          
         fayco2(:,jmc) = 0._wp          
@@ -239,6 +348,8 @@ contains
 
       ! Cycling
       faxdse(imc,j) = faxdse(1,j)              
+      faxdse_psi(imc,j) = faxdse_psi(1,j)
+      faxdse_psi_topo(imc,j) = faxdse_psi_topo(1,j)
       faxwtr(imc,j) = faxwtr(1,j)          
       faxdst(imc,j) = faxdst(1,j)          
       faxco2(imc,j) = faxco2(1,j)          
@@ -255,7 +366,7 @@ contains
     ! fluxes convergency
     !-----------------------------------
 
-    !$omp parallel do collapse(2) private(i,j,fdivdse,fdivwtr,fdivdst,fdivco2)
+    !$omp parallel do collapse(2) private(i,j,k,fdivdse,fdivwtr,fdivdst,fdivco2,mc_psi,mc_psi_topo)
     do j=1,jm
       do i=1,im
 
@@ -279,6 +390,57 @@ contains
                        +faydse(i,j+1)-faydse(i,j) &
                        +fdivdse) &
                        /sqr(i,j) * cp  ! K * kg/s / m2 * J/kg/K = J/m2/s = W/m2
+
+        ! The part of it carried by each half of the column mass correction.
+        !
+        ! Neither half is mass conserving on its own - grad(psi) removes the dynamic
+        ! share of the spurious column convergence and grad(psi_topo) the topographic
+        ! share, and only their sum with the uncorrected flux closes the column. Each
+        ! is therefore reported against a reference: the SAME column mass correction
+        ! spread through the troposphere in proportion to layer mass, which is the
+        ! least perturbing way of removing it. What is written out is the excess over
+        ! that reference,
+        !     sum_k mc_k*(tp_k - tp_trop) * cp / area ,
+        ! so it answers how much the CHOICE OF LEVEL for the compensation adds to the
+        ! local dry static energy budget. It is in W/m2 and directly comparable with
+        ! convdse. A column that exports mass, mc<0, from levels above the tropospheric
+        ! mean reads negative: the compensation is cooling that column, and it cools it
+        ! more the higher the band sits.
+        !
+        ! Note that taken raw, without any reference, each part would instead carry a
+        ! term (column mass imbalance)*tp of order fac*cp*theta/area - several hundred
+        ! W/m2, an order of magnitude above the placement signal, cancelling only when
+        ! the three are added back up.
+        !
+        ! The reference is the TROPOSPHERIC mean, not the whole column, because both
+        ! bands lie in the troposphere and because the two stratospheric layers carry a
+        ! fifth of the column pressure at theta of 380-520 K. That drags a full column
+        ! mean to ~334 K at 67N, above the tropopause value itself, so every possible
+        ! tropospheric placement would read as a large positive anomaly and a band
+        ! sitting at the tropopause would read as harmless.
+        !
+        ! Subtracting a reference does not break the decomposition: the three column
+        ! imbalances sum to zero, so the subtracted pieces do too and the parts still
+        ! add up to the advective convdse. Only the split is reference dependent - the
+        ! sum, and the difference between two runs, are not.
+        mc_psi      = 0._wp
+        mc_psi_topo = 0._wp
+        do k=1,km
+          mc_psi      = mc_psi      + fax_psi(i,j,k)     -fax_psi(i+1,j,k) &
+                                    + fay_psi(i,j+1,k)   -fay_psi(i,j,k)
+          mc_psi_topo = mc_psi_topo + fax_psi_topo(i,j,k)-fax_psi_topo(i+1,j,k) &
+                                    + fay_psi_topo(i,j+1,k)-fay_psi_topo(i,j,k)
+        enddo
+        convdse_psi(i,j) = &
+                       (faxdse_psi(i,j)  -faxdse_psi(i+1,j) &
+                       +faydse_psi(i,j+1)-faydse_psi(i,j) &
+                       -mc_psi*tp_col(i,j)) &
+                       /sqr(i,j) * cp
+        convdse_psi_topo(i,j) = &
+                       (faxdse_psi_topo(i,j)  -faxdse_psi_topo(i+1,j) &
+                       +faydse_psi_topo(i,j+1)-faydse_psi_topo(i,j) &
+                       -mc_psi_topo*tp_col(i,j)) &
+                       /sqr(i,j) * cp
 
         !-----------------------------------
         ! water (advection [+ explicit diffusion])

@@ -42,7 +42,7 @@ module lnd_model
     use lnd_params, only : l_dynveg, pft_fix_file, l_fixlai, lai_fix_file
     use lnd_params, only : i_weathering, l_river_export
     use lnd_params, only : veg_par, pft_par, snow_par, surf_par, hydro_par, soil_par, soilc_par, peat_par
-    use lnd_params, only : mineral, topmodel, dyptop, nmonwet
+    use lnd_params, only : mineral, topmodel, nmonwet
     use lnd_params, only : weath_gemco2_par, weath_uhh_par
     use lnd_def, only : lnd_class, lnd_0d_class, lnd_2d_class
     use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
@@ -296,6 +296,7 @@ contains
     use hydrology_mod
     use water_deficit_mod
     use soil_hydro_mod
+    use groundwater_mod, only : groundwater, w_table_ini, perched_water_table
     use water_check_mod
     use dyn_veg_mod
     use soil_carbon_mod
@@ -340,6 +341,8 @@ contains
                           lnd%cato_c,lnd%cato_c13,lnd%cato_c14,lnd%litter_c_peat,lnd%litter_c13_peat,lnd%litter_c14_peat, &
                           lnd%acro_c,lnd%acro_c13,lnd%acro_c14,lnd%f_peat,lnd%f_peat_pot,lnd%w_table_min,lnd%w_table_peat,lnd%dCpeat_dt, &
                           lnd%z0m)
+        ! the aquifer of a newly vegetated cell starts at the nominal equilibrium water table
+        lnd%w_table = w_table_ini()
         if (l_wiso) then
           ! cold-start: tag fresh land water at VSMOW so delta18O = 0 permil
           lnd%w_w_iso(:,i_o18)        = Rstd(i_o18) * lnd%w_w
@@ -347,6 +350,8 @@ contains
           lnd%w_can_iso(:,i_o18)      = Rstd(i_o18) * lnd%w_can
           lnd%s_can_iso(:,i_o18)      = Rstd(i_o18) * lnd%s_can
           lnd%w_snow_iso(is_veg,i_o18) = Rstd(i_o18) * lnd%w_snow(is_veg)
+          lnd%w_gw_iso(i_o18)         = Rstd(i_o18) * rho_w*hydro_par%sy_aqf &
+                                      * (hydro_par%z_wtab_max - lnd%w_table)
         endif
        endif
 
@@ -528,8 +533,7 @@ contains
       endif
 
       ! surface resistance for evapotranspiration
-      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%w_snow, &
-                     lnd%theta_w,lnd%g_can, &
+      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%theta_w,lnd%g_can, &
                      lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can)
 
       ! compute evaporation of intercepted water
@@ -796,15 +800,12 @@ contains
       call surface_hydrology(lnd%frac_surf,lnd%mask_snow, &
                             lnd%evap_surface,lnd%rain_ground,lnd%snow_ground, &
                             lnd%snowmelt, lnd%icemelt, lnd%icesub, lnd%et, &
-                            lnd%theta, &
-                            lnd%theta_sat,lnd%theta_field,lnd%k_sat, &
-                            lnd%cap_soil(1),lnd%cap_lake(1), &
+                            lnd%k_sat,lnd%cap_soil(1),lnd%cap_lake(1), &
                             topmodel(i,j)%cti_mean,topmodel(i,j)%cti_cdf, &
-                            dyptop(i,j)%k,dyptop(i,j)%v,dyptop(i,j)%xm,dyptop(i,j)%fmax, &
                             lnd%w_snow_old,lnd%w_snow,lnd%w_snow_max,lnd%w_w,lnd%w_i, &
                             lnd%w_table_cum,lnd%f_wet_cum,lnd%t_soil,lnd%t_lake, &
                             lnd%h_snow,lnd%calving,lnd%runoff_sur, &
-                            lnd%infiltration,lnd%w_table,lnd%f_wet,lnd%f_wet_max,lnd%cti_lim,lnd%lake_water_tendency, &
+                            lnd%infiltration,lnd%w_table_eff,lnd%fz_eff,lnd%f_wet,lnd%f_wet_max,lnd%cti_lim,lnd%lake_water_tendency, &
                             lnd%evap_surface_iso,lnd%rain_ground_iso,lnd%snow_ground_iso, &
                             lnd%snowmelt_iso,lnd%icemelt_iso,lnd%icesub_iso,lnd%et_iso, &
                             lnd%w_snow_iso_old,lnd%w_snow_iso,lnd%w_w_iso,lnd%w_i_iso, &
@@ -821,16 +822,31 @@ contains
        ! update water content of the soil profile
        call soil_hydro(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%theta_sat, &
                       lnd%k_sat,lnd%k_exp,lnd%psi_exp,lnd%kappa_int,lnd%psi, &
-                      lnd%w_table, &
                       lnd%transpiration,lnd%evap_surface,lnd%infiltration,lnd%wilt, &
                       lnd%w_snow(is_veg),lnd%w_w,lnd%w_i, &
                       lnd%theta_w,lnd%theta_i,lnd%theta,lnd%theta_w_cum,lnd%theta_i_cum,lnd%theta_fire_cum, &
-                      lnd%drainage, &
+                      lnd%drainage,lnd%runoff_exc, &
                       lnd%transpiration_iso,lnd%evap_surface_iso,lnd%infiltration_iso, &
-                      lnd%w_w_iso,lnd%drainage_iso)
+                      lnd%w_w_iso,lnd%drainage_iso,lnd%runoff_exc_iso)
+
+       ! update the water table of the unconfined aquifer below the soil column
+       call groundwater(lnd%theta,lnd%theta_w,lnd%drainage(is_veg), &
+                       lnd%w_table,lnd%runoff_gw, &
+                       lnd%drainage_iso(is_veg,:),lnd%w_gw_iso,lnd%runoff_gw_iso)
+
+       ! water table perched on the frost table, and the effective table for wetlands and peat
+       call perched_water_table(lnd%theta_sat,lnd%theta_i,lnd%w_w,lnd%w_table, &
+                               lnd%w_table_perch,lnd%w_table_eff,lnd%fz_eff)
 
       else
        lnd%drainage = 0._wp
+       lnd%runoff_gw = 0._wp
+       lnd%runoff_exc = 0._wp
+       lnd%w_table_perch = 0._wp
+       lnd%w_table_eff = lnd%w_table
+       lnd%fz_eff = hydro_par%f_drain*lnd%w_table
+       if (l_wiso) lnd%runoff_gw_iso = 0._wp
+       if (l_wiso) lnd%runoff_exc_iso = 0._wp
       endif
 
       ! potential evapotranspiration
@@ -848,11 +864,13 @@ contains
       endif
 
       ! total runoff over gridcell
-      lnd%runoff(is_veg) = lnd%runoff_sur(is_veg)+lnd%drainage(is_veg)   ! runoff from vegetated grid cell fraction
+      ! the drainage out of the soil column first recharges the aquifer and leaves the land as
+      ! baseflow instead
+      lnd%runoff(is_veg) = lnd%runoff_sur(is_veg)+lnd%runoff_exc+lnd%runoff_gw ! runoff from vegetated grid cell fraction
       lnd%runoff(is_ice) = lnd%runoff_sur(is_ice)+lnd%drainage(is_ice)     ! runoff from glacier grid cell fraction
       lnd%runoff(is_lake)= lnd%runoff_sur(is_lake)+lnd%drainage(is_lake)  ! runoff from lake cell fraction, fixme
       if (l_wiso) then
-        lnd%runoff_iso(is_veg,:)  = lnd%runoff_sur_iso(is_veg,:)  + lnd%drainage_iso(is_veg,:)
+        lnd%runoff_iso(is_veg,:) = lnd%runoff_sur_iso(is_veg,:) + lnd%runoff_exc_iso(:) + lnd%runoff_gw_iso(:)
         lnd%runoff_iso(is_ice,:)  = lnd%runoff_sur_iso(is_ice,:)  + lnd%drainage_iso(is_ice,:)
         lnd%runoff_iso(is_lake,:) = lnd%runoff_sur_iso(is_lake,:) + lnd%drainage_iso(is_lake,:)
       endif
@@ -865,12 +883,12 @@ contains
        ! combined bulk + iso conservation check
        call water_balance_check(i, j, lnd%frac_surf, lnd%f_veg, &
                                 lnd%rain, lnd%snow, lnd%et, &
-                                lnd%runoff_sur, lnd%calving, lnd%drainage, lnd%icemelt, lnd%icesub, &
+                                lnd%runoff_sur, lnd%runoff_exc, lnd%calving, lnd%drainage, lnd%icemelt, lnd%icesub, &
                                 lnd%w_w, lnd%w_i, lnd%w_snow, lnd%w_can, lnd%s_can, &
                                 lnd%w_w_old, lnd%w_i_old, lnd%w_snow_old, lnd%w_can_old, lnd%s_can_old, &
                                 lnd%lake_water_tendency, &
                                 lnd%rain_iso, lnd%snow_iso, lnd%et_iso, &
-                                lnd%runoff_sur_iso, lnd%calving_iso, lnd%drainage_iso, &
+                                lnd%runoff_sur_iso, lnd%runoff_exc_iso, lnd%calving_iso, lnd%drainage_iso, &
                                 lnd%icemelt_iso, lnd%icesub_iso, &
                                 lnd%w_w_iso, lnd%w_i_iso, lnd%w_snow_iso, lnd%w_can_iso, lnd%s_can_iso, &
                                 lnd%w_w_iso_old, lnd%w_i_iso_old, lnd%w_snow_iso_old, &
@@ -1024,9 +1042,11 @@ contains
         if (lnd%f_veg.gt.0._wp) then
           soil_resp = lnd%soil_resp(ic_min)*(lnd%f_veg-lnd%f_peat)+lnd%soil_resp(ic_peat)*lnd%f_peat
           call n2o_emission(soil_resp, lnd%t_soil(1), lnd%theta_w(1), lnd%theta_field(1), lnd%theta_sat(1), &
-                            lnd%n2o_emis)
+                            lnd%n2o_emis, lnd%n2o_emis_nit, lnd%n2o_emis_denit)
         else
           lnd%n2o_emis = 0._wp
+          lnd%n2o_emis_nit = 0._wp
+          lnd%n2o_emis_denit = 0._wp
         endif
 
 
@@ -1173,6 +1193,7 @@ end subroutine lnd_update
   subroutine lnd_init(lnd,f_lnd,f_ocn,f_ice,f_ice_grd,f_lake)
 
     use surface_par_lnd
+    use groundwater_mod, only : w_table_ini
 
     implicit none 
 
@@ -1191,6 +1212,7 @@ end subroutine lnd_update
     ! initialize grid
     call lnd_grid_init
 
+    allocate(lnd%z_lake(nl_l))
     lnd%z_lake(:) = z_l(1:nl_l)
 
     ! initialize parameters
@@ -1249,7 +1271,7 @@ end subroutine lnd_update
           do k=1,nl
             lnd%l2d(i,j)%psi_sat(k) = soil_par%psi_sat_u
             lnd%l2d(i,j)%k_sat(k) = soil_par%k_sat_u
-            lnd%l2d(i,j)%k_exp(k) = 2*soil_par%b_u+3
+            lnd%l2d(i,j)%k_exp(k) = soil_par%k_exp_u
             lnd%l2d(i,j)%psi_exp(k) = -soil_par%b_u
             lnd%l2d(i,j)%theta_field(k) = soil_par%theta_field_u
             lnd%l2d(i,j)%theta_wilt(k) = soil_par%theta_wilt_u
@@ -1510,8 +1532,14 @@ end subroutine lnd_update
     ! initialize
     do i = 1,ni
       do j = 1,nj
-        lnd%l2d(i,j)%f_wet_cum      = 0._wp  
-        lnd%l2d(i,j)%runoff_ann     = 0._wp  
+        lnd%l2d(i,j)%f_wet_cum      = 0._wp
+        lnd%l2d(i,j)%runoff_ann     = 0._wp
+        lnd%l2d(i,j)%w_table        = w_table_ini()
+        lnd%l2d(i,j)%runoff_gw      = 0._wp
+        lnd%l2d(i,j)%runoff_exc     = 0._wp
+        lnd%l2d(i,j)%w_table_perch  = 0._wp
+        lnd%l2d(i,j)%w_table_eff    = 0._wp
+        lnd%l2d(i,j)%fz_eff         = 0._wp
 
         lnd%l2d(i,j)%coszm          = 0._wp 
         lnd%l2d(i,j)%daylength      = 0._wp 
@@ -1998,6 +2026,9 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%w_w_lake_iso      (nl_l,nwiso))
         allocate(lnd%l2d(i,j)%w_i_lake_iso      (nl_l,nwiso))
         allocate(lnd%l2d(i,j)%infiltration_iso  (nwiso))
+        allocate(lnd%l2d(i,j)%w_gw_iso          (nwiso))
+        allocate(lnd%l2d(i,j)%runoff_gw_iso     (nwiso))
+        allocate(lnd%l2d(i,j)%runoff_exc_iso    (nwiso))
         allocate(lnd%l2d(i,j)%water_iso_cons    (nsoil,nwiso))
         lnd%l2d(i,j)%rain_iso          = 0._wp
         lnd%l2d(i,j)%snow_iso          = 0._wp
@@ -2028,6 +2059,9 @@ end subroutine lnd_update
         lnd%l2d(i,j)%w_w_lake_iso      = 0._wp
         lnd%l2d(i,j)%w_i_lake_iso      = 0._wp
         lnd%l2d(i,j)%infiltration_iso  = 0._wp
+        lnd%l2d(i,j)%w_gw_iso          = 0._wp
+        lnd%l2d(i,j)%runoff_gw_iso     = 0._wp
+        lnd%l2d(i,j)%runoff_exc_iso    = 0._wp
         lnd%l2d(i,j)%water_iso_cons    = 0._wp
         allocate(lnd%l2d(i,j)%psi              (nl))
         allocate(lnd%l2d(i,j)%k_exp            (nl)) 
@@ -2369,6 +2403,13 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"Cd",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="exchange coefficient for heat",units="1",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%Ri(:)
+     enddo
+   enddo
+   ! Ri is a prognostic state (relaxed over tau_Ri in resist_aer), not a diagnostic
+   call nc_write(fnm,"Ri",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="Richardson number",units="1",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%albedo(:)
@@ -2857,6 +2898,7 @@ end subroutine lnd_update
    call nc_write(fnm,"f_peat",           lnd%f_peat,          dims=[dim_lon,dim_lat],long_name="peatland fraction",units="/",ncid=ncid)
    call nc_write(fnm,"f_peat_pot",       lnd%f_peat_pot,      dims=[dim_lon,dim_lat],long_name="potential peatland fraction",units="/",ncid=ncid)
    call nc_write(fnm,"dCpeat_dt",       lnd%dCpeat_dt,        dims=[dim_lon,dim_lat],long_name="peat accumulation rate",units="kgC/m2/s",ncid=ncid)
+   call nc_write(fnm,"w_table",          lnd%w_table,         dims=[dim_lon,dim_lat],long_name="water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_min",      lnd%w_table_min,     dims=[dim_lon,dim_lat],long_name="minumum yearly water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_peat",     lnd%w_table_peat,    dims=[dim_lon,dim_lat],long_name="peatland water table depth",units="m",ncid=ncid)
 
@@ -2882,13 +2924,16 @@ end subroutine lnd_update
        real(wp), allocatable :: tmp_s (:,:,:)   ! (nsurf,ni,nj)
        real(wp), allocatable :: tmp_so(:,:,:)   ! (nsoil,ni,nj)
        real(wp), allocatable :: tmp_ll(:,:,:)   ! (nl_l,ni,nj)
+       real(wp), allocatable :: tmp_gw(:,:)     ! (ni,nj)
        integer :: ii, jj, iwiso
        allocate(tmp_l (nl,   ni,nj))
        allocate(tmp_s (nsurf,ni,nj))
        allocate(tmp_so(nsoil,ni,nj))
        allocate(tmp_ll(nl_l, ni,nj))
+       allocate(tmp_gw(      ni,nj))
        do iwiso=1,nwiso
          do jj=1,nj; do ii=1,ni
+           tmp_gw(  ii,jj) = lnd(ii,jj)%w_gw_iso(iwiso)
            tmp_l (:,ii,jj) = lnd(ii,jj)%w_w_iso(:,iwiso)
            tmp_so(:,ii,jj) = lnd(ii,jj)%w_snow_iso(:,iwiso)
            tmp_s (:,ii,jj) = lnd(ii,jj)%w_can_iso(:,iwiso)
@@ -2920,8 +2965,11 @@ end subroutine lnd_update
          call nc_write(fnm,"w_i_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,"wiso"],&
                        start=[1,1,1,iwiso],count=[nl_l,ni,nj,1],&
                        long_name="lake ice isotope mass",units="kg/m2",ncid=ncid)
+         call nc_write(fnm,"w_gw_iso", tmp_gw, dims=[dim_lon,dim_lat,"wiso"],&
+                       start=[1,1,iwiso],count=[ni,nj,1],&
+                       long_name="groundwater isotope mass",units="kg/m2",ncid=ncid)
        enddo
-       deallocate(tmp_l, tmp_s, tmp_so, tmp_ll)
+       deallocate(tmp_l, tmp_s, tmp_so, tmp_ll, tmp_gw)
      end block
    endif
 
@@ -2939,6 +2987,7 @@ end subroutine lnd_update
   subroutine lnd_read_restart(fnm,lnd,l0d)
 
     use ncio
+    use dim_name, only: dim_depth, dim_depthl, dim_depth1
 
     implicit none
 
@@ -2948,6 +2997,11 @@ end subroutine lnd_update
 
     integer :: i, j, ncid
 
+
+    ! the restart file has to be on the same vertical grid as the model
+    call check_restart_levels(fnm,dim_depth ,nl ,"nl")
+    call check_restart_levels(fnm,dim_depth1,nlc,"nl (nlc=nl+1)")
+    call check_restart_levels(fnm,dim_depthl,nl_l,"nl_lake")
 
     call nc_open(fnm,ncid,writable=.false.)
     call nc_read(fnm,"Cflx_avg",l0d%Cflx_avg,ncid=ncid)
@@ -3027,6 +3081,11 @@ end subroutine lnd_update
         call nc_read(fnm,"rough_m",lnd(i,j)%rough_m,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"rough_h",lnd(i,j)%rough_h,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"Cd",lnd(i,j)%Ch,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+        if (nc_exists_var(fnm,"Ri")) then
+          call nc_read(fnm,"Ri",lnd(i,j)%Ri,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+        else
+          lnd(i,j)%Ri = 0._wp   ! restarts predating the relaxed Ri: start neutral, spins up over tau_Ri
+        endif
         call nc_read(fnm,"albedo",lnd(i,j)%albedo,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"w_can",lnd(i,j)%w_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"s_can",lnd(i,j)%s_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
@@ -3127,6 +3186,16 @@ end subroutine lnd_update
     call nc_read(fnm,"f_peat",           lnd%f_peat,ncid=ncid)
     call nc_read(fnm,"f_peat_pot",       lnd%f_peat_pot,ncid=ncid)
     call nc_read(fnm,"dCpeat_dt",        lnd%dCpeat_dt,ncid=ncid)
+    ! the water table is prognostic and is not in restart files written before the aquifer was
+    ! introduced, so stop with an explicit message instead of failing inside netCDF
+    if (.not.nc_exists_var(fnm,"w_table")) then
+      print *,'ERROR: variable w_table missing from the land restart file'
+      print *,'       file : ',trim(fnm)
+      print *,'       the water table is prognostic since the unconfined aquifer was introduced'
+      print *,'       and the restart file has to be regenerated'
+      stop
+    endif
+    call nc_read(fnm,"w_table",          lnd%w_table,ncid=ncid)
     call nc_read(fnm,"w_table_min",      lnd%w_table_min,ncid=ncid)
     call nc_read(fnm,"w_table_peat",     lnd%w_table_peat,ncid=ncid)
 
@@ -3150,6 +3219,7 @@ end subroutine lnd_update
     if (l_wiso) then
       block
         real(wp), allocatable :: tmp_l (:,:,:), tmp_s (:,:,:), tmp_so(:,:,:), tmp_ll(:,:,:)
+        real(wp), allocatable :: tmp_gw(:,:)
         integer :: ii, jj, iwiso
         logical :: have_iso
         have_iso = nc_exists_var(fnm,"w_w_iso")
@@ -3158,6 +3228,7 @@ end subroutine lnd_update
           allocate(tmp_s (nsurf,nx,ny))
           allocate(tmp_so(nsoil,nx,ny))
           allocate(tmp_ll(nl_l, nx,ny))
+          allocate(tmp_gw(      nx,ny))
           do iwiso=1,nwiso
             call nc_read(fnm,"w_w_iso",     tmp_l, start=[1,1,1,iwiso],count=[nl,nx,ny,1],ncid=ncid)
             do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_w_iso(:,iwiso) = tmp_l(:,ii,jj); enddo; enddo
@@ -3173,8 +3244,10 @@ end subroutine lnd_update
             do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_w_lake_iso(:,iwiso) = tmp_ll(:,ii,jj); enddo; enddo
             call nc_read(fnm,"w_i_lake_iso",tmp_ll,start=[1,1,1,iwiso],count=[nl_l,nx,ny,1],ncid=ncid)
             do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_i_lake_iso(:,iwiso) = tmp_ll(:,ii,jj); enddo; enddo
+            call nc_read(fnm,"w_gw_iso",    tmp_gw,start=[1,1,iwiso],  count=[nx,ny,1],ncid=ncid)
+            do jj=1,ny; do ii=1,nx; lnd(ii,jj)%w_gw_iso(iwiso) = tmp_gw(ii,jj); enddo; enddo
           enddo
-          deallocate(tmp_l, tmp_s, tmp_so, tmp_ll)
+          deallocate(tmp_l, tmp_s, tmp_so, tmp_ll, tmp_gw)
         else
           ! cold-start iso state from bulk × Rstd so delta18O = 0 permil
           print *,'restart lacks water-isotope fields; initializing iso = Rstd * bulk'
@@ -3187,6 +3260,8 @@ end subroutine lnd_update
               lnd(ii,jj)%s_can_iso(:,iwiso)    = Rstd(iwiso) * lnd(ii,jj)%s_can
               lnd(ii,jj)%w_w_lake_iso(:,iwiso) = Rstd(iwiso) * lnd(ii,jj)%w_w_lake
               lnd(ii,jj)%w_i_lake_iso(:,iwiso) = Rstd(iwiso) * lnd(ii,jj)%w_i_lake
+              lnd(ii,jj)%w_gw_iso(iwiso)       = Rstd(iwiso) * rho_w*hydro_par%sy_aqf &
+                                               * (hydro_par%z_wtab_max - lnd(ii,jj)%w_table)
             enddo
           enddo; enddo
         endif
@@ -3201,4 +3276,41 @@ end subroutine lnd_update
 
   end subroutine lnd_read_restart
 
-end module lnd_model 
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  c h e c k _ r e s t a r t _ l e v e l s
+  ! Purpose    :  stop with an informative message if the number of vertical
+  !               levels in the restart file does not match the model grid
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine check_restart_levels(fnm,dimname,n,parname)
+
+    use ncio
+
+    implicit none
+
+    character (len=*), intent(in) :: fnm      ! restart file name
+    character (len=*), intent(in) :: dimname  ! name of the level dimension in the restart file
+    integer,           intent(in) :: n        ! number of levels expected by the model
+    character (len=*), intent(in) :: parname  ! name of the namelist parameter setting n
+
+    integer :: n_restart
+
+
+    n_restart = nc_size(fnm,dimname)
+
+    if (n_restart.ne.n) then
+      print *,'ERROR: vertical grid mismatch in the land restart file'
+      print *,'       file        : ',trim(fnm)
+      print *,'       dimension   : ',trim(dimname)
+      print *,'       levels in file        : ',n_restart
+      print *,'       levels requested by ',trim(parname),' in lnd_par.nml : ',n
+      print *,'       the restart file has to be regenerated for the new vertical grid,'
+      print *,'       or the vertical grid in lnd_par.nml has to be set back to match the restart file'
+      stop
+    endif
+
+  return
+
+  end subroutine check_restart_levels
+
+end module lnd_model

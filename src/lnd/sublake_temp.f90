@@ -83,7 +83,6 @@ contains
     ! assign some arrays
     cap = cap_sublake*dz(1:nl)  ! J/m2/K
     rcap = 1._wp/cap
-    rdz_neg(1) = 1._wp / (z(1) - 0._wp)
 
     ! save old prognostic variables
     t_sublake_old = t_sublake

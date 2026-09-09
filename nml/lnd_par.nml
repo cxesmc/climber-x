@@ -8,7 +8,18 @@
                                 ! 2 .. forest everywhere
 
     !------------------------------------------------------------------------------------
-    ! dynamic vs fixed settings 
+    ! vertical grid
+    !------------------------------------------------------------------------------------
+    nl           = 7            ! number of soil layers
+    z_int_soil   = 0. 0.1 0.25 0.5 1.0 2.0 3.0 5.0   ! m, depths of the soil layer interfaces, nl+1 values, the first one has to be 0.
+                                ! the layer nodes are the midpoints of these interfaces
+                                ! the old 4-layer grid is nl=4, z_int_soil = 0. 0.475 1.1 2.3 3.9
+    nl_lake      = 10           ! number of lake layers
+    z_int_lake   = 0. 0.35 0.75 1.5 3.5 7.5 15. 25. 40. 75. 125.  ! m, depths of the lake layer interfaces, nl_lake+1 values, the first one has to be 0.
+                                ! the bottom layer is stretched to the actual lake depth of each grid cell
+
+    !------------------------------------------------------------------------------------
+    ! dynamic vs fixed settings
     !------------------------------------------------------------------------------------
     l_dynveg     = T            ! enable dynamic vegetation? If l_dynveg==F, then PFTs fractions are read from file pft_fix_file
     pft_fix_file = "input/pfts_pi.nc" ! file with prescribed PFTs, used only if l_dynveg==F
@@ -29,12 +40,16 @@
     !------------------------------------------------------------------------------------
     l_diurnal_cycle = F         ! use parameterisation of diurnal cycle for snowmelt?
     l_neutral = F               ! assume neutral stratification?
-    z_sfl = 50.                 ! m, reference height for turbulent heat fluxes
-    i_racan = 3                 ! parameterisation of aerodynamic resistance below canopy:
-                                ! 1 .. only wind dependence
-                                ! 2 .. wind + LAI+SAI dependence
-                                ! 3 .. same as resistance over bare soil
-    p_cdense = 0.002            ! dense canopy drag coefficient for below canopy resistance, used only for i_racan=1,2
+    z_sfl = 10.                 ! m, reference height for turbulent heat fluxes
+    c_racan_1 = 20.0            ! below canopy resistance for a closed canopy, in units of the bare soil
+                                ! resistance, TUNABLE
+    c_racan_2 = 0.1             ! leaf area scale of the approach to the closed canopy limit, 1/(lai+sai),
+                                ! TUNABLE. With c_racan_2=1 the exponential is
+                                ! 95% saturated already at lai+sai=3, so a dense tropical canopy and a
+                                ! semi-arid shrubland get nearly the same below-canopy resistance and the
+                                ! zonal soil evaporation profile lacks the equatorial minimum seen in
+                                ! CMIP6. c_racan_2<1 stretches the curve over the observed leaf area
+                                ! range; c_racan_2=1 reproduces the old single-parameter formulation.
     z0m_bare = 0.01             ! m, roughness length of bare soil/desert
     z0m_ice = 0.002             ! m, roughness length of ice sheets
     z0m_lake = 0.001            ! m, roughness length of lake water
@@ -45,8 +60,9 @@
                                 ! 3 .. roughness Reynolds number dependence from Zilitinkevich 1995 
                                 ! 4 .. same as 3, but with Yang 2008 for non-vegetated surfaces 
     zm_to_zh_const = 0.1353353  ! constant ratio between roughness length for momentum and heat, used only if i_z0h==1
-    f_Ri_unstab = 2.            ! Richardson number factor for unstable stratification
+    f_Ri_unstab = 10.           ! Richardson number factor for unstable stratification
     f_Ri_stab = 0.              ! Richardson number factor for stable stratification
+    tau_Ri = 4.                 ! relaxation timescale of the Richardson number [days], 0 = no relaxation
 
     !------------------------------------------------------------------------------------
     ! water isotopes (phase 1: passive tracer, land-only, no fractionation)
@@ -56,16 +72,9 @@
     !------------------------------------------------------------------------------------
     ! hydrology params
     !------------------------------------------------------------------------------------
-    i_runoff    = 1             ! runoff parameterisation: 1..bottom free drainage, 2..simtop and no bottom drainage
     l_runoff_icemelt = F        ! allow for runoff from ice sheet melt?
     l_allow_icesub = T          ! allow sublimation deficit to be drawn from glacier ice (closes water balance over ice)?
-    i_cond_theta= 2             ! use liquid+frozen water (1) or only liquid water (2) for hydraulic conductivity
-    i_evp_soil = 2              ! parameterisation of soil evaporation:
-                                ! 1 .. Lee and Pielke 1992 
-                                ! 2 .. quadratic with soil moisture 
-    theta_crit_evp = 0.25       ! m3/m3, critical volumentric soil moisture for bare soil evaporation parameterisation 
-    dz_evp = 0.05               ! m, maximum depth from which evaporation can occur
-    frac_inf_2 = 0.0            ! fraction of infiltration added to second soil layer, as opposed to the top layer
+    theta_crit_evp = 0.25       ! m3/m3, critical volumentric soil moisture for bare soil evaporation parameterisation
     l_dew       = F             ! allow dew deposition?
     l_prc_intercept = T         ! allow for precipitation interception by vegetation?
     tau_w = 1.                  ! days, removal time scale of water from canopy
@@ -77,13 +86,20 @@
     can_max_s = 0.2             ! kg/m2, canopy interception capacity parameter for snow
     p_psi_min    = -150.0       ! m, matric potential at wilting point
     p_psi_max    = -5.0         ! m, matric potential at field capacity (approx)
-    i_wtab      = 5             ! param of water table depth
-    i_fwet      = 3             ! param of water saturated fraction; 1..SIMTOP, 2..DYPTOP, 3..TOPMODEL
-    wtab_scale  = 4             ! scaling for water table depth, used only if i_wtab==3
-    f_wtab       = 2.5          ! scaling parameter in computation of saturated grid cell fraction 
-    fmax_crit    = 0.55         ! critical maximum wetland fraction above which wetlands can occur, used only if i_fwet==1,2
+    sy_aqf      = 0.015         ! specific yield of the aquifer. Does not affect the
+                                ! equilibrium depth, it sets the seasonal amplitude and the spin-up rate.
+                                ! Over-determined: the water table seasonal amplitude of Fan et al.
+    z_wtab_max  = 25.           ! m, aquifer thickness = maximum water table depth
+    f_drain     = 0.40          ! 1/m, TOPMODEL transmissivity decay factor. It sets both the decay of
+                                ! baseflow with water table depth and the CTI threshold for the saturated
+                                ! fraction, cti_lim = cti_mean + f_drain*w_table, because in TOPMODEL both
+                                ! follow from the same exponential transmissivity profile T=T0*exp(-f*z).
+    f_drain_perch = 4.0         ! 1/m, TOPMODEL transmissivity decay factor of the PERCHED zone
+    kappa_max   = 20.           ! kg/m2/day, baseflow at zero water table depth. Sets the mean wetland
+                                ! extent through cti_lim = cti_mean + log(kappa_max/recharge)
+    f_ice_perch = 0.5           ! ice fraction of the pore space above which a layer counts as the frost table
     cti_min = 0.                ! minimum CTI index for floodability, 8.5 in Kleinen 2020
-    cti_mean_crit = 5.5         ! critical grid-cell mean CTI index below which no wetlands, 5.5 in Kleinen 2020, used only for i_fwet==3
+    cti_mean_crit = 5.5         ! critical grid-cell mean CTI index below which no wetlands, 5.5 in Kleinen 2020
 
     !------------------------------------------------------------------------------------
     ! lake parameters 
@@ -119,7 +135,7 @@
     !------------------------------------------------------------------------------------
     ! dust emissions params
     !------------------------------------------------------------------------------------
-    b0 = 6.e-9                 ! dust emission flux constant [kg s^2 m^-5]
+    b0 = 4.e-9                  ! dust emission flux constant [kg s^2 m^-5]
     qd = 0.01                   ! desert dust source scaling constant
     qg = 0.005                  ! grass dust source scaling constant
     wind_gust_fac = 0.          ! 1/(1000 m), factor to scale wind to account for topographic roughness-dependent wind gusts
@@ -232,16 +248,16 @@
     ich4_ftemp       = 2        ! temperature dependence of ch4 emission fraction. 1=Arrhenius, 2=q10
     Ea_ch4           = 0.96     ! eV, activation energy for temperature dependence of ch4 emission fraction, 0.96 in Yvon-Durocher 2014 (only for ich4_ftemp=1)
     q10_ch4          = 1.8      ! q10 for temperature dependence of ch4 emission fraction (only for ich4_ftemp==2)
-    ch4_frac_wet     = 0.082    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
+    ch4_frac_wet     = 0.044    ! fraction of carbon emitted as methane from wetlands, Riley 2011 0.2, Spahni 2011 range 0.024-0.0415
     ch4_frac_shelf   = 0.0      ! fraction of carbon emitted as methane from ocean shelf
-    ch4_frac_peat    = 0.082    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
+    ch4_frac_peat    = 0.044    ! fraction of carbon emitted as methane from peatlands, Spahni 2011 range 0.2-0.25
     ch4_frac_lake    = 0.0      ! fraction of carbon emitted as methane from lakes 
 
     !------------------------------------------------------------------------------------
     ! N2O emission params
     !------------------------------------------------------------------------------------
-    k_n2o_nit        = 4.e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
-    k_n2o_denit      = 5.e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
+    k_n2o_nit        = 2.7e-5    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through nitrification 
+    k_n2o_denit      = 3.4e-4    ! kg N2O-N / kgC, maximum fraction of soil respiration emitted as N2O through denitrification 
     q10_n2o          = 1.0      ! q10 for temperature dependence of N2O emission
     wfps_crit_denit  = 0.7      ! critical water filled pore space for denitrification
 
@@ -349,10 +365,16 @@
     lambda_dry_u = 0.20         ! w/m/K, uniform dry soil heat conductivity, 0.22 (0.18 - 0.27)
     theta_sat_u  = 0.43         ! m3/m3, uniform porosity, 0.43 (0.37 - 0.49)
     theta_field_u= 0.25         ! m3/m3, uniform field capacity, 0.25 (0.15 - 0.38)
-    theta_wilt_u = 0.1          ! m3/m3, uniform wilting point, 0.14 (0.05 - 0.3)
+                                ! theta_sat*(psi_fc/psi_sat)**(-1/b_u) at psi_fc = -3.3 m (-1/3 bar)
+    theta_wilt_u = 0.15         ! m3/m3, uniform wilting point, 0.14 (0.05 - 0.3)
+                                ! theta_sat*(p_psi_min/psi_sat)**(-1/b_u) at p_psi_min = -150 m (-15 bar)
     psi_sat_u    = -0.2         ! m, uniform matric potential at saturation, -0.19 (-0.71 - -0.05)
     k_sat_u      = 100          ! kg/m2/day, uniform hydraulic conductivity at saturation, 520 (86 - 1900)
     b_u          = 3            ! integer, unifrom Clapp-Horneberger parameter, 6 (4 - 14)
+    k_exp_u      = -1           ! integer, uniform exponent of the hydraulic conductivity curve kappa = k_sat*(theta/theta_sat)**k_exp_u. 
+                                ! -1 uses the Clapp-Hornberger/Burdine relation k_exp = 2*b_u+3
+                                ! CONSTRAINT: k_exp_u > b_u+1 is required, otherwise the soil water diffusivity D = kappa*dpsi/dtheta ~ S**(k_exp_u-b_u-1) 
+                                ! increases as the soil dries out. Use k_exp_u >= b_u+2.
 
     lnd_par_file    = "input/lnd_par.nc"
     soil_texture = 1            ! which soil texture to use; 1...HWSD, 2...GSDE

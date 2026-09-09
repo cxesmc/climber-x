@@ -27,19 +27,21 @@ module time_step_mod
 
   use atm_params, only : wp
   use precision, only : dp
-  use constants, only : T0, fqsat, q_sat_w, q_sat_i
+  use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, amas, hatm, ra, cv, cle, cls, l_dust, l_diff_impl, rh_max, rskin_ocn_min, gams_max_ocn, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, i_tslz, c_tsl_gam, c_tsl_gam_ice, hgams
-  use atm_params, only : c_wrt_1, c_wrt_2, c_wrt_3
+  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, l_diff_impl, rh_max_ocn, rh_max_lnd, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, c_tsl_gam, c_tsl_gam_ice, hgams
+  use atm_params, only : z_q2, z_q2_ocn, p0
   use control, only : check_water, check_energy
-  use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_lake, i_ice, i_lnd, sqr
-  use vesta_mod, only : t_prof
+  use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr, cheat
+  use vesta_mod, only : t_prof, rh_prof
   !$ use omp_lib
 
   implicit none
 
+  real(wp), parameter :: dtcol_prev_unset = -9.e9_wp   !! sentinel, see atm_model
+
   private
-  public :: time_step
+  public :: time_step, dtcol_prev_unset
   
 contains
 
@@ -47,12 +49,14 @@ contains
   !   Subroutine :  t i m e _ s t e p
   !   Purpose    :  time integration of equations for temperature, humidity and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, slope, evpa, convwtr, convwtr_adv, wcon, A_trop, W_strat, sam, eke, &
-      tskin, convdse, rb_atm, rb_sur, sha, gams, gamb, gamt, &
+  subroutine time_step(frst, zs, zsa, ps, psa, ra2a, evpa, convwtr, convwtr_adv, wcon, A_trop, W_strat, dtcol, eke, &
+      tskin, convdse, rb_atm, sha, gams, gamb, gamt, hrm, htrop, &
+      evp, wind, Cde, q2_lag, &
       convdst, dust_emis, dust_dep, hdust, &
       convco2, co2flx, &
-      tam, qam, dam, cam, prc, prcw, prcs, prc_conv, prc_wcon, prc_over, &
-      q2, q2a, ram, r2, r2a, rskina, tsl, tsksl, t2, t2a, tskina, error)
+      dtcol_prev, &
+      tam, qam, dam, cam, prc, prcw, prcs, prc_conv, prc_over, &
+      q2, q2a, ram, r2, r2a, tsl, tsksl, t2, t2a, tskina, error)
 
     implicit none
 
@@ -62,23 +66,27 @@ contains
     real(wp), intent(in   ) :: ps(:,:,:)
     real(wp), intent(in   ) :: psa(:,:)
     real(wp), intent(in   ) :: ra2a(:,:)
-    real(wp), intent(in   ) :: slope(:,:)
     real(wp), intent(in   ) :: evpa(:,:)
     real(wp), intent(in   ) :: convwtr(:,:)       ! total moisture convergence (advective + diffusive)
     real(wp), intent(in   ) :: convwtr_adv(:,:)   ! advective moisture convergence
     real(wp), intent(inout) :: wcon(:,:)
     real(wp), intent(in   ) :: A_trop(:,:)
     real(wp), intent(in   ) :: W_strat(:,:)
-    real(wp), intent(in   ) :: sam(:,:)
+    real(wp), intent(in   ) :: dtcol(:,:)     ! <t_prof>_mass - tam, the column shape offset
     real(wp), intent(in   ) :: eke(:,:)
     real(wp), intent(in   ) :: tskin(:,:,:)
     real(wp), intent(in   ) :: convdse(:,:)
     real(wp), intent(in   ) :: rb_atm(:,:)
-    real(wp), intent(in   ) :: rb_sur(:,:)
     real(wp), intent(in   ) :: sha(:,:)
     real(wp), intent(in   ) :: gams(:,:)
     real(wp), intent(in   ) :: gamb(:,:)
     real(wp), intent(in   ) :: gamt(:,:)
+    real(wp), intent(in   ) :: hrm(:,:)
+    real(wp), intent(in   ) :: htrop(:,:)
+    real(wp), intent(in   ) :: evp(:,:,:)    ! evaporation per surface type, kg/m2/s
+    real(wp), intent(in   ) :: wind(:,:,:)   ! surface wind speed per surface type, m/s
+    real(wp), intent(in   ) :: Cde(:,:,:)    ! surface exchange coefficient for moisture per surface type, /
+    real(wp), intent(in   ) :: q2_lag(:,:,:) ! q2 at the time evp was computed, fixed over the fast loop 
     real(wp), intent(in   ) :: convdst(:,:)
     real(wp), intent(in   ) :: dust_emis(:,:)
     real(wp), intent(in   ) :: dust_dep(:,:)
@@ -86,6 +94,7 @@ contains
     real(wp), intent(in   ) :: convco2(:,:)
     real(wp), intent(in   ) :: co2flx(:,:)
 
+    real(wp), intent(inout) :: dtcol_prev(:,:)
     real(wp), intent(inout) :: tam(:,:)
     real(wp), intent(inout) :: qam(:,:)
     real(wp), intent(inout) :: dam(:,:)
@@ -94,7 +103,6 @@ contains
     real(wp), intent(inout) :: prcw(:,:,:)
     real(wp), intent(inout) :: prcs(:,:,:)
     real(wp), intent(inout) :: prc_conv(:,:)
-    real(wp), intent(inout) :: prc_wcon(:,:)
     real(wp), intent(inout) :: prc_over(:,:)
 
     real(wp), intent(out  ) :: q2(:,:,:)
@@ -102,7 +110,6 @@ contains
     real(wp), intent(inout) :: ram(:,:)
     real(wp), intent(out  ) :: r2(:,:,:)
     real(wp), intent(out  ) :: r2a(:,:)
-    real(wp), intent(out  ) :: rskina(:,:)
     real(wp), intent(out  ) :: tsl(:,:)
     real(wp), intent(out  ) :: tsksl(:,:)
     real(wp), intent(inout) :: t2(:,:,:)
@@ -112,15 +119,19 @@ contains
     logical, intent(inout) :: error
 
     integer :: i, j, n
-    real(wp) :: dwdt, q2sat, qsat, rr, deba, dtdt, dddt, dcdt, frsnw, heff, rh, tam_zs
-    real(wp) :: convwtr_slope, convwtr_bdg
-    real(wp) :: prc_tmp, prcw_tmp, prcs_tmp
-    real(wp) :: prc_ocn, prc_ocn_conv, prc_ocn_wcon
-    real(wp) :: prc_lnd, prc_lnd_conv, prc_lnd_wcon
+    real(wp) :: dwdt, q2sat, qsat, deba, dtdt, dddt, dcdt, frsnw, heff, rh, tam_zs
+    real(wp) :: rr
+    real(wp) :: ddtcol
+    real(wp) :: convwtr_bdg
+    real(wp) :: z_ab, t_ab, r_ab, q_ab, rho_ab, cq2l, gq2
+    real(wp) :: prc_tmp, prcw_tmp, prcs_tmp, prc_over_tmp
     real(wp) :: qold, A_loc, wcon_budget, wcon_in, water_res
     real(wp) :: frocn
-    real(wp), dimension(nm) :: rskin
+    real(wp) :: rh_max
 
+    real(wp), parameter :: q2_min = 1.e-6_wp        ! kg/kg, same floor the qam cap uses
+    real(wp), parameter :: wind_q2_min = 0.5_wp     ! m/s
+    real(wp), parameter :: cq2_min = 5.e-4_wp       ! floor on the ventilation coefficient Cde.
     real(wp), parameter :: A_trop_min = 1.e-3_wp   ! safeguard against division by ~0 in extreme cold profile
     real(wp), parameter :: water_check_tol = 1.e-9_wp  ! kg/m2 per fast step; anything above is real, not round-off
     real(wp), parameter :: atm_heat_tol = 1.e-3_wp     ! W/m2, max allowed atmospheric energy imbalance
@@ -133,8 +144,8 @@ contains
     ! global atmospheric energy budget accumulators (for check_energy)
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
-    !$omp parallel do private(i,j,n,rr,convwtr_slope,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_ocn,prc_ocn_conv,prc_ocn_wcon,prc_lnd,prc_lnd_conv,prc_lnd_wcon) &
-    !$omp private(frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,rskin,tam_old_loc) &
+    !$omp parallel do private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
+    !$omp private(rh_max,frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,tam_old_loc,z_ab,t_ab,r_ab,q_ab,rho_ab,cq2l,gq2,ddtcol) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
       do i=1,im
@@ -143,30 +154,18 @@ contains
         ! precipitation
         !---------------------------
 
+        frocn = frst(i,j,i_ocn)+frst(i,j,i_sic)
+
+        rh_max = frocn*rh_max_ocn + (1._wp-frocn)*rh_max_lnd
         rr = (ram(i,j)/rh_max)
 
-        ! moisture convergence due to synoptic activity on slope
-        convwtr_slope = c_wrt_3*sqrt(sam(i,j))*slope(i,j)*ra*qam(i,j)  ! m/s * kg/m3 * kg/kg = kg/m2/s
+        ! precipitation from moisture convergence and evaporation
+        prc_tmp = max(0._wp,convwtr(i,j)+evpa(i,j))*rr
 
-        ! precipitation from moisture convergence and evaporation.
-        prc_ocn_conv = max(0._wp,convwtr(i,j)+convwtr_slope+evpa(i,j))*rr
-        prc_lnd_conv = prc_ocn_conv
-
-        ! additional precipitation from water content and residence time of water in the atmosphere
-        ! ocean
-        prc_ocn_wcon = wcon(i,j)*rr/(c_wrt_1*sec_day)
-        prc_ocn = prc_ocn_conv+prc_ocn_wcon 
-        ! land
-        prc_lnd_wcon = wcon(i,j)*rr/(c_wrt_2*sec_day)
-        prc_lnd = prc_lnd_conv+prc_lnd_wcon
-
-        ! weighted mean of land and ocean
-        frocn = frst(i,j,i_ocn)+frst(i,j,i_sic)
-        prc_tmp = frocn*prc_ocn + (1._wp-frocn)*prc_lnd 
-
-        ! diagnostics
-        prc_conv(i,j) = frocn*prc_ocn_conv + (1._wp-frocn)*prc_lnd_conv
-        prc_wcon(i,j) = frocn*prc_ocn_wcon + (1._wp-frocn)*prc_lnd_wcon
+        ! diagnostics.  ACCUMULATED over the fast steps and divided by nstep_fast in
+        ! atm_model, exactly as prc is - otherwise these would be last-fast-step snapshots
+        ! while prc is a fast-step mean, and prc_conv+prc_over would not sum to prc.
+        prc_conv(i,j) = prc_conv(i,j) + prc_tmp
 
         !-------------------------------------
         ! update prognostic atmospheric humidity
@@ -202,8 +201,7 @@ contains
         qsat = fqsat(tam(i,j),psa(i,j))
         qam(i,j) = ram(i,j)*qsat
 
-        ! overflow: cap ram at rh_max 
-        prc_over(i,j) = 0._wp
+        ! overflow: cap ram at rh_max
         if (ram(i,j).gt.rh_max) then
           ram(i,j) = rh_max
           qam(i,j) = ram(i,j)*qsat
@@ -217,9 +215,10 @@ contains
           wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
 
-        ! mass-consistent precipitation correction: water added/removed by capping is reflected in the precipitation 
-        prc_over(i,j) = (wcon_budget - wcon(i,j))/tstep
-        prc_tmp = prc_tmp + prc_over(i,j)
+        ! mass-consistent precipitation correction: water added/removed by capping is reflected in the precipitation
+        prc_over_tmp = (wcon_budget - wcon(i,j))/tstep
+        prc_tmp = prc_tmp + prc_over_tmp
+        prc_over(i,j) = prc_over(i,j) + prc_over_tmp   ! accumulated, see prc_conv above
 
         if (prc_tmp.lt.0._wp) then
           print *,'WARNING: prc<0 ',prc_tmp,' in (i,j) ',i,j
@@ -294,7 +293,16 @@ contains
         ! net energy balance of atmospheric column
         deba = convdse(i,j) + rb_atm(i,j) + sha(i,j) + (cle*prcw_tmp+cls*prcs_tmp)   ! W/m2
         ! temperature tendency
-        dtdt=deba/(amas*cv)    ! J/m2/s * m2/kg * kg*K/J = K/s
+        dtdt=deba/cheat(i,j)   ! W/m2 / (J/m2/K) = K/s.  cheat is the column heat capacity,
+
+        ! deba is the energy budget of the whole COLUMN, but tam is the profile ANCHOR:
+        ! t_prof(zs) = tam exactly, so the column heat content is cheat*(tam+dtcol), not cheat*tam.  
+        !     d(tam + dtcol)/dt = deba/cheat,
+        if (dtcol_prev(i,j).le.dtcol_prev_unset) dtcol_prev(i,j) = dtcol(i,j)   ! first step
+        ddtcol = dtcol(i,j)-dtcol_prev(i,j)
+        dtdt = dtdt - ddtcol/tstep
+        dtcol_prev(i,j) = dtcol(i,j)
+
         ! atmospheric column temperature before the update (for the energy conservation check)
         if (check_energy) tam_old_loc = tam(i,j)
         ! new atmospheric temperature
@@ -303,7 +311,7 @@ contains
         ! accumulate the global atmospheric energy budget [J] and source terms [W*m2]
         ! convdse is the dry-static-energy transport convergence; rb_atm/sha/latent are the column sources/sinks
         if (check_energy) then
-          e_dh   = e_dh   + real(amas*cv*(tam(i,j)-tam_old_loc),dp)*real(sqr(i,j),dp)
+          e_dh   = e_dh   + real(cheat(i,j)*((tam(i,j)-tam_old_loc)+ddtcol),dp)*real(sqr(i,j),dp)
           e_conv = e_conv + real(convdse(i,j),dp)*real(sqr(i,j),dp)
           e_rad  = e_rad  + real(rb_atm(i,j),dp)*real(sqr(i,j),dp)
           e_sha  = e_sha  + real(sha(i,j),dp)*real(sqr(i,j),dp)
@@ -314,7 +322,6 @@ contains
         ! 2m temperature and humidity 
         !-------------------------------------
 
-        rskin(:) = 0._wp
         do n=1,nm
           if (frst(i,j,n).gt.0._wp) then
 
@@ -322,7 +329,7 @@ contains
             tam_zs = t_prof(zsa(i,j), zs(i,j,n), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
 
             ! 2m temperature
-            t2(i,j,n) = 0.5_wp*(tskin(i,j,n)+tam_zs)
+            t2(i,j,n) = 0.5_wp * (tskin(i,j,n) + tam_zs)
 
             if (n.eq.i_ocn .or. tskin(i,j,n).gt.T0) then
               ! saturation over water
@@ -334,20 +341,27 @@ contains
               qsat  = q_sat_i(tskin(i,j,n),ps(i,j,n))
             endif
 
-            ! skin relative humidity keeping constant specific humidity (qam)
-            rskin(n) = min(qsat,qam(i,j))/qsat
-            if (n.eq.i_ocn) then
-              rskin(n) = max(rskin(n),rskin_ocn_min)
-            endif
+            ! Surface-layer moisture closure, applied to EVERY surface type. The near-surface air is a blend of air conditioned by the surface 
+            ! and drier air mixed down from z_ab above it:
+            !     q2 = q_ab + E/(rho*Cq*wind)
+            ! the surface-layer humidity excess over the air aloft being the surface moisture flux divided by the ventilation rate.
+            !
+            z_ab = zs(i,j,n) + merge(z_q2_ocn, z_q2, n.eq.i_ocn)
+            t_ab = t_prof(zsa(i,j), z_ab, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1)
+            r_ab = rh_prof(zsa(i,j), z_ab, ram(i,j), hrm(i,j), htrop(i,j))
+            q_ab = r_ab * fqsat(t_ab, p0*exp(-z_ab/hatm))
 
-            ! rh as average between ram and rskina
-!            if (n.eq.i_ocn) then
-!              rh = 0.5_wp*(rh_max+rskin(n)) 
-!            else
-              rh = 0.5_wp*(ram(i,j)+rskin(n)) 
-!            endif
-            q2(i,j,n) = rh*q2sat
+            ! The ventilation coefficient is tied to that type's own surface exchange coefficient, Cq = Cde.  
+            cq2l = max(Cde(i,j,n), cq2_min)
+            gq2 = Cde(i,j,n)/cq2l          
+            rho_ab = ps(i,j,n)/(Rd*t2(i,j,n))
+            q2(i,j,n) = (q_ab + evp(i,j,n)/(rho_ab*cq2l*max(wind(i,j,n),wind_q2_min)) &
+              + gq2*q2_lag(i,j,n)) / (1._wp+gq2)
 
+            ! keep the result physical: subsaturated, and positive under strong dew
+            q2(i,j,n) = min(max(q2(i,j,n), q2_min), q2sat)
+
+            ! relative humidity
             r2(i,j,n) = q2(i,j,n)/q2sat
 
           endif
@@ -358,32 +372,26 @@ contains
         q2a(i,j) = sum(q2(i,j,:)*frst(i,j,:))
         r2a(i,j) = sum(r2(i,j,:)*frst(i,j,:))
         tskina(i,j) = sum(tskin(i,j,:)*frst(i,j,:)) 
-        rskina(i,j) = sum(rskin(:)*frst(i,j,:)) 
 
         !-------------------------------------
         ! sea-level temperature 
         !-------------------------------------
 
         ! reduce temperature to sea level
-        if (i_tslz.eq.1) then
-          tsl(i,j)=t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
-        else if (i_tslz.eq.2) then
-          tsl(i,j)=t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
-            + (gamb(i,j)-gams(i,j))*(1500._wp*(frst(i,j,i_ocn)+frst(i,j,i_sic)))
-        endif
+        tsl(i,j) = t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
 
-        ! sea level temperature for azonal sea level pressure, using skin temperature
-        if (i_tsl.eq.1) then
-          tsksl(i,j)=max(tam(i,j),tskina(i,j))+c_tsl_gam*zsa(i,j) 
-          if (rb_sur(i,j).gt.0._wp) then
-            tsksl(i,j)=tsksl(i,j) + (frst(i,j,i_ocn)+frst(i,j,i_sic)+frst(i,j,i_lake))*(gams_max_ocn-gams(i,j))*hgams
-          endif
-        else if (i_tsl.eq.2) then
-          tsksl(i,j) = max(tam(i,j),tskina(i,j)) &
+        ! sea level temperature for azonal sea level pressure
+        if (i_tsl.eq.0) then
+          ! the air temperature profile reduced to sea level, with no skin contribution at all
+          tsksl(i,j) = tsl(i,j)
+        else if (i_tsl.eq.1) then
+          ! built from the skin temperature instead: the warmer of tam and tskina, carried down
+          ! through the surface layer and then to sea level
+          tsksl(i,j) = tskina(i,j) &
             - max(frst(i,j,i_lnd)*tsl_gams_min_lnd+frst(i,j,i_ice)*tsl_gams_min_ice,gams(i,j))*hgams &
-            + ((1._wp-frst(i,j,i_ice))*c_tsl_gam + frst(i,j,i_ice)*c_tsl_gam_ice)*zsa(i,j) 
-        else 
-          stop 'itsl'
+            + ((1._wp-frst(i,j,i_ice))*c_tsl_gam + frst(i,j,i_ice)*c_tsl_gam_ice)*zsa(i,j)
+        else if (i_tsl.eq.2) then
+          tsksl(i,j) = tam(i,j) + c_tsl_gam*zsa(i,j)
         endif
 
         !-------------------------------------

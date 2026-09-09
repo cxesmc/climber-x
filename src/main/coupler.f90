@@ -290,6 +290,7 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: sh !! sensible heat flux over each surface type [W/m2]
       real(wp), dimension(:,:,:), allocatable :: lh !! latent heat flux over each surface type [W/m2]
       real(wp), dimension(:,:,:), allocatable :: evp    !! evaporation from each surface type [kg/m2/s]
+      real(wp), dimension(:,:,:), allocatable :: Cde    !! exchange coefficient for moisture over each surface type [/]
       real(wp), dimension(:,:),   allocatable :: runoff_veg  !! runoff from vegetated grid cell parts [kg/s]
       real(wp), dimension(:,:),   allocatable :: calving_veg !! calving from vegetated grid cell parts [kg/s]
       real(wp), dimension(:,:),   allocatable :: runoff_ice  !! runoff from ice sheets [kg/s]
@@ -490,13 +491,19 @@ contains
             atm%flwr_up_sur(i,j,n) = sum(cmn%lwu(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
             ! skin temperature 
             atm%tskin(i,j,n) = sum(cmn%t_skin(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
+            ! evaporation, per unit area of the macro surface type 
+            atm%evp(i,j,n) = sum(cmn%evp(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
+            ! exchange coefficient for moisture
+            atm%Cde(i,j,n) = sum(cmn%Cde(i,ja,:)*cmn%f_stp(i,ja,:), mask=(st2ast==n)) / atm%frst(i,j,n)
           else
             atm%alb_vu_s(i,j,n) = 0._wp 
             atm%alb_vu_c(i,j,n) = 0._wp
             atm%alb_ir_s(i,j,n) = 0._wp
             atm%alb_ir_c(i,j,n) = 0._wp
             atm%flwr_up_sur(i,j,n) = 0._wp
-            atm%tskin(i,j,n) = 0._wp 
+            atm%tskin(i,j,n) = 0._wp
+            atm%evp(i,j,n) = 0._wp
+            atm%Cde(i,j,n) = 1.3e-3_wp
           endif
 
         enddo
@@ -1161,6 +1168,8 @@ contains
             cmn%t_skin(i,j,i_surf_macro_ocn)      = sic%t_skin_ocn(i,j)
             cmn%z0m(i,j,i_surf_macro_sic)         = sic%rough_m_sic(i,j)
             cmn%z0m(i,j,i_surf_macro_ocn)         = sic%rough_m_ocn(i,j)
+            cmn%Cde(i,j,i_surf_macro_sic)         = sic%Cde_sic(i,j)
+            cmn%Cde(i,j,i_surf_macro_ocn)         = sic%Cde_ocn(i,j)
           endif
           ! if ocean model active
           if (flag_ocn) then
@@ -1453,6 +1462,7 @@ contains
             cmn%lh(i,j,i_surf_lnd(n))      = lnd%l2d(i,j)%flx_lh(n)
             cmn%evp(i,j,i_surf_lnd(n))         = lnd%l2d(i,j)%et(n)
             cmn%z0m(i,j,i_surf_lnd(n))         = lnd%l2d(i,j)%rough_m(n)
+            cmn%Cde(i,j,i_surf_lnd(n))         = lnd%l2d(i,j)%Ch(n)
             cmn%t_skin(i,j,i_surf_lnd(n))      = lnd%l2d(i,j)%t_skin(n)
           enddo
           cmn%dust_emis(i,j) = lnd%l2d(i,j)%dust_emis
@@ -4205,8 +4215,9 @@ contains
         cmn%sh(i,j,1) = 1.3e-3*cap_a*1.3_wp*cmn%wind(i,j,1)*(cmn%t_skin(i,j,1)-cmn%t2m(i,j,1))
         cmn%evp(i,j,1) = 1.3e-3*1.3_wp*cmn%wind(i,j,1)*(fqsat(cmn%t_skin(i,j,1),p0)-cmn%q2m(i,j,1))
         cmn%evp(i,j,1) = max(0._wp,cmn%evp(i,j,1))
-        cmn%lh(i,j,1) = Le*cmn%evp(i,j,1) 
+        cmn%lh(i,j,1) = Le*cmn%evp(i,j,1)
         cmn%lwu(i,j,1) = sigma*cmn%t_skin(i,j,1)**4
+        cmn%Cde(i,j,1) = 1.3e-3_wp
 
         ! 'ocean' heat flux, needed for slab ocean setup
         cmn%flx_ocn(i,j) = cmn%swnet(i,j,1) + cmn%lwd(i,j,1) - cmn%lwu(i,j,1) - cmn%sh(i,j,1) - cmn%lh(i,j,1) - cmn%snow(i,j,1)*Lf
@@ -4306,6 +4317,7 @@ contains
     cmn%v700 = 0._wp
     cmn%wind = 0._wp
     cmn%z0m = 0._wp
+    cmn%Cde = 1.3e-3_wp
     cmn%swd = 0._wp
     cmn%swd_vis_dir = 0._wp
     cmn%swd_nir_dir = 0._wp
@@ -4506,6 +4518,7 @@ contains
     allocate(cmn%ps(ni,nj,nsurf))
     allocate(cmn%slp(ni,nj))
     allocate(cmn%z0m(ni,nj,nsurf))
+    allocate(cmn%Cde(ni,nj,nsurf))
     allocate(cmn%swnet(ni,nj,nsurf))
     allocate(cmn%swd(ni,nj))
     allocate(cmn%swd_vis_dir(ni,nj))

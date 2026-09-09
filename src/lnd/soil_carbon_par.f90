@@ -295,7 +295,7 @@ contains
       ! cryoturbation, Koven 2009, 2013, dependence on active layer thickness
       do k=1,nlc
         if( z_c(k) .lt. alt ) then
-          diff(k) = soilc_par%diff_cryo * exp(-z(k)/soilc_par%z_diff)
+          diff(k) = soilc_par%diff_cryo * exp(-z_c(k)/soilc_par%z_diff)
         else if( z_c(k).ge.alt .and. z_c(k).lt.soilc_par%n_alt*alt ) then
           diff(k) = soilc_par%diff_cryo * (1._wp - (z_c(k)-alt)/((soilc_par%n_alt-1._wp)*alt)) * exp(-z_c(k)/soilc_par%z_diff)
         else

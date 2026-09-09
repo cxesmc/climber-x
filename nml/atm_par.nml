@@ -21,30 +21,49 @@
   !-----------------------------------------------------------
   fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter
 
+  i_fcorg  = 1                  ! how the equatorial singularity of the geostrophic PBL wind is handled.
+                                ! u2d.f90 forms ugb = -dpdy*fcorg/ra, vgb = dpdx*fcorg/ra, and
+                                !   0   fcorg = 1/fcort, the original. fcort is floored in MAGNITUDE at fcormin but keeps its sign
+                                !   1   fcorg = f/(f**2 + fcormin**2)
+
   !-----------------------------------------------------------
   ! drag and cross-isobar angle parameters 
   !-----------------------------------------------------------
   cd0_ocn = 1.3e-3              ! drag coefficient for momentum over ocean, realistic values : 1.2e-3 - 1.5e-3
   cd0_sic = 1.63e-3             ! drag coefficient for momentum over sea ice, 1.63e-3 in Large and Yaeger 2004
   i_zoro = 3                    ! parameterisation of topographic roughness
-  i_acbar = 2
+  i_acbar = 1                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
+                                ! equivalently tan(a) = R/(1+R), and differ only in R:
+                                !   1 = R = cd/sqrt(|f|), the original
+                                !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**2), phi = |f|/f_45
   acbar_max = 0.5               ! maximum cross-isobar angle
   acbar_scale = 1.              ! scaling factor of cross-isobar angle
+  c_acbar_0 = 3.1713e-3         ! equatorial denominator of the cross-isobar angle (i_acbar=2). Larger means a smaller angle everywhere, most strongly in the tropics.
+  c_acbar_f = 1.0132e-2         ! Coriolis term of the same denominator (i_acbar=2). Sets how fast the angle falls with latitude.
+  c_acbar_wind = 1.6            ! factor on the cross-isobar angle used to ROTATE the surface wind in usur.
 
   !-----------------------------------------------------------
   ! zonal mean overturning circulation parameters
   !-----------------------------------------------------------
-  i_mmc = 1                     ! meridional temperature gradients:
-                                ! 1 = assuming fixed position of cell borders
-                                ! 2 = following borders of the cells
-  c_mmc_had = 0.35              ! parameter for strength of Hadley cells
-  c_mmc_fer = 0.06 !0.05              ! parameter for strength of Ferrel cells
+  i_mmc_fer = 2                 ! Ferrel cell amplitude: 1 = meridional tslz contrast across the cell, 2 = transient eddy DSE flux
+  i_mmc_had = 1                 ! Hadley cell amplitude: 0 = sea level temperature contrast across the cell only,
+                                !                        1 = the same, additionally scaled by the inverse of the tropical
+                                !                            boundary layer humidity (moisture mass budget of the cell)
+  c_mmc_had = 0.3               ! parameter for strength of Hadley cells
+  c_mmc_q = 1.0                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
+  q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
+  c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
-  c_mmc_1 = 5.                  ! 
-  c_mmc_2 = 0.025               ! 1/K
-  c_mmc_3 = 90.                 ! K
-  c_mmc_4 = 195. !200.                ! K 
-  c_mmc_z = 750.                ! m 
+  c_mmc_1 = 5.                  ! shape factor 
+  c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
+  c_mmc_dt0 = 70.               ! deg, total Hadley width at zero tropical contrast, used only if i_mmc_2=2
+  c_mmc_dt1 = 2.0               ! deg/K, Hadley cell narrowing per K of tropical contrast, used only if i_mmc_2=2
+  i_mmc_wid = 1                 ! Hadley cell width: 0 = tropical sea level temperature contrast only,
+                                !                    1 = the same, scaled by the Held (2000) supercriticality
+                                !                        criterion (tropopause height x bulk dry stability)
+  c_mmc_dt2 = 0.25              ! exponent of the supercriticality scaling of the Hadley width, used only if i_mmc_wid=1
+  hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity, used only if i_mmc_wid=1
+  c_mmc_z = 0.                  ! m, elevation at which the zonal mean topography fully damps the meridional cells in the PBL; 0 = damping off
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
   dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
@@ -58,7 +77,9 @@
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
-  c_slp_5 = 0.2                 ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
+  l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  c_aslp_temp_tau = 0.5         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
   c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
   c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 
@@ -68,11 +89,37 @@
   !-----------------------------------------------------------
   ! additional dynamics parameters 
   !-----------------------------------------------------------
-  l_mass_com_topo = F           ! special treatment of vertical mass flux generated by orography?
+  i_mass_com_topo = 1           ! treatment of the topographic part of the column convergence, V.grad(p_s):
+                                ! 0 = not separated, corrected together with the rest of the column mass
+                                !     correction, in a band of depth dp_com below the tropopause
+                                ! 1 = corrected separately, with its own flux potential, in a terrain following
+                                !     band from dps_com_topo above the local surface up to the tropopause.
+  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com_topo=1)
+  i_mass_com_vert = 0           ! vertical placement of the NON-topographic column mass correction:
+                                ! 0 = the whole residual in a band of depth dp_com below the tropopause.
+                                ! 1 = split by wind component - one flux potential for the barotropic
+                                !     geostrophic part and one for the thermal wind - and each returned
+                                !     through the same layers, in the same proportion, that the component's
+                                !     own flux occupies at that face. The correction then carries the same
+                                !     dry static energy and moisture per unit mass as the flux that created
+                                !     the imbalance, so it is neutral in both by construction.
+                                !     The reason: the barotropic geostrophic wind is height independent
+                                !     through the troposphere, so its divergence arrives distributed by
+                                !     layer mass, whereas the thermal wind is a shear anchored at zero and
+                                !     its divergence is made aloft. Measured over 55-140E / 50-70N in JJA,
+                                !     the centroid of the divergence generation is 3.3 km for the barotropic
+                                !     part against 5.3-6.6 km for the thermal wind, while dp_com returns
+                                !     both near the tropopause.
+                                !     The topographic term keeps its own potential and band either way.
+                                ! 2 = as 0, but the band hangs below the fixed level ptop_com instead of
+                                !     below the tropopause, so that the correction is returned at the same
+                                !     pressure everywhere. Unlike 0 the band no longer follows the tropopause
+                                !     down at high latitudes, and unlike the old pcmin/pcmax pair it cannot
+                                !     collapse, since its depth is always dp_com.
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
-  c_uter_eq = 5.                ! parameter for equatorial damping of thermal wind
-  pcmin = 0.2                   ! top pressure level for compensation of mass in the column 
-  pcmax = 0.3                   ! bottom pressure level for compensation of mass in the column
+  c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
+  dp_com = 0.1                  ! depth of the band over which the column mass correction is spread (i_mass_com_vert=0,2)
+  ptop_com = 0.25               ! top of that band when i_mass_com_vert=2; a fixed level instead of the tropopause
   ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
   i_pbl = 2                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
@@ -86,18 +133,20 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 3.7e-3              ! K/m, background lapse rate
+  c_gam_1 = 3.4e-3              ! K/m, background lapse rate
   c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
-  c_gam_4 = 5.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over ocean
-  c_gam_5 = 2.e-3               ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land and ice
-  c_gam_6 = 10.e-3              ! K/m/K, slope of surface lapse rate dependence on temperature gradient over land for inversion case
-  gams_max_lnd = 10.e-3         ! K/m, maximum surface lapse rate over land and ice
-  gams_max_ocn = 7.5e-3         ! K/m, maximum surface lapse rate over ocean
-  gams_min_ocn = 0.e-3          ! K/m, minimum surface lapse rate over ocean
+  ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
+  ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
+  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime.
+  gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
+  gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
+  sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
-  i_tsl = 2 !1
-  i_tslz = 2 !1
+  i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
+                                !   0 = tsksl = tsl, the air temperature profile reduced to sea level
+                                !   1 = built from the skin temperature (c_tsl_gam, c_tsl_gam_ice,
+                                !       tsl_gams_min_lnd, tsl_gams_min_ice below)
   c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
   c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
   tsl_gams_min_lnd = 6.5e-3     ! K/m
@@ -119,22 +168,17 @@
   !-----------------------------------------------------------
   ! relative humidity height scale parameters
   !-----------------------------------------------------------
-  c_hrs_1 = 2500.               ! m
+  c_hrs_1 = 3000.               ! m
   c_hrs_2 = 200.                ! s/m
   c_hrs_3 = 2.4                 ! 
   c_hrs_4 = 3000.               ! m
   c_hrs_5 = 1000.               ! m
   c_hrs_6 = 0.7                 !
-  rh_max = 0.95                 ! maximum relative humidity
-  rskin_ocn_min = 0.7 !0.
+  rh_max_ocn = 0.9              ! maximum relative humidity over ocean/sea ice
+  rh_max_lnd = 0.8              ! maximum relative humidity over land/ice sheets
   rh_strat = 0.05               ! relative humidity in stratosphere
-
-  !-----------------------------------------------------------
-  ! water residence time parameters
-  !-----------------------------------------------------------
-  c_wrt_1 = 1000.                 ! days, residence time of water in the atmosphere over ocean
-  c_wrt_2 = 50.                   ! days, residence time of water in the atmosphere over land
-  c_wrt_3 = 0. !0.005                 ! 
+  z_q2 = 200.                   ! m, depth of the layer the surface layer mixes with, NON-ocean types
+  z_q2_ocn = 1300.              ! m, same over open ocean
 
   !-----------------------------------------------------------
   ! synoptic kinetic energy parameteres
@@ -144,19 +188,21 @@
   c_syn_3 = 8.e-7               ! 1/m, background synoptic energy dissipation rate
   c_syn_4 = 1.e-4               ! 1/m, synoptic energy dissipation parameter
   c_syn_5 = 2.3e5               ! effective macrodiffusive coefficient parameter
-  c_syn_6 = 0.7                 ! scaling from synoptic kinetic energy to synoptic wind
-  c_syn_7 = 1.e-3               ! scaling for synoptic vertical velocity at ~700 hPa
-  c_syn_8 = 0. !1.
+  c_syn_6 = 0.6                 ! scaling from synoptic kinetic energy to synoptic wind
+  c_syn_7 = 1.6e-3              ! scaling for synoptic vertical velocity at ~700 hPa, wsyn = c_syn_7*sqrt(sam)*S(lat).
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
-  c_wind_ele = 0.               ! m/s / m, elevation gradient of surface wind speed
-  c_diff_dse = 2.e5             ! m, factor for macro-diffusion of dry static energy
-  i_diff_wtr = 1                ! 
-  c_diff_wtr = 1.6e4            ! s, factor for macro-diffusion of moisture
+  tau_fac = 1.2                 ! scaling factor on the surface wind stress taux/tauy
+  c_diff = 2.e5                 ! m, factor for macro-diffusion
+  c_diff_dse_eq = 3.            ! amplification of the ZONAL dry static energy diffusivity at the equator, tapering as exp(-(lat/fi_diff_dse_eq)^2). 1 = off.
+  fi_diff_dse_eq = 15.          ! deg, e-folding latitude of the above
 
   !-----------------------------------------------------------
-  ! diffusion and stability parameters 
+  ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
+  i_adv = 1                     ! advection scheme:
+                                ! 1 = first order upstream (donor cell)
+                                ! 2 = flux corrected transport (Zalesak 1979)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
   c_diffx_pol = 2.              ! implicit scheme: max zonal diffusion number for the polar limiter on the zonal diffusivities; large value = no limit
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr) to suppress grid-scale checkerboard; 0 = off
@@ -165,15 +211,21 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.45                !
-  c_cld_2 = 0.5                 !
-  c_cld_3 = 200.                !
+  c_cld_1 = 0.54                !
+  c_cld_2 = 0.54                !
+  c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
-  c_cld_5 = 0.75                !
-  c_cld_55 = 0.                 !
-  c_cld_6 = 0.1                 !
+  i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
+  q_cld_low = 0.005
+  c_cld_5 = 1.0                 !
+  c_cld_5_sc = 2.               ! i_cld_low=4 only: c_cld_5 for the warm subtropical stratocumulus regime (qam above c_cld_8)
+  c_cld_6 = 0.1                 ! half-width of the inversion window (r2a-ram)
+  c_cld_60_ocn = 0.0            ! centre of the inversion window (r2a-ram) over ocn+sic+lake
+  c_cld_60_lnd = 0.1            ! centre of the inversion window (r2a-ram) over lnd
   c_cld_7 = 0.003               ! kg/kg, critical specific humidity for 'freezedry' reduction in cloud fraction
-  l_cld_low_ice = F
+  c_cld_8 = 0.008               ! kg/kg, i_cld_low=4 only: qam threshold above which warm columns suppress low cloud
+  c_cld_9 = 0.002               ! kg/kg, i_cld_low=4 only: e-folding scale of the warm-column suppression
+  c_cld_10 = 0.00025            ! kg/kg, i_cld_low=4 only: width of the ramp from c_cld_5 to c_cld_5_sc across the c_cld_8 threshold. Keep it well below c_cld_9 
   cld_max = 0.95                ! maximum cloud fraction
   c_woro = 1e-5                 ! factor for orographic vertical velocity
   c_weff = 0.25                 ! factor for effective vertical synoptic and orographic velocity for cloud fraction
@@ -181,8 +233,10 @@
   !-----------------------------------------------------------
   ! cloud height parameters
   !-----------------------------------------------------------
+  c_hcld_low = 1500.            ! m, height of the low cloud top above the surface
+  c_hcld_dz_min = 1000.         ! m, minimum thickness of the radiating cloud slab in the longwave column (lwr.f90).
   c_hcld_1 = 2000.              !
-  c_hcld_2 = 0.27               !
+  c_hcld_2 = 0.3                !
   c_hcld_3 = 200.               !
   c_hcld_4 = 0.                 !
 
@@ -193,8 +247,9 @@
   !-----------------------------------------------------------
   c_clot_1 = 5.                 ! 
   c_clot_2 = 30.                !
-  c_clot_3 = 2.                 !
+  c_clot_3 = 1.5                !
   c_clot_4 = 0.5                !
+  c_clot_5 = 0.4                ! weight of the dynamical factor fweff in the cloud optical thickness, 0 = off
 
   !-----------------------------------------------------------
   ! shortwave radiation parameters
@@ -202,7 +257,7 @@
   l_sct_0  = T                  !
   l_alb_0  = F                  !
   f_ice_pow = 1.                !
-  r_scat   = 0.17               !
+  r_scat   = 0.15               !
   a1_w     = 0.21               !
   b1_w     = 6.27               !
   b2_w     = 0.0267             !
@@ -249,6 +304,7 @@
   sigma_so4 = 3.5e3             ! m2/kg, scattering efficiency for sulfate aerosols (Bauer et al., 2008)
   r_so4 = 0.17e-6               ! m, sulfate aerosol radius (0.1-0.15 microm in Bauer 2008)
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
+  N_so4_nat_lnd = 300e6         ! m^-3, natural cloud condensation nuclei concentration over land; = N_so4_nat is an exact no-op
 
   !-----------------------------------------------------------
   ! smoothing options
@@ -259,8 +315,6 @@
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
   nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  nsmooth_aslp_eq = 5           ! spatial smoothing of azonal sea level pressure around the equator
-  nj_eq = 5                     ! latitudinal extent of spatial smoothing of azonal sea level pressure around the equator
   nsmooth_aslp_topo = 4         ! spatial smoothing of azonal sea level pressure from topographic waves
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle
   nsmooth_gam = 2               ! spatial smoothing of lapse rate 

@@ -12,7 +12,7 @@ obj_version = $(patsubst %, $(objdir)/%, $(tmp_version) )
 # atmospheric model related source files
 dir_atm = $(srcdir)/atm/
 files_atm = atm_params.f90 atm_def.f90 atm_grid.f90 smooth_atm.f90 \
-						adifa.f90 diffuse_impl.f90 synop.f90 wvel.f90 clouds.f90 vesta.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
+						adv_fct.f90 adifa.f90 diffuse_impl.f90 synop.f90 wvel.f90 vesta.f90 clouds.f90 crisa.f90 slp.f90 u2d.f90 u3d.f90 \
 						time_step.f90 lwr.f90 swr.f90 feedbacks.f90 rad_kernels.f90 dust.f90 \
 						atm_model.f90 atm_out.f90
 tmp_atm = $(patsubst %.f90, %.o, $(files_atm) )
@@ -140,7 +140,7 @@ files_lnd = lnd_grid.f90 wiso_params.f90 lnd_params.f90 lnd_def.f90 \
 	          soil_par.f90 ice_par.f90 lake_par.f90 lake_rho.f90 shelf_par.f90 surface_par_lnd.f90 veg_par.f90 \
 	          soil_carbon_par.f90 shelf_carbon_par.f90 ice_carbon_par.f90 lake_carbon_par.f90 \
             photosynthesis.f90 ebal_veg.f90 ebal_ice.f90 ebal_lake.f90 surface_hydro.f90 water_deficit.f90 \
-            soil_temp.f90 ice_temp.f90 shelf_temp.f90 lake_temp.f90 lake_convection.f90 sublake_temp.f90 soil_hydro.f90 water_check.f90 \
+            soil_temp.f90 ice_temp.f90 shelf_temp.f90 lake_temp.f90 lake_convection.f90 sublake_temp.f90 soil_hydro.f90 groundwater.f90 water_check.f90 \
 	          dyn_veg.f90 soil_carbon.f90 peat_carbon.f90 shelf_carbon.f90 ice_carbon.f90 lake_carbon.f90 \
 	          carbon_trans.f90 n2o_emis.f90 dust_emis.f90 weathering.f90 carbon_export.f90 init_cell.f90 end_cell.f90 carbon_inventory.f90 carbon_flx_atm_lnd.f90 \
             lnd_model.f90 lnd_out.f90
@@ -320,7 +320,7 @@ $(objdir)/%.o : $(dir_utils)%.f90
 
 #######################
 # atmosphere rules ####
-$(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/adifa.o \
+$(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/adifa.o $(objdir)/adv_fct.o \
 	$(objdir)/diffuse_impl.o \
 	$(objdir)/synop.o $(objdir)/smooth_atm.o $(objdir)/wvel.o $(objdir)/clouds.o $(objdir)/vesta.o \
 	$(objdir)/crisa.o $(objdir)/slp.o $(objdir)/u2d.o $(objdir)/u3d.o $(objdir)/time_step.o \
@@ -340,7 +340,10 @@ $(objdir)/atm_params.o : $(dir_atm)atm_params.f90 $(objdir)/constants.o $(objdir
 $(objdir)/atm_def.o : $(dir_atm)atm_def.f90 $(objdir)/atm_params.o $(objdir)/atm_grid.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/adv_fct.o : $(dir_atm)adv_fct.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/adv_fct.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/diffuse_impl.o : $(dir_atm)diffuse_impl.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o
@@ -352,7 +355,7 @@ $(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid
 $(objdir)/wvel.o : $(dir_atm)wvel.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/vesta.o : $(dir_atm)vesta.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
@@ -522,7 +525,7 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 	$(objdir)/surface_par_lnd.o $(objdir)/ebal_veg.o $(objdir)/ebal_ice.o $(objdir)/ebal_lake.o \
 	$(objdir)/soil_par.o $(objdir)/ice_par.o $(objdir)/shelf_par.o $(objdir)/lake_par.o $(objdir)/lake_rho.o \
 	$(objdir)/soil_temp.o $(objdir)/ice_temp.o $(objdir)/shelf_temp.o $(objdir)/lake_temp.o $(objdir)/lake_convection.o $(objdir)/sublake_temp.o \
-	$(objdir)/surface_hydro.o $(objdir)/water_deficit.o $(objdir)/soil_hydro.o $(objdir)/water_check.o \
+	$(objdir)/surface_hydro.o $(objdir)/water_deficit.o $(objdir)/soil_hydro.o $(objdir)/groundwater.o $(objdir)/water_check.o \
 	$(objdir)/veg_par.o $(objdir)/photosynthesis.o $(objdir)/dyn_veg.o \
 	$(objdir)/soil_carbon.o $(objdir)/peat_carbon.o $(objdir)/shelf_carbon.o $(objdir)/ice_carbon.o $(objdir)/lake_carbon.o \
 	$(objdir)/soil_carbon_par.o $(objdir)/shelf_carbon_par.o $(objdir)/ice_carbon_par.o $(objdir)/lake_carbon_par.o \
@@ -530,7 +533,7 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 	$(objdir)/carbon_inventory.o $(objdir)/carbon_flx_atm_lnd.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90
+$(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90 $(objdir)/precision.o $(objdir)/control.o $(objdir)/climber_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/wiso_params.o : $(dir_lnd)wiso_params.f90 $(objdir)/precision.o
@@ -575,7 +578,7 @@ $(objdir)/lake_rho.o : $(dir_lnd)lake_rho.f90 $(objdir)/lnd_grid.o $(objdir)/lnd
 $(objdir)/shelf_par.o : $(dir_lnd)shelf_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o 
+$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/photosynthesis.o : $(dir_lnd)photosynthesis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
@@ -615,6 +618,9 @@ $(objdir)/sublake_temp.o : $(dir_lnd)sublake_temp.f90 $(objdir)/lnd_grid.o $(obj
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/soil_hydro.o : $(dir_lnd)soil_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/wiso_params.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/groundwater.o : $(dir_lnd)groundwater.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/water_check.o : $(dir_lnd)water_check.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o

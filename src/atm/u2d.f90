@@ -29,7 +29,7 @@ module u2d_mod
   use constants, only : g
   use atm_params, only : ra, i_kata_wind, h_kata
   use atm_grid, only : im, imc, jm, jmc, nm, dxt, dy
-  use atm_grid, only : fcort, fcorta, fcorua, signf
+  use atm_grid, only : fcorg, fcorta, fcorua, signf
   !$use omp_lib
 
   implicit none
@@ -77,8 +77,10 @@ contains
         dpdx = 0.5_wp*(slp(ipl,j)-slp(imi,j))/dxt(j) 
         dpdy = 0.5_wp*(slp(i,jmi)-slp(i,jpl))/dy  
 
-        ugb(i,j) = -dpdy/(fcort(j)*ra)
-        vgb(i,j) =  dpdx/(fcort(j)*ra)
+        ! fcorg is 1/fcort for i_fcorg=0 and the regular f/(f**2+fcormin**2) for i_fcorg=1.
+        ! See the fcorg block in atm_grid.f90.
+        ugb(i,j) = -dpdy*fcorg(j)/ra
+        vgb(i,j) =  dpdx*fcorg(j)/ra
 
         !------------------------------------------------------
         ! Ageostrophic wind components in PBL (on U-points)

@@ -624,7 +624,9 @@ contains
       sic%rough_h_ocn = 1.e-3_wp
       sic%rough_h_sic = 1.e-3_wp
       sic%Cdh_ocn     = 1.e-3_wp
-      sic%Cdh_sic     = 1.e-3_wp 
+      sic%Cdh_sic     = 1.e-3_wp
+      sic%Cde_ocn     = 1.e-3_wp
+      sic%Cde_sic     = 1.e-3_wp
       sic%flx_sh  = 0._wp
       sic%flx_lwu = sigma*T0**4
       sic%flx_lh  = 0._wp

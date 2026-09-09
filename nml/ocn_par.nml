@@ -69,7 +69,7 @@
  !-------------------------------------------------------------------------------------------
  adrag = 4.                   ! days, inverse minimum drag
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
- drag_topo_fac = 3.0          ! factor by which to increase drag in shallow water
+ drag_topo_fac = 2.5          ! factor by which to increase drag in shallow water
  drag_topo_scale_eq = 0.
  z_drag_shallow = 1000.       ! m, depth of shallow water regions below which to increase adrag by factor drag_topo_fac
  drag_frac_fac = 0.           ! factor by which to increase drag where small ocean fraction
@@ -152,9 +152,9 @@
  !-------------------------------------------------------------------------------------------
  ! salinity/runoff settings 
  !-------------------------------------------------------------------------------------------
- n_cells_dist_runoff = 3      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
- n_cells_dist_calving = 3     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
- n_cells_dist_weath = 3       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_runoff = 5      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_calving = 5     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
+ n_cells_dist_weath = 5       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)
  l_fw_corr = T                ! correct freshwater flux to ensure net zero freshwater flux into ocean?
  l_fw_melt_ice_sep = F        ! treat freshwater to the ocean originating from ice sheet melt separately? 
                               ! If ==T, fw is applied at the surface and salinity conservation is ensured by compensating uniformely over the whole ocean
@@ -170,7 +170,7 @@
  l_brines = F                 ! apply special treatment of brines during sea ice formation?
                               ! when true, a fraction frac_brines of the rejected brine salt is removed from the surface and
                               ! distributed thickness-weighted from the surface down to the neutral-buoyancy depth
- frac_brines = 0.
+ frac_brines = 1.0
  drho_brines_coast = 0.       ! density overshoot [kg/m3] for the brine plume in coastal cells: there the plume overshoots the neutral-buoyancy level until the ambient
                               ! density exceeds the parcel density by drho_brines_coast
  relax_run = 0.               ! relaxation factor for runoff from ice sheets: 0 = no relaxation, -> 1 = strong relaxation

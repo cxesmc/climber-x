@@ -30,6 +30,7 @@ module atm_model
     use constants, only : T0, fqsat, pi, frac_vu
     use timer, only: nday_year, doy, time_soy_atm, time_eoy_atm
     use timer, only : time_feedback_save, time_feedback_analysis
+    use timer, only : time_feedback_save_tg, time_feedback_analysis_tg
     use timer, only : monthly2daily
     use climber_grid, only: lon, lat 
     use control, only: restart_in_dir, atm_restart, flag_dust
@@ -41,17 +42,18 @@ module atm_model
     use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
-    use atm_params, only : l_diff_impl
+    use atm_params, only : l_diff_impl, i_adv
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
-    use atm_grid, only : dxt, dy, fit, sqr
+    use atm_grid, only : dxt, dy, fit, sqr, dplt
     use atm_params, only : tstep
     use constants, only : pi
     use atm_def, only : atm_class
+    use adv_fct_mod, only : fct_acc, fct_diag_reset
 
     use lw_radiation_mod, only : lw_radiation
     use sw_radiation_mod, only : sw_radiation
@@ -66,8 +68,8 @@ module atm_model
     use adifa_mod, only : adifa
     use diffuse_impl_mod, only : diffuse_impl
     use dust_mod, only : dust
-    use time_step_mod, only : time_step    
-    use feedbacks_mod, only : feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write
+    use time_step_mod, only : time_step, dtcol_prev_unset
+    use feedbacks_mod, only : feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write, feedback_tg
     use rad_kernels_mod, only : rad_kernels_type, rad_kernels_init, rad_kernels, rad_kernels_write
     use smooth_atm_mod, only : smooth2, shapiro2dx
     !$  use omp_lib
@@ -102,6 +104,7 @@ contains
     !$ real(wp) :: time1,time2
 
     real(wp), dimension(im,jm) :: prc_save
+    real(wp), dimension(im,jm,nm) :: q2_lag   ! q2 as it was when the surface models made evp
 
     
     atm%eke = wtm0(doy)*eke_mon(:,:,m0(doy)) + wtm1(doy)*eke_mon(:,:,m1(doy)) 
@@ -187,6 +190,12 @@ contains
     !-------------------------------------------------
     ! feedback analysis
     !-------------------------------------------------
+    ! accumulate the global mean temperature of the two climate states over the last
+    ! nyear_feedback_avg years of each phase. Must come before feedback_analysis, which
+    ! forms the temperature difference on the last day of the run.
+    if (l_feedbacks .and. time_feedback_save_tg)     call feedback_tg(atm%t2, atm%frst, 1, fb)
+    if (l_feedbacks .and. time_feedback_analysis_tg) call feedback_tg(atm%t2, atm%frst, 2, fb)
+
     if (l_feedbacks .and. time_feedback_analysis) then 
       ! feedback analysis
       call feedback_analysis(fb, atm%frst, atm%zs, atm%zsa, atm%htrop, atm%hcld, atm%tskin, atm%t2, atm%ra2, & 
@@ -221,7 +230,10 @@ contains
     !-------------------------------------------------
     ! zonal sea level pressure and total sea level pressure
     !$ time1 = omp_get_wtime()
-    call zslp(atm%zsa, atm%sin_cos_acbar, atm%tsl, atm%aslp, & ! in
+    ! fdydse and t3 are from the previous step: adifa and vesta run further down, see
+    ! slp_mod::zslp.
+    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, atm%zsa, & ! in
+      atm%fdydse, atm%t3, atm%q3, atm%htrop, atm%ttrop, & ! in
       atm%slp, atm%had_fi, atm%had_width)  ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'zslp',(time2-time1)
@@ -237,11 +249,17 @@ contains
 
     ! fast time step
 
+    ! q2 at the moment evp was produced
+    q2_lag = atm%q2
+
     ! initialize precipitation to be cumulated over fast time steps
     prc_save = atm%prc
     atm%prc  = 0._wp
     atm%prcw = 0._wp
     atm%prcs = 0._wp
+    ! the diagnostic split too, so that it stays consistent with prc
+    atm%prc_conv = 0._wp
+    atm%prc_over = 0._wp
 
     do niter=1,nstep_fast
 
@@ -250,8 +268,9 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, & ! in
-        atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%uz500, &  ! out   
-        atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac)  ! out
+        atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%w3_nt, atm%uz500, &  ! out   
+        atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac, atm%fac_topo, atm%psi, atm%psi_topo, &  ! out
+        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'u3d1',(time2-time1)*nstep_fast
       !$ if(l_write_timer .and. niter.eq.2) print *,'u3d2',(time2-time1)*nstep_fast
@@ -273,7 +292,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call wvel(atm%w3, atm%wsyn, atm%winda, atm%sigoro, &    ! in
+        call wvel(atm%w3_nt, atm%wsyn, atm%winda, atm%sigoro, &    ! in
           atm%wcld, atm%woro, atm%weff)   ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'wvel',time2-time1
@@ -284,8 +303,9 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%rskina, atm%wcon, atm%htrop, atm%so4, &    ! in
-          atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%clot) ! out
+        call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%r2a, atm%q2a, atm%wcon, atm%htrop, atm%so4, &    ! in
+          atm%tam, atm%gams, atm%gamb, atm%gamt, &    ! in
+          atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%hcld_rh, atm%hcld_low, atm%clot) ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'cld',time2-time1
       endif
@@ -297,7 +317,7 @@ contains
 
       ! lapse rate and height scales of moisture and dust
       !$ time1 = omp_get_wtime()
-      call hscales(atm%frst, atm%f_ice_lake, atm%ra2a, atm%rb_sur, atm%tam, atm%tskin, atm%qam, atm%wcon, atm%wcld, &  ! in
+      call hscales(atm%frst, atm%ra2a, atm%sha, atm%tskina, atm%tam, atm%qam, atm%wcon, atm%wcld, &  ! in
         atm%had_fi, atm%had_width, &   ! in
         atm%gams, atm%gamb, atm%gamt, atm%hrm, &    ! inout
         atm%hqeff, atm%hdust)    ! out
@@ -307,7 +327,7 @@ contains
       ! vertical profiles of temperature, humidity and dust
       !$ time1 = omp_get_wtime()
       call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
-        atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
+        atm%A_trop, atm%W_strat, atm%dtcol, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'vesta',(time2-time1)*nstep_fast
 
@@ -329,10 +349,10 @@ contains
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
         call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
-          atm%zsa, atm%cda, atm%cd, atm%epsa, atm%cos_acbar, &    ! in
+          atm%zsa, atm%cda, atm%cd, atm%epsa, &    ! in
           atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
-          atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst, atm%wsyn)    ! out
+          atm%diffx, atm%diffy, atm%wsyn)    ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'synop',time2-time1
       endif
@@ -341,13 +361,16 @@ contains
       ! advection-diffusion
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call adifa(atm%fax, atm%fay, atm%tp, atm%q3, atm%d3, atm%cam, &
-        atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst,  &   ! in
+      call adifa(atm%fax, atm%fay, &
+        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, &   ! in
+        atm%tp, atm%q3, atm%d3, atm%cam, &
+        atm%diffx, atm%diffy, &   ! in
         atm%convdse, atm%convwtr_adv, atm%convwtr_dif, atm%convdst, atm%convco2, &   ! out 
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
-        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2)   ! out
+        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &  ! out
+        atm%convdse_psi, atm%convdse_psi_topo)             ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'adifa',(time2-time1)*nstep_fast
 
@@ -357,7 +380,7 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       if (l_diff_impl) then
-        call diffuse_impl(atm%diffxdse, atm%diffxwtr, atm%diffxdst, atm%diffydse, atm%diffywtr, atm%diffydst, &   ! in
+        call diffuse_impl(atm%diffx, atm%diffy, &   ! in
           atm%ra2a, atm%hdust, atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &                                  ! in
           atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &                                                       ! in
           atm%tam, atm%wcon, atm%dam, atm%cam, &                                                                  ! inout
@@ -370,6 +393,12 @@ contains
       ! grid-scale (2dx) checkerboard control on the convergences
       !-------------------------------------------------
       if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdse, sqr, c_filt_conv, nord_filt_conv)
+      ! the same linear filter on the diagnostic parts, so that they stay comparable
+      ! with the filtered convdse they are a part of
+      if (c_filt_conv.gt.0._wp) then
+        call shapiro2dx(atm%convdse_psi, sqr, c_filt_conv, nord_filt_conv)
+        call shapiro2dx(atm%convdse_psi_topo, sqr, c_filt_conv, nord_filt_conv)
+      endif
       if (l_diff_impl) then
         ! implicit: filter the advective convergence AND the implicit diffusive convergence. 
         if (c_filt_conv.gt.0._wp) then
@@ -387,20 +416,24 @@ contains
       ! time step, prognostic equations for temperature, humidity and dust
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%slope, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%sam, atm%eke, &   ! in
-        atm%tskin, atm%convdse, atm%rb_atm, atm%rb_sur, atm%sha, atm%gams, atm%gamb, atm%gamt, &     ! in
+      call time_step(atm%frst, atm%zs, atm%zsa, atm%ps, atm%psa, atm%ra2a, atm%evpa, atm%convwtr, atm%convwtr_adv, atm%wcon, atm%A_trop, atm%W_strat, atm%dtcol, atm%eke, &   ! in
+        atm%tskin, atm%convdse, atm%rb_atm, atm%sha, atm%gams, atm%gamb, atm%gamt, atm%hrm, atm%htrop, &     ! in
+        atm%evp, atm%wind, atm%Cde, q2_lag, &     ! in
         atm%convdst, atm%dust_emis, atm%dust_dep, atm%hdust, &     ! in
         atm%convco2, atm%co2flx, &     ! in
-        atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_wcon, atm%prc_over, &   ! inout
-        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%rskina, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
+        atm%dtcol_prev, &   ! inout
+        atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_over, &   ! inout
+        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'time_Step',(time2-time1)*nstep_fast
 
       if (atm%error) exit
 
-      ! CFL / diffusion stability diagnostic (per latitude; prints running max on the last sub-step)
-      if (l_write_timer) call cfl_diag(niter.eq.nstep_fast, atm%u3, atm%v3, &
-        atm%diffxdse, atm%diffydse, atm%diffxwtr, atm%diffywtr, atm%diffxdst, atm%diffydst)
+      ! CFL / diffusion stability diagnostic (per latitude; prints running max on the last sub-step).
+      ! Always on with the flux corrected transport: its low order leg is donor cell, so the
+      ! monotonicity of the limiter rests on the mass Courant number staying below 1.
+      if (l_write_timer .or. i_adv.eq.2) call cfl_diag(l_write_timer.and.niter.eq.nstep_fast, atm%u3, atm%v3, atm%fax, atm%fay, &
+        atm%diffx, atm%diffy)
 
     enddo
 
@@ -408,6 +441,8 @@ contains
     atm%prc  = atm%prc/nstep_fast
     atm%prcw = atm%prcw/nstep_fast
     atm%prcs = atm%prcs/nstep_fast
+    atm%prc_conv = atm%prc_conv/nstep_fast
+    atm%prc_over = atm%prc_over/nstep_fast
 
     !-------------------------------------------------
     ! save for feedback analysis
@@ -430,51 +465,125 @@ contains
   !   Purpose    :  per-latitude running-max advective Courant and diffusion
   !              :  stability numbers, to find which rows limit the fast time step
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine cfl_diag(do_print, u3, v3, diffxdse, diffydse, diffxwtr, diffywtr, diffxdst, diffydst)
+  subroutine cfl_diag(do_print, u3, v3, fax, fay, diffx, diffy)
 
     implicit none
 
     logical,  intent(in) :: do_print
     real(wp), intent(in) :: u3(:,:,:), v3(:,:,:)
-    real(wp), intent(in) :: diffxdse(:,:), diffydse(:,:)
-    real(wp), intent(in) :: diffxwtr(:,:), diffywtr(:,:)
-    real(wp), intent(in) :: diffxdst(:,:), diffydst(:,:)
+    real(wp), intent(in) :: fax(:,:,:), fay(:,:,:)
+    real(wp), intent(in) :: diffx(:,:), diffy(:,:)
 
     integer :: i, j, k
-    real(wp) :: umax, vmax, dxmax, dymax
+    real(wp) :: umax, vmax, dxmax, dymax, cimax, comax, fin, fout, mass
+    real(wp) :: rdse, rwtr, fbad
+    logical  :: do_print_fct
     real(wp), save :: cx_max(jm) = 0._wp   ! running-max zonal advective Courant per latitude
     real(wp), save :: cy_max(jm) = 0._wp   ! running-max meridional advective Courant
+    real(wp), save :: ci_max(jm) = 0._wp   ! running-max INFLOW mass Courant, dt*(mass entering the cell)/(cell mass)
+    real(wp), save :: co_max(jm) = 0._wp   ! running-max OUTFLOW mass Courant, for reference only
     real(wp), save :: dx_max(jm) = 0._wp   ! running-max zonal diffusion number
     real(wp), save :: dy_max(jm) = 0._wp   ! running-max meridional diffusion number
+    real(wp), save :: cm_warned = 1._wp    ! largest inflow mass Courant already warned about
+    integer,  save :: ncall = 0            ! sub-steps since the FCT diagnostic was last reported
+    integer,  save :: nrep  = 0            ! annual FCT reports issued so far
 
     ! update the per-latitude running maxima from the current sub-step
     do j=1,jm
-      umax = 0._wp; vmax = 0._wp; dxmax = 0._wp; dymax = 0._wp
+      umax = 0._wp; vmax = 0._wp; dxmax = 0._wp; dymax = 0._wp; cimax = 0._wp; comax = 0._wp
       do i=1,im
         do k=1,km
           umax = max(umax, abs(u3(i,j,k)))
           vmax = max(vmax, abs(v3(i,j,k)))
+          ! mass entering cell (i,j,k) through its four faces; this, not u*dt/dx and not
+          ! the outflow, is the condition the advective-form donor-cell update (and with
+          ! it the FCT limiter) actually needs. The outflow is carried alongside because
+          ! the two differ by the level's horizontal mass divergence, which is large.
+          mass = dplt(i,j,k)*sqr(i,j)
+          if (mass.gt.0._wp) then
+            fin  = max(0._wp,fax(i,j,k)) + max(0._wp,-fax(i+1,j,k)) &
+                 + max(0._wp,fay(i,j+1,k)) + max(0._wp,-fay(i,j,k))
+            fout = max(0._wp,-fax(i,j,k)) + max(0._wp,fax(i+1,j,k)) &
+                 + max(0._wp,-fay(i,j+1,k)) + max(0._wp,fay(i,j,k))
+            cimax = max(cimax, tstep*fin/mass)
+            comax = max(comax, tstep*fout/mass)
+          endif
         enddo
-        dxmax = max(dxmax, diffxdse(i,j), diffxwtr(i,j), diffxdst(i,j))   ! worst diffusivity over tracers
-        dymax = max(dymax, diffydse(i,j), diffywtr(i,j), diffydst(i,j))
+        dxmax = max(dxmax, diffx(i,j))   ! worst diffusivity over tracers
+        dymax = max(dymax, diffy(i,j))
       enddo
       cx_max(j) = max(cx_max(j), umax*tstep/dxt(j))
       cy_max(j) = max(cy_max(j), vmax*tstep/dy)
+      ci_max(j) = max(ci_max(j), cimax)
+      co_max(j) = max(co_max(j), comax)
       dx_max(j) = max(dx_max(j), dxmax*tstep/dxt(j)**2)
       dy_max(j) = max(dy_max(j), dymax*tstep/dy**2)
     enddo
+
+    ! with FCT, warn as soon as the inflow mass Courant passes 1 - beyond it the low
+    ! order leg is no longer a convex combination and the limiter silently falls back
+    ! to upstream in the offending cells. Reported once per 5% increase, not every step.
+    if (i_adv.eq.2 .and. maxval(ci_max).gt.cm_warned) then
+      print '(a,f7.2,a,i3,a)', ' WARNING atm FCT: inflow mass Courant number =',maxval(ci_max), &
+        ' > 1 at j =',maxloc(ci_max,1),' ; those cells revert to upstream. Increase nstep_fast.'
+      cm_warned = maxval(ci_max)*1.05_wp
+    endif
+
+    ! how much of the available antidiffusion the limiter actually lets through:
+    ! 1 is centred differencing, 0 is plain upstream, so 1-r is the share of the
+    ! upstream numerical diffusion that FCT has failed to remove. Reported once a
+    ! year, then the accumulators are reset. Part of the timer output: adifa only
+    ! fills fct_acc when l_write_timer is set. The mass Courant warning above is
+    ! not gated - it is the safety net that says the limiter is degrading.
+    ncall = ncall + 1
+    do_print_fct = l_write_timer .and. i_adv.eq.2 .and. ncall.ge.nday_year*nstep_fast
+    if (do_print_fct) then
+      rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+      if (sum(fct_acc(2,:,1)).gt.0._wp) rdse = sum(fct_acc(1,:,1))/sum(fct_acc(2,:,1))
+      if (sum(fct_acc(2,:,2)).gt.0._wp) rwtr = sum(fct_acc(1,:,2))/sum(fct_acc(2,:,2))
+      if (sum(fct_acc(4,:,1)).gt.0._wp) fbad = sum(fct_acc(3,:,1))/sum(fct_acc(4,:,1))
+      print '(a,f6.3,a,f6.3,a,f6.2,a)', ' atm FCT (annual mean): antidiffusion admitted, dse =',rdse, &
+        ' , water =',rwtr,' ; cells at the CFL fallback =',100._wp*fbad,' %'
+      ! the latitudinal structure once, in the first year: enough to tell a fallback
+      ! confined to a few orographic columns from one that has spread over the domain
+      if (nrep.eq.0) then
+        print '(a)', '       j   lat[deg]      C_in     C_out      r_dse     r_wtr    fCFL[%]'
+        do j=1,jm
+          rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+          if (fct_acc(2,j,1).gt.0._wp) rdse = fct_acc(1,j,1)/fct_acc(2,j,1)
+          if (fct_acc(2,j,2).gt.0._wp) rwtr = fct_acc(1,j,2)/fct_acc(2,j,2)
+          if (fct_acc(4,j,1).gt.0._wp) fbad = 100._wp*fct_acc(3,j,1)/fct_acc(4,j,1)
+          print '(i8,f9.1,5f11.3)', j, fit(j)*180._wp/pi, ci_max(j), co_max(j), rdse, rwtr, fbad
+        enddo
+        print *
+      endif
+      nrep = nrep + 1
+      call fct_diag_reset
+      ncall = 0
+    endif
 
     if (.not.do_print) return
 
     print *
     print '(a,es10.3,a)', ' ===== atm CFL / diffusion stability (running max over run), tstep =',tstep,' s ====='
     print '(a)',          '   donor-cell advection stable if Courant < 1 ; explicit diffusion stable if (Dx+Dy) < 0.5'
-    print '(a,f7.2,a,i3)','   global max Courant_x =',maxval(cx_max),'   at j =',maxloc(cx_max,1)
-    print '(a,f7.2,a,i3)','   global max Courant_y =',maxval(cy_max),'   at j =',maxloc(cy_max,1)
-    print '(a,f7.3,a,i3)','   global max (Dx+Dy)   =',maxval(dx_max+dy_max),'   at j =',maxloc(dx_max+dy_max,1)
-    print '(a)',          '       j   lat[deg]    Cadv_x    Cadv_y     Ddif_x    Ddif_y     Dx+Dy'
+    print '(a)',          '   C_in is the condition the FCT limiter needs; C_out is shown only to expose the'
+    print '(a)',          '   per-level horizontal mass divergence, which is balanced by the vertical mass flux.'
+    print '(a)',          '   r_dse, r_wtr = share of the available antidiffusion admitted (1 = centred, 0 = upstream),'
+    print '(a)',          '   fCFL = share of cells whose limiter was zeroed by the CFL fallback; all three annual means.'
+    print '(a,f7.2,a,i3)','   global max Courant_x   =',maxval(cx_max),'   at j =',maxloc(cx_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_y   =',maxval(cy_max),'   at j =',maxloc(cy_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_in  =',maxval(ci_max),'   at j =',maxloc(ci_max,1)
+    print '(a,f7.2,a,i3)','   global max Courant_out =',maxval(co_max),'   at j =',maxloc(co_max,1)
+    print '(a,f7.3,a,i3)','   global max (Dx+Dy)     =',maxval(dx_max+dy_max),'   at j =',maxloc(dx_max+dy_max,1)
+    print '(a)',          '       j   lat[deg]    Cadv_x    Cadv_y      C_in     C_out     Ddif_x    Ddif_y     Dx+Dy      r_dse     r_wtr    fCFL[%]'
     do j=1,jm
-      print '(i8,f9.1,5f11.3)', j, fit(j)*180._wp/pi, cx_max(j), cy_max(j), dx_max(j), dy_max(j), dx_max(j)+dy_max(j)
+      rdse = 0._wp; rwtr = 0._wp; fbad = 0._wp
+      if (fct_acc(2,j,1).gt.0._wp) rdse = fct_acc(1,j,1)/fct_acc(2,j,1)
+      if (fct_acc(2,j,2).gt.0._wp) rwtr = fct_acc(1,j,2)/fct_acc(2,j,2)
+      if (fct_acc(4,j,1).gt.0._wp) fbad = 100._wp*fct_acc(3,j,1)/fct_acc(4,j,1)
+      print '(i8,f9.1,10f11.3)', j, fit(j)*180._wp/pi, cx_max(j), cy_max(j), ci_max(j), co_max(j), &
+        dx_max(j), dy_max(j), dx_max(j)+dy_max(j), rdse, rwtr, fbad
     enddo
     print *
 
@@ -556,10 +665,14 @@ contains
          atm%prcs(i,j,:) = 0._wp
          atm%prcw(i,j,:) = 0._wp
          atm%evpa(i,j) = 0._wp
+         atm%evp(i,j,:) = 0._wp
+         atm%Cde(i,j,:) = 1.3e-3_wp
          atm%cld(i,j) = 0.5_wp
          atm%cld_rh(i,j) = 0.5_wp
          atm%cld_low(i,j) = 0._wp
          atm%hcld(i,j) = 4000._wp
+         atm%hcld_rh(i,j) = 4000._wp
+         atm%hcld_low(i,j) = 1500._wp
          atm%clot(i,j) = 1._wp
          atm%htrop(i,j) = 12.e3_wp*(1._wp+0.5_wp*cost(j))
          atm%rb_sur(i,j) = 0._wp
@@ -593,6 +706,10 @@ contains
          atm%convwtr(i,j) = 0._wp
          atm%convwtr_adv(i,j) = 0._wp
          atm%convdse(i,j) = 0._wp
+         atm%psi(i,j) = 0._wp
+         atm%psi_topo(i,j) = 0._wp
+         atm%convdse_psi(i,j) = 0._wp
+         atm%convdse_psi_topo(i,j) = 0._wp
 
          atm%dam(i,j) = 0._wp
          atm%hdust(i,j) = 2000._wp
@@ -617,6 +734,7 @@ contains
          atm%u3 = 0._wp  
          atm%v3 = 0._wp
          atm%w3 = 0._wp
+         atm%w3_nt = 0._wp
 
          atm%uter = 0._wp  
          atm%vter = 0._wp
@@ -624,7 +742,7 @@ contains
          atm%vterf = 0._wp
 
          call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &  ! in
-           atm%A_trop, atm%W_strat, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
+           atm%A_trop, atm%W_strat, atm%dtcol, atm%t3, atm%q3, atm%tp, atm%d3, atm%ttrop)    ! out
          ! initialize column water from vesta's reconstruction: wcon = ram·A_trop + W_strat
          atm%wcon = atm%ram*atm%A_trop + atm%W_strat
 
@@ -708,6 +826,11 @@ contains
      allocate(atm%wcon(im,jm))
      allocate(atm%A_trop(im,jm))
      allocate(atm%W_strat(im,jm))
+     allocate(atm%dtcol(im,jm))
+     allocate(atm%dtcol_prev(im,jm))
+     ! sentinel: time_step seeds dtcol_prev from the first dtcol it sees, so no restart field
+     ! is needed and the first step carries no spurious correction
+     atm%dtcol_prev(:,:) = dtcol_prev_unset
      allocate(atm%cld_rh(im,jm)) 
      allocate(atm%cld_low(im,jm)) 
      allocate(atm%cld(im,jm)) 
@@ -717,9 +840,10 @@ contains
      allocate(atm%prcw(im,jm,nm))
      allocate(atm%prcs(im,jm,nm))
      allocate(atm%prc_conv(im,jm))
-     allocate(atm%prc_wcon(im,jm))
      allocate(atm%prc_over(im,jm))
      allocate(atm%hcld(im,jm))
+     allocate(atm%hcld_rh(im,jm))
+     allocate(atm%hcld_low(im,jm))
      allocate(atm%clot(im,jm)) 
      allocate(atm%alb_cld(im,jm)) 
      allocate(atm%htrop(im,jm)) 
@@ -759,13 +883,18 @@ contains
      allocate(atm%cda(im,jm))
      allocate(atm%cd0a(im,jm))
      allocate(atm%sha(im,jm))
+     ! sha is set by the coupler each step, but hscales reads it and it enters a tanh, so it must
+     ! not be undefined on the first call. Zero puts gam_s at the midpoint of (gams_min,
+     ! gams_max), which is harmless.
+     atm%sha(:,:) = 0._wp
      allocate(atm%lha(im,jm))
      allocate(atm%evpa(im,jm))
+     allocate(atm%evp(im,jm,nm))
+     allocate(atm%Cde(im,jm,nm))
      allocate(atm%tskina(im,jm))
      allocate(atm%t2a(im,jm))
      allocate(atm%q2a(im,jm))
      allocate(atm%r2a(im,jm))
-     allocate(atm%rskina(im,jm))
  
      allocate(atm%t3(im,jm,km))
      allocate(atm%q3(im,jm,km))
@@ -817,7 +946,17 @@ contains
      allocate(atm%fay(im,jmc,km))
      allocate(atm%fayo(im,jmc,km))
      allocate(atm%fac(im,jm))
+     allocate(atm%fac_topo(im,jm))
+     allocate(atm%psi(im,jm))
+     allocate(atm%psi_topo(im,jm))
+     allocate(atm%fax_psi(imc,jm,km))
+     allocate(atm%fay_psi(im,jmc,km))
+     allocate(atm%fax_psi_topo(imc,jm,km))
+     allocate(atm%fay_psi_topo(im,jmc,km))
+     allocate(atm%convdse_psi(im,jm))
+     allocate(atm%convdse_psi_topo(im,jm))
      allocate(atm%w3(im,jm,kmc))
+     allocate(atm%w3_nt(im,jm,kmc))
 
      allocate(atm%convdse(im,jm))
      allocate(atm%convwtr(im,jm))
@@ -838,6 +977,8 @@ contains
      allocate(atm%fdxdst(imc,jm))
      allocate(atm%fdxco2(imc,jm))
      allocate(atm%fdydse(im,jmc))
+     ! zslp reads fdydse, and adifa, which fills it, runs later in the step
+     atm%fdydse(:,:) = 0._wp
      allocate(atm%fdywtr(im,jmc))
      allocate(atm%fdydst(im,jmc))
      allocate(atm%fdyco2(im,jmc))
@@ -888,12 +1029,8 @@ contains
      allocate(atm%syndif(im,jm))
      allocate(atm%synsur(im,jm,nm))
      allocate(atm%cdif(im,jm) )    
-     allocate(atm%diffxdse(imc,jm))
-     allocate(atm%diffydse(im,jmc))
-     allocate(atm%diffxwtr(imc,jm))
-     allocate(atm%diffywtr(im,jmc))
-     allocate(atm%diffxdst(imc,jm))
-     allocate(atm%diffydst(im,jmc))
+     allocate(atm%diffx(imc,jm))
+     allocate(atm%diffy(im,jmc))
 
    return
 
@@ -967,6 +1104,8 @@ contains
      deallocate(atm%wcon)
      deallocate(atm%A_trop)
      deallocate(atm%W_strat)
+     deallocate(atm%dtcol)
+     deallocate(atm%dtcol_prev)
      deallocate(atm%cld_rh) 
      deallocate(atm%cld_low) 
      deallocate(atm%cld) 
@@ -976,9 +1115,10 @@ contains
      deallocate(atm%prcw)
      deallocate(atm%prcs)
      deallocate(atm%prc_conv)
-     deallocate(atm%prc_wcon)
      deallocate(atm%prc_over)
      deallocate(atm%hcld)
+     deallocate(atm%hcld_rh)
+     deallocate(atm%hcld_low)
      deallocate(atm%clot) 
      deallocate(atm%alb_cld) 
      deallocate(atm%htrop) 
@@ -1020,11 +1160,12 @@ contains
      deallocate(atm%sha)
      deallocate(atm%lha)
      deallocate(atm%evpa)
+     deallocate(atm%evp)
+     deallocate(atm%Cde)
      deallocate(atm%tskina)
      deallocate(atm%t2a)
      deallocate(atm%q2a)
      deallocate(atm%r2a)
-     deallocate(atm%rskina)
  
      deallocate(atm%t3)
      deallocate(atm%q3)
@@ -1068,6 +1209,7 @@ contains
      deallocate(atm%u3)
      deallocate(atm%v3)
      deallocate(atm%w3)
+     deallocate(atm%w3_nt)
      deallocate(atm%uter)
      deallocate(atm%vter)
      deallocate(atm%uterf)
@@ -1077,12 +1219,17 @@ contains
      deallocate(atm%fay)
      deallocate(atm%fayo)
      deallocate(atm%fac)
-     deallocate(atm%diffxdse)
-     deallocate(atm%diffydse)
-     deallocate(atm%diffxwtr)
-     deallocate(atm%diffywtr)
-     deallocate(atm%diffxdst)
-     deallocate(atm%diffydst)
+     deallocate(atm%fac_topo)
+     deallocate(atm%psi)
+     deallocate(atm%psi_topo)
+     deallocate(atm%fax_psi)
+     deallocate(atm%fay_psi)
+     deallocate(atm%fax_psi_topo)
+     deallocate(atm%fay_psi_topo)
+     deallocate(atm%convdse_psi)
+     deallocate(atm%convdse_psi_topo)
+     deallocate(atm%diffx)
+     deallocate(atm%diffy)
 
      deallocate(atm%convdse)
      deallocate(atm%convwtr)
@@ -1197,7 +1344,6 @@ contains
     call nc_write(fnm,"q2a      ",     atm%q2a      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"q2       ",     atm%q2       ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"ram      ",     atm%ram      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"rskina   ",     atm%rskina   ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"r2       ",     atm%r2       ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"r2a      ",     atm%r2a      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"hqeff    ",     atm%hqeff    ,     dims=["lon","lat"],long_name="",units="")
@@ -1240,6 +1386,7 @@ contains
     call nc_write(fnm,"frlnd    ",     atm%frlnd    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"f_ice_lake ",   atm%f_ice_lake,    dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"frst     ",     atm%frst     ,     dims=["lon","lat","nm "],long_name="",units="")
+    call nc_write(fnm,"Cde      ",     atm%Cde      ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"zsa      ",     atm%zsa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"psa      ",     atm%psa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"sigoro   ",     atm%sigoro   ,     dims=["lon","lat"],long_name="",units="")
@@ -1287,7 +1434,6 @@ contains
     call nc_read(fnm,"q2a      ",     atm%q2a     ) 
     call nc_read(fnm,"q2       ",     atm%q2      ) 
     call nc_read(fnm,"ram      ",     atm%ram     ) 
-    call nc_read(fnm,"rskina   ",     atm%rskina  ) 
     call nc_read(fnm,"r2       ",     atm%r2      ) 
     call nc_read(fnm,"r2a      ",     atm%r2a     ) 
     call nc_read(fnm,"hqeff    ",     atm%hqeff   ) 
@@ -1329,7 +1475,12 @@ contains
     call nc_read(fnm,"ra2a     ",     atm%ra2a    ) 
     call nc_read(fnm,"frlnd    ",     atm%frlnd   ) 
     call nc_read(fnm,"f_ice_lake   ",     atm%f_ice_lake  ) 
-    call nc_read(fnm,"frst     ",     atm%frst    ) 
+    call nc_read(fnm,"frst     ",     atm%frst    )
+    if (nc_exists_var(fnm,"Cde")) then
+      call nc_read(fnm,"Cde",atm%Cde)
+    else
+      atm%Cde = 1.3e-3_wp
+    endif
     call nc_read(fnm,"zsa      ",     atm%zsa     ) 
     call nc_read(fnm,"psa      ",     atm%psa     ) 
     call nc_read(fnm,"sigoro   ",     atm%sigoro  ) 

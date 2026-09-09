@@ -101,6 +101,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: wcon       !! atmospheric water content (kg m-2), prognostic, budget-conserving
       real(wp), allocatable, dimension(:,:) :: A_trop     !! tropospheric coefficient ∂wcon/∂ram (kg m-2), from vesta
       real(wp), allocatable, dimension(:,:) :: W_strat    !! stratospheric column water intercept (kg m-2), from vesta
+      real(wp), allocatable, dimension(:,:) :: dtcol      !! <t_prof>_mass - tam (K), the column shape offset, from vesta
+      real(wp), allocatable, dimension(:,:) :: dtcol_prev !! dtcol at the previous thermodynamic update (K)
       real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
@@ -110,9 +112,10 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: prcw       !! rain(kg m-2 s-1)
       real(wp), allocatable, dimension(:,:,:) :: prcs       !! snowfall(kg m-2 s-1)
       real(wp), allocatable, dimension(:,:) :: prc_conv   !! precipitation from supersaturation (kg m-2 s-1)
-      real(wp), allocatable, dimension(:,:) :: prc_wcon  
       real(wp), allocatable, dimension(:,:) :: prc_over
       real(wp), allocatable, dimension(:,:) :: hcld       !! cloud height (m)
+      real(wp), allocatable, dimension(:,:) :: hcld_rh    !! top of the large scale relative humidity clouds (m)
+      real(wp), allocatable, dimension(:,:) :: hcld_low   !! top of the low clouds (m)
       real(wp), allocatable, dimension(:,:) :: clot       !! cloud optical thickness (.)
       real(wp), allocatable, dimension(:,:) :: alb_cld    !! cloud albedo (.)
       real(wp), allocatable, dimension(:,:) :: htrop      !! tropopause height (m)
@@ -154,11 +157,12 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: sha
       real(wp), allocatable, dimension(:,:) :: lha
       real(wp), allocatable, dimension(:,:) :: evpa
+      real(wp), allocatable, dimension(:,:,:) :: evp   !! evaporation from each surface type (kg m-2 s-1)
+      real(wp), allocatable, dimension(:,:,:) :: Cde   !! surface exchange coefficient for moisture of each surface type (/)
       real(wp), allocatable, dimension(:,:) :: tskina
       real(wp), allocatable, dimension(:,:) :: t2a
       real(wp), allocatable, dimension(:,:) :: q2a
       real(wp), allocatable, dimension(:,:) :: r2a
-      real(wp), allocatable, dimension(:,:) :: rskina
 
       ! 3D longitude-latitude-height
       real(wp), allocatable, dimension(:,:,:) :: t3   !! atmospheric temperature (K)
@@ -211,7 +215,17 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: fay
       real(wp), allocatable, dimension(:,:,:) :: fayo
       real(wp), allocatable, dimension(:,:) :: fac
+      real(wp), allocatable, dimension(:,:) :: fac_topo
+      real(wp), allocatable, dimension(:,:) :: psi
+      real(wp), allocatable, dimension(:,:) :: psi_topo
+      real(wp), allocatable, dimension(:,:,:) :: fax_psi
+      real(wp), allocatable, dimension(:,:,:) :: fay_psi
+      real(wp), allocatable, dimension(:,:,:) :: fax_psi_topo
+      real(wp), allocatable, dimension(:,:,:) :: fay_psi_topo
+      real(wp), allocatable, dimension(:,:) :: convdse_psi
+      real(wp), allocatable, dimension(:,:) :: convdse_psi_topo
       real(wp), allocatable, dimension(:,:,:) :: w3
+      real(wp), allocatable, dimension(:,:,:) :: w3_nt
 
       real(wp), allocatable, dimension(:,:) :: convdse
       real(wp), allocatable, dimension(:,:) :: convwtr       ! total moisture convergence = convwtr_adv + convwtr_dif (drives precip)
@@ -282,12 +296,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: syndif
       real(wp), allocatable, dimension(:,:,:) :: synsur
       real(wp), allocatable, dimension(:,:) :: cdif     
-      real(wp), allocatable, dimension(:,:) :: diffxdse
-      real(wp), allocatable, dimension(:,:) :: diffydse
-      real(wp), allocatable, dimension(:,:) :: diffxwtr
-      real(wp), allocatable, dimension(:,:) :: diffywtr
-      real(wp), allocatable, dimension(:,:) :: diffxdst
-      real(wp), allocatable, dimension(:,:) :: diffydst
+      real(wp), allocatable, dimension(:,:) :: diffx
+      real(wp), allocatable, dimension(:,:) :: diffy
 
     end type
 

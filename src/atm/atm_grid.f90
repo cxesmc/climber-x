@@ -30,8 +30,8 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin
-  use atm_params, only : l_p0_var, p0, ps0, pble, pblp
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg
+  use atm_params, only : l_p0_var, p0, ps0, pble, pblp, cp
   use smooth_atm_mod, only : smooth2
 
   implicit none
@@ -85,6 +85,7 @@ module atm_grid
   real(wp) :: aim
  
   real(wp) :: fcort(jm)
+  real(wp) :: fcorg(jm)      !! s, the reciprocal-Coriolis factor of the geostrophic PBL wind, see i_fcorg
   real(wp) :: fcorta_sqrt(jm)
   real(wp) :: fcorta(jm)
   real(wp) :: fcorua(jmc)
@@ -103,11 +104,15 @@ module atm_grid
   integer :: k700
   integer :: k500
   integer :: k300
+  integer :: k_dse_lo
+  integer :: k_dse_up
 
   real(wp), allocatable :: pl(:)
   real(wp), allocatable :: dpl(:)
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
+  real(wp), allocatable :: cheat(:,:)    !! column heat capacity, J/m2/K; see atm_grid_update
+  real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
   real(wp), allocatable :: dply(:,:,:)
   real(wp), allocatable :: dplxo(:,:,:)
@@ -144,6 +149,8 @@ contains
     allocate(dpl(km))
     allocate(zl(kmc))
     allocate(zc(km))
+    allocate(cheat(im,jm))
+    allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
     allocate(dply(im,jm,km))
     allocate(dplxo(im,jm,km))
@@ -223,6 +230,24 @@ contains
       fcort(j) = signf(j)*max(ABS(fcortp),fcormin)
       fcorta(j) = max(ABS(fcortp),fcormin)
       fcorta_sqrt(j) = sqrt(abs(fcorta(j)))
+      ! fcorg is the factor u2d.f90 divides the SLP gradient by to form ugb/vgb.
+      !   0  fcorg = 1/fcort, the original. fcort is floored in MAGNITUDE at fcormin but keeps
+      !      its sign, so |fcorg| is LARGEST on the two rows either side of the equator and
+      !      reverses between them; ugb jumps by 2*|dpdy|/(fcormin*ra) there.
+      !   1  fcorg = f/(f**2+fcormin**2), the Rayleigh-damped geostrophic balance with fcormin
+      !      doubling as the linear drag rate. Same regularisation, opposite behaviour at the
+      !      equator: |fcorg| peaks at 1/(2*fcormin) where |f| = fcormin and goes to ZERO at
+      !      f = 0, so ugb crosses zero continuously. It is also the factor consistent with the
+      !      ageostrophic wind uab/vab, which already carries the down-gradient companion of the
+      !      same balance; only the geostrophic half was left singular.
+      ! fcorta/fcorua are unsigned and were never discontinuous, so they are untouched.
+      if (i_fcorg.eq.0) then
+        fcorg(j) = 1._wp/fcort(j)
+      else if (i_fcorg.eq.1) then
+        fcorg(j) = fcortp/(fcortp**2 + fcormin**2)
+      else
+        stop 'i_fcorg'
+      endif
     enddo
 
     do j=1,jm
@@ -267,12 +292,20 @@ contains
     k500  = minloc(abs(pl-0.5_wp),1)
     k300  = minloc(abs(pl-0.3_wp),1)
 
+    ! layer centres nearest the lower and upper branch of the Ferrel cell (~1300 and ~7300 m,
+    ! i.e. roughly 850 and 400 hPa); zc, not zl, because t3 is carried at layer centres.
+    ! Used by the i_mmc_fer=2/3 closure in slp_mod::zslp
+    k_dse_lo = minloc(abs(zc-1300._wp),1)
+    k_dse_up = minloc(abs(zc-7300._wp),1)
+
     print *,'k 1000 hPa',k1000, ', z 1000 hPa',zl(k1000)
     print *,'k 900  hPa',k900,  ', z 900  hPa',zl(k900)
     print *,'k 850  hPa',k850,  ', z 850  hPa',zl(k850)
     print *,'k 700  hPa',k700,  ', z 700  hPa',zl(k700)
     print *,'k 500  hPa',k500,  ', z 500  hPa',zl(k500)
     print *,'k 300  hPa',k300,  ', z 500  hPa',zl(k300)
+    print *,'k dse lo  ',k_dse_lo, ', zc      ',zc(k_dse_lo)
+    print *,'k dse up  ',k_dse_up, ', zc      ',zc(k_dse_up)
 
     ! initialize, needed by vesta
     kweff(:,:) = 4
@@ -369,6 +402,10 @@ contains
 
     ra = p0/(Rd*T0)     ! kg/m3, air density at pressure p0 and temperature T0
 
+    ! Column heat capacity, J/m2/K.  For a hydrostatic column the internal plus potential
+    ! energy is the enthalpy, int(cv*T + g*z)dm = int(cp*T)dm, so the reservoir is cp*M 
+    cheat = pzsa*amas*cp
+
     ! k-index of first layer above topography 
     do i=1,im
       do j=1,jm
@@ -417,6 +454,19 @@ contains
         plx(i,j) = 0._wp
         plx_trop(i,j) = 0._wp
 
+        ! layer mass at the T-point itself, the cell mass of the advection.
+        ! Built from pzsa(i,j) rather than from the face average px, so that the
+        ! cell mass is consistent with where the tracer is carried.
+        do k=1,km
+          if (pzsa(i,j).le.pl(k+1)) then
+            dplt(i,j,k) = 0._wp
+          elseif (pzsa(i,j).lt.pl(k)) then
+            dplt(i,j,k) = (pzsa(i,j)-pl(k+1))*amas
+          else
+            dplt(i,j,k) = (pl(k)-pl(k+1))*amas
+          endif
+        enddo
+
         do k=1,km
           if (px.le.pl(k+1))then
             dplx(i,j,k) = 0._wp
@@ -434,6 +484,10 @@ contains
 
       enddo
     enddo    
+
+    ! periodic closure: face imc is the same physical face as face 1
+    plx(imc,:)      = plx(1,:)
+    plx_trop(imc,:) = plx_trop(1,:)
 
 
     do i=1,im
@@ -463,6 +517,9 @@ contains
     enddo
     dply(:,1,:) = 0._wp
     dplyo(:,1,:) = 0._wp
+    ! no flux through the poles
+    ply(:,1)     = 0._wp
+    ply(:,jmc)   = 0._wp
     ply_trop(:,1)   = 0._wp
     ply_trop(:,jmc) = 0._wp
 

@@ -41,7 +41,7 @@ contains
   !   Purpose    :  n2o emissions 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine n2o_emission(soil_resp, t_soil, theta_w, theta_field, theta_sat, &
-                      n2o_emis)
+                      n2o_emis, n2o_emis_nit, n2o_emis_denit)
 
   implicit none
 
@@ -51,7 +51,9 @@ contains
   real(wp), intent(in) :: theta_field   !! soil water content at field capacity [m3/m3]
   real(wp), intent(in) :: theta_sat     !! soil porosity [m3/m3]
 
-  real(wp), intent(out) :: n2o_emis     !! n2o emissions [kg N2O-N/m2/s]
+  real(wp), intent(out) :: n2o_emis       !! total n2o emissions [kg N2O-N/m2/s]
+  real(wp), intent(out) :: n2o_emis_nit   !! n2o emissions from nitrification [kg N2O-N/m2/s]
+  real(wp), intent(out) :: n2o_emis_denit !! n2o emissions from denitrification [kg N2O-N/m2/s]
 
   real(wp) :: fac_t, fac_sm_nit, fac_sm_denit
   real(wp), parameter :: t_soil_ref = T0+10._wp  ! K
@@ -69,7 +71,9 @@ contains
   fac_sm_denit = 1._wp/(1._wp + exp(-a*(theta_w/theta_sat-n2o_par%wfps_crit_denit)))
 
   ! N2O emissions
-  n2o_emis = soil_resp * fac_t * (n2o_par%k_n2o_nit*fac_sm_nit + n2o_par%k_n2o_denit*fac_sm_denit)     ! kg N2O-N/m2/s
+  n2o_emis_nit   = soil_resp * fac_t * n2o_par%k_n2o_nit*fac_sm_nit         ! kg N2O-N/m2/s
+  n2o_emis_denit = soil_resp * fac_t * n2o_par%k_n2o_denit*fac_sm_denit     ! kg N2O-N/m2/s
+  n2o_emis = n2o_emis_nit + n2o_emis_denit                                  ! kg N2O-N/m2/s
 
   return
 
