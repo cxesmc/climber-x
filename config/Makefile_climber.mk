@@ -539,7 +539,7 @@ $(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90 $(objdir)/precision.o $(objdir)/co
 $(objdir)/wiso_params.o : $(dir_lnd)wiso_params.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/wiso_params.o
+$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/precision.o $(objdir)/timer.o $(objdir)/control.o $(objdir)/lnd_grid.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lnd_def.o : $(dir_lnd)lnd_def.f90 $(objdir)/precision.o $(objdir)/lnd_grid.o
