@@ -40,6 +40,7 @@ module lndvc_model
     use lndvc_hydrology_mod,   only : canopy_water, surface_hydrology_veg
     use lndvc_soil_par_mod,    only : soil_par_thermal, soil_par_hydro, soil_par_update
     use lndvc_soil_hydro_mod,  only : soil_hydro
+    use lndvc_groundwater_mod, only : groundwater, w_table_ini, perched_water_table
     use lndvc_water_deficit_mod, only : calculate_pet, calculate_cwd
     use lndvc_dyn_veg_mod,     only : dyn_veg
     use lndvc_soil_carbon_par_mod, only : soil_carbon_par
@@ -387,7 +388,7 @@ contains
     end subroutine lndvc_update_vc
 
     subroutine lndvc_init_land(vc, m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry, &
-                               cti_mean, cti_cdf, dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax, &
+                               cti_mean, cti_cdf, &
                                c13_c12_atm, c14_c_atm)
         ! One-time physical init of a vegetated land vc (port C decision B):
         ! seed the soil parameters from the coarse-cell mineral texture (the
@@ -401,7 +402,6 @@ contains
         type(vc_t), intent(inout) :: vc
         real(wp), intent(in) :: m_theta_sat, m_k_sat, m_psi_sat, m_Bi, m_lambda_s, m_lambda_dry
         real(wp), intent(in) :: cti_mean, cti_cdf(:)
-        real(wp), intent(in) :: dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax
         real(wp), intent(in) :: c13_c12_atm, c14_c_atm
 
         integer  :: k
@@ -433,13 +433,9 @@ contains
         vc%soil%mineral_lambda_s   = m_lambda_s
         vc%soil%mineral_lambda_dry = m_lambda_dry
 
-        ! --- static wetland parameters (TOPMODEL cti + DYPTOP) ----------------
+        ! --- static wetland parameters (TOPMODEL cti) -------------------------
         vc%soil%cti_mean    = cti_mean
         vc%soil%cti_cdf(:)  = cti_cdf(:)
-        vc%soil%dyptop_k    = dyptop_k
-        vc%soil%dyptop_v    = dyptop_v
-        vc%soil%dyptop_xm   = dyptop_xm
-        vc%soil%dyptop_fmax = dyptop_fmax
 
         ! --- physical veg/soil state (ported init_cell_veg) -------------------
         call lndvc_init_cell_veg(c13_c12_atm, c14_c_atm, vc%desc%w, &
@@ -452,6 +448,8 @@ contains
             vc%veg%leaf_c, vc%veg%root_c, vc%veg%stem_c, vc%veg%veg_h, vc%veg%veg_c, vc%veg%veg_c13, vc%veg%veg_c14, &
             vc%carb%f_peat, vc%carb%f_peat_pot, vc%soil%w_table_min, vc%soil%w_table_peat, vc%carb%dCpeat_dt, &
             vc%flx%z0m)
+        ! the aquifer of a newly vegetated cell starts at the nominal equilibrium water table
+        vc%soil%w_table = w_table_ini()
 
         ! --- sub-tile fractions within the vc (bare = remainder) --------------
         call set_frac_surf_veg(vc)
@@ -660,13 +658,12 @@ contains
         ! --- surface hydrology (snow layer, wetland, runoff, infiltration) ----
         call surface_hydrology_veg(vc%flx%frac_surf, vc%snow%mask_snow, &
             vc%flx%evap_surface, vc%flx%rain_ground, vc%flx%snow_ground, vc%snow%snowmelt, &
-            vc%soil%theta, vc%soil%theta_sat, vc%soil%theta_field, vc%soil%k_sat, vc%soil%cap_soil(1), &
+            vc%soil%k_sat, vc%soil%cap_soil(1), &
             vc%soil%cti_mean, vc%soil%cti_cdf, &
-            vc%soil%dyptop_k, vc%soil%dyptop_v, vc%soil%dyptop_xm, vc%soil%dyptop_fmax, &
             vc%snow%w_snow_old, vc%snow%w_snow, vc%snow%w_snow_max, vc%soil%w_w, vc%soil%w_i, &
             vc%soil%w_table_cum, vc%soil%f_wet_cum, vc%soil%t_soil, &
             vc%snow%h_snow, vc%soil%calving(1), vc%soil%runoff_sur(1), vc%soil%infiltration, &
-            vc%soil%w_table, vc%soil%f_wet, vc%soil%f_wet_max, vc%soil%cti_lim, &
+            vc%soil%w_table_eff, vc%soil%fz_eff, vc%soil%f_wet, vc%soil%f_wet_max, vc%soil%cti_lim, &
             vc%flx%evap_surface_iso, vc%flx%rain_ground_iso, vc%flx%snow_ground_iso, vc%snow%snowmelt_iso, &
             vc%snow%w_snow_iso, vc%soil%w_w_iso, vc%soil%w_i_iso, &
             vc%soil%calving_iso, vc%soil%runoff_sur_iso, vc%soil%infiltration_iso)
@@ -679,15 +676,30 @@ contains
 
             call soil_hydro(vc%flx%frac_surf, vc%snow%mask_snow, vc%soil%theta_sat, &
                 vc%soil%k_sat, vc%soil%k_exp, vc%soil%psi_exp, vc%soil%kappa_int, vc%soil%psi, &
-                vc%soil%w_table, &
                 vc%flx%transpiration, vc%flx%evap_surface, vc%soil%infiltration, vc%soil%wilt, &
                 vc%snow%w_snow, vc%soil%w_w, vc%soil%w_i, &
                 vc%soil%theta_w, vc%soil%theta_i, vc%soil%theta, vc%soil%theta_w_cum, vc%soil%theta_i_cum, vc%veg%theta_fire_cum, &
-                vc%soil%drainage(1), &
+                vc%soil%drainage(1), vc%soil%runoff_exc, &
                 vc%flx%transpiration_iso, vc%flx%evap_surface_iso, vc%soil%infiltration_iso, &
-                vc%soil%w_w_iso, vc%soil%drainage_iso)
+                vc%soil%w_w_iso, vc%soil%drainage_iso, vc%soil%runoff_exc_iso)
+
+            ! update the water table of the unconfined aquifer below the soil column
+            call groundwater(vc%soil%theta, vc%soil%theta_w, vc%soil%drainage(1), &
+                vc%soil%w_table, vc%soil%runoff_gw, &
+                vc%soil%drainage_iso, vc%soil%w_gw_iso, vc%soil%runoff_gw_iso)
+
+            ! water table perched on the frost table, and the effective table for wetlands and peat
+            call perched_water_table(vc%soil%theta_sat, vc%soil%theta_i, vc%soil%w_w, vc%soil%w_table, &
+                vc%soil%w_table_perch, vc%soil%w_table_eff, vc%soil%fz_eff)
         else
             vc%soil%drainage(1) = 0._wp
+            vc%soil%runoff_gw = 0._wp
+            vc%soil%runoff_exc = 0._wp
+            vc%soil%w_table_perch = 0._wp
+            vc%soil%w_table_eff = vc%soil%w_table
+            vc%soil%fz_eff = hydro_par%f_drain*vc%soil%w_table
+            if (l_wiso) vc%soil%runoff_gw_iso = 0._wp
+            if (l_wiso) vc%soil%runoff_exc_iso = 0._wp
         endif
 
         ! --- potential evapotranspiration + cumulative water deficit ----------
@@ -705,8 +717,10 @@ contains
         endif
 
         ! --- total surface + subsurface runoff over the veg column ------------
-        vc%soil%runoff(1) = vc%soil%runoff_sur(1) + vc%soil%drainage(1)
-        if (l_wiso) vc%soil%runoff_iso(:) = vc%soil%runoff_sur_iso(:) + vc%soil%drainage_iso(:)
+        ! the drainage out of the soil column first recharges the aquifer and leaves the land as
+        ! baseflow instead
+        vc%soil%runoff(1) = vc%soil%runoff_sur(1) + vc%soil%runoff_exc + vc%soil%runoff_gw
+        if (l_wiso) vc%soil%runoff_iso(:) = vc%soil%runoff_sur_iso(:) + vc%soil%runoff_exc_iso(:) + vc%soil%runoff_gw_iso(:)
 
         ! ===== soil-carbon decomposition parameters (port C.4) ================
         ! runs before dyn_veg (needs the year's cumulative soil T/moisture); sets

@@ -73,7 +73,7 @@ contains
     integer :: i, j, k
     real(wp), dimension(0:nl_l) :: a, b, c, r, x
     real(wp), dimension(0:nl_l) :: cap, rcap
-    real(wp), dimension(0:nl_l) :: dz_loc, z_loc, rdz_loc_pos, rdz_loc_neg
+    real(wp), dimension(0:nl_l) :: dz_loc, z_loc, z_int_loc, rdz_loc_pos, rdz_loc_neg
     real(wp), dimension(nl_l) :: w, w_w_old, w_i_old
     real(wp) :: t_freeze, t_freeze_lake
     real(wp) :: w_melt, w_ice, w_liq, w_liq_max, H, H_star, w_snow_tmp, dw_snow, energy_warm_snow, flx_excess
@@ -91,16 +91,16 @@ contains
     snowmelt = 0._wp
     energy_warm_snow = 0._wp
 
+    ! local grid, the bottom layer is stretched to the actual lake depth
+    z_int_loc(0:nl_l-1) = z_int_l(0:nl_l-1)   ! z_int_loc(0) is the snow - lake interface
+    z_int_loc(nl_l) = h_lake
+
     dz_loc(0) = h_snow
     z_loc(0) = -0.5_wp * dz_loc(0)
-    z_loc(1:nl_l-1) = z_l(1:nl_l-1)
-    z_loc(nl_l) = (h_lake+0.5_wp*z_loc(nl_l-1))/1.5_wp 
-
-    dz_loc(1) = 0.5_wp * ( z_loc(1) + z_loc(2) )
-    do k=2,nl_l-1
-     dz_loc(k) = 0.5_wp * ( z_loc(k+1) - z_loc(k-1) )
+    do k=1,nl_l
+     dz_loc(k) = z_int_loc(k) - z_int_loc(k-1)
+     z_loc(k)  = 0.5_wp * ( z_int_loc(k-1) + z_int_loc(k) )
     enddo
-    dz_loc(nl_l) = z_loc(nl_l) - z_loc(nl_l-1)
 
     rdz_loc_pos(1:nl_l-2) = rdz_pos_l(1:nl_l-2)
     rdz_loc_neg(2:nl_l-1) = rdz_neg_l(2:nl_l-1)

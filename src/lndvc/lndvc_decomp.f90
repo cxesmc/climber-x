@@ -360,6 +360,7 @@ contains
         allocate(vc%soil%infiltration_iso(nwiso))
         allocate(vc%soil%runoff_iso(nwiso), vc%soil%runoff_sur_iso(nwiso))
         allocate(vc%soil%drainage_iso(nwiso), vc%soil%calving_iso(nwiso))
+        allocate(vc%soil%w_gw_iso(nwiso), vc%soil%runoff_gw_iso(nwiso), vc%soil%runoff_exc_iso(nwiso))
         allocate(vc%soil%water_iso_cons(nwiso))
 
         vc%soil%t_soil(:)        = T0
@@ -409,6 +410,9 @@ contains
         vc%soil%runoff_sur_iso(:) = 0._wp
         vc%soil%drainage_iso(:)  = 0._wp
         vc%soil%calving_iso(:)   = 0._wp
+        vc%soil%w_gw_iso(:)      = 0._wp
+        vc%soil%runoff_gw_iso(:) = 0._wp
+        vc%soil%runoff_exc_iso(:) = 0._wp
         vc%soil%water_iso_cons(:) = 0._wp
         ! soil scalars
         vc%soil%alt          = 0._wp
@@ -417,6 +421,11 @@ contains
         vc%soil%w_table_peat = 0._wp
         vc%soil%w_table_cum  = 0._wp
         vc%soil%w_table_min  = 0._wp
+        vc%soil%w_table_perch = 0._wp
+        vc%soil%w_table_eff  = 0._wp
+        vc%soil%fz_eff       = 0._wp
+        vc%soil%runoff_gw    = 0._wp
+        vc%soil%runoff_exc   = 0._wp
         vc%soil%f_wet        = 0._wp
         vc%soil%f_wet_cum    = 0._wp
         vc%soil%f_wet_max    = 0._wp
@@ -431,13 +440,9 @@ contains
         vc%soil%mcwd         = 0._wp
         vc%soil%mcwd_clim    = 0._wp
         vc%soil%cwd_mon(:)   = 0._wp
-        ! static wetland parameters (seeded from topmodel/dyptop in lndvc_init_land)
+        ! static wetland parameters (seeded from topmodel in lndvc_init_land)
         vc%soil%cti_mean     = 0._wp
         vc%soil%cti_cdf(:)   = 0._wp
-        vc%soil%dyptop_k     = 0._wp
-        vc%soil%dyptop_v     = 0._wp
-        vc%soil%dyptop_xm    = 0._wp
-        vc%soil%dyptop_fmax  = 0._wp
 
         ! --- vegetation tiles (npft) -----------------------------------------
         allocate(vc%veg%ci(npft), vc%veg%g_can(npft), vc%veg%gpp(npft), vc%veg%npp(npft))

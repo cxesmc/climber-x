@@ -149,6 +149,9 @@ module lndvc_def
         ! hydrology / water balance
         real(wp) :: infiltration, w_table, w_table_peat
         real(wp) :: w_table_cum, w_table_min
+        ! prognostic groundwater / perched-table state (port of SIMGM, replaces DYPTOP)
+        real(wp) :: w_table_perch, w_table_eff, fz_eff
+        real(wp) :: runoff_gw, runoff_exc
         real(wp) :: f_wet, f_wet_cum, f_wet_max, f_wetland, cti_lim
         real(wp), allocatable, dimension(:) :: f_wet_mon, w_table_mon   ! (nmon_year)
         real(wp), allocatable, dimension(:) :: f_wet_long               ! (nmonwet)
@@ -156,15 +159,15 @@ module lndvc_def
         real(wp) :: runoff_ann
         real(wp) :: pet, mcwd, mcwd_clim
         real(wp), allocatable, dimension(:) :: cwd_mon             ! (nmon_year) monthly cumulative water deficit
-        ! static wetland parameters (TOPMODEL cti + DYPTOP), seeded once per cell
+        ! static wetland parameters (TOPMODEL cti), seeded once per cell
         real(wp) :: cti_mean
         real(wp), allocatable, dimension(:) :: cti_cdf            ! (15) CTI cumulative distribution
-        real(wp) :: dyptop_k, dyptop_v, dyptop_xm, dyptop_fmax
         real(wp), allocatable, dimension(:,:) :: wilt, root_frac   ! (nl,npft), mirror reference
         ! water isotopes
         real(wp), allocatable, dimension(:,:) :: w_w_iso, w_i_iso, w_w_iso_old, w_i_iso_old   ! (nl,nwiso)
         real(wp), allocatable, dimension(:)   :: infiltration_iso                              ! (nwiso)
         real(wp), allocatable, dimension(:)   :: runoff_iso, runoff_sur_iso, drainage_iso, calving_iso  ! (nwiso)
+        real(wp), allocatable, dimension(:)   :: w_gw_iso, runoff_gw_iso, runoff_exc_iso       ! (nwiso)
         real(wp), allocatable, dimension(:)   :: water_iso_cons                                ! (nwiso)
     end type
 

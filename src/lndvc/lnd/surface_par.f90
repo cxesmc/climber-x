@@ -28,9 +28,10 @@ module lndvc_surface_par_lnd
   use precision, only : wp
   use constants, only : karman, g, pi, T0, frac_vu
   use lnd_grid, only : i_ice, i_lake, i_bare
-  use lnd_grid, only : npft, nveg, ntrees, ngrass, nshrub, i_trees, i_grass, i_shrub, flag_pft, dz
-  use lnd_params, only : l_neutral, z_sfl, i_racan, p_cdense
+  use lnd_grid, only : npft, nveg, ntrees, ngrass, nshrub, i_trees, i_grass, i_shrub, flag_pft, z
+  use lnd_params, only : l_neutral, z_sfl, c_racan_1, c_racan_2
   use lnd_params, only : snow_par, surf_par, veg_par, pft_par, hydro_par
+  use timer, only : dt_lnd, sec_day
 
   implicit none
 
@@ -447,14 +448,24 @@ contains
     real(wp), intent(in) :: wind
     real(wp), intent(in) :: z0m
     real(wp), intent(out) :: rough_m, rough_h
-    real(wp), intent(out) :: Ch, r_a, Ri
+    real(wp), intent(out) :: Ch, r_a
+    ! Ri is a state: it is relaxed in time rather than diagnosed anew each step (see below)
+    real(wp), intent(inout) :: Ri
 
     real(wp) :: fsnow
     real(wp) :: u_star, Re
     real(wp) :: log_m, log_h, Ch_neutral
+    real(wp) :: Ri_new, w_Ri
 
     real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
 
+
+    ! weight of the instantaneous Richardson number in the relaxation below
+    if (surf_par%tau_Ri.gt.0._wp) then
+      w_Ri = min(dt_lnd/(surf_par%tau_Ri*sec_day), 1._wp)
+    else
+      w_Ri = 1._wp
+    endif
 
     ! account for snow cover (lake is non-vegetated: flag_pft=0, z0m fixed)
     fsnow = h_snow/(h_snow+10._wp*z0m)
@@ -485,8 +496,9 @@ contains
     ! neutral heat exchange coefficient
     Ch_neutral = log_m * log_h
 
-    ! Richardson number
-    Ri = g * 100._wp * (1._wp - t_skin / tatm) / wind**2
+    ! Richardson number.  Relaxed towards its instantaneous value over tau_Ri rather than reset every step, needed for stability
+    Ri_new = g * z_sfl * (1._wp - t_skin / tatm) / wind**2
+    Ri = Ri + w_Ri*(Ri_new - Ri)
 
     if( l_neutral ) then
       ! neutral stratification
@@ -545,16 +557,26 @@ contains
     real(wp), intent(in) :: h_snow
     real(wp), dimension(:), intent(in) :: wind
     real(wp), dimension(:), intent(inout) :: z0m, rough_m, rough_h
-    real(wp), dimension(:), intent(out) :: Ch, r_a, Ri
+    real(wp), dimension(:), intent(out) :: Ch, r_a
+    ! Ri is a state: it is relaxed in time rather than diagnosed anew each step (see below)
+    real(wp), dimension(:), intent(inout) :: Ri
     real(wp), dimension(:), intent(out) :: r_a_can
 
     integer :: n
     real(wp) :: fsnow, hsnow
     real(wp) :: u_star, Re
     real(wp) :: log_m, log_h, Ch_neutral
+    real(wp) :: Ri_new, w_Ri
 
     real(wp), parameter :: nu = 1.461e-5    ! kinematic molecular viscosity (m2/s)
 
+
+    ! weight of the instantaneous Richardson number in the relaxation below
+    if (surf_par%tau_Ri.gt.0._wp) then
+      w_Ri = min(dt_lnd/(surf_par%tau_Ri*sec_day), 1._wp)
+    else
+      w_Ri = 1._wp
+    endif
 
     do n=1,nveg
 
@@ -602,8 +624,9 @@ contains
         ! neutral heat exchange coefficient
         Ch_neutral = log_m * log_h
 
-        ! Richardson number
-        Ri(n) = g * 100._wp * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2
+        ! Richardson number.  Relaxed towards its instantaneous value over tau_Ri rather than reset every step, needed for stability
+        Ri_new = g * z_sfl * (1._wp - t_skin(n) / tatm(n)) / wind(n)**2
+        Ri(n) = Ri(n) + w_Ri*(Ri_new - Ri(n))
 
         if( l_neutral ) then
           Ch(n) = Ch_neutral
@@ -619,23 +642,15 @@ contains
         ! aerodynamic resistance
         r_a(n) = 1._wp / (Ch(n) * wind(n))
 
-        ! aerodynamic resistance for ground below canopy
-        if( flag_pft(n) .eq. 1 ) then
-          if (i_racan.eq.1) then
-            r_a_can(n) = 1._wp/(p_cdense*wind(n))
-          else if (i_racan.eq.2) then
-            r_a_can(n) = (1._wp-exp(-(lai(n)+10._wp*sai(n))))/(p_cdense*wind(n))
-          endif
-        endif
-
       endif
     enddo
 
-    if (i_racan.eq.3) then
-      do n=1,npft
-        r_a_can(n) = r_a(i_bare)
-      enddo
-    endif
+    ! Aerodynamic resistance for the ground below the canopy: the bare soil resistance scaled
+    ! by canopy density.  r_a_can -> 0 for an open canopy, so that the ground below then sees
+    ! only r_a(n), and -> c_racan_1*r_a(i_bare) for a closed canopy.
+    do n=1,npft
+      r_a_can(n) = c_racan_1 * (1._wp-exp(-c_racan_2*(lai(n)+sai(n)))) * r_a(i_bare)
+    enddo
 
     return
 
@@ -663,31 +678,22 @@ contains
     real(wp) :: beta_soil, beta_snow
 
 
-    ! bare soil, use resistance OR beta factor
+    ! bare soil, use beta factor
     r_s(i_bare) = 0._wp
     beta_snow = 1._wp
-    if (hydro_par%i_evp_soil.eq.1) then
-      ! CLM, Lee and Pielke 1992
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = 0.25_wp * (1._wp - cos(pi * theta_w(1) / hydro_par%theta_crit_evp))**2
-      else
-        beta_soil = 1._wp
-      endif
-    else if (hydro_par%i_evp_soil.eq.2) then
-      ! CLIMBER-2
-      if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
-        beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
-      else
-        beta_soil = 1._wp
-      endif
+    ! CLIMBER-2
+    if( theta_w(1) .lt. hydro_par%theta_crit_evp ) then
+      beta_soil = (theta_w(1) / hydro_par%theta_crit_evp)**2
+    else
+      beta_soil = 1._wp
     endif
     if (mask_snow.eq.0) then
       beta_s(i_bare) = beta_soil
     else
+      ! snow covered, sublimation from the snow surface is not limited by the soil
       beta_s(i_bare) = beta_snow
+      r_s(i_bare) = 0._wp
     endif
-    ! scale to account for fraction of top layer from which evaporation can occur
-    beta_s(i_bare) = hydro_par%dz_evp/dz(1) * beta_s(i_bare)
 
     ! vegetation
     do n=1,npft

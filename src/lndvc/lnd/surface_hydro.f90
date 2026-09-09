@@ -31,7 +31,6 @@ module lndvc_hydrology_mod
   use control, only : check_water
   use lnd_grid, only : nsurf, npft, nveg, nsoil, i_ice, i_lake, is_veg, is_ice, is_lake
   use lnd_grid, only : flag_veg, flag_pft, flag_tree
-  use lnd_grid, only : z_int, dz, nl
   use lnd_params, only : dt, rdt
   use lnd_params, only : snow_par, hydro_par
   use wiso_params, only : l_wiso, nwiso, i_o18, Rstd
@@ -454,11 +453,10 @@ contains
   !              :  (icemelt/icesub/et, cap_lake/t_lake, lake_water_tendency).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine surface_hydrology_veg(frac_surf,mask_snow,evap_surface,rain_ground,snow_ground,snowmelt, &
-                                  theta,theta_sat,theta_field,k_sat,cap_soil, &
+                                  k_sat,cap_soil, &
                                   cti_mean, cti_cdf, &
-                                  dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax, &
                                   w_snow_old,w_snow,w_snow_max,w_w,w_i,w_table_cum,f_wet_cum,t_soil, &
-                                  h_snow,calving,runoff_sur,infiltration,w_table,f_wet,f_wet_max,cti_lim, &
+                                  h_snow,calving,runoff_sur,infiltration,w_table_eff,fz_eff,f_wet,f_wet_max,cti_lim, &
                                   evap_surface_iso,rain_ground_iso,snow_ground_iso,snowmelt_iso, &
                                   w_snow_iso,w_w_iso,w_i_iso, &
                                   calving_iso,runoff_sur_iso,infiltration_iso)
@@ -467,10 +465,9 @@ contains
 
     integer, intent(in) :: mask_snow
     real(wp), dimension(:), intent(in) :: frac_surf, snow_ground, evap_surface, rain_ground
-    real(wp), dimension(:), intent(in) :: theta, theta_sat, theta_field, k_sat
+    real(wp), dimension(:), intent(in) :: k_sat
     real(wp), intent(in) :: cap_soil
     real(wp), intent(in) :: cti_mean, cti_cdf(:)
-    real(wp), intent(in) :: dyptop_k,dyptop_v,dyptop_xm,dyptop_fmax
     real(wp), intent(in) :: w_snow_old
     real(wp), intent(inout) :: snowmelt
     real(wp), intent(inout) :: w_snow, w_snow_max
@@ -478,18 +475,21 @@ contains
     real(wp), dimension(0:), intent(inout) :: t_soil
     real(wp), dimension(:), intent(inout) :: w_w, w_i
     real(wp), intent(out) :: h_snow, calving, runoff_sur
-    real(wp), intent(out) :: infiltration, w_table, f_wet, f_wet_max, cti_lim
+    real(wp), intent(out) :: infiltration, f_wet, f_wet_max, cti_lim
+    real(wp), intent(in) :: w_table_eff  ! m, effective water table: the shallower of the aquifer
+                                         ! table and the table perched on the frost table
+    real(wp), intent(in) :: fz_eff       ! -, f*z of whichever of the two regimes is the shallower,
+                                         ! i.e. the TOPMODEL shift of the CTI threshold
     ! water-isotope siblings (always passed; values are 0 unless l_wiso=.true.)
     real(wp), dimension(:,:), intent(in)    :: evap_surface_iso, snow_ground_iso, rain_ground_iso
     real(wp), dimension(:),   intent(inout) :: snowmelt_iso, w_snow_iso
     real(wp), dimension(:,:), intent(inout) :: w_w_iso, w_i_iso
     real(wp), dimension(:),   intent(out)   :: calving_iso, runoff_sur_iso, infiltration_iso
 
-    integer :: n, i1, i2, iso
-    real(wp) :: f_sat, w1, w2, phi, rain_g, snow_g, H, H_m, H_star, wsnowold_m
-    real(wp) :: z, d_z, deficit, integral, psi
+    integer :: n, iso
+    real(wp) :: f_sat, rain_g, snow_g, H, H_m, H_star, wsnowold_m
     real(wp) :: f_veg
-    real(wp) :: infiltration_max, q_liq, sublimation, dws
+    real(wp) :: infiltration_max, f_run_sur, q_liq, sublimation, dws
     real(wp) :: snow_g_iso(nwiso), rain_g_iso(nwiso), sublimation_iso(nwiso)
     real(wp) :: q_liq_iso(nwiso), ratio_snow(nwiso), wsnowold_iso(nwiso)
 
@@ -497,7 +497,6 @@ contains
     runoff_sur = 0._wp
     calving = 0._wp
     infiltration = 0._wp
-    w_table = 0._wp
     f_wet = 0._wp
     f_wet_max = 0._wp
     cti_lim = 0._wp
@@ -639,146 +638,45 @@ contains
       ! save seasonal maximum snow swe
       if (w_snow.gt.w_snow_old) w_snow_max = w_snow
 
-      ! water table depth, from soil water content
-      if (hydro_par%i_wtab.eq.1) then
+      ! the water table is prognostic and updated in groundwater() after the soil hydrology,
+      ! so it is used here with a one time step lag, exactly as in soil_hydro.
+      ! w_table_eff, not the aquifer table, is what wets the surface: where the ground freezes the
+      ! saturated zone that matters sits on the frost table, not tens of metres down in the aquifer.
+      ! w_table_cum feeds w_table_mon and hence the peat acrotelm oxic fraction, so that sees it too.
 
-        w_table = z_int(nl) - sum(theta / theta_sat * dz(1:nl))
-
-      else if (hydro_par%i_wtab.eq.2) then
-
-        ! water table after Niu et al 2005, section 2.4
-        ! column soil water deficit
-        deficit = sum((theta_sat-theta) * dz(1:nl))
-        d_z = 0.1_wp
-        w_table = 0._wp
-        do while (integral<deficit)
-          integral = 0._wp
-          z = 0._wp
-          do while (z<w_table)
-            integral = integral + (theta_sat(1)-theta_sat(1)*((-0.2-(w_table-z))/-0.2)**(-1._wp/6.)) * d_z
-            z = z+d_z
-          enddo
-          w_table = w_table + d_z
-        enddo
-
-      else if (hydro_par%i_wtab.eq.3) then
-
-        w_table = hydro_par%wtab_scale * (1._wp-theta(1)/theta_sat(1))
-
-      elseif (hydro_par%i_wtab.eq.4) then
-
-        w_table = z_int(nl) - sum(theta(1:nl-1) / theta_sat(1:nl-1) * dz(1:nl-1)) * sum(dz(1:nl))/sum(dz(1:nl-1))
-
-      else if (hydro_par%i_wtab.eq.5) then
-
-        w_table = z_int(nl) - 0.5_wp * (sum(theta/theta_sat*dz(1:nl)) + theta(1)/theta_sat(1)*sum(dz(1:nl)))
-
-      else if (hydro_par%i_wtab.eq.6) then
-
-        w_table = z_int(nl) - 0.5_wp * (sum(theta/theta_field*dz(1:nl)) + theta(1)/theta_field(1)*sum(dz(1:nl)))
-
-      else if (hydro_par%i_wtab.eq.7) then
-
-        w_table = z_int(nl) - theta(1)/theta_sat(1)*sum(dz(1:nl))
-
-      else if (hydro_par%i_wtab.eq.8) then
-
-        ! Kleinen 2020
-
-      endif
-
-      w_table_cum = w_table_cum + w_table
+      w_table_cum = w_table_cum + w_table_eff
 
       ! max possible wetland extent (w_table=0)
-      if (cti_mean.gt.14._wp) then
-        f_wet_max = 0._wp
-      else
-        i1 = max(cti_mean,hydro_par%cti_min)
-        i2 = i1+1
-        w2 = (max(cti_mean,hydro_par%cti_min)-i1)/(i2-i1)
-        w1 = 1._wp-w2
-        f_wet_max = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-      endif
+      f_wet_max = f_cti_exceed(max(cti_mean,hydro_par%cti_min), cti_cdf)
       ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
       if (cti_mean.le.hydro_par%cti_mean_crit) f_wet_max = 0._wp
 
-      ! saturated grid cell fraction
-      if( hydro_par%i_fwet .eq. 1 ) then
-
-        ! fraction of icefree surface at saturation, SIMTOP, Niu 2005
-        f_sat = f_wet_max * exp(-hydro_par%f_wtab * w_table)
-        ! wetland area, excluding snow
-        if( mask_snow .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 2 ) then
-
-        ! DYPTOP, Stocker 2014
-        phi = (1._wp+dyptop_v*exp(-dyptop_k*(-w_table-dyptop_xm)))**(-1._wp/dyptop_v)
-        f_sat = min(dyptop_fmax,phi)
-        ! wetland area, excluding snow
-        if( mask_snow .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          if( dyptop_fmax .gt. hydro_par%fmax_crit ) then
-            f_wet = f_sat
-          else
-            f_wet = 0._wp
-          endif
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 3 ) then
-
-        ! TOPMODEL following Kleinen et al 2020
-        cti_lim = cti_mean + hydro_par%f_wtab*w_table   ! NOTE: w_table is positive!
-        cti_lim = max(cti_lim,hydro_par%cti_min)
-        cti_lim = max(1._wp,cti_lim)
-        if (cti_lim.gt.14._wp) then
-          f_sat = 0._wp
-        else
-          i1 = cti_lim
-          i2 = i1+1
-          w2 = (cti_lim-i1)/(i2-i1)
-          w1 = 1._wp-w2
-          f_sat = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-        endif
-        ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
-        if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp
-        if( mask_snow .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-
-      elseif( hydro_par%i_fwet .eq. 4 ) then
-
-        ! TOPMODEL following Kleinen et al 2020
-        cti_lim = hydro_par%cti_min + hydro_par%f_wtab*w_table   ! NOTE: w_table is positive!
-        cti_lim = max(1._wp,cti_lim)
-        if (cti_lim.gt.14._wp) then
-          f_sat = 0._wp
-        else
-          i1 = cti_lim
-          i2 = i1+1
-          w2 = (cti_lim-i1)/(i2-i1)
-          w1 = 1._wp-w2
-          f_sat = 1._wp-(w1*cti_cdf(i1)+w2*cti_cdf(i2))
-        endif
-        ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
-        if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp
-        if( mask_snow .eq. 1 ) then
-          f_wet = 0._wp ! no wetland where snow
-        else
-          f_wet = f_sat
-        endif
-
+      ! saturated grid cell fraction, TOPMODEL following Kleinen et al 2020.
+      ! f_drain is the TOPMODEL transmissivity decay factor, the same parameter that sets the
+      ! aquifer baseflow recession in groundwater().
+      ! The SIMTOP (Niu 2005) and DYPTOP (Stocker 2014) alternatives were removed: both were
+      ! calibrated for a water table within a metre or two of the surface, and with the
+      ! prognostic aquifer, which puts it near 13 m, both collapse to essentially no wetland
+      ! (0.8 and 0.008 mln km2 against ~3.1 observed), DYPTOP additionally overflowing exp().
+      ! Neither has a free parameter left to recalibrate with, since f_wtab was merged into
+      ! f_drain and the DYPTOP shape parameters are read from a file fitted elsewhere.
+      cti_lim = cti_mean + fz_eff   ! f_drain*w_table, or f_drain_perch*w_table_perch
+      cti_lim = max(cti_lim,hydro_par%cti_min)
+      f_sat = f_cti_exceed(cti_lim, cti_cdf)
+      ! no inundation if CTI lower than critical value (5.5 in Kleinen 2020)
+      if (cti_mean.le.hydro_par%cti_mean_crit) f_sat = 0._wp
+      if( mask_snow .eq. 1 ) then
+        f_wet = 0._wp ! no wetland where snow
+      else
+        f_wet = f_sat
       endif
 
       f_wet_cum = f_wet_cum + f_wet
 
+      ! Infiltration capacity, kg/m2/s. The relevant conductivity is the one at SATURATION of
+      ! the pore space open to liquid water, not the one at the antecedent water content: during
+      ! an event the top layer wets up towards saturation and the Green-Ampt capacity decays to
+      ! k_sat from above, never below it.
       infiltration_max = k_sat(1) * (1._wp-f_sat)
 
       ! mean rain on the ground over vegetated part
@@ -797,18 +695,28 @@ contains
       q_liq = rain_g + snowmelt ! kg/m2/s
 
       ! surface runoff, kg/m2/s
-      runoff_sur = f_sat * q_liq &  ! all into runoff over saturated or frozen surface
-        + (1._wp - f_sat) * max(0._wp, q_liq - infiltration_max)    ! this condition is never met!
+      runoff_sur = f_sat * q_liq &  ! all into runoff over the saturated fraction
+        + (1._wp - f_sat) * max(0._wp, q_liq - infiltration_max)    ! infiltration excess
+      ! NOTE the infiltration-excess term is unreachable: k_sat(1) is ~100 mm/day while q_liq is
+      ! a DAILY MEAN at 5 degrees and never approaches that. Activating it needs a sub-daily/
+      ! sub-grid rainfall intensity distribution, not a different conductivity.
       ! soil liquid water infiltration, kg/m2/s
       infiltration = rain_g + snowmelt - runoff_sur  ! kg/m2/s
 
-      ! iso: same f_sat split applied to iso fluxes
+      ! iso: surface runoff removes water at the isotopic ratio of the incoming flux, so the
+      ! bulk runoff fraction applies unchanged to the iso fluxes (no fractionation).
+      ! NOTE the split must not be re-derived from the iso fluxes themselves: applying the
+      ! infiltration_max threshold to q_liq_iso separately does not preserve the incoming ratio
       if (l_wiso) then
+        if (q_liq .gt. 0._wp) then
+          f_run_sur = runoff_sur / q_liq
+        else
+          f_run_sur = 0._wp
+        endif
         do iso=1,nwiso
           q_liq_iso(iso) = rain_g_iso(iso) + snowmelt_iso(iso)
-          runoff_sur_iso(iso) = f_sat * q_liq_iso(iso) &
-            + (1._wp - f_sat) * max(0._wp, q_liq_iso(iso) - infiltration_max*Rstd(iso))
-          infiltration_iso(iso) = rain_g_iso(iso) + snowmelt_iso(iso) - runoff_sur_iso(iso)
+          runoff_sur_iso(iso) = f_run_sur * q_liq_iso(iso)
+          infiltration_iso(iso) = q_liq_iso(iso) - runoff_sur_iso(iso)
         enddo
       endif
 
@@ -817,6 +725,51 @@ contains
     return
 
   end subroutine surface_hydrology_veg
+
+
+  ! ------------------------------------------------------------------------------------------
+  ! Fraction of the grid cell with a compound topographic index above cti, i.e. the exceedance
+  ! probability 1-cdf(cti), from the tabulated CTI distribution (Marthews et al. 2015, one
+  ! entry per integer CTI bin).
+  !
+  ! The exceedance probability decays close to geometrically with CTI (area-weighted global
+  ! means: 0.105, 0.067, 0.042, 0.025, 0.0128, 0.0050 for bins 9..14, a ratio of about 0.6 per
+  ! unit), so it is interpolated log-linearly. Interpolating the cdf linearly instead, as was
+  ! done before, overshoots systematically between the nodes because the tail is convex, and
+  ! inflated the global wetland area by about 4% (+0.2 mln km2). The last bin is exactly zero
+  ! because the distribution ends there, which log-linear interpolation cannot represent, so
+  ! that one interval falls back to linear.
+  ! ------------------------------------------------------------------------------------------
+  function f_cti_exceed(cti, cti_cdf) result(f)
+
+    implicit none
+
+    real(wp), intent(in) :: cti
+    real(wp), intent(in) :: cti_cdf(:)
+    real(wp) :: f
+
+    integer :: i1, i2, ncti
+    real(wp) :: w2, e1, e2
+
+    ncti = size(cti_cdf)
+
+    if (cti .ge. real(ncti,wp)) then
+      ! above the top of the tabulated distribution, which the cdf reaches with a value of 1
+      f = 0._wp
+    else
+      i1 = int(max(1._wp,cti))
+      i2 = i1+1
+      w2 = max(1._wp,cti)-real(i1,wp)
+      e1 = 1._wp-cti_cdf(i1)
+      e2 = 1._wp-cti_cdf(i2)
+      if (e1.gt.0._wp .and. e2.gt.0._wp) then
+        f = e1**(1._wp-w2) * e2**w2
+      else
+        f = (1._wp-w2)*e1 + w2*e2
+      endif
+    endif
+
+  end function f_cti_exceed
 
 end module lndvc_hydrology_mod
 

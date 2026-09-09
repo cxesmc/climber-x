@@ -164,6 +164,7 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
                  $(objdir)/lndvc_lnd_lake_convection.o $(objdir)/lndvc_lnd_ebal_lake.o \
                  $(objdir)/lndvc_lnd_lake_temp.o $(objdir)/lndvc_lnd_sublake_temp.o \
                  $(objdir)/lndvc_lnd_surface_hydro.o $(objdir)/lndvc_lnd_soil_hydro.o \
+                 $(objdir)/lndvc_lnd_groundwater.o \
                  $(objdir)/lndvc_lnd_water_deficit.o \
                  $(objdir)/lndvc_lnd_veg_par.o $(objdir)/lndvc_lnd_photosynthesis.o \
                  $(objdir)/lndvc_lnd_soil_par.o $(objdir)/lndvc_lnd_ebal_veg.o \
@@ -753,7 +754,7 @@ $(objdir)/lndvc_smb_semi.o : $(dir_lndvc)/smb/semi.f90 $(objdir)/lndvc_thermo.o 
 # ported land/lake physics (src/lndvc/lnd): pattern A, reuse the real land
 # infrastructure (lnd_grid/lnd_params/wiso_params/lake_rho); distinct objects.
 $(objdir)/lndvc_lnd_surface_par.o : $(dir_lndvc)/lnd/surface_par.f90 $(objdir)/constants.o \
-						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_lnd_lake_par.o : $(dir_lndvc)/lnd/lake_par.f90 $(objdir)/constants.o \
@@ -783,6 +784,10 @@ $(objdir)/lndvc_lnd_surface_hydro.o : $(dir_lndvc)/lnd/surface_hydro.f90 $(objdi
 
 $(objdir)/lndvc_lnd_soil_hydro.o : $(dir_lndvc)/lnd/soil_hydro.f90 $(objdir)/constants.o $(objdir)/control.o \
 						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/tridiag.o $(objdir)/wiso_params.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_lnd_groundwater.o : $(dir_lndvc)/lnd/groundwater.f90 $(objdir)/constants.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/wiso_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_lnd_water_deficit.o : $(dir_lndvc)/lnd/water_deficit.f90 $(objdir)/constants.o \
