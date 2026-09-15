@@ -30,7 +30,7 @@ files_bgc = bgc_grid.f90 bgc_params.f90 bgc_def.f90 mo_biomod.f90 \
 	          ocprod.f90 carchm.f90 cyano.f90 \
 	          powadi.f90 dipowa.f90 powach.f90 sedshi.f90 \
 	          mo_beleg_bgc.f90 tracer_cons.f90 flx_sed.f90 \
-                  flx_sed_net.f90 flx_bur.f90 sed_grid_update_tracers.f90 \
+                  flx_sed_net.f90 flx_bur.f90 sed_grid_update_tracers.f90 hydrate.f90 \
                   bgc_model.f90 bgc_out.f90
 tmp_bgc = $(patsubst %.f90, %.o, $(files_bgc) )
 obj_bgc = $(patsubst %, $(objdir)/%, $(tmp_bgc))
@@ -693,7 +693,7 @@ $(objdir)/bgc_model.o : $(dir_bgc)bgc_model.f90 $(objdir)/bgc_grid.o $(objdir)/b
 	$(objdir)/mo_m4ago_climberx.o \
 	$(objdir)/ocprod.o $(objdir)/carchm.o $(objdir)/cyano.o $(objdir)/powadi.o \
 	$(objdir)/dipowa.o $(objdir)/powach.o $(objdir)/sedshi.o $(objdir)/mo_beleg_bgc.o $(objdir)/tracer_cons.o \
-	$(objdir)/flx_sed.o $(objdir)/flx_sed_net.o $(objdir)/flx_bur.o $(objdir)/sed_grid_update_tracers.o
+	$(objdir)/flx_sed.o $(objdir)/flx_sed_net.o $(objdir)/flx_bur.o $(objdir)/sed_grid_update_tracers.o $(objdir)/hydrate.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bgc_grid.o : $(dir_bgc)/bgc_grid.f90 
@@ -779,6 +779,9 @@ $(objdir)/flx_bur.o : $(dir_bgc)/flx_bur.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sed_grid_update_tracers.o : $(dir_bgc)/sed_grid_update_tracers.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/hydrate.o : $(dir_bgc)/hydrate.f90 $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/timer.o $(objdir)/constants.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bgc_out.o : $(dir_bgc)bgc_out.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o

@@ -151,6 +151,9 @@ module coupler
       real(wp) :: ch4   !! atmopheric CH4 concentration [ppb]
       real(wp) :: ch4_rad   !! atmopheric CH4 concentration for radiation [ppb]
       real(wp) :: ch4_flx_lnd   !! land CH4 emissions [kgCH4/yr]
+      real(wp) :: ch4_flx_ocn   !! ocean (hydrate-derived) CH4 flux to the atmosphere [kgCH4/yr]
+      real(wp) :: c13h4_flx_ocn !! 13C of it [kgC13/yr]
+      real(wp) :: ch4_geo_flx_ocn !! hydrate CH4 carbon entering the budget from outside (i_hyd_poc=2) [kgC/yr]
       real(wp) :: ch4_emis  !! anthropogenic CH4 emissions [kgCH4/yr]
       real(wp) :: f_ch4emis_agro  !! fraction of anthropogenic CH4 emissions originating from agriculture [1]
       real(wp) :: n2o   !! atmopheric N2O concentration [ppb]
@@ -1643,10 +1646,13 @@ contains
     real(wp) :: runoff_weight
     integer :: b, k, kb, kc, lev
     real(wp) :: depth_b, ssum
+    real(wp) :: z_acc(maxk)
 
 
     ! get updated grid from ocean
     if (time_soy_bgc) then
+      ! geothermal heat flux at the seafloor (hydrate model geotherm)
+      bgc%clim%q_geo = cmn%q_geo
       bgc%grid%ocn_area_tot          = ocn%grid%ocn_area_tot
       bgc%grid%ocn_area              = ocn%grid%ocn_area
       bgc%grid%ocn_area_old          = ocn%grid%ocn_area_old
@@ -1683,8 +1689,10 @@ contains
       do j=1,bgc%grid%nj
         do i=1,bgc%grid%ni
           kb = bgc%grid%kbo(i,j)
+          bgc%grid%z_sed_lev(i,j,:) = bgc%grid%layer_depth(:)
           if (kb<=0) cycle   ! land / non-ocean column
           if (l_sed_hypsometry) then
+            z_acc = 0._wp
             do b=1,n_hypso
               ! depth of this bin below the current sea surface (z_bed referenced)
               depth_b = hypso_depth_centre(b)
@@ -1698,9 +1706,14 @@ contains
                 endif
               enddo
               bgc%grid%f_sed_lev(i,j,kc) = bgc%grid%f_sed_lev(i,j,kc) + cmn%hypso_f_depth(i,j,b)
+              z_acc(kc) = z_acc(kc) + depth_b*cmn%hypso_f_depth(i,j,b)
             enddo
             ssum = sum(bgc%grid%f_sed_lev(i,j,1:kb))
             if (ssum>0._wp) then
+              ! area-weighted mean seafloor depth of each class (hydrate stability), before normalising
+              do kc=1,kb
+                if (bgc%grid%f_sed_lev(i,j,kc)>0._wp) bgc%grid%z_sed_lev(i,j,kc) = z_acc(kc)/bgc%grid%f_sed_lev(i,j,kc)
+              enddo
               bgc%grid%f_sed_lev(i,j,1:kb) = bgc%grid%f_sed_lev(i,j,1:kb)/ssum
             else
               bgc%grid%f_sed_lev(i,j,kb) = 1._wp   ! fallback: all at bottom cell
@@ -1987,6 +2000,9 @@ contains
       cmn%delta_C13_ocn = bgc%delta_C13 ! kgC13/yr
       cmn%delta_C14_ocn = bgc%delta_C14 ! kgC14/yr
       cmn%n2o_flx_ocn   = bgc%n2o_flx   ! kgN2O-N/yr
+      cmn%ch4_flx_ocn   = bgc%ch4_flx   ! kgCH4/yr
+      cmn%c13h4_flx_ocn = bgc%c13h4_flx ! kgC13/yr
+      cmn%ch4_geo_flx_ocn = bgc%ch4_geo_flx ! kgC/yr
     endif
 
     cmn%Cflx_ocn_avg = bgc%Cflx_avg ! kgC/yr
@@ -2081,6 +2097,13 @@ contains
 
     ! anthropogenic CH4 emissions to CO2 equivalent, exclude emissions from agriculture to avoid double-counting!
     co2%dCH4_dt = (1._wp-cmn%f_ch4emis_agro)*cmn%ch4_emis * 12._wp/16._wp  ! kgCH4 <- kgC
+    co2%dC13H4_dt = 0._wp
+    ! hydrate-derived ocean CH4 reaching the atmosphere is oxidised to CO2 there (the
+    ! carbon left the ocean-sediment budget as CH4, so it has to arrive in the atmosphere)
+    if (flag_bgc) then
+      co2%dCH4_dt   = co2%dCH4_dt + cmn%ch4_flx_ocn * 12._wp/16._wp   ! kgC/yr
+      co2%dC13H4_dt = cmn%c13h4_flx_ocn                                ! kgC13/yr
+    endif
 
     ! global annual temperature change for extra emissions 
     if (co2%T_glob.eq.0._wp) co2%T_glob = cmn%t2m_glob_ann  ! initialize 
@@ -2121,8 +2144,12 @@ contains
     type(ch4_class), intent(inout) :: ch4
 
 
-    ! ocean methane fluxes
-    ch4%dch4ocn_dt   = 0._wp 
+    ! ocean methane fluxes (hydrate-derived CH4 escaping through the water column)
+    if (flag_bgc) then
+      ch4%dch4ocn_dt   = cmn%ch4_flx_ocn   ! kgCH4/yr
+    else
+      ch4%dch4ocn_dt   = 0._wp 
+    endif
 
     ! land methane fluxes
     if (flag_lnd) then
@@ -4246,6 +4273,9 @@ contains
     call monthly2daily(m0,m1,wtm0,wtm1)
 
     ! initalize all variables to zero
+    cmn%ch4_flx_ocn     = 0._wp
+    cmn%c13h4_flx_ocn   = 0._wp
+    cmn%ch4_geo_flx_ocn = 0._wp
     cmn%mask_ocn = 0
     cmn%mask_lnd = 0
     cmn%mask_smb = 0
