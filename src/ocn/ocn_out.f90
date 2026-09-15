@@ -48,7 +48,7 @@ module ocn_out
   use ocn_params, only : depth_buoy
   use ocn_params, only : l_diff_dia_strat
   use ocn_params, only : l_bering_flow
-  use transport_ocn_mod, only: drho_dx, drho_dy, drho_dz, Ri
+  use transport_ocn_mod, only: drho_dx, drho_dy, drho_dz, Ri, v_gm
   use eos_mod, only : eos
   use ocn_def, only : ocn_class
   use ncio
@@ -169,6 +169,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: ub, vb, psi
      real(wp), dimension(:,:,:), allocatable :: ubisl, vbisl
      real(wp), dimension(:,:), allocatable :: opsi, opsia, opsip, opsii
+     real(wp), dimension(:,:), allocatable :: opsi_gm, opsia_gm, opsip_gm, opsii_gm
      real(wp), dimension(:,:), allocatable :: flx, fw, vsf, p_e_sic, runoff, runoffSv, runoffSv_ice, calving, bmelt, fw_hosing, fw_flux_adj
      real(wp), dimension(:,:), allocatable :: fw_noise, flx_noise
      real(wp), dimension(:,:), allocatable :: buoy, buoyS, buoyT
@@ -307,6 +308,10 @@ contains
     allocate(ann_o%opsia(0:maxj,maxk))
     allocate(ann_o%opsip(0:maxj,maxk))
     allocate(ann_o%opsii(0:maxj,maxk))
+    allocate(ann_o%opsi_gm(0:maxj,maxk))
+    allocate(ann_o%opsia_gm(0:maxj,maxk))
+    allocate(ann_o%opsip_gm(0:maxj,maxk))
+    allocate(ann_o%opsii_gm(0:maxj,maxk))
     allocate(ann_o%flx(maxi,maxj))
     allocate(ann_o%fw(maxi,maxj))
     allocate(ann_o%vsf(maxi,maxj))
@@ -1052,6 +1057,8 @@ contains
     real(wp) :: opsia(0:maxj,0:maxk)
     real(wp) :: opsip(0:maxj,0:maxk)
     real(wp) :: opsii(0:maxj,0:maxk)
+    real(wp) :: opsi_gm(0:maxj,0:maxk), opsia_gm(0:maxj,0:maxk), opsip_gm(0:maxj,0:maxk), opsii_gm(0:maxj,0:maxk)
+    real(wp) :: og_g, og_p, og_i, og_a
     integer :: iposa(2)
     real(wp), dimension(10) :: fw, fw_corr, p_e_sic, runoff, runoff_veg, runoff_ice, runoff_lake, calving, bmelt, icemelt, fw_dhdt_ice, flx, vsf
     real(wp) :: fw_noise
@@ -1064,6 +1071,7 @@ contains
     real(wp) :: sz(maxj,maxk), sza(maxj,maxk), szp(maxj,maxk) 
     real(wp) :: dxz(maxj,maxk), dxza(maxj,maxk), dxzp(maxj,maxk) 
     real(wp) :: hfto(maxj), hfao(maxj), hfpo(maxj), hftg(maxj), hfag(maxj), hfpg(maxj)
+    real(wp) :: veff
     real(wp) :: fwto(maxj), fwao(maxj), fwpo(maxj), fwtg(maxj), fwag(maxj), fwpg(maxj)
     real(wp) :: global_tocn, global_socn, global_sst, global_sss, global_cons, global_age, global_dye
     real(wp), dimension(6) :: ohc, ohc700, ohc2000
@@ -1617,7 +1625,7 @@ contains
 
     ! All independent per-timestep diagnostic blocks run concurrently in a single OpenMP sections region
     !$omp parallel sections default(shared) &
-    !$omp private(i,j,k,n,ntot,nxa,JNS,ou_g,ou_p,ou_i,ou_a,vbar,dxdz,vzab,vzam,sza1,sza2,fazz,alpha,beta) &
+    !$omp private(i,j,k,n,ntot,nxa,JNS,ou_g,ou_p,ou_i,ou_a,og_g,og_p,og_i,og_a,vbar,dxdz,vzab,vzam,sza1,sza2,fazz,alpha,beta) &
     !$omp private(int_drake,int_bering,int_davis,int_medi,int_indo,int_agulhas,mldst,rho_maxk,rho_k,rho1,rho2)
     !$omp section
     ! initialize
@@ -1625,28 +1633,46 @@ contains
     opsia = 0._wp
     opsip = 0._wp
     opsii = 0._wp
+    opsi_gm  = 0._wp
+    opsia_gm = 0._wp
+    opsip_gm = 0._wp
+    opsii_gm = 0._wp
 
     ! global and basin (Pacific/Indian/Atlantic) overturning in a single sweep over the grid.
+    ! opsi* include the GM eddy-induced velocity (CMIP msftmz: resolved plus parameterized advection),
+    ! opsi*_gm is the GM part alone (CMIP msftmzmpa)
     do j=1,maxj-1
        do k=1,maxk
           ou_g = 0._wp
           ou_p = 0._wp
           ou_i = 0._wp
           ou_a = 0._wp
+          og_g = 0._wp
+          og_p = 0._wp
+          og_i = 0._wp
+          og_a = 0._wp
           do i=1,maxi
-             ou_g = ou_g + ocn%u(2,i,j,k)
+             ou_g = ou_g + ocn%u(2,i,j,k) + v_gm(i,j,k)
+             og_g = og_g + v_gm(i,j,k)
              if (basin_mask(i,j).eq.i_pacific) then
-                ou_p = ou_p + ocn%u(2,i,j,k)
+                ou_p = ou_p + ocn%u(2,i,j,k) + v_gm(i,j,k)
+                og_p = og_p + v_gm(i,j,k)
              else if (basin_mask(i,j).eq.i_indian) then
-                ou_i = ou_i + ocn%u(2,i,j,k)
+                ou_i = ou_i + ocn%u(2,i,j,k) + v_gm(i,j,k)
+                og_i = og_i + v_gm(i,j,k)
              else if (basin_mask(i,j).eq.i_atlantic) then
-                ou_a = ou_a + ocn%u(2,i,j,k)
+                ou_a = ou_a + ocn%u(2,i,j,k) + v_gm(i,j,k)
+                og_a = og_a + v_gm(i,j,k)
              endif
           enddo
           opsi(j,k)  = opsi(j,k-1)  - ou_g*dxv(j)*dz(k)  ! m3/s
           opsip(j,k) = opsip(j,k-1) - ou_p*dxv(j)*dz(k)
           opsii(j,k) = opsii(j,k-1) - ou_i*dxv(j)*dz(k)
           opsia(j,k) = opsia(j,k-1) - ou_a*dxv(j)*dz(k)
+          opsi_gm(j,k)  = opsi_gm(j,k-1)  - og_g*dxv(j)*dz(k)  ! m3/s
+          opsip_gm(j,k) = opsip_gm(j,k-1) - og_p*dxv(j)*dz(k)
+          opsii_gm(j,k) = opsii_gm(j,k-1) - og_i*dxv(j)*dz(k)
+          opsia_gm(j,k) = opsia_gm(j,k-1) - og_a*dxv(j)*dz(k)
        enddo
     enddo
 
@@ -2581,6 +2607,10 @@ contains
       ann_o%opsia = 0._wp
       ann_o%opsip = 0._wp
       ann_o%opsii = 0._wp
+      ann_o%opsi_gm  = 0._wp
+      ann_o%opsia_gm = 0._wp
+      ann_o%opsip_gm = 0._wp
+      ann_o%opsii_gm = 0._wp
 
       ann_o%hft   = 0._wp
       ann_o%hfp   = 0._wp
@@ -2689,6 +2719,10 @@ contains
     ann_o%opsia = ann_o%opsia + opsia(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
     ann_o%opsip = ann_o%opsip + opsip(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
     ann_o%opsii = ann_o%opsii + opsii(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
+    ann_o%opsi_gm  = ann_o%opsi_gm  + opsi_gm(0:maxj,1:maxk)*1e-6  * ann_avg ! Sv
+    ann_o%opsia_gm = ann_o%opsia_gm + opsia_gm(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
+    ann_o%opsip_gm = ann_o%opsip_gm + opsip_gm(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
+    ann_o%opsii_gm = ann_o%opsii_gm + opsii_gm(0:maxj,1:maxk)*1e-6 * ann_avg ! Sv
 
     ann_o%hft(1:3,:) = ann_o%hft(1:3,:) + hft*1e-15 * ann_avg ! PW
     ann_o%hfp(1:3,:) = ann_o%hfp(1:3,:) + hfp*1e-15 * ann_avg ! PW
@@ -3166,7 +3200,8 @@ contains
     mon_o(mon)%fwaz(:,:)    = mon_o(mon)%fwaz(:,:)    + fwaz*1.e-6_wp  * mon_avg ! Sv/m
 
 
-    ! compute zonal mean meridional velocity, global and for each basin
+    ! compute zonal mean meridional velocity (Eulerian + GM eddy-induced, as in the CMIP htovovrt/htovgyre
+    ! diagnostics; note over+gyre = adv + GM part, whose isopycnal-diffusion counterpart sits in diff), global and for each basin
     do j=1,maxj-1
       do k=1,maxk
         vz(j,k)  = 0._wp
@@ -3182,16 +3217,17 @@ contains
           if (mask_v(i,j,k).eq.1) then
             nx = nx+1
             dxz(j,k) = dxz(j,k) + dxv(j) 
-            vz(j,k) = vz(j,k) + ocn%u(2,i,j,k) 
+            veff = ocn%u(2,i,j,k) + v_gm(i,j,k)
+            vz(j,k) = vz(j,k) + veff
             if (basin_mask2(i,j).eq.i_atlantic) then
               nxa = nxa+1
               dxza(j,k) = dxza(j,k) + dxv(j) 
-              vza(j,k) = vza(j,k) + ocn%u(2,i,j,k) 
+              vza(j,k) = vza(j,k) + veff
             endif
             if (basin_mask2(i,j).eq.i_pacific .or. basin_mask2(i,j).eq.i_indian) then
               nxp = nxp+1
               dxzp(j,k) = dxzp(j,k) + dxv(j) 
-              vzp(j,k) = vzp(j,k) + ocn%u(2,i,j,k) 
+              vzp(j,k) = vzp(j,k) + veff
             endif
           endif
         enddo
@@ -3268,15 +3304,16 @@ contains
       do k=1,maxk
         do i=1,maxi
           if (mask_v(i,j,k).eq.1) then
-            hftg(j) = hftg(j) + (ocn%u(2,i,j,k)-vz(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tz(j,k)-tz(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
-            fwtg(j) = fwtg(j) + (ocn%u(2,i,j,k)-vz(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - sz(j,k)-sz(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
+            veff = ocn%u(2,i,j,k) + v_gm(i,j,k)
+            hftg(j) = hftg(j) + (veff-vz(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tz(j,k)-tz(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
+            fwtg(j) = fwtg(j) + (veff-vz(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - sz(j,k)-sz(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
             if (basin_mask2(i,j).eq.i_atlantic) then
-              hfag(j) = hfag(j) + (ocn%u(2,i,j,k)-vza(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tza(j,k)-tza(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
-              fwag(j) = fwag(j) + (ocn%u(2,i,j,k)-vza(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - sza(j,k)-sza(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
+              hfag(j) = hfag(j) + (veff-vza(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tza(j,k)-tza(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
+              fwag(j) = fwag(j) + (veff-vza(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - sza(j,k)-sza(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
             endif
             if (basin_mask2(i,j).eq.i_pacific .or. basin_mask2(i,j).eq.i_indian) then
-              hfpg(j) = hfpg(j) + (ocn%u(2,i,j,k)-vzp(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tzp(j,k)-tzp(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
-              fwpg(j) = fwpg(j) + (ocn%u(2,i,j,k)-vzp(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - szp(j,k)-szp(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
+              hfpg(j) = hfpg(j) + (veff-vzp(j,k))  * 0.5_wp*(ocn%ts(i,j,k,1)+ocn%ts(i,j+1,k,1) - tzp(j,k)-tzp(j+1,k))  * dxv(j)*dz(k) * rho0*cap_w   ! m/s * K * m2 * kg/m3 * J/kg/K = W
+              fwpg(j) = fwpg(j) + (veff-vzp(j,k))  * 0.5_wp*(ocn%ts(i,j,k,2)+ocn%ts(i,j+1,k,2) - szp(j,k)-szp(j+1,k))  * dxv(j)*dz(k) * (-1._wp/ocn%saln0)   ! m/s * psu * m2 / psu = m3/s
             endif
           endif
         enddo
@@ -3948,7 +3985,7 @@ contains
     call nc_write_dim(fnm,dim_lev,x=-zro(maxk:1:-1),units="m",axis="z",ncid=ncid)
     call nc_write_dim(fnm,dim_levw,x=-zw(maxk:1:-1),units="m",axis="z",ncid=ncid)
     call nc_write_dim(fnm,dim_isles,x=1._wp,dx=1._wp,nx=maxisles,ncid=ncid)
-    call nc_write_dim(fnm,dim_type,x=1._wp,dx=1._wp,nx=5,units="[tot,adv,diff,over,gyre]",ncid=ncid)
+    call nc_write_dim(fnm,dim_type,x=1._wp,dx=1._wp,nx=5,units="[tot,adv,diff,over,gyre]; over/gyre = Eulerian+GM eddy-induced advection",ncid=ncid)
     call nc_write_dim(fnm,dim_month,x=1._wp,dx=1._wp,nx=13,units="months",ncid=ncid)
     call nc_write(fnm,"dx", dx, dims=[dim_lat],start=[1],count=[maxj],long_name="longitude grid distance at cell centers",units="m",ncid=ncid)
     call nc_write(fnm,"dxv", dxv, dims=[dim_latv1],start=[1],count=[maxj+1],long_name="longitude grid distance at cell edges on v-grid",units="m",ncid=ncid)
@@ -4054,10 +4091,14 @@ contains
     endif
     call nc_write(fnm,"psi",      sngl(vars%psi),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="barotropic streamfunction",units="Sv",missing_value=missing_value,ncid=ncid)
     if (ndat.eq.13) then
-    call nc_write(fnm,"opsi",   sngl(vars%opsi(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="global overturning circulation",units="Sv",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"opsi_a",   sngl(vars%opsia(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Atlantic overturning circulation",units="Sv",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"opsi_p",   sngl(vars%opsip(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Pacific overturning circulation",units="Sv",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"opsi_i",   sngl(vars%opsii(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Indian overturning circulation",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi",   sngl(vars%opsi(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="global overturning circulation (resolved + GM eddy-induced)",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_a",   sngl(vars%opsia(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Atlantic overturning circulation (resolved + GM eddy-induced)",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_p",   sngl(vars%opsip(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Pacific overturning circulation (resolved + GM eddy-induced)",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_i",   sngl(vars%opsii(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Indian overturning circulation (resolved + GM eddy-induced)",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_mpa",   sngl(vars%opsi_gm(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="global overturning circulation due to parameterized mesoscale (GM) advection",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_a_mpa",   sngl(vars%opsia_gm(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Atlantic overturning circulation due to parameterized mesoscale (GM) advection",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_p_mpa",   sngl(vars%opsip_gm(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Pacific overturning circulation due to parameterized mesoscale (GM) advection",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"opsi_i_mpa",   sngl(vars%opsii_gm(:,maxk:1:-1)),dims=[dim_latv1,dim_levw,dim_time],start=[1,1,nout],count=[maxj+1,maxk,1],long_name="Indian overturning circulation due to parameterized mesoscale (GM) advection",units="Sv",missing_value=missing_value,ncid=ncid)
     endif
     call nc_write(fnm,"flx",      sngl(vars%flx),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="net ocean heat flux",units="W/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fw",       sngl(vars%fw),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="net ocean freshwater flux",units="kg/m2/day",missing_value=missing_value,ncid=ncid)
