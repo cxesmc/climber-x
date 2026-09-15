@@ -36,14 +36,16 @@ module ice_model
                       yelmo_write_step_model_metrics, yelmo_restart_write 
     use sicopolis, only : sico_class, sico_init, sico_update, sico_end, sico_write_restart
     use sico_out, only : sico_diag_init, sico_diag
+    use ice_syn, only : ice_syn_class, ice_syn_init, ice_syn_update, ice_syn_write_step, ice_syn_end
     use ice_id_mod, only : set_ice_id
     use nml
     use ncio 
 
     implicit none 
 
-    type(sico_class),  allocatable, target :: sico_doms(:)
-    type(yelmo_class), allocatable, target :: ylmo_doms(:) 
+    type(sico_class),    allocatable, target :: sico_doms(:)
+    type(yelmo_class),   allocatable, target :: ylmo_doms(:) 
+    type(ice_syn_class), allocatable, target :: syn_doms(:)
 
     ! Save regional averaging calculations over [ndom,ntimes]
     ! to avoid writing netcdf output every year (which is slow)
@@ -81,8 +83,9 @@ contains
         logical,          intent(IN)    :: time_out_ice     ! Flag for whether to write 2D ice output
         
         ! Local variables 
-        type(yelmo_class), pointer :: ylmo
-        type(sico_class),  pointer :: sico 
+        type(yelmo_class),   pointer :: ylmo
+        type(sico_class),    pointer :: sico 
+        type(ice_syn_class), pointer :: syn
 
         integer :: n, niter, k 
         character(len=1024) :: file1D 
@@ -165,6 +168,22 @@ contains
                 call sico_to_ice(ice,sico)
 
                 nullify(sico)
+
+            case("syn")
+                ! Synthetic ice-sheet geometry from a target-extent mask
+
+                syn => syn_doms(idx_dom)
+
+                ! geometry from current target mask, bedrock and sea level
+                call ice_syn_update(syn,time,ice%z_bed,ice%z_sl)
+
+                call syn_to_ice(ice,syn)
+
+                if (time_out_ice) then
+                    call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%smb)
+                end if
+
+                nullify(syn)
              
             case DEFAULT 
 
@@ -213,6 +232,12 @@ contains
                 if (allocated(sico_doms)) deallocate(sico_doms)
                 allocate(sico_doms(n_dom))
 
+            case("syn")
+                ! Synthetic ice-sheet geometry
+
+                if (allocated(syn_doms)) deallocate(syn_doms)
+                allocate(syn_doms(n_dom))
+
             case DEFAULT 
 
                 write(*,*) "ice_init_domains:: Error: model not recognized."
@@ -258,8 +283,9 @@ contains
         integer, allocatable :: id_mask(:,:)    ! ice id mask 
         type(map_class) :: maps_geo_to_ice
 
-        type(yelmo_class), pointer :: ylmo
-        type(sico_class),  pointer :: sico 
+        type(yelmo_class),   pointer :: ylmo
+        type(sico_class),    pointer :: sico 
+        type(ice_syn_class), pointer :: syn
 
         ! Needed for Yelmo initialization 
         character(len=56)   :: domain 
@@ -422,6 +448,21 @@ contains
 
                 ! Disassociate the local pointer sico
                 nullify(sico)
+
+            case("syn")
+                ! Synthetic ice-sheet geometry from a target-extent mask
+                ! (stateless: ignores l_restart and the initial h_ice)
+
+                syn => syn_doms(idx_dom)
+
+                ice%z_bed = z_bed
+                ice%z_sl  = 0.0_wp
+                par_path = trim(out_dir)//"/ice_syn_par.nml"
+                call ice_syn_init(syn, grid, par_path, time, ice%z_bed, ice%z_sl, out_dir)
+
+                call syn_to_ice(ice,syn)
+
+                nullify(syn)
              
             case DEFAULT 
 
@@ -468,6 +509,10 @@ contains
                 ! SICOPOLIS ice-sheet model interface 
 
                 call sico_end(sico_doms(idx_dom)) 
+
+            case("syn")
+
+                call ice_syn_end(syn_doms(idx_dom))
 
             case DEFAULT 
 
@@ -595,6 +640,32 @@ contains
         return 
 
     end subroutine sico_to_ice
+
+    subroutine syn_to_ice(ice,syn)
+        ! Populate ice fields with synthetic-geometry information
+
+        implicit none 
+
+        type(ice_class),     intent(INOUT) :: ice 
+        type(ice_syn_class), intent(IN)    :: syn 
+
+        ice%error = .false.
+
+        ! maximum allowed extent: the target mask itself
+        ice%mask_extent = merge(1,0,syn%mask_target)
+
+        ! ice thickness and surface elevation (grounded only)
+        ice%H_ice  = syn%H_ice
+        ice%z_sur  = syn%z_sur
+        ice%z_base = ice%z_bed
+
+        ! no basal melt, no calving
+        ice%Q_b  = 0.0_wp
+        ice%calv = 0.0_wp
+
+        return 
+
+    end subroutine syn_to_ice
 
     subroutine ice_to_sico(sico,ice)
         ! Populate SICOPOLIS fields with ice information 
@@ -747,6 +818,9 @@ contains
 
                 file_restart = trim(restart_out_dir)//"/ice_sico_"//trim(ice%grid%name)//"_restart.nc"
                 call sico_write_restart(file_restart,sico_doms(idx_dom))
+
+            case("syn")
+                ! stateless, nothing to write
 
             case DEFAULT 
 

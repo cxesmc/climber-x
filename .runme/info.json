@@ -37,6 +37,7 @@
                            "nml/smb_par.nml",
                            "nml/ice_yelmo_par.nml",
                            "nml/ice_sico_par.nml",
+                           "nml/ice_syn_par.nml",
                            "nml/hyster_ctrl.nml" ]
         },
 

@@ -17,7 +17,7 @@
  flag_smb         = F        ! use surface mass balance model?
  flag_bmb         = F        ! use basal mass balance model?
  flag_ice         = F        ! use ice sheet model?
- ice_model_name   = 'yelmo'  ! select which ice sheet model to use, 'sico' or 'yelmo'
+ ice_model_name   = 'yelmo'  ! select which ice sheet model to use, 'sico', 'yelmo' or 'syn' (synthetic geometry from target mask, see ice_syn_par.nml)
  ice_domain_name  = 'NH-32KM' !'ANT-32KM'      ! name of ice sheet domanin(s) to be used
 
  !-------------------------------------------------------

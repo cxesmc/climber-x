@@ -1,0 +1,33 @@
+&ice_syn
+  !-------------------------------------------------------------------
+  ! Synthetic ice-sheet geometry, used if ice_model_name = 'syn'.
+  ! The ice sheet is built each n_year_ice from a prescribed target
+  ! extent: signed distance to the mask boundary -> surface profile
+  ! (perfect-plastic or linear) on the current bedrock -> grounded ice
+  ! thickness. Stateless, no restart. The SMB it receives is written
+  ! to the ice output for diagnostics but not applied.
+  !-------------------------------------------------------------------
+
+  !--- target-extent forcing ---
+  ! lat/lon netcdf file with mask_var(lon,lat) or mask_var(lon,lat,time).
+  ! time in model years (same convention as ctl.fake_ice_var_file);
+  ! linearly interpolated between slices, clamped outside the range.
+  mask_file  = "input/Batchelor2019_LGM_icemask.nc"  ! static LGM mask; Batchelor2019_ice_masks.nc has 18 slices but an index time axis
+  mask_var   = "mask"    ! variable name
+  var_thresh = 0.5       ! cells with mask_var > var_thresh are target ice
+                         ! (0.5 for 0/1 masks; e.g. 10. to threshold an ice thickness field)
+
+  !--- synthetic-elevation profile (see ice_syn_topo) ---
+  use_plastic = T        ! T => plastic Nye/Vialov; F => linear wedge
+  slope       = 6.09e-3  ! m/m, linear inside (use_plastic=F)
+  tau0        = 36.0e3   ! Pa, plastic basal yield stress
+  slope_out   = 6.09e-3  ! m/m, linear outside ramp (unused for thickness)
+  z_max_in    = 2500.0   ! m, inside cap
+  z_max_out   = 200.0    ! m, outside floor
+  rho_ice     = 910.0    ! kg/m3
+  g           = 9.81     ! m/s2
+
+  !--- grounded-only constraint ---
+  ! inside the target mask, H >= (z_sl - z_bed)*rho_sw/rho_i + h_grd_min
+  h_grd_min   = 10.0     ! m
+/

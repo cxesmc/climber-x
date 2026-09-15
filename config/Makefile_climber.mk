@@ -96,7 +96,7 @@ obj_geo = $(patsubst %, $(objdir)/%, $(tmp_geo) )
 ########################################################################
 # ice related source files (ice)
 dir_ice = $(srcdir)/ice/
-files_ice = ice_model.f90 ice_def.f90 ice_id.f90 ice_syn_topo.f90
+files_ice = ice_model.f90 ice_def.f90 ice_id.f90 ice_syn_topo.f90 ice_syn.f90
 tmp_ice = $(patsubst %.f90, %.o, $(files_ice) )
 obj_ice = $(patsubst %, $(objdir)/%, $(tmp_ice))
 # dummy
@@ -903,7 +903,7 @@ $(objdir)/n2o_out.o : $(dir_n2o)n2o_out.f90 $(objdir)/n2o_def.o
 
 ######################
 # ice model rules ####
-$(objdir)/ice_model.o : $(dir_ice)ice_model.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o
+$(objdir)/ice_model.o : $(dir_ice)ice_model.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o $(objdir)/ice_syn.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/.ice_model_dummy.o : $(dir_ice).ice_model_dummy.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o
@@ -916,6 +916,9 @@ $(objdir)/ice_id.o : $(dir_ice)ice_id.f90
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/ice_syn_topo.o : $(dir_ice)ice_syn_topo.f90 $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/ice_syn.o : $(dir_ice)ice_syn.f90 $(objdir)/precision.o $(objdir)/constants.o $(objdir)/ice_syn_topo.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ############################
