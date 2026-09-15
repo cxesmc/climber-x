@@ -96,11 +96,11 @@ obj_geo = $(patsubst %, $(objdir)/%, $(tmp_geo) )
 ########################################################################
 # ice related source files (ice)
 dir_ice = $(srcdir)/ice/
-files_ice = ice_model.f90 ice_def.f90 ice_id.f90
+files_ice = ice_model.f90 ice_def.f90 ice_id.f90 ice_syn_topo.f90
 tmp_ice = $(patsubst %.f90, %.o, $(files_ice) )
 obj_ice = $(patsubst %, $(objdir)/%, $(tmp_ice))
 # dummy
-files_ice_dummy = .ice_model_dummy.f90 ice_def.f90 ice_id.f90
+files_ice_dummy = .ice_model_dummy.f90 ice_def.f90 ice_id.f90 ice_syn_topo.f90
 tmp_ice_dummy = $(patsubst %.f90, %.o, $(files_ice_dummy) )
 obj_ice_dummy = $(patsubst %, $(objdir)/%, $(tmp_ice_dummy))
 ########################################################################
@@ -915,6 +915,9 @@ $(objdir)/ice_def.o : $(dir_ice)ice_def.f90 $(objdir)/precision.o
 $(objdir)/ice_id.o : $(dir_ice)ice_id.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
+$(objdir)/ice_syn_topo.o : $(dir_ice)ice_syn_topo.f90 $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
 ############################
 # SICOPOLIS model rules ####
 $(objdir)/sico_model.o : $(dir_ice_sico)sico_model.f90 $(objdir)/control.o $(objdir)/timer.o \
@@ -1063,7 +1066,7 @@ $(objdir)/smb_temp.o : $(dir_smb)smb_temp.f90 $(objdir)/smb_grid.o $(objdir)/smb
 $(objdir)/snow.o : $(dir_smb)snow.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_simple.o : $(dir_smb)smb_simple.f90 $(objdir)/precision.o
+$(objdir)/smb_simple.o : $(dir_smb)smb_simple.f90 $(objdir)/precision.o $(objdir)/ice_syn_topo.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_pdd.o : $(dir_smb)smb_pdd.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/downscaling.o
