@@ -841,7 +841,7 @@ $(objdir)/drainage_basins.o : $(dir_geo)drainage_basins.f90
 $(objdir)/runoff_routing.o : $(dir_geo)runoff_routing.f90 $(objdir)/lakes.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lakes.o : $(dir_geo)lakes.f90 
+$(objdir)/lakes.o : $(dir_geo)lakes.f90 $(objdir)/precision.o $(objdir)/constants.o $(objdir)/timer.o $(objdir)/geo_params.o $(objdir)/geo_def.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/fill_ocean.o : $(dir_geo)fill_ocean.f90 
