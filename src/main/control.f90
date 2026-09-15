@@ -40,6 +40,8 @@ module control
   logical :: ocn_restore_sal, ocn_restore_temp
   logical :: atm_fix_tau
   character (len=256) :: ice_model_name
+  logical :: l_ice_syn        !! run the synthetic ice geometry (ice_syn) as a shadow alongside the ice sheet model?
+  integer :: i_ice_topo_clim  !! ice topography seen by climate/smb: 0 = ice sheet model, 1 = synthetic (requires l_ice_syn or ice_model_name='syn')
   !character (len=65), allocatable :: ice_domain_name(:)
   integer, parameter :: n_ice_domain_max=10  !! maximum number of ice sheet model domains
   integer :: n_ice_domain  !! number of ice sheet model domains
@@ -216,6 +218,13 @@ contains
     call nml_read(filename,"control","flag_bgc",flag_bgc)
     call nml_read(filename,"control","flag_ice",flag_ice)
     call nml_read(filename,"control","ice_model_name",ice_model_name)
+    call nml_read(filename,"control","l_ice_syn",l_ice_syn)
+    call nml_read(filename,"control","i_ice_topo_clim",i_ice_topo_clim)
+    if (trim(ice_model_name)=='syn') l_ice_syn = .true.
+    if (i_ice_topo_clim==1 .and. .not.l_ice_syn) then
+      print *,'ERROR: i_ice_topo_clim=1 requires l_ice_syn=T or ice_model_name=syn'
+      stop
+    endif
     call nml_read(filename,"control","ice_domain_name",ice_domain_name)
     n_ice_domain = 0
     do n=1,10

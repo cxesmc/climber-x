@@ -26,7 +26,7 @@
 module ice_model
     
     use precision, only : wp, sp, dp 
-    use control, only : out_dir
+    use control, only : out_dir, l_ice_syn
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
     use constants, only : map_gen
@@ -192,6 +192,19 @@ contains
                 stop 
 
         end select
+
+        ! Synthetic geometry as a shadow of a real ice sheet model
+        ! (same grid, bedrock and sea level; not fed back to the ice sheet model)
+        if (l_ice_syn .and. trim(model).ne."syn") then
+            syn => syn_doms(idx_dom)
+            call ice_syn_update(syn,time,ice%z_bed,ice%z_sl)
+            ice%H_syn     = syn%H_ice
+            ice%z_sur_syn = syn%z_sur
+            if (time_out_ice) then
+                call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%smb)
+            end if
+            nullify(syn)
+        end if
         
         return 
 
@@ -233,10 +246,7 @@ contains
                 allocate(sico_doms(n_dom))
 
             case("syn")
-                ! Synthetic ice-sheet geometry
-
-                if (allocated(syn_doms)) deallocate(syn_doms)
-                allocate(syn_doms(n_dom))
+                ! Synthetic ice-sheet geometry (allocated below)
 
             case DEFAULT 
 
@@ -245,6 +255,12 @@ contains
                 stop 
 
         end select
+
+        ! Synthetic geometry: the model itself, or a shadow alongside yelmo/sico
+        if (l_ice_syn) then
+            if (allocated(syn_doms)) deallocate(syn_doms)
+            allocate(syn_doms(n_dom))
+        end if
         
         return 
 
@@ -472,6 +488,16 @@ contains
 
         end select
 
+        ! Synthetic geometry as a shadow of a real ice sheet model
+        if (l_ice_syn .and. trim(model).ne."syn") then
+            syn => syn_doms(idx_dom)
+            par_path = trim(out_dir)//"/ice_syn_par.nml"
+            call ice_syn_init(syn, grid, par_path, time, ice%z_bed, ice%z_sl, out_dir, file_prefix="ice_syn_")
+            ice%H_syn     = syn%H_ice
+            ice%z_sur_syn = syn%z_sur
+            nullify(syn)
+        end if
+
         deallocate(z_bed)
         deallocate(z_bed_fil)
         deallocate(z_bed_rel)
@@ -521,6 +547,10 @@ contains
                 stop 
 
         end select
+
+        if (l_ice_syn .and. trim(model).ne."syn") then
+            call ice_syn_end(syn_doms(idx_dom))
+        end if
 
         return 
 
@@ -658,6 +688,8 @@ contains
         ice%H_ice  = syn%H_ice
         ice%z_sur  = syn%z_sur
         ice%z_base = ice%z_bed
+        ice%H_syn     = syn%H_ice
+        ice%z_sur_syn = syn%z_sur
 
         ! no basal melt, no calving
         ice%Q_b  = 0.0_wp
@@ -854,6 +886,8 @@ contains
         allocate(ice%z_bed(nx,ny))
         allocate(ice%z_bed_fil(nx,ny))
         allocate(ice%H_ice(nx,ny))
+        allocate(ice%H_syn(nx,ny))
+        allocate(ice%z_sur_syn(nx,ny))
         allocate(ice%mask_ocn_lake(nx,ny))
         allocate(ice%z_sl(nx,ny))
         allocate(ice%mask_extent(nx,ny))
@@ -878,6 +912,8 @@ contains
         ice%z_bed       = 0.0_wp
         ice%z_bed_fil   = 0.0_wp
         ice%H_ice       = 0.0_wp
+        ice%H_syn       = 0.0_wp
+        ice%z_sur_syn   = 0.0_wp
         ice%z_sl        = 0.0_wp
         ice%mask_extent = 0.0_wp
         ice%calv        = 0.0_wp
@@ -911,6 +947,8 @@ contains
         if (allocated(ice%z_bed))       deallocate(ice%z_bed)
         if (allocated(ice%z_bed_fil))   deallocate(ice%z_bed_fil)
         if (allocated(ice%H_ice))       deallocate(ice%H_ice)
+        if (allocated(ice%H_syn))       deallocate(ice%H_syn)
+        if (allocated(ice%z_sur_syn))   deallocate(ice%z_sur_syn)
         if (allocated(ice%mask_ocn_lake))deallocate(ice%mask_ocn_lake)
         if (allocated(ice%z_sl))        deallocate(ice%z_sl)
         if (allocated(ice%mask_extent)) deallocate(ice%mask_extent)

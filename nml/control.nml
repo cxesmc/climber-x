@@ -19,6 +19,8 @@
  flag_ice         = F        ! use ice sheet model?
  ice_model_name   = 'yelmo'  ! select which ice sheet model to use, 'sico', 'yelmo' or 'syn' (synthetic geometry from target mask, see ice_syn_par.nml)
  ice_domain_name  = 'NH-32KM' !'ANT-32KM'      ! name of ice sheet domanin(s) to be used
+ l_ice_syn        = F        ! also run the synthetic ice geometry (ice_syn_par.nml) as a shadow alongside the ice sheet model? (implied by ice_model_name='syn')
+ i_ice_topo_clim  = 0        ! ice topography passed to geo (climate) and smb: 0 = ice sheet model, 1 = synthetic (needs l_ice_syn=T). Solid Earth and sea level always follow the ice sheet model.
 
  !-------------------------------------------------------
  ! special settings/experiments 

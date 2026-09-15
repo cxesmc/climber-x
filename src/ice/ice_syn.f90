@@ -110,7 +110,7 @@ contains
     !=================================================================
     ! init
     !=================================================================
-    subroutine ice_syn_init(syn, grid, par_file, time, z_bed, z_sl, out_dir)
+    subroutine ice_syn_init(syn, grid, par_file, time, z_bed, z_sl, out_dir, file_prefix)
 
         type(ice_syn_class), intent(inout) :: syn
         type(grid_class),    intent(in)    :: grid
@@ -119,8 +119,10 @@ contains
         real(wp),            intent(in)    :: z_bed(:,:)
         real(wp),            intent(in)    :: z_sl(:,:)
         character(len=*),    intent(in)    :: out_dir
+        character(len=*),    intent(in), optional :: file_prefix   ! default "ice_"
 
         integer :: nx, ny
+        character(len=64) :: prefix
 
         syn%grid = grid
         nx = grid%G%nx
@@ -142,7 +144,9 @@ contains
         call ice_syn_update(syn, time, z_bed, z_sl)
 
         ! 2D output file
-        syn%file2D = trim(out_dir)//"/ice_"//trim(grid%name)//".nc"
+        prefix = "ice_"
+        if (present(file_prefix)) prefix = file_prefix
+        syn%file2D = trim(out_dir)//"/"//trim(prefix)//trim(grid%name)//".nc"
         syn%nout = 0
         call ice_syn_write_init(syn)
 

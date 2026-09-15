@@ -38,6 +38,7 @@ module coupler
     use control, only : ico2_rad, ich4_rad, in2o_rad, id13c, iD14c, prc_forcing
     use control, only : ocn_restore_temp, ocn_restore_sal, atm_fix_tau
     use control, only : flag_co2, flag_ch4, flag_n2o, flag_atm, flag_ocn, flag_bgc, flag_sic, flag_lnd, flag_dust, flag_smb, flag_bmb, flag_ice, flag_geo, flag_lakes
+    use control, only : i_ice_topo_clim
     use control, only : check_water
     use control, only : geo_restart
     use control, only : ifake_ice
@@ -2536,19 +2537,23 @@ contains
 
 
     if (time_soy_smb) then
-      ! surface elevation
-      smb%z_sur = ice%z_sur
+      ! surface elevation and ice thickness: ice sheet model or synthetic geometry
+      if (i_ice_topo_clim.eq.1) then
+        smb%z_sur = ice%z_sur_syn
+        smb%h_ice = ice%H_syn
+      else
+        smb%z_sur = ice%z_sur
+        smb%h_ice = ice%h_ice
+      endif
       where (smb%z_sur.lt.0._wp) 
         smb%z_sur = 0._Wp
       endwhere
       smb%z_bed_std = ice%z_bed_std
-      ! ice thickness
-      smb%h_ice = ice%h_ice
       ! ice mask
       ! save old ice mask
       smb%mask_ice_old = smb%mask_ice
       ! derive new mask
-      where (ice%h_ice.gt.0._wp)
+      where (smb%h_ice.gt.0._wp)
         smb%mask_ice = 1
       elsewhere
         smb%mask_ice = 0
@@ -2937,33 +2942,17 @@ contains
     !----------------------------------------------------------------
     ! map from ice domains to geo domain
     !----------------------------------------------------------------
-    !!$omp parallel do
+    ! h_ice_load (solid Earth, sea level) always follows the ice sheet model;
+    ! h_ice (topography seen by the climate) follows the ice sheet model
+    ! or the synthetic geometry, per i_ice_topo_clim
     do n=1,n_ice_domain
-      ! ice thickness
-      call map_field(maps_hice_to_geo(n),"hice",ice(n)%H_ice,geo%hires%h_ice,stat="mean",missing_value=-9999._dp,reset=.false.)
-      allocate(mask_ice(ice(n)%grid%G%nx,ice(n)%grid%G%ny))
-      allocate(mask_ice_geo(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
-      where (ice(n)%H_ice>h_ice_min) 
-        mask_ice = 1.
-      elsewhere
-        mask_ice = 0.
-      endwhere
-      mask_ice_geo = 1.
-      call map_field(maps_hice_to_geo(n),"mask",mask_ice,mask_ice_geo,stat="mean",missing_value=-9999._dp,reset=.false.)
-      where (mask_ice_geo<0.5) geo%hires%h_ice = 0._wp
-      !mask_ice_geo = 0._wp
-      !call map_field(maps_hice_to_geo(n),"mask",mask_ice,mask_ice_geo,stat="mean",missing_value=-9999._wp,reset=.false.)
-      !where (mask_ice_geo>0.5_wp) mask_ice_geo = 1._wp
-      deallocate(mask_ice)
-      deallocate(mask_ice_geo)
-      !print *,'ice vol ice',sum(ice(n)%H_ice(:,:)*ice(n)%grid%area(:,:)) * 1.e6_wp ! m3
-      !print *,'ice vol geo',sum(geo%hires%h_ice(:,:)*geo%hires%grid%area(:,:), mask=mask_ice_geo==1._wp) * 1.e6_wp ! m3
-
+      call ice_thickness_to_geo(maps_hice_to_geo(n), ice(n)%H_ice, geo%hires%h_ice_load)
+      if (i_ice_topo_clim.eq.1) then
+        call ice_thickness_to_geo(maps_hice_to_geo(n), ice(n)%H_syn, geo%hires%h_ice)
+      else
+        call ice_thickness_to_geo(maps_hice_to_geo(n), ice(n)%H_ice, geo%hires%h_ice)
+      endif
     enddo
-    !!$omp end parallel do
-
-    ! solid-Earth load follows the ice model
-    geo%hires%h_ice_load = geo%hires%h_ice
 
 !    where (geo%hires%grid%lat<45._wp .and. geo%hires%grid%lat>0._wp) 
 !      geo%hires%h_ice = 0._wp
@@ -3017,6 +3006,39 @@ contains
     return
 
   end subroutine ice_to_geo
+
+  !----------------------------------------------------------------
+  ! map an ice thickness field from an ice domain onto the geo hires
+  ! grid (bilinear), cutting cells where the mapped ice mask < 0.5
+  !----------------------------------------------------------------
+  subroutine ice_thickness_to_geo(map, h_ice_dom, h_ice_geo)
+
+    implicit none
+
+    type(map_class), intent(inout) :: map
+    real(wp), intent(in) :: h_ice_dom(:,:)
+    real(wp), intent(inout) :: h_ice_geo(:,:)
+
+    real(wp), allocatable, dimension(:,:) :: mask_ice
+    real(wp), allocatable, dimension(:,:) :: mask_ice_geo
+
+    call map_field(map,"hice",h_ice_dom,h_ice_geo,stat="mean",missing_value=-9999._dp,reset=.false.)
+    allocate(mask_ice(size(h_ice_dom,1),size(h_ice_dom,2)))
+    allocate(mask_ice_geo(size(h_ice_geo,1),size(h_ice_geo,2)))
+    where (h_ice_dom>h_ice_min) 
+      mask_ice = 1.
+    elsewhere
+      mask_ice = 0.
+    endwhere
+    mask_ice_geo = 1.
+    call map_field(map,"mask",mask_ice,mask_ice_geo,stat="mean",missing_value=-9999._dp,reset=.false.)
+    where (mask_ice_geo<0.5) h_ice_geo = 0._wp
+    deallocate(mask_ice)
+    deallocate(mask_ice_geo)
+
+    return
+
+  end subroutine ice_thickness_to_geo
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

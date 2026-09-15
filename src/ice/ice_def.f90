@@ -54,6 +54,8 @@ module ice_def
         real(wp), allocatable :: z_bed_std(:,:) 
         real(wp), allocatable :: z_base(:,:) 
         real(wp), allocatable :: H_ice(:,:) 
+        real(wp), allocatable :: H_syn(:,:)      ! synthetic ice thickness (l_ice_syn) 
+        real(wp), allocatable :: z_sur_syn(:,:)  ! synthetic surface elevation (l_ice_syn) 
         real(wp), allocatable :: calv(:,:) 
         real(wp), allocatable :: Q_b(:,:) 
 
