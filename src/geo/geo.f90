@@ -132,6 +132,7 @@ contains
     allocate( geo%hires%z_topo_fill(ni_topo,nj_topo))
     allocate( geo%hires%z_sur(ni_topo,nj_topo))
     allocate( geo%hires%h_ice(ni_topo,nj_topo))
+    allocate( geo%hires%h_ice_load(ni_topo,nj_topo))
     allocate( geo%hires%h_ice_eq(ni_topo,nj_topo))
     allocate( geo%hires%rsl(ni_topo,nj_topo))
     allocate( geo%hires%mask(ni_topo,nj_topo))
@@ -328,6 +329,8 @@ contains
         deallocate(mask_ice)
         deallocate(mask_ice_geo)
       endif
+      ! solid-Earth load initially identical to climate ice thickness
+      geo%hires%h_ice_load = geo%hires%h_ice
 
       ! derive mask and topography
       ! initially land everywhere
@@ -559,10 +562,10 @@ contains
     ! initialize VILMA
     !-------------------------------------------------------------------
     if (flag_geo .and. i_geo.eq.2) then
-      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice_load)
     endif
     if (flag_geo .and. i_geo.eq.3) then
-      call fastearth_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+      call fastearth_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice_load)
     endif
 
     print*
@@ -620,7 +623,7 @@ contains
       geo%hires%rsl = geo%sea_level   ! just for output
 
      ! compute glacial isostatic adjustment and update bedrock elevation (relative to current sea level)
-      call gia_update(geo%hires%z_bed_rel, geo%hires%h_ice, geo%hires%mask, geo%sea_level, geo%d_sea_level, &    ! in
+      call gia_update(geo%hires%z_bed_rel, geo%hires%h_ice_load, geo%hires%mask, geo%sea_level, geo%d_sea_level, &    ! in
         geo%hires%z_bed)  ! inout
 
     else if (i_geo==2) then
@@ -630,7 +633,7 @@ contains
       if (.not.firstcall) then
         ! takes current ice load (thickness) as input
         ! returns relative sea level and new bedrock elevation
-        call vilma_update(geo%hires%grid, geo%hires%h_ice, & ! in
+        call vilma_update(geo%hires%grid, geo%hires%h_ice_load, & ! in
           geo%hires%rsl, geo%hires%z_bed)    ! out
       endif
 
@@ -641,7 +644,7 @@ contains
       if (.not.firstcall) then
         ! takes current ice load (thickness) as input
         ! returns relative sea level and new bedrock elevation
-        call fastearth_update(geo%hires%h_ice, &  ! in
+        call fastearth_update(geo%hires%h_ice_load, &  ! in
           geo%hires%rsl, geo%hires%z_bed)    ! out
       endif
 
@@ -1022,6 +1025,7 @@ contains
     deallocate(geo%hires%z_topo_fill)
     deallocate(geo%hires%z_sur)
     deallocate(geo%hires%h_ice)
+    deallocate(geo%hires%h_ice_load)
     deallocate(geo%hires%h_ice_eq)
     deallocate(geo%hires%rsl)
     deallocate(geo%hires%mask)
@@ -1115,6 +1119,7 @@ contains
     call nc_write(fnm,"z_bed_eq", geo%hires%z_bed_eq , dims=["lon","lat"],long_name="z_bed_eq ",units="m")
     call nc_write(fnm,"z_topo", geo%hires%z_topo, dims=["lon","lat"],long_name="z_topo",units="m") 
     call nc_write(fnm,"h_ice ", geo%hires%h_ice , dims=["lon","lat"],long_name="h_ice ",units="m")
+    call nc_write(fnm,"h_ice_load", geo%hires%h_ice_load, dims=["lon","lat"],long_name="h_ice_load",units="m")
     call nc_write(fnm,"h_ice_ref ", geo%hires%h_ice_ref , dims=["lon","lat"],long_name="h_ice_ref ",units="m")
     call nc_write(fnm,"h_ice_eq ", geo%hires%h_ice_eq , dims=["lon","lat"],long_name="h_ice_eq ",units="m")
     call nc_write(fnm,"rsl   ", geo%hires%rsl   , dims=["lon","lat"],long_name="rsl   ",units="m")
@@ -1151,6 +1156,12 @@ contains
     call nc_read(fnm,"z_bed_eq ", geo%hires%z_bed_eq )
     call nc_read(fnm,"z_topo   ", geo%hires%z_topo   ) 
     call nc_read(fnm,"h_ice    ", geo%hires%h_ice    )
+    if (nc_exists_var(fnm,"h_ice_load")) then
+      call nc_read(fnm,"h_ice_load", geo%hires%h_ice_load)
+    else
+      ! older restart files: load identical to climate ice thickness
+      geo%hires%h_ice_load = geo%hires%h_ice
+    endif
 !    call nc_read(fnm,"h_ice_ref", geo%hires%h_ice_ref)
     call nc_read(fnm,"h_ice_eq ", geo%hires%h_ice_eq )
     call nc_read(fnm,"rsl      ", geo%hires%rsl      )

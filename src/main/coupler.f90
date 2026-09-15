@@ -2962,6 +2962,9 @@ contains
     enddo
     !!$omp end parallel do
 
+    ! solid-Earth load follows the ice model
+    geo%hires%h_ice_load = geo%hires%h_ice
+
 !    where (geo%hires%grid%lat<45._wp .and. geo%hires%grid%lat>0._wp) 
 !      geo%hires%h_ice = 0._wp
 !    endwhere
@@ -3160,6 +3163,8 @@ contains
         deallocate(mask_ice)
         deallocate(mask_ice_geo)
       endif
+      ! solid-Earth load follows the prescribed ice
+      geo%hires%h_ice_load = geo%hires%h_ice
     endif
 
     ! if solid Earth model not active, derive bedrock elevation anomaly from bnd
