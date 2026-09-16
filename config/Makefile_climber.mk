@@ -718,7 +718,7 @@ $(objdir)/lndvc_const.o : $(dir_lndvc)/constants.f90 $(objdir)/precision.o
 $(objdir)/lndvc_thermo.o : $(dir_lndvc)/thermo.f90 $(objdir)/lndvc_const.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lndvc_smb_params.o : $(dir_lndvc)/smb/params.f90 $(objdir)/precision.o
+$(objdir)/lndvc_smb_params.o : $(dir_lndvc)/smb/params.f90 $(objdir)/precision.o $(objdir)/timer.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_smb_snow.o : $(dir_lndvc)/smb/snow.f90 $(objdir)/lndvc_smb_params.o $(objdir)/precision.o

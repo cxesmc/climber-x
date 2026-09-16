@@ -23,7 +23,8 @@ module lndvc_model
 
     ! ported single-column physics
     use semi_m,          only : semi
-    use smb_par_m,       only : p0, h_atm, gamma, prc_par, surf_par
+    use smb_par_m,       only : p0, h_atm, gamma, prc_par, surf_par, smb_par_init
+    use smb_grid_m,      only : smb_grid_init
     ! ported single-column lake physics
     use lndvc_surface_par_lnd, only : resist_aer_lake, snow_albedo_lake, surface_albedo_lake, resist_sur_lake
     use lndvc_lake_par_mod,    only : lake_par_thermal, sublake_par_thermal
@@ -85,6 +86,8 @@ contains
         integer,           intent(in)    :: nx, ny
 
         call lndvc_grid_init()
+        call smb_grid_init()  ! set up lndvc SMB vertical grid (dz, z_int, rdz_pos/neg, rdz)
+        call smb_par_init()   ! load lndvc SMB namelist (snow_par, surf_par, prc_par, dt, ...)
         call lndvc_alloc(lnd, nx, ny)
 
         return

@@ -8,10 +8,12 @@ module smb_par_m
 
     use precision, only : wp
     use nml
+    use timer,   only : dt_smb, sec_day, sec_year
+    use control, only : out_dir
 
     implicit none
 
-    ! time step [s] (set in smb_par_init; default 1 day)
+    ! time step [s] (set in smb_par_init from timer::dt_smb; default 1 day)
     real(wp) :: dt  = 86400._wp
     real(wp) :: rdt = 1._wp/86400._wp
 
@@ -114,17 +116,23 @@ module smb_par_m
 
 contains
 
-    subroutine smb_par_init(filename, dt_smb)
-        ! Read the snow parameters from the "smb_par" namelist group so values
-        ! match the reference SMB model. dt is set from the passed time step.
+    subroutine smb_par_init
+        ! Read the SMB parameters from the "smb_par" namelist group so values
+        ! match the reference SMB model. Time step follows the reference: dt is
+        ! set from timer::dt_smb, filename from control::out_dir/smb_par.nml,
+        ! mirroring src/smb/smb_params::smb_params_init.
 
         implicit none
 
-        character(len=*), intent(in)           :: filename
-        real(wp),         intent(in), optional :: dt_smb
+        character(len=256)  :: filename
+        real(wp)            :: h_firn
+        real(wp), parameter :: rho_firn = 600._wp   ! kg/m3 (reference smb)
 
-        if (present(dt_smb)) dt = dt_smb
-        rdt = 1._wp/dt
+        ! time step (mirror reference)
+        dt  = dt_smb
+        rdt = 1._wp / dt
+
+        filename = trim(out_dir) // "/smb_par.nml"
 
         call nml_read(filename,"smb_par","rho_snow",          snow_par%rho)
         call nml_read(filename,"smb_par","lambda_snow",       snow_par%lambda)
@@ -133,6 +141,7 @@ contains
         call nml_read(filename,"smb_par","f_age_t",           snow_par%f_age_t)
         call nml_read(filename,"smb_par","dT_age",            snow_par%dT_age)
         call nml_read(filename,"smb_par","snow_0",            snow_par%snow_0)
+        snow_par%snow_0 = snow_par%snow_0 / sec_day     ! mm/day -> mm/s (mirror reference)
         call nml_read(filename,"smb_par","snow_1",            snow_par%snow_1)
         call nml_read(filename,"smb_par","snow_grain_fresh",  snow_par%snow_grain_fresh)
         call nml_read(filename,"smb_par","isnow_albedo",      snow_par%isnow_albedo)
@@ -152,6 +161,25 @@ contains
         call nml_read(filename,"smb_par","f_rfz_to_snow_max", snow_par%f_rfz_to_snow_max)
         call nml_read(filename,"smb_par","wsnow_crit_rfz",    snow_par%wsnow_crit_rfz)
 
+        ! surface parameters (mirror src/smb/smb_params:324-340)
+        call nml_read(filename,"smb_par","i_f_ice",              surf_par%i_f_ice)
+        call nml_read(filename,"smb_par","h_ice_crit",           surf_par%h_ice_crit)
+        call nml_read(filename,"smb_par","c_fice",               surf_par%c_fice)
+        call nml_read(filename,"smb_par","z_sur_std_crit",       surf_par%z_sur_std_crit)
+        call nml_read(filename,"smb_par","z0m_ice",              surf_par%z0m_ice)
+        call nml_read(filename,"smb_par","i_alb_ice",            surf_par%i_alb_ice)
+        call nml_read(filename,"smb_par","i_alb_ice_margin",     surf_par%i_alb_ice_margin)
+        call nml_read(filename,"smb_par","alb_soil",             surf_par%alb_soil)
+        call nml_read(filename,"smb_par","alb_firn",             surf_par%alb_firn)
+        call nml_read(filename,"smb_par","alb_ice_const",        surf_par%alb_ice_const)
+        call nml_read(filename,"smb_par","alb_ice_margin_const", surf_par%alb_ice_margin_const)
+        call nml_read(filename,"smb_par","alb_ice_clean",        surf_par%alb_ice_clean)
+        call nml_read(filename,"smb_par","alb_ice_dirty",        surf_par%alb_ice_dirty)
+        call nml_read(filename,"smb_par","tau_alb_ice_dirty",    surf_par%tau_alb_ice_dirty)
+        surf_par%tau_alb_ice_dirty = surf_par%tau_alb_ice_dirty * sec_year  ! yr -> s
+        call nml_read(filename,"smb_par","h_firn",               h_firn)
+        surf_par%w_firn = h_firn * rho_firn
+
         ! surface energy balance scalars
         call nml_read(filename,"smb_par","l_diurnal_cycle",   l_diurnal_cycle)
         call nml_read(filename,"smb_par","tstd_scale",        tstd_scale)
@@ -160,6 +188,7 @@ contains
         call nml_read(filename,"smb_par","l_regional_climate_forcing", l_regional_climate_forcing)
         call nml_read(filename,"smb_par","i_gamma",           i_gamma)
         call nml_read(filename,"smb_par","gamma",             gamma)
+        gamma = gamma * 1e-3_wp                          ! K/km -> K/m (mirror reference)
 
         ! downscaling scalars
         call nml_read(filename,"smb_par","dLW_dT_fac",        dLW_dT_fac)
