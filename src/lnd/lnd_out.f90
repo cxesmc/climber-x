@@ -679,6 +679,7 @@ contains
         mon_ts(y,k)%gpp = 0._wp
         mon_ts(y,k)%runoff = 0._wp
         mon_ts(y,k)%runsur = 0._wp
+        mon_ts(y,k)%runsub = 0._wp   ! was missing; runsub was accumulating on top of allocation-time uninitialised memory
         mon_ts(y,k)%calving = 0._wp
         mon_ts(y,k)%drain = 0._wp
         mon_ts(y,k)%evp   = 0._wp
