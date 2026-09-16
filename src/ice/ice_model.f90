@@ -180,7 +180,7 @@ contains
                 call syn_to_ice(ice,syn)
 
                 if (time_out_ice) then
-                    call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%smb)
+                    call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%H_syn,ice%z_sur_syn,ice%smb)
                 end if
 
                 nullify(syn)
@@ -198,10 +198,9 @@ contains
         if (l_ice_syn .and. trim(model).ne."syn") then
             syn => syn_doms(idx_dom)
             call ice_syn_update(syn,time,ice%z_bed,ice%z_sl)
-            ice%H_syn     = syn%H_ice
-            ice%z_sur_syn = syn%z_sur
+            call syn_composite(ice,syn)
             if (time_out_ice) then
-                call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%smb)
+                call ice_syn_write_step(syn,time,ice%z_bed,ice%z_sl,ice%H_syn,ice%z_sur_syn,ice%smb)
             end if
             nullify(syn)
         end if
@@ -493,8 +492,7 @@ contains
             syn => syn_doms(idx_dom)
             par_path = trim(out_dir)//"/ice_syn_par.nml"
             call ice_syn_init(syn, grid, par_path, time, ice%z_bed, ice%z_sl, out_dir, file_prefix="ice_syn_")
-            ice%H_syn     = syn%H_ice
-            ice%z_sur_syn = syn%z_sur
+            call syn_composite(ice,syn)
             nullify(syn)
         end if
 
@@ -698,6 +696,29 @@ contains
         return 
 
     end subroutine syn_to_ice
+
+    subroutine syn_composite(ice,syn)
+        ! Topography delivered to the climate in shadow mode: synthetic
+        ! geometry inside the target mask, the ice sheet model's own ice
+        ! outside it (e.g. where the target outline misses an ice-covered
+        ! region, the ice sheet model's ice there is still seen).
+
+        implicit none 
+
+        type(ice_class),     intent(INOUT) :: ice 
+        type(ice_syn_class), intent(IN)    :: syn 
+
+        where (syn%mask_target)
+            ice%H_syn     = syn%H_ice
+            ice%z_sur_syn = syn%z_sur
+        elsewhere
+            ice%H_syn     = ice%H_ice
+            ice%z_sur_syn = ice%z_sur
+        end where
+
+        return 
+
+    end subroutine syn_composite
 
     subroutine ice_to_sico(sico,ice)
         ! Populate SICOPOLIS fields with ice information 

@@ -380,12 +380,17 @@ contains
 
     end subroutine ice_syn_write_init
 
-    subroutine ice_syn_write_step(syn, time, z_bed, z_sl, smb)
+    !> H_ice, z_srf: the topography actually delivered to the climate
+    !> (identical to the synthetic one in mode ice_model_name='syn';
+    !> composite with the ice sheet model outside the mask in shadow mode)
+    subroutine ice_syn_write_step(syn, time, z_bed, z_sl, H_ice, z_srf, smb)
 
         type(ice_syn_class), intent(inout) :: syn
         real(wp),            intent(in)    :: time
         real(wp),            intent(in)    :: z_bed(:,:)
         real(wp),            intent(in)    :: z_sl(:,:)
+        real(wp),            intent(in)    :: H_ice(:,:)
+        real(wp),            intent(in)    :: z_srf(:,:)
         real(wp),            intent(in)    :: smb(:,:)
 
         integer :: nx, ny, n, ncid
@@ -405,12 +410,16 @@ contains
             long_name="target ice mask", units="1", ncid=ncid)
         call nc_write(fnm, "dist", real(syn%d_m,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
             long_name="signed distance to target-mask boundary", units="m", ncid=ncid)
-        call nc_write(fnm, "z_syn", real(syn%z_syn,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
-            long_name="synthetic surface elevation (profile)", units="m", ncid=ncid)
-        call nc_write(fnm, "H_ice", real(syn%H_ice,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
-            long_name="ice thickness", units="m", ncid=ncid)
-        call nc_write(fnm, "z_srf", real(syn%z_sur,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
-            long_name="surface elevation", units="m", ncid=ncid)
+        call nc_write(fnm, "z_syn_raw", real(syn%z_syn,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
+            long_name="synthetic surface profile before grounding constraint", units="m", ncid=ncid)
+        call nc_write(fnm, "H_syn", real(syn%H_ice,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
+            long_name="synthetic ice thickness (valid inside target mask, 0 outside)", units="m", ncid=ncid)
+        call nc_write(fnm, "z_syn", real(syn%z_sur,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
+            long_name="synthetic surface elevation (bedrock outside target mask)", units="m", ncid=ncid)
+        call nc_write(fnm, "H_ice", real(H_ice,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
+            long_name="ice thickness delivered to climate (synthetic inside mask, ice sheet model outside)", units="m", ncid=ncid)
+        call nc_write(fnm, "z_srf", real(z_srf,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
+            long_name="surface elevation delivered to climate (synthetic inside mask, ice sheet model outside)", units="m", ncid=ncid)
         call nc_write(fnm, "z_bed", real(z_bed,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
             long_name="bedrock elevation", units="m", ncid=ncid)
         call nc_write(fnm, "z_sl", real(z_sl,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
