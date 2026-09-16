@@ -12,7 +12,8 @@
   ! lat/lon netcdf file with mask_var(lon,lat) or mask_var(lon,lat,time).
   ! time in model years (same convention as ctl.fake_ice_var_file);
   ! linearly interpolated between slices, clamped outside the range.
-  mask_file  = "input/Batchelor2019_LGM_icemask.nc"  ! static LGM mask; Batchelor2019_ice_masks.nc has 18 slices but an index time axis
+  mask_file  = "input/Batchelor2019_ice_masks_lgc.nc"  ! MIS 6 to LGM, time in years BP (LGM held 26.5-21 ka);
+                                                      ! Batchelor2019_LGM_icemask.nc for a static LGM extent
   mask_var   = "mask"    ! variable name
   var_thresh = 0.5       ! cells with mask_var > var_thresh are target ice
                          ! (0.5 for 0/1 masks; e.g. 10. to threshold an ice thickness field)

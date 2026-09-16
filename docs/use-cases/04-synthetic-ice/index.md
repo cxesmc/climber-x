@@ -19,12 +19,12 @@ With `l_ice_syn=T` and `i_ice_topo_clim=0` the synthetic geometry is only diagno
 The target extent is read from a lat/lon netCDF file set in `nml/ice_syn_par.nml` (group `&ice_syn`, runme alias `icesyn`):
 
 ```fortran
-mask_file  = "input/Batchelor2019_LGM_icemask.nc"
+mask_file  = "input/Batchelor2019_ice_masks_lgc.nc"   ! MIS 6 to LGM, years before present
 mask_var   = "mask"    ! mask_var(lon,lat) or mask_var(lon,lat,time)
 var_thresh = 0.5       ! cells with mask_var > var_thresh are target ice
 ```
 
-A file with a `time` dimension (model years, same convention as `fake_ice_var_file`) is linearly interpolated between slices and clamped outside its range. An ice-thickness reconstruction can be used as the target by setting `var_thresh` to a thickness (e.g. `10.`). The mask is mapped conservatively to the ice grid and thresholded at a fraction of 0.5.
+A file with a `time` dimension (model years, same convention as `fake_ice_var_file`) is linearly interpolated between slices and clamped outside its range. The default `Batchelor2019_ice_masks_lgc.nc` holds the Batchelor et al. (2019) reconstructions from MIS 6 to the LGM with an age assigned to each stage (see `time_slices.md` in the FesmData `Batchelor2019_NHIceMasks` directory); it ends at 21 ka, so a deglaciation needs another source. An ice-thickness reconstruction can be used as the target by setting `var_thresh` to a thickness (e.g. `10.`). The mask is mapped conservatively to the ice grid and thresholded at a fraction of 0.5.
 
 ## Geometry parameters
 
