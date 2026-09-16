@@ -90,6 +90,8 @@ module ice_syn
         integer                :: i0, i1
         real(wp), allocatable  :: f_ice_0(:,:)     ! target ice fraction on ice grid, slice i0
         real(wp), allocatable  :: f_ice_1(:,:)     ! target ice fraction on ice grid, slice i1
+        real(wp), allocatable  :: d_0(:,:)         ! signed distance to slice-i0 mask boundary [m]
+        real(wp), allocatable  :: d_1(:,:)         ! signed distance to slice-i1 mask boundary [m]
 
         ! geometry on the ice grid
         real(wp), allocatable  :: x_m(:,:), y_m(:,:)   ! coordinates [m]
@@ -134,6 +136,7 @@ contains
         allocate(syn%f_ice_target(nx,ny), syn%mask_target(nx,ny))
         allocate(syn%d_m(nx,ny), syn%z_syn(nx,ny), syn%H_ice(nx,ny), syn%z_sur(nx,ny))
         allocate(syn%f_ice_0(nx,ny), syn%f_ice_1(nx,ny))
+        allocate(syn%d_0(nx,ny), syn%d_1(nx,ny))
 
         ! grid coordinates in metres (grid axes are in grid%cs%units, e.g. km)
         syn%x_m = real(grid%x,wp) * real(grid%cs%xy_conv,wp)
@@ -248,9 +251,15 @@ contains
     end subroutine ice_syn_mask_init
 
     !-----------------------------------------------------------------
-    !> Interpolate the target ice fraction to `time` (linear between
-    !> bracketing slices; clamped outside the file range) and threshold
-    !> it to the logical target mask.
+    !> Target mask at `time`, interpolated between the bracketing slices
+    !> (clamped outside the file range). Each slice mask (fraction >= 0.5)
+    !> is represented by its signed distance to the boundary; the two
+    !> distances are blended linearly in time and the mask is where the
+    !> blended distance is >= 0. At the slice times this reproduces the
+    !> slice masks exactly; in between, the margin advances (or retreats)
+    !> gradually from one boundary to the other instead of all newly
+    !> glaciated cells switching at once. The ice fraction is also
+    !> blended, for diagnostics only.
     !-----------------------------------------------------------------
     subroutine ice_syn_mask_update(syn, time)
 
@@ -283,24 +292,41 @@ contains
         if (i0 /= i0_old) then
             if (i0 == i1_old) then
                 syn%f_ice_0 = syn%f_ice_1
+                syn%d_0     = syn%d_1
             else
                 call ice_syn_read_slice(syn, i0, syn%f_ice_0)
+                call ice_syn_slice_distance(syn, syn%f_ice_0, syn%d_0)
             end if
         end if
         if (i1 /= i1_old) then
             if (i1 == i0) then
                 syn%f_ice_1 = syn%f_ice_0
+                syn%d_1     = syn%d_0
             else
                 call ice_syn_read_slice(syn, i1, syn%f_ice_1)
+                call ice_syn_slice_distance(syn, syn%f_ice_1, syn%d_1)
             end if
         end if
         syn%i0 = i0
         syn%i1 = i1
 
         syn%f_ice_target = w0*syn%f_ice_0 + w1*syn%f_ice_1
-        syn%mask_target  = (syn%f_ice_target >= 0.5_wp)
+        syn%mask_target  = (w0*syn%d_0 + w1*syn%d_1 >= 0.0_wp)
 
     end subroutine ice_syn_mask_update
+
+    !-----------------------------------------------------------------
+    !> Signed distance [m] to the boundary of a slice mask (f_ice >= 0.5).
+    !-----------------------------------------------------------------
+    subroutine ice_syn_slice_distance(syn, f_ice, d)
+
+        type(ice_syn_class), intent(in)  :: syn
+        real(wp),            intent(in)  :: f_ice(:,:)
+        real(wp),            intent(out) :: d(:,:)
+
+        call compute_signed_distance(d, f_ice >= 0.5_wp, syn%x_m, syn%y_m, "m")
+
+    end subroutine ice_syn_slice_distance
 
     !-----------------------------------------------------------------
     !> Read slice `idx` of mask_var, threshold to 0/1 on the file grid,
@@ -412,6 +438,8 @@ contains
         if (allocated(syn%z_sur))        deallocate(syn%z_sur)
         if (allocated(syn%f_ice_0))      deallocate(syn%f_ice_0)
         if (allocated(syn%f_ice_1))      deallocate(syn%f_ice_1)
+        if (allocated(syn%d_0))          deallocate(syn%d_0)
+        if (allocated(syn%d_1))          deallocate(syn%d_1)
         if (allocated(syn%time_file))    deallocate(syn%time_file)
 
     end subroutine ice_syn_end
