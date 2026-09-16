@@ -82,6 +82,7 @@ module smb_simple_m
     public :: smb_simple_init
     public :: smb_simple_par_load
     public :: smb_simple_set_mask
+    public :: smb_simple_set_mask_ice
     public :: smb_simple_update
     public :: calc_smb_simple_syn
     public :: calc_smb_simple_pwl
@@ -176,6 +177,8 @@ module smb_simple_m
         character(len=512)   :: mask_file = "" ! target-mask file ("" => H_ice_ref)
         character(len=56)    :: mask_var  = "" ! target-mask variable name
         integer              :: mask_idx = 1 ! index along the 3rd (e.g. time) dim of mask_var
+        logical              :: l_z_syn_external = .false. ! T => z_syn and target mask supplied by the
+                                             ! ice component (e.g. ice_syn) each update; no internal profile
         character(len=16)    :: units       ! coordinate units for distance ("m")
 
         ! Static grid (stored once so update needs no grid arguments)
@@ -289,6 +292,28 @@ contains
     end subroutine smb_simple_set_mask
 
     !-----------------------------------------------------------------
+    !> Set the target mask directly from an ice mask (1 = ice) supplied
+    !> by the ice component, ignoring mask_file. Used each update when
+    !> l_z_syn_external is set.
+    !-----------------------------------------------------------------
+    subroutine smb_simple_set_mask_ice(smbs, mask_ice)
+
+        type(smb_simple_class), intent(inout) :: smbs
+        integer,                intent(in)    :: mask_ice(:,:)
+
+        if (.not. allocated(smbs%mask)) then
+            error stop "smb_simple_set_mask_ice: smbs not initialized"
+        end if
+        if (size(mask_ice, 1) /= size(smbs%mask, 1) .or. &
+            size(mask_ice, 2) /= size(smbs%mask, 2)) then
+            error stop "smb_simple_set_mask_ice: mask_ice shape mismatch"
+        end if
+
+        smbs%mask = (mask_ice > 0)
+
+    end subroutine smb_simple_set_mask_ice
+
+    !-----------------------------------------------------------------
     !> Compute the SMB (mm w.e./yr) and surface temperature (K) fields
     !> for the active scheme, storing them in smbs%smb and smbs%t_srf.
     !> Only the synthetic-elevation scheme ("syn") is currently wired;
@@ -303,9 +328,17 @@ contains
         select case (trim(smbs%scheme))
 
             case ("syn")
-                call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
-                                         smbs%x, smbs%y, smbs%lat, t_sl, &
-                                         smbs%co2, smbs%f, smbs%par, units=smbs%units)
+                if (smbs%l_z_syn_external) then
+                    ! z_srf already is the synthetic surface (from the ice component)
+                    call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
+                                             smbs%x, smbs%y, smbs%lat, t_sl, &
+                                             smbs%co2, smbs%f, smbs%par, units=smbs%units, &
+                                             z_syn_in=z_srf)
+                else
+                    call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
+                                             smbs%x, smbs%y, smbs%lat, t_sl, &
+                                             smbs%co2, smbs%f, smbs%par, units=smbs%units)
+                end if
 
             case default
                 write(*,*) "smb_simple_update: scheme not supported: ", trim(smbs%scheme)
@@ -330,7 +363,9 @@ contains
     !>      coordinate pairs x/y interpreted per `units` ("m"/"km"
     !>      Cartesian, "degrees" lon/lat)
     !>   2. z_syn from (d, z_sur, mask_target) per p%use_plastic
-    !>      (.true. → plastic Nye/Vialov; .false. → linear wedge)
+    !>      (.true. → plastic Nye/Vialov; .false. → linear wedge),
+    !>      or taken as given when z_syn_in is present (surface supplied
+    !>      by the ice component, e.g. ice_syn)
     !>   3. SMB = acc - abl kernel on z_syn (dz_SL = 0), with acc the maritime
     !>      accumulation field from compute_acc; all tuned params are in
     !>      mm w.e./yr, so no unit conversion is needed.
@@ -345,7 +380,7 @@ contains
     !> optional and defaults to "m".
     !-----------------------------------------------------------------
     subroutine calc_smb_simple_syn(smb, t_srf, z_sur, mask_target, x, y, lat, &
-                                   t_sl, CO2, f, p, units)
+                                   t_sl, CO2, f, p, units, z_syn_in)
         real(wp), intent(out) :: smb(:,:)
         real(wp), intent(out) :: t_srf(:,:)
         real(wp), intent(in)  :: z_sur(:,:)
@@ -358,6 +393,7 @@ contains
         real(wp), intent(in)  :: f
         type(smb_params_syn), intent(in) :: p
         character(len=*), intent(in), optional :: units
+        real(wp), intent(in), optional :: z_syn_in(:,:)   ! externally supplied synthetic surface; skips step 2
 
         integer :: nx, ny
         real(wp), allocatable :: d_m(:,:), z_syn(:,:)
@@ -391,7 +427,12 @@ contains
 
         call compute_signed_distance(d_m, mask_target, x, y, units_use)
 
-        if (p%use_plastic) then
+        if (present(z_syn_in)) then
+            if (size(z_syn_in, 1) /= nx .or. size(z_syn_in, 2) /= ny) then
+                error stop "calc_smb_simple_syn: z_syn_in shape mismatch"
+            end if
+            z_syn = z_syn_in
+        else if (p%use_plastic) then
             call compute_z_syn_plastic(z_syn, d_m, z_sur, mask_target,     &
                                        p%tau0, p%slope_out,                &
                                        p%z_max_in, p%z_max_out,            &
@@ -681,6 +722,7 @@ contains
         call nml_read(filename,nml_group,"mask_file", smbs%mask_file, init=init_pars)
         call nml_read(filename,nml_group,"mask_var",  smbs%mask_var,  init=init_pars)
         call nml_read(filename,nml_group,"mask_idx",  smbs%mask_idx,  init=init_pars)
+        call nml_read(filename,nml_group,"l_z_syn_external", smbs%l_z_syn_external, init=init_pars)
 
         ! Synthetic-elevation (syn) scheme parameters
         call nml_read(filename,nml_group,"a1",         smbs%par%a1,         init=init_pars)

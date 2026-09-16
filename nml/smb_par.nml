@@ -188,6 +188,13 @@
   mask_var  = ""       ! target-mask variable name (cells > 0 are ice)
   mask_idx  = 1        ! index along the 3rd dim of mask_var
 
+  ! synthetic surface supplied by the ice component instead of built here:
+  ! with ice_model_name='syn', or l_ice_syn=T and i_ice_topo_clim=1, the
+  ! surface elevation and ice mask delivered to the smb grid already are the
+  ! synthetic ones (see ice_syn_par.nml). Set T to use them directly (no
+  ! internal profile, target mask = delivered ice mask, refreshed yearly).
+  l_z_syn_external = F
+
   !--- climate snow line  z_SL = a1 + a2*phi + a3*CO2 + a4*(f - fmean) ---
   a1    = 3750.        ! m (constant)
   a2    =  -50.        ! m / deg N (negative: drops poleward)
