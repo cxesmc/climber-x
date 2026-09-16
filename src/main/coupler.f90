@@ -2535,9 +2535,13 @@ contains
           f%swd_toa_i     = cmn%solarm(doy,j)
           f%swd_toa_min_i = cmn%solarmin(doy,j)
 
-          ! identity baseline: no bias correction, no interannual variability
+          ! identity baseline: no bias correction, no interannual variability.
+          ! prc_bias_i enters SEMI/prc_downscaling as `prc = prc_i / prc_bias_i`
+          ! (multiplicative correction), so the identity value is 1, not 0
+          ! (mirror reference smb: smb_in%prc_bias = 1 when no correction file
+          ! is loaded — see src/smb/smb_model.f90:1178).
           f%t2m_bias_i = 0._wp
-          f%prc_bias_i = 0._wp
+          f%prc_bias_i = 1._wp
           f%dTvar      = 0._wp
 
         end associate
