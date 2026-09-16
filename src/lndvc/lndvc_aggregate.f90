@@ -173,6 +173,120 @@ contains
             cell%et     = cell%et     / wsum
         end if
 
+        ! --- rich diagnostic aggregation (mirrors reference lnd_surf / lnd_ts coverage) ----
+        ! Every ice/lake vc holds an identical forcing broadcast from its cell,
+        ! so we take it from the first vc we find with a live block. Snowpack,
+        ! water balance, vegetation, soil carbon are aggregated area-weighted
+        ! over the vcs that contribute (ice-vc snow + veg-vc veg, etc.).
+        cell%t2m           = 0._wp
+        cell%q2m           = 0._wp
+        cell%lwnet         = 0._wp
+        cell%swnet         = 0._wp
+        cell%rain          = 0._wp
+        cell%snow_flx      = 0._wp
+        cell%h_snow        = 0._wp
+        cell%w_snow        = 0._wp
+        cell%w_snow_max    = 0._wp
+        cell%snowmelt      = 0._wp
+        cell%icemelt       = 0._wp
+        cell%f_snow        = 0._wp
+        cell%transpiration = 0._wp
+        cell%evap_surface  = 0._wp
+        cell%evap_can      = 0._wp
+        cell%runoff_sur    = 0._wp
+        cell%runoff_gw     = 0._wp
+        cell%drainage      = 0._wp
+        cell%w_table       = 0._wp
+        cell%w_table_peat  = 0._wp
+        cell%f_wet         = 0._wp
+        cell%f_wetland     = 0._wp
+        cell%f_peat_pot    = 0._wp
+        cell%lai           = 0._wp
+        cell%sai           = 0._wp
+        cell%gpp           = 0._wp
+        cell%npp           = 0._wp
+        cell%veg_c         = 0._wp
+        cell%gdd5          = 0._wp
+        cell%t2m_min_mon   = 0._wp
+        cell%t_soil_top    = 0._wp
+        cell%theta_w_top   = 0._wp
+        cell%alt           = 0._wp
+        cell%soil_c        = 0._wp
+        cell%peat_c        = 0._wp
+        cell%soil_resp     = 0._wp
+
+        ! forcing scalars: one representative vc suffices (broadcast is uniform)
+        do k = 1, size(vc)
+            if (vc(k)%desc%class /= 0) then
+                cell%t2m      = vc(k)%forc%t2m
+                cell%q2m      = vc(k)%forc%q2m
+                cell%swnet    = vc(k)%forc%swnet
+                cell%rain     = vc(k)%forc%rain
+                cell%snow_flx = vc(k)%forc%snow
+                cell%lwnet    = vc(k)%forc%lwdown ! downwelling; net lw computed in ebal per vc
+                exit
+            end if
+        end do
+
+        ! snowpack + water/veg/soil aggregation over active vcs
+        do k = 1, size(vc)
+            w = vc(k)%desc%w
+            if (vc(k)%desc%class == 3 .and. allocated(vc(k)%snow)) then
+                ! ice-vc snow contribution
+                cell%h_snow     = cell%h_snow     + w * vc(k)%snow%h_snow
+                cell%w_snow     = cell%w_snow     + w * vc(k)%snow%w_snow
+                cell%w_snow_max = cell%w_snow_max + w * vc(k)%snow%w_snow_max
+                cell%snowmelt   = cell%snowmelt   + w * vc(k)%snow%snowmelt
+                cell%icemelt    = cell%icemelt    + w * vc(k)%snow%icemelt
+                cell%f_snow     = cell%f_snow     + w * vc(k)%snow%f_snow
+            else if (vc(k)%desc%class == 2 .and. allocated(vc(k)%snow)) then
+                ! lake-vc snow contribution
+                cell%h_snow     = cell%h_snow     + w * vc(k)%snow%h_snow
+                cell%w_snow     = cell%w_snow     + w * vc(k)%snow%w_snow
+                cell%snowmelt   = cell%snowmelt   + w * vc(k)%snow%snowmelt
+            else if (vc(k)%desc%class == 1) then
+                ! land-vc: rich aggregation
+                if (allocated(vc(k)%snow)) then
+                    cell%h_snow   = cell%h_snow   + w * vc(k)%snow%h_snow
+                    cell%w_snow   = cell%w_snow   + w * vc(k)%snow%w_snow
+                    cell%snowmelt = cell%snowmelt + w * vc(k)%snow%snowmelt
+                end if
+                if (allocated(vc(k)%flx%transpiration)) then
+                    cell%transpiration = cell%transpiration + w * sum(vc(k)%flx%transpiration)
+                    cell%evap_surface  = cell%evap_surface  + w * sum(vc(k)%flx%evap_surface)
+                    cell%evap_can      = cell%evap_can      + w * sum(vc(k)%flx%evap_can)
+                end if
+                if (allocated(vc(k)%soil)) then
+                    cell%runoff_sur   = cell%runoff_sur + w * (sum(vc(k)%soil%runoff_sur) + vc(k)%soil%runoff_exc)
+                    cell%runoff_gw    = cell%runoff_gw  + w * vc(k)%soil%runoff_gw
+                    cell%drainage     = cell%drainage   + w * sum(vc(k)%soil%drainage)
+                    cell%w_table      = cell%w_table    + w * vc(k)%soil%w_table
+                    cell%w_table_peat = cell%w_table_peat + w * vc(k)%soil%w_table_peat
+                    cell%f_wet        = cell%f_wet      + w * vc(k)%soil%f_wet
+                    cell%f_wetland    = cell%f_wetland  + w * vc(k)%soil%f_wetland
+                    cell%alt          = cell%alt        + w * vc(k)%soil%alt
+                    if (allocated(vc(k)%soil%t_soil)) cell%t_soil_top = cell%t_soil_top + w * vc(k)%soil%t_soil(1)
+                    if (allocated(vc(k)%soil%theta_w)) cell%theta_w_top = cell%theta_w_top + w * vc(k)%soil%theta_w(1)
+                end if
+                if (allocated(vc(k)%veg)) then
+                    cell%lai         = cell%lai         + w * sum(vc(k)%veg%lai * vc(k)%veg%pft_frac)
+                    cell%sai         = cell%sai         + w * sum(vc(k)%veg%sai * vc(k)%veg%pft_frac)
+                    cell%gpp         = cell%gpp         + w * sum(vc(k)%veg%gpp * vc(k)%veg%pft_frac)
+                    cell%npp         = cell%npp         + w * sum(vc(k)%veg%npp * vc(k)%veg%pft_frac)
+                    cell%veg_c       = cell%veg_c       + w * sum(vc(k)%veg%veg_c * vc(k)%veg%pft_frac)
+                    cell%gdd5        = cell%gdd5        + w * vc(k)%veg%gdd5
+                    cell%t2m_min_mon = cell%t2m_min_mon + w * vc(k)%veg%t2m_min_mon
+                end if
+                if (allocated(vc(k)%carb)) then
+                    cell%f_peat_pot  = cell%f_peat_pot + vc(k)%carb%f_peat_pot
+                    cell%soil_c      = cell%soil_c     + w * sum(vc(k)%carb%soil_c_tot)
+                    cell%soil_resp   = cell%soil_resp  + w * sum(vc(k)%carb%soil_resp)
+                    cell%peat_c      = cell%peat_c     + vc(k)%carb%f_peat &
+                        * (vc(k)%carb%litter_c_peat + vc(k)%carb%acro_c + sum(vc(k)%carb%cato_c))
+                end if
+            end if
+        end do
+
         ! --- emission aggregation (port W.1) ----------------------------------
         ! per-cell CH4/N2O emission flux [kgC/m2 cell/s], mirroring the reference
         ! lnd_update_wrapper weighting. Land vc: wetland CH4 over the non-peat

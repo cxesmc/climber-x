@@ -375,6 +375,7 @@
  nyout_cmn = 1000       ! frequency of coupler output in years
  nyout_atm = 1000       ! frequency of atmosphere output in years
  nyout_lnd = 1000       ! frequency of land output in years
+ nyout_lndvc = 1000     ! frequency of land-virtual-cell output in years (lndvc_surf.nc / lndvc_hires.nc)
  nyout_ocn = 1000       ! frequency of ocean output in years
  nyout_sic = 1000       ! frequency of sea ice output in years
  nyout_bgc = 1000       ! frequency of ocean biogeochemistry output in years

@@ -329,6 +329,33 @@ module lndvc_def
         real(wp) :: Cflx_atm_lnd, C13flx_atm_lnd, C14flx_atm_lnd
         real(wp) :: fire_c_flux, fire_c13_flux, fire_c14_flux
         real(wp) :: ch4_emis, n2o_emis
+        ! ---- rich diagnostic set (mirrors reference lnd_surf.nc / lnd_ts.nc coverage) ----
+        ! surface + near-surface state
+        real(wp) :: t2m, q2m                          ! cell-mean 2 m temperature, humidity
+        real(wp) :: lwnet, swnet                      ! net longwave / shortwave radiation [W/m2]
+        real(wp) :: rain, snow_flx                    ! rain + snow fluxes as forcing [kg/m2/s]
+        ! snowpack
+        real(wp) :: h_snow, w_snow, w_snow_max        ! snow thickness, SWE, seasonal max SWE
+        real(wp) :: snowmelt, icemelt                 ! snow + ice melt rates [kg/m2/s]
+        real(wp) :: f_snow                            ! snow-cover fraction on the cell
+        ! water balance partitioning
+        real(wp) :: transpiration, evap_surface, evap_can   ! ET partitioning [kg/m2/s]
+        real(wp) :: runoff_sur, runoff_gw, drainage         ! runoff components [kg/m2/s]
+        real(wp) :: w_table, w_table_peat                   ! water-table depth (aquifer, peat) [m]
+        real(wp) :: f_wet, f_wetland                        ! saturated and TOPMODEL wetland fractions
+        real(wp) :: f_peat_pot                              ! potential peat fraction
+        ! vegetation
+        real(wp) :: lai, sai                                ! cell-mean leaf + stem area index
+        real(wp) :: gpp, npp                                ! gross + net primary productivity [kgC/m2/s]
+        real(wp) :: veg_c                                   ! total vegetation carbon [kgC/m2]
+        real(wp) :: gdd5, t2m_min_mon                       ! phenology drivers
+        ! soil
+        real(wp) :: t_soil_top                              ! top-layer soil temperature [K]
+        real(wp) :: theta_w_top                             ! top-layer soil moisture [/]
+        real(wp) :: alt                                     ! active-layer thickness [m]
+        real(wp) :: soil_c                                  ! total soil carbon (mineral) [kgC/m2]
+        real(wp) :: peat_c                                  ! peatland carbon [kgC/m2]
+        real(wp) :: soil_resp                               ! soil heterotrophic respiration [kgC/m2/s]
     end type
 
 ! ============================================================================

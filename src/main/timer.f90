@@ -79,6 +79,7 @@ module timer
   logical :: time_soy_bgc, time_eoy_bgc, time_som_bgc, time_eom_bgc, time_sod_bgc, time_eod_bgc
   logical :: time_soy_sic, time_eoy_sic, time_som_sic, time_eom_sic, time_sod_sic, time_eod_sic
   logical :: time_soy_lnd, time_eoy_lnd, time_som_lnd, time_eom_lnd, time_sod_lnd, time_eod_lnd
+  logical :: time_soy_lndvc, time_eoy_lndvc, time_som_lndvc, time_eom_lndvc, time_sod_lndvc, time_eod_lndvc
   logical :: time_soy_smb, time_eoy_smb, time_som_smb, time_eom_smb, time_sod_smb, time_eod_smb
   logical :: time_soy_bmb, time_eoy_bmb, time_som_bmb, time_eom_bmb, time_sod_bmb, time_eod_bmb
   logical :: time_soy_bnd
@@ -91,10 +92,10 @@ module timer
   integer :: year_out_start
   integer :: y_out_ts, y_out_ts_geo, y_out_ts_clim, y_out_ts_smb, ny_out_ts, ny_out_ts_geo, &
   ny_out_ts_accel, ny_out_ts_smb
-  integer :: nyout_cmn, nyout_atm, nyout_lnd, nyout_ocn, nyout_sic, nyout_bgc, &
+  integer :: nyout_cmn, nyout_atm, nyout_lnd, nyout_lndvc, nyout_ocn, nyout_sic, nyout_bgc, &
   nyout_smb, nyout_bmb, nyout_ice, nyout_geo
   logical :: time_out_ts, time_out_ts_geo, time_out_ts_clim, time_out_ts_smb, time_out_cmn, &
-  time_out_atm, time_out_lnd, time_out_ocn, time_out_sic, time_out_bgc, time_out_smb, &
+  time_out_atm, time_out_lnd, time_out_lndvc, time_out_ocn, time_out_sic, time_out_bgc, time_out_smb, &
   time_out_bmb, time_out_ice, time_out_geo
 
   logical :: time_call_atm, time_call_lnd, time_call_ocn, time_call_sic, time_call_bgc, &
@@ -125,6 +126,7 @@ contains
     call nml_read(filename,"control","nyout_cmn",nyout_cmn)
     call nml_read(filename,"control","nyout_atm",nyout_atm)
     call nml_read(filename,"control","nyout_lnd",nyout_lnd)
+    call nml_read(filename,"control","nyout_lndvc",nyout_lndvc)
     call nml_read(filename,"control","nyout_ocn",nyout_ocn)
     call nml_read(filename,"control","nyout_bgc",nyout_bgc)
     call nml_read(filename,"control","nyout_sic",nyout_sic)
@@ -377,19 +379,38 @@ contains
     if (flag_lnd .and. year_call_accel) then
       time_call_lnd = (mod(step,step_lnd) .eq. 1) .or. (step_lnd.eq.1)
       time_soy_lnd = soy .eq. 1
-      time_sod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. 0) 
-      time_eod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. nstep_day_lnd-1) 
+      time_sod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. 0)
+      time_eod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. nstep_day_lnd-1)
       time_eom_lnd = (mod(doy,nday_mon) .eq. 0) .and. time_eod_lnd
       time_eoy_lnd = (mod(doy,nday_year) .eq. 0) .and. time_eod_lnd
       time_out_lnd = (mod(year,nyout_lnd) .eq. 0) .and. year_now.ge.year_out_start
     else
-      time_call_lnd =.false. 
+      time_call_lnd =.false.
       time_soy_lnd = .false.
       time_sod_lnd = .false.
       time_eod_lnd = .false.
       time_eom_lnd = .false.
       time_eoy_lnd = .false.
       time_out_lnd = .false.
+    endif
+
+    ! lndvc runs on the same daily cadence as reference lnd (identity baseline),
+    ! but has an independent output frequency (nyout_lndvc). Keep the sub-flags
+    ! mirrored so downstream code doesn't need to reach into lnd's namespace.
+    if (flag_lnd .and. year_call_accel) then
+      time_soy_lndvc = time_soy_lnd
+      time_sod_lndvc = time_sod_lnd
+      time_eod_lndvc = time_eod_lnd
+      time_eom_lndvc = time_eom_lnd
+      time_eoy_lndvc = time_eoy_lnd
+      time_out_lndvc = (mod(year,nyout_lndvc) .eq. 0) .and. year_now.ge.year_out_start
+    else
+      time_soy_lndvc = .false.
+      time_sod_lndvc = .false.
+      time_eod_lndvc = .false.
+      time_eom_lndvc = .false.
+      time_eoy_lndvc = .false.
+      time_out_lndvc = .false.
     endif
 
     if (flag_sic .and. year_call_accel) then
