@@ -72,9 +72,9 @@ contains
             lnd%id_map(i,j) = lnd%ncells
 
             k = 0
-            if (f_veg(i,j)  > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 1, z_veg(i,j), f_veg(i,j))
-            if (f_lake(i,j) > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 2, z_veg(i,j), f_lake(i,j))
-            if (f_ice(i,j)  > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 3, z_ice(i,j),  f_ice(i,j))
+            if (f_veg(i,j)  > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 1, z_veg(i,j), f_veg(i,j), i, j)
+            if (f_lake(i,j) > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 2, z_veg(i,j), f_lake(i,j), i, j)
+            if (f_ice(i,j)  > 0._wp) call set_leaf(lnd%vc(i,j,:), k, 3, z_ice(i,j),  f_ice(i,j), i, j)
 
         end do
         end do
@@ -83,9 +83,10 @@ contains
 
     end subroutine lndvc_decompose
 
-    subroutine set_leaf(vc, k, class, z, w)
+    subroutine set_leaf(vc, k, class, z, w, i, j)
         ! Populate leaf k+1 with a class/elevation/weight, allocate its class
         ! blocks, and advance k. (Inner arrays are sized during the physics port.)
+        ! i,j are the coarse-cell indices, stored on desc for error prints.
 
         implicit none
 
@@ -93,11 +94,14 @@ contains
         integer,    intent(inout) :: k
         integer,    intent(in)    :: class
         real(wp),   intent(in)    :: z, w
+        integer,    intent(in)    :: i, j
 
         k = k + 1
         if (k > size(vc)) return   ! guard: n_vc too small for present classes
 
         vc(k)%desc%class = class
+        vc(k)%desc%i     = i
+        vc(k)%desc%j     = j
         vc(k)%desc%z     = z
         vc(k)%desc%dz    = 0._wp
         vc(k)%desc%w     = w

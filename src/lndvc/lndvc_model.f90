@@ -497,7 +497,7 @@ contains
 
         type(vc_t), intent(inout) :: vc
 
-        integer, parameter :: ii = 0, jj = 0   ! debug-print indices only
+        integer  :: ii, jj   ! coarse-cell indices for physics debug prints
         integer  :: n
         real(wp) :: f_veg, t_skin_veg
         real(wp) :: flx_g_veg, dflxg_dT_veg, flx_melt_veg
@@ -510,6 +510,9 @@ contains
         real(wp) :: encons1(nsurf), encons2(nsurf)
         ! potential evapotranspiration (per-tile local; only mcwd/cwd_mon persist)
         real(wp) :: pet(nsurf)
+
+        ii = vc%desc%i
+        jj = vc%desc%j
 
         ! --- broadcast the vc's scalar forcing to the sub-tiles ---------------
         tatm(:)      = vc%forc%tatm
@@ -887,11 +890,14 @@ contains
 
         type(vc_t), intent(inout) :: vc
 
-        integer, parameter :: ii = 0, jj = 0   ! debug-print indices only
+        integer  :: ii, jj   ! coarse-cell indices for physics debug prints
         real(wp) :: z0m_lake
         real(wp) :: calving, runoff_sur              ! lake calving/runoff not yet aggregated
         real(wp) :: calving_iso(nwiso), runoff_sur_iso(nwiso)
         real(wp) :: litter_lake_zero(nlc)            ! litter input to lake (zero: cross-class, deferred to wrapper)
+
+        ii = vc%desc%i
+        jj = vc%desc%j
 
         ! carry-over snapshot for the step
         vc%snow%w_snow_old = vc%snow%w_snow
@@ -1033,7 +1039,7 @@ contains
         real(wp) :: num_lh, num_sh, num_sw, num_lw, denom_lh, denom_sh, denom_lw
         real(wp) :: f_sh, f_e, f_lh, f_lw
 
-        ii = 0; jj = 0   ! SEMI uses these only for debug prints
+        ii = vc%desc%i; jj = vc%desc%j   ! for SEMI's debug prints
 
         ! --- geometry-derived forcing (framework side) ------------------------
         ! barometric surface pressure at the vc elevation

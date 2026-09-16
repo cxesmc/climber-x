@@ -25,6 +25,7 @@ module lndvc_def
 
     type vc_desc_t
         integer  :: class           ! surface class: 1 land, 2 lake, 3 ice, 4 shelf/ocean
+        integer  :: i = 0, j = 0    ! coarse-cell indices (set in set_leaf, for error prints)
         real(wp) :: z               ! band elevation [m] (fixed)
         real(wp) :: dz              ! band width [m]
         real(wp) :: w               ! area weight relative to coarse cell (Sum w = 1)
