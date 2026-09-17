@@ -160,6 +160,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: taux, tauy
      real(wp), dimension(:,:,:), allocatable :: cfc11, cfc12
      real(wp), dimension(:,:,:), allocatable :: diffdia, drho_dx, drho_dy, drho_dz, Ri
+     real(wp), dimension(:,:,:), allocatable :: bvf2
      real(wp), dimension(:,:), allocatable :: t_atl, t_pac, t_ind, t_so
      real(wp), dimension(:,:), allocatable :: s_atl, s_pac, s_ind, s_so
      real(wp), dimension(:,:), allocatable :: a_atl, a_pac, a_ind, a_so
@@ -277,6 +278,7 @@ contains
     allocate(ann_o%drho_dx(maxi,maxj,maxk))
     allocate(ann_o%drho_dy(maxi,maxj,maxk))
     allocate(ann_o%drho_dz(maxi,maxj,maxk))
+    allocate(ann_o%bvf2(maxi,maxj,maxk))
     allocate(ann_o%drho_0_1000(maxi,maxj))
     allocate(ann_o%drho_0_3000(maxi,maxj))
     allocate(ann_o%Ri(maxi,maxj,maxk))
@@ -383,6 +385,7 @@ contains
      allocate(mon_o(k)%drho_dx(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_dy(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_dz(maxi,maxj,maxk))
+     allocate(mon_o(k)%bvf2(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_0_1000(maxi,maxj))
      allocate(mon_o(k)%drho_0_3000(maxi,maxj))
      allocate(mon_o(k)%Ri(maxi,maxj,maxk))
@@ -2932,6 +2935,7 @@ contains
                    mon_o(m)%drho_dx(i,j,k) = 0._wp
                    mon_o(m)%drho_dy(i,j,k) = 0._wp
                    mon_o(m)%drho_dz(i,j,k) = 0._wp
+                   mon_o(m)%bvf2(i,j,k) = 0._wp
                    mon_o(m)%Ri(i,j,k) = 0._wp
                  else
                    mon_o(m)%t   (i,j,k)  = missing_value 
@@ -2946,6 +2950,7 @@ contains
                    mon_o(m)%drho_dx(i,j,k) = missing_value 
                    mon_o(m)%drho_dy(i,j,k) = missing_value 
                    mon_o(m)%drho_dz(i,j,k) = missing_value 
+                   mon_o(m)%bvf2(i,j,k) = missing_value 
                    mon_o(m)%Ri(i,j,k) = missing_value 
                  endif
               enddo
@@ -3160,6 +3165,8 @@ contains
             mon_o(mon)%drho_dx(i,j,k) = mon_o(mon)%drho_dx(i,j,k)   + drho_dx (i,j,kr)   * mon_avg ! m2/s
             mon_o(mon)%drho_dy(i,j,k) = mon_o(mon)%drho_dy(i,j,k)   + drho_dy (i,j,kr)   * mon_avg ! m2/s
             mon_o(mon)%drho_dz(i,j,k) = mon_o(mon)%drho_dz(i,j,k)   + drho_dz (i,j,kr)   * mon_avg ! m2/s
+            ! squared Brunt-Vaisala frequency on the w-grid from the locally referenced potential density gradient
+            mon_o(mon)%bvf2(i,j,k)    = mon_o(mon)%bvf2(i,j,k)      - g/rho0*drho_dz(i,j,kr) * mon_avg ! 1/s2
             mon_o(mon)%Ri(i,j,k)      = mon_o(mon)%Ri(i,j,k)        + Ri      (i,j,kr)   * mon_avg 
             mon_o(mon)%rho    (i,j,k) = mon_o(mon)%rho    (i,j,k)   + rho     (i,j,kr)   * mon_avg ! kg/m3
             mon_o(mon)%rho2   (i,j,k) = mon_o(mon)%rho2   (i,j,k)   + ocn%rho (i,j,kr)   * mon_avg ! kg/m3
@@ -4148,6 +4155,7 @@ contains
     call nc_write(fnm,"ke_tau",  sngl(vars%ke_tau),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="kinetic energy input into the ocean by wind stress",units="mW/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"conv_pe", sngl(vars%conv_pe),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ssh",      sngl(vars%ssh),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="elevation of the free surface",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"obvfsq",       sngl(vars%bvf2),dims=[dim_lon,dim_lat,dim_levw,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="square of Brunt-Vaisala frequency, N2 = -g/rho0*drho_dz with locally referenced potential density (CMIP6 obvfsq)",units="1/s2",missing_value=missing_value,ncid=ncid)
 
     if (l_output_extended) then
     call nc_write(fnm,"fdx",        sngl(vars%fdx),  dims=[dim_lonu,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="zonal diffusive tracer volume flux",units="m3*K",missing_value=missing_value,ncid=ncid)
@@ -4274,6 +4282,7 @@ contains
     ave%drho_dx = 0._wp
     ave%drho_dy = 0._wp
     ave%drho_dz = 0._wp
+    ave%bvf2    = 0._wp
     ave%Ri = 0._wp
     ave%taux  = 0._wp
     ave%tauy  = 0._wp
@@ -4355,6 +4364,7 @@ contains
        ave%drho_dx = ave%drho_dx  + d(k)%drho_dx  / div
        ave%drho_dy = ave%drho_dy  + d(k)%drho_dy  / div
        ave%drho_dz = ave%drho_dz  + d(k)%drho_dz  / div
+       ave%bvf2    = ave%bvf2     + d(k)%bvf2     / div
        ave%Ri      = ave%Ri       + d(k)%Ri       / div
        ave%rho     = ave%rho      + d(k)%rho      / div
        ave%drho_0_1000 = ave%drho_0_1000 + d(k)%drho_0_1000 / div
