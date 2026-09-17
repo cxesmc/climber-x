@@ -35,7 +35,7 @@ program climber
   use timer, only : time_out_ice 
   use timer, only : time_write_restart, timer_print
   use timer, only : n_year_ice
-  use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
+  use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer, restart_in_dir
   use control, only: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_ocn, flag_lnd, flag_lndvc, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
   use control, only: l_aquaplanet
@@ -94,6 +94,8 @@ program climber
   use lndvc_decomp, only: lndvc_decompose
   use lndvc_def, only: lndvc_class
   use lndvc_out,  only: lndvc_diag_init, lndvc_diag
+  use lndvc_restart_m, only: lndvc_write_restart, lndvc_read_restart
+  use lndvc_params,    only: lndvc_par_init, lndvc_restart, i_write_restart_lndvc
 #endif
   use lnd_out, only: lnd_diag, lnd_diag_init
 
@@ -304,7 +306,12 @@ program climber
     if (flag_lnd) then
        call lnd_init(lnd,geo%f_lnd,geo%f_ocn,geo%f_ice,geo%f_ice_grd,geo%f_lake)
 #ifdef LNDVC
-       if (flag_lndvc) call lndvc_init(lndvc, ni, nj)
+       if (flag_lndvc) then
+         call lndvc_init(lndvc, ni, nj)
+         call lndvc_par_init
+         if (lndvc_restart) &
+             call lndvc_read_restart(trim(restart_in_dir)//"/lndvc_restart.nc", lndvc)
+       endif
 #else
        if (flag_lndvc) then
          print *,'ERROR: flag_lndvc=T but this executable was built without the'
@@ -847,6 +854,10 @@ subroutine write_restart(restart_out_dir, year_now)
                                        trim(rest_dir)//"/sed_restart.nc",bgc)
   if (flag_sic) call sic_write_restart(trim(rest_dir)//"/sic_restart.nc",sic)
   if (flag_lnd) call lnd_write_restart(trim(rest_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
+#ifdef LNDVC
+  if (flag_lndvc .and. i_write_restart_lndvc == 1) &
+      call lndvc_write_restart(trim(rest_dir)//"/lndvc_restart.nc", lndvc)
+#endif
   if (flag_smb) then
     do n=1,n_ice_domain
       call smb_write_restart(trim(rest_dir)//"/smb_"//trim(smb(n)%grid%name)//"_restart.nc",smb(n))
