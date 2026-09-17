@@ -93,6 +93,7 @@ program climber
   use lndvc_model, only: lndvc_init, lndvc_update, lndvc_end
   use lndvc_decomp, only: lndvc_decompose
   use lndvc_def, only: lndvc_class
+  use lndvc_out,  only: lndvc_diag_init, lndvc_diag
 #endif
   use lnd_out, only: lnd_diag, lnd_diag_init
 
@@ -312,6 +313,9 @@ program climber
        endif
 #endif
        call lnd_diag_init
+#ifdef LNDVC
+       if (flag_lndvc) call lndvc_diag_init(lndvc, geo)
+#endif
     endif
 
     ! Initialize smb
@@ -565,6 +569,7 @@ program climber
           ! populate each ice vc's reference (_i) forcing from the coarse cell
           call cmn_to_lndvc(cmn, lnd, lndvc)
           call lndvc_update(lndvc)
+          call lndvc_diag(lndvc, geo)
         endif
 #endif
         !$ time_end = omp_get_wtime()

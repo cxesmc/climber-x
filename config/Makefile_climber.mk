@@ -151,7 +151,7 @@ obj_lnd = $(patsubst %, $(objdir)/%, $(tmp_lnd) )
 ########################################################################
 # land virtual cell (lndvc) model related source files
 dir_lndvc = $(srcdir)/lndvc
-files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_decomp.f90 lndvc_downscale.f90 lndvc_aggregate.f90 lndvc_model.f90
+files_lndvc = lndvc_def.f90 lndvc_grid.f90 lndvc_decomp.f90 lndvc_downscale.f90 lndvc_aggregate.f90 lndvc_params.f90 lndvc_out.f90 lndvc_model.f90
 tmp_lndvc = $(patsubst %.f90, %.o, $(files_lndvc) )
 # ported physics live in subdirs (src/lndvc/smb, ...) with clean filenames;
 # objects are given distinct names to avoid clashing with src/smb, src/lnd in obj/.
@@ -184,7 +184,7 @@ obj_lndvc_phys = $(objdir)/lndvc_const.o $(objdir)/lndvc_thermo.o $(objdir)/lndv
 # main objects do not force the framework to build.
 ifeq ($(LNDVC),1)
 obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) ) $(obj_lndvc_phys)
-dep_lndvc_main = $(objdir)/lndvc_model.o
+dep_lndvc_main = $(objdir)/lndvc_model.o $(objdir)/lndvc_out.o
 dep_lndvc_def  = $(objdir)/lndvc_def.o
 else
 obj_lndvc =
@@ -886,6 +886,16 @@ $(objdir)/lndvc_downscale.o : $(dir_lndvc)/lndvc_downscale.f90 $(objdir)/lndvc_d
 
 $(objdir)/lndvc_aggregate.o : $(dir_lndvc)/lndvc_aggregate.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \
 						$(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_params.o : $(dir_lndvc)/lndvc_params.f90 $(objdir)/precision.o $(objdir)/control.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/lndvc_out.o : $(dir_lndvc)/lndvc_out.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_params.o \
+						$(objdir)/lnd_grid.o $(objdir)/lnd_params.o \
+						$(objdir)/climber_grid.o $(objdir)/geo_def.o \
+						$(objdir)/timer.o $(objdir)/control.o $(objdir)/constants.o \
+						$(objdir)/dim_name.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_model.o : $(dir_lndvc)/lndvc_model.f90 $(objdir)/lndvc_def.o $(objdir)/lndvc_grid.o \

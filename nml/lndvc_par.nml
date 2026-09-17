@@ -1,0 +1,28 @@
+&lndvc_par
+    ! Output selectors — which lndvc netCDF files to write.
+    write_surf   = T   ! per-cell aggregated surface state (lndvc_surf.nc, mirrors lnd_surf.nc)
+    write_hires  = T   ! high-res painted output (lndvc_hires.nc, painted onto geo%hires grid)
+    write_cons   = F   ! conservation-check output (energy/water/carbon closure of the vc reduction)
+
+    ! Output cadence toggles inside a write cycle.
+    l_monthly_output = T   ! include monthly climatology in lndvc_surf.nc (mirror lnd_surf)
+    l_daily_output   = F   ! optional daily surf output (lndvc_surf_daily.nc); heavy, off by default
+
+    ! High-res subset — which fields to paint onto the 2880x1440 geo%hires grid.
+    ! Small by design (this file is expensive on disk). Add more as needed.
+    hires_write_h_snow    = T
+    hires_write_w_snow    = T
+    hires_write_t_skin    = T
+    hires_write_smb       = T
+    hires_write_melt      = T
+    hires_write_f_ice     = T
+    hires_write_veg_c     = F
+    hires_write_soil_c    = F
+
+    ! Restart control — mirror lnd's ctl.i_write_restart. lndvc restart persists
+    ! per-vc soil / veg / snow / carbon pools + descriptor so a run picks up
+    ! from lndvc_restart.nc rather than re-seeding from the reference lnd every
+    ! start. Off by default until the physics port stabilises.
+    i_write_restart_lndvc = 1   ! write lndvc_restart.nc at the same cadence as lnd
+    lndvc_restart         = F   ! read lndvc_restart.nc at startup (F = seed from reference lnd)
+/

@@ -16,19 +16,21 @@
             "geo"  : "geo_par",
             "bmb"  : "bmb_par",
             "lnd"  : "lnd_par",
+            "lndvc": "lndvc_par",
             "ocn"  : "ocn_par",
             "sic"  : "sic_par",
             "smb"  : "smb_par",
             "hose" : "hyster_hosing",
             "icey" : "ice_yelmo_par",
             "ices" : "ice_sico_par"
-            
+
         },
 
     "par_paths" :
         {   "climber"  : [ "nml/control.nml",
                            "nml/atm_par.nml",
                            "nml/lnd_par.nml",
+                           "nml/lndvc_par.nml",
                            "nml/sic_par.nml",
                            "nml/bgc_par.nml",
                            "nml/geo_par.nml",
