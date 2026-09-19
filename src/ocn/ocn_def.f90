@@ -133,6 +133,8 @@ module ocn_def
      real(wp), allocatable :: dven(:,:)     !! depth of ventilation [m]
      real(wp), allocatable :: z_brines(:,:) !! brine neutral-buoyancy penetration depth [m]
      real(wp), allocatable :: conv_pe(:,:)     !! potential energy released by convection [J/m2]
+     real(wp), allocatable :: fds(:,:)     !! downslope volume flux of dense shelf water out of the cell [m3/s]
+     real(wp), allocatable :: zds(:,:)     !! flux-weighted depth at which the downslope plume is deposited [m]
      integer, allocatable :: nconv(:,:)             !! number of layers mixed by convection []
      integer, allocatable :: kven(:,:)              !! number of layers mixed my ventialtion []
      real(wp), allocatable :: ssh(:,:)      !! elevation of the free surface [m]
