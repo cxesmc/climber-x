@@ -30,7 +30,7 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref
   use atm_params, only : l_p0_var, p0, ps0, pble, pblp, cp
   use smooth_atm_mod, only : smooth2
 
@@ -91,9 +91,11 @@ module atm_grid
   real(wp) :: fcorua(jmc)
        
   real(wp) :: plx(imc,jm)
-  real(wp) :: plx_trop(imc,jm)   !! tropospheric (k<=km-2) zonal column mass, for implicit zonal diffusion
+  real(wp) :: plx_trop(imc,jm)   !! tropospheric (k<=km-2) zonal column mass
+  real(wp) :: plx_dif(imc,jm)    !! tropospheric zonal column mass weighted by the vertical profile of the diffusivity, for implicit zonal diffusion
   real(wp) :: ply(im,jmc)
-  real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass, for implicit meridional diffusion
+  real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass
+  real(wp) :: ply_dif(im,jmc)    !! tropospheric meridional column mass weighted by the vertical profile of the diffusivity, for implicit meridional diffusion
   real(wp) :: pblt(jm)      !! planetary boundary height in t-points
   real(wp) :: pblu(jmc)     !! planetary boundary height in u-points
   integer :: k1(im,jm)  
@@ -115,6 +117,8 @@ module atm_grid
   real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
   real(wp), allocatable :: dply(:,:,:)
+  real(wp), allocatable :: dplx_dif(:,:,:)   !! zonal face layer mass times the vertical diffusivity profile exp(-(zc-z_sur)/h_diff); = dplx for h_diff<=0
+  real(wp), allocatable :: dply_dif(:,:,:)   !! meridional face layer mass times the vertical diffusivity profile
   real(wp), allocatable :: dplxo(:,:,:)
   real(wp), allocatable :: dplyo(:,:,:)
   integer, allocatable :: kplxo(:,:)
@@ -153,6 +157,8 @@ contains
     allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
     allocate(dply(im,jm,km))
+    allocate(dplx_dif(im,jm,km))
+    allocate(dply_dif(im,jm,km))
     allocate(dplxo(im,jm,km))
     allocate(dplyo(im,jm,km))
     allocate(kplxo(im,jm))
@@ -453,6 +459,7 @@ contains
 
         plx(i,j) = 0._wp
         plx_trop(i,j) = 0._wp
+        plx_dif(i,j) = 0._wp
 
         ! layer mass at the T-point itself, the cell mass of the advection.
         ! Built from pzsa(i,j) rather than from the face average px, so that the
@@ -476,8 +483,22 @@ contains
             dplx(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
           plx(i,j) = plx(i,j)+dplx(i,j,k)
+          ! face layer mass weighted by the vertical profile of the macro-diffusivity,
+          ! decaying with height above the face surface (-hatm*log(px)) or above sea level
+          if (h_diff.gt.0._wp) then
+            if (i_hdiff_ref.eq.1) then
+              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(px))/h_diff)
+            else
+              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+            endif
+          else
+            dplx_dif(i,j,k) = dplx(i,j,k)
+          endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
-          if (k.le.km-2) plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
+          if (k.le.km-2) then
+            plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
+            plx_dif(i,j)  = plx_dif(i,j)+dplx_dif(i,j,k)
+          endif
           ! orographic component
           dplxo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(imi,j),pzsa(i,j)))-pl(k+1))*amas
         enddo
@@ -488,6 +509,7 @@ contains
     ! periodic closure: face imc is the same physical face as face 1
     plx(imc,:)      = plx(1,:)
     plx_trop(imc,:) = plx_trop(1,:)
+    plx_dif(imc,:)  = plx_dif(1,:)
 
 
     do i=1,im
@@ -497,6 +519,7 @@ contains
 
         ply(i,j) = 0._wp
         ply_trop(i,j) = 0._wp
+        ply_dif(i,j) = 0._wp
 
         do k=1,km
           if (py.le.pl(k+1))then
@@ -507,8 +530,20 @@ contains
             dply(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
           ply(i,j) = ply(i,j)+dply(i,j,k)
+          if (h_diff.gt.0._wp) then
+            if (i_hdiff_ref.eq.1) then
+              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(py))/h_diff)
+            else
+              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+            endif
+          else
+            dply_dif(i,j,k) = dply(i,j,k)
+          endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
-          if (k.le.km-2) ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
+          if (k.le.km-2) then
+            ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
+            ply_dif(i,j)  = ply_dif(i,j)+dply_dif(i,j,k)
+          endif
           ! orographic component
           dplyo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(i,j-1),pzsa(i,j)))-pl(k+1))*amas
         enddo

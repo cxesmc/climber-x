@@ -6,7 +6,8 @@
 !            prognostic atmospheric column variables (dry static energy /
 !            temperature, column water, dust and CO2).
 !
-!            EXACT 2D EQUIVALENT. Because the diffusivity is vertically uniform,
+!            EXACT 2D EQUIVALENT. Because the diffusivity has a fixed vertical
+!            profile (uniform, or exp(-z/h_diff) folded into the face masses),
 !            the column-integrated zonal diffusive convergence is reproduced
 !            exactly from 2D quantities by solving, per field,
 !
@@ -43,7 +44,7 @@ module diffuse_impl_mod
   use atm_params, only : wp
   use atm_params, only : tstep, hatm, ra, cp, l_dust
   use atm_grid, only : im, jm, jmc
-  use atm_grid, only : plx_trop, ply_trop, sqr, dxt, dxu, dy, cheat
+  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   !$ use omp_lib
 
@@ -181,7 +182,7 @@ contains
       ! zonal face weights and diffusion coefficients (face i lies west of cell i)
       do i=1,im
         if (mass_weight) then
-          wx(i) = plx_trop(i,j)
+          wx(i) = plx_dif(i,j)
         else
           wx(i) = 1._wp
         endif
@@ -245,7 +246,7 @@ contains
       ! cell j); diffy is zero at j=1 and j=jmc -> automatic no-flux at the poles
       do j=1,jm
         if (mass_weight) then
-          wy(j) = ply_trop(i,j)
+          wy(j) = ply_dif(i,j)
         else
           wy(j) = 1._wp
         endif

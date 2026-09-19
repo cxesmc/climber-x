@@ -32,7 +32,7 @@ module adifa_mod
   use atm_params, only : l_diff_impl, l_dust, i_adv
   use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplt, dplx, dply, dy, dxt, dxu, sqr
+  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr
   use adv_fct_mod, only : fct_ratios
   !$ use omp_lib
 
@@ -311,8 +311,8 @@ contains
           if (k.le.km-2) then   ! limit to troposphere
 
             !-----------------------------------
-            ! zonal diffusive fluxes
-            dpl_x = dplx(i,j,k)
+            ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff)
+            dpl_x = dplx_dif(i,j,k)
             fdxdse(i,j) = fdxdse(i,j) + diffx(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
             fdxwtr(i,j) = fdxwtr(i,j) + diffx(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
             fdxdst(i,j) = fdxdst(i,j) + diffx(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
@@ -320,7 +320,7 @@ contains
 
             !-----------------------------------
             ! meridional diffusive fluxes
-            dpl_y = dply(i,j,k)
+            dpl_y = dply_dif(i,j,k)
             fdydse(i,j) = fdydse(i,j) + diffy(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
             fdywtr(i,j) = fdywtr(i,j) + diffy(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
             fdydst(i,j) = fdydst(i,j) + diffy(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
