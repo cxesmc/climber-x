@@ -156,7 +156,10 @@ module atm_params
   real(wp) :: windmin 
   real(wp) :: synsurmin
   real(wp) :: tau_fac
-  real(wp) :: c_diff
+  integer  :: i_diff       !! macro-diffusivity closure: 1 = c_diff*sqrt(EKE), 2 = c_diff*EKE
+  real(wp) :: c_diff       !! macro-diffusivity factor: m for i_diff=1, s for i_diff=2
+  real(wp) :: h_diff       !! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983); <=0 = vertically uniform
+  integer  :: i_hdiff_ref  !! reference height for h_diff: 1 = local (face) surface, 2 = sea level
   real(wp) :: c_diff_dse_eq   !! amplification of the ZONAL dry static energy diffusivity at the equator, tapering with latitude; 1 = off
   real(wp) :: fi_diff_dse_eq  !! deg, e-folding latitude of that amplification
   integer :: i_adv         !! advection scheme: 1 = first order upstream (donor cell), 2 = flux corrected transport (Zalesak 1979)
@@ -403,7 +406,10 @@ contains
     call nml_read(filename,"atm_par","windmin",windmin)
     call nml_read(filename,"atm_par","synsurmin",synsurmin)
     call nml_read(filename,"atm_par","tau_fac",tau_fac)
+    call nml_read(filename,"atm_par","i_diff",i_diff)
     call nml_read(filename,"atm_par","c_diff",c_diff)
+    call nml_read(filename,"atm_par","h_diff",h_diff)
+    call nml_read(filename,"atm_par","i_hdiff_ref",i_hdiff_ref)
     call nml_read(filename,"atm_par","c_diff_dse_eq",c_diff_dse_eq)
     call nml_read(filename,"atm_par","fi_diff_dse_eq",fi_diff_dse_eq)
     call nml_read(filename,"atm_par","i_adv",i_adv)

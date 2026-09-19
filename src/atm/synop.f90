@@ -31,7 +31,7 @@ module synop_mod
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin
   use atm_params, only : tau_fac
-  use atm_params, only : c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl, c_diffx_pol
+  use atm_params, only : i_diff, c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl, c_diffx_pol
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
@@ -97,6 +97,7 @@ contains
     real(wp) :: diffxmx(jm)
     real(wp) :: fdiff_eq(jm)   ! tropical amplification of the zonal DSE diffusivity
     real(wp) :: sam_sqrt(im,jm)
+    real(wp) :: kdif(im,jm)    ! macro-diffusivity at cell centres [m2/s]
     ! implicit (ADI) solve of the synoptic-energy (sam) equation
     real(wp) :: kdiss(im,jm), samx(im,jm)
     real(wp) :: gx, gy
@@ -298,12 +299,19 @@ contains
     !-----------------------------------------------
     ! macro diffusivities for energy, water and dust
 
+    if (i_diff.eq.1) then
+      ! proportional to sqrt(EKE), K = c*V' (mixing length c)
+      kdif = c_diff*sam_sqrt
+    else if (i_diff.eq.2) then
+      ! proportional to EKE, K = c*V'^2 (mixing length ~ V'*c, i.e. eddy time scale c; Caballero & Hanley 2012).
+      kdif = c_diff*sam
+    endif
+
     do i=1,im
       imi=i-1
       if (imi.lt.1) imi=im
       do j=1,jm
-        ! macro diffusivity, proportional to sqrt(EKE)
-        diffx(i,j) = c_diff * fdiff_eq(j) * 0.5_wp*(sam_sqrt(imi,j)+sam_sqrt(i,j))
+        diffx(i,j) = fdiff_eq(j) * 0.5_wp*(kdif(imi,j)+kdif(i,j))
         ! limit the zonal diffusivities. Explicit scheme: CFL stability requires the
         ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
         ! Implicit scheme: unconditionally stable, but near the pole (dxt->0) the
@@ -323,8 +331,7 @@ contains
       jmi=j-1
       if (jmi.lt.1) jmi=1
       do i=1,im
-        ! macro diffusivity, proportional to sqrt(EKE)
-        diffy(i,j) = c_diff * 0.5_wp*(sam_sqrt(i,jmi)+sam_sqrt(i,j))
+        diffy(i,j) = 0.5_wp*(kdif(i,jmi)+kdif(i,j))
       enddo
     enddo
     diffy(:,1)   = 0._wp

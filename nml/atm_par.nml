@@ -32,7 +32,7 @@
   cd0_ocn = 1.3e-3              ! drag coefficient for momentum over ocean, realistic values : 1.2e-3 - 1.5e-3
   cd0_sic = 1.63e-3             ! drag coefficient for momentum over sea ice, 1.63e-3 in Large and Yaeger 2004
   i_zoro = 3                    ! parameterisation of topographic roughness
-  i_acbar = 1                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
+  i_acbar = 2                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
                                 ! equivalently tan(a) = R/(1+R), and differ only in R:
                                 !   1 = R = cd/sqrt(|f|), the original
                                 !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**2), phi = |f|/f_45
@@ -56,14 +56,14 @@
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor 
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
-  c_mmc_dt0 = 70.               ! deg, total Hadley width at zero tropical contrast, used only if i_mmc_2=2
-  c_mmc_dt1 = 2.0               ! deg/K, Hadley cell narrowing per K of tropical contrast, used only if i_mmc_2=2
+  c_mmc_dt0 = 72.               ! deg, total Hadley width at zero tropical contrast
+  c_mmc_dt1 = 2.0               ! deg/K, Hadley cell narrowing per K of tropical contrast
   i_mmc_wid = 1                 ! Hadley cell width: 0 = tropical sea level temperature contrast only,
                                 !                    1 = the same, scaled by the Held (2000) supercriticality
                                 !                        criterion (tropopause height x bulk dry stability)
   c_mmc_dt2 = 0.25              ! exponent of the supercriticality scaling of the Hadley width, used only if i_mmc_wid=1
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity, used only if i_mmc_wid=1
-  c_mmc_z = 0.                  ! m, elevation at which the zonal mean topography fully damps the meridional cells in the PBL; 0 = damping off
+  c_mmc_z = 1500.               ! m, elevation at which the zonal mean topography fully damps the meridional cells in the PBL; 0 = damping off
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
   dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
@@ -77,7 +77,7 @@
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
-  c_slp_5 = 0.5                 ! parameter for equatorial damping of azonal sea level pressure
+  c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
   c_aslp_temp_tau = 0.5         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
@@ -124,7 +124,7 @@
   i_pbl = 2                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
                                 ! 2 = PBL assumed to start from sea level
-  i_kata_wind = 1               ! katabatic winds:
+  i_kata_wind = 2               ! katabatic winds:
                                 ! 0 = no katabatic winds
                                 ! 1 = katabatic winds using u/v grid values
                                 ! 2 = katabatic winds using upwind values
@@ -193,7 +193,15 @@
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
   tau_fac = 1.2                 ! scaling factor on the surface wind stress taux/tauy
-  c_diff = 2.e5                 ! m, factor for macro-diffusion
+  i_diff = 2                    ! macro-diffusivity closure (energy, water, dust):
+                                ! 1 = c_diff*sqrt(EKE), K = c*V'
+                                ! 2 = c_diff*EKE,       K = c*V'^2 (Caballero & Hanley 2012)
+  c_diff = 3.e4                 ! macro-diffusivity factor
+  h_diff = 4000.                ! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983 vertical structure of the baroclinic eddy flux)
+                                ! <=0 = vertically uniform.
+  i_hdiff_ref = 2               ! height reference for h_diff:
+                                ! 1 = height above the local surface
+                                ! 2 = height above sea level
   c_diff_dse_eq = 3.            ! amplification of the ZONAL dry static energy diffusivity at the equator, tapering as exp(-(lat/fi_diff_dse_eq)^2). 1 = off.
   fi_diff_dse_eq = 15.          ! deg, e-folding latitude of the above
 
@@ -211,7 +219,7 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.54                !
+  c_cld_1 = 0.53                !
   c_cld_2 = 0.54                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
