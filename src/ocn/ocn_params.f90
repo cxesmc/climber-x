@@ -94,6 +94,11 @@ module ocn_params
      integer :: i_advection
      integer :: i_conv_shuffle
      logical :: l_conv_shuffle_passive
+     logical :: l_downslope           !! downsloping flow of dense shelf water (Campin and Goosse 1999)?
+     real(wp) :: c_downslope         !! coefficient of the gravity-current speed sqrt(g'H) []
+     real(wp) :: ent_downslope       !! entrainment of ambient water by the plume, fraction of its volume per km of descent []
+     real(wp) :: drho_downslope_min  !! minimum shelf-minus-ambient density contrast for a downslope flow [kg/m3]
+     real(wp) :: f_downslope_max     !! maximum fraction of a cell volume exchanged per time step []
      logical :: l_mix_bgc_all
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
@@ -290,6 +295,11 @@ subroutine ocn_par_load(filename)
 
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)
     call nml_read(filename,"ocn_par","l_conv_shuffle_passive",l_conv_shuffle_passive)
+    call nml_read(filename,"ocn_par","l_downslope",l_downslope)
+    call nml_read(filename,"ocn_par","c_downslope",c_downslope)
+    call nml_read(filename,"ocn_par","ent_downslope",ent_downslope)
+    call nml_read(filename,"ocn_par","drho_downslope_min",drho_downslope_min)
+    call nml_read(filename,"ocn_par","f_downslope_max",f_downslope_max)
     call nml_read(filename,"ocn_par","l_mix_bgc_all",l_mix_bgc_all)
 
     call nml_read(filename,"ocn_par","pe_buoy_coeff",pe_buoy_coeff)

@@ -172,7 +172,7 @@ obj_main_clim_ice = $(patsubst %, $(objdir)/%, $(tmp_main) ) $(objdir)/coupler_n
 dir_ocn = $(srcdir)/ocn/
 files_ocn = ocn_model.f90 ocn_params.f90 ocn_grid.f90 ocn_def.f90 ocn_out.f90 ocn_check.f90 \
 						momentum.f90 jbar.f90 ubarsolv.f90 island.f90 matinv.f90 wind.f90 invert.f90 velc.f90 \
-            transport_ocn.f90 advection.f90 diffusion.f90 convection.f90 krausturner.f90 eos.f90 \
+            transport_ocn.f90 advection.f90 diffusion.f90 convection.f90 downslope.f90 krausturner.f90 eos.f90 \
             restore_salinity.f90 hosing.f90 noise.f90 flux_adj.f90 ocn_grid_update_state.f90 \
 						cfc_flux.f90 free_surface.f90 bering.f90
 tmp_ocn = $(patsubst %.f90, %.o, $(files_ocn) )
@@ -448,8 +448,11 @@ $(objdir)/invert.o : $(dir_ocn)invert.f90 $(objdir)/ocn_params.o $(objdir)/ocn_g
 $(objdir)/krausturner.o : $(dir_ocn)krausturner.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
+$(objdir)/downslope.o : $(dir_ocn)downslope.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
 $(objdir)/transport_ocn.o : $(dir_ocn)transport_ocn.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o \
-	$(objdir)/advection.o $(objdir)/diffusion.o $(objdir)/eos.o $(objdir)/convection.o $(objdir)/krausturner.o 
+	$(objdir)/advection.o $(objdir)/diffusion.o $(objdir)/eos.o $(objdir)/convection.o $(objdir)/downslope.o $(objdir)/krausturner.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/advection.o : $(dir_ocn)advection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
