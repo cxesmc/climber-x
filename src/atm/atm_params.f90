@@ -179,6 +179,7 @@ module atm_params
   real(wp) :: acbar_scale
   real(wp) :: c_acbar_0
   real(wp) :: c_acbar_f
+  real(wp) :: c_acbar_p
   real(wp) :: c_acbar_wind
 
   real(wp) :: c_cld_1
@@ -427,6 +428,7 @@ contains
     call nml_read(filename,"atm_par","acbar_scale",acbar_scale)
     call nml_read(filename,"atm_par","c_acbar_0",c_acbar_0)
     call nml_read(filename,"atm_par","c_acbar_f",c_acbar_f)
+    call nml_read(filename,"atm_par","c_acbar_p",c_acbar_p)
     call nml_read(filename,"atm_par","c_acbar_wind",c_acbar_wind)
     call nml_read(filename,"atm_par","c_cld_1",c_cld_1)
     call nml_read(filename,"atm_par","c_cld_2",c_cld_2)

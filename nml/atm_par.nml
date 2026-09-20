@@ -35,11 +35,12 @@
   i_acbar = 2                   ! cross-isobar angle closure. Both solve sin(a)/sqrt(1-sin(2a)) = R,
                                 ! equivalently tan(a) = R/(1+R), and differ only in R:
                                 !   1 = R = cd/sqrt(|f|), the original
-                                !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**2), phi = |f|/f_45
+                                !   2 = R = cd/(c_acbar_0 + c_acbar_f*phi**c_acbar_p), phi = |f|/f_45
   acbar_max = 0.5               ! maximum cross-isobar angle
   acbar_scale = 1.              ! scaling factor of cross-isobar angle
-  c_acbar_0 = 3.1713e-3         ! equatorial denominator of the cross-isobar angle (i_acbar=2). Larger means a smaller angle everywhere, most strongly in the tropics.
-  c_acbar_f = 1.0132e-2         ! Coriolis term of the same denominator (i_acbar=2). Sets how fast the angle falls with latitude.
+  c_acbar_0 = 2.75e-3           ! equatorial denominator of the cross-isobar angle (i_acbar=2). Larger means a smaller angle everywhere, most strongly in the tropics.
+  c_acbar_f = 1.08e-2           ! Coriolis term of the same denominator (i_acbar=2). Sets how fast the angle falls with latitude.
+  c_acbar_p = 1.7               ! exponent on phi in the same denominator (i_acbar=2). The aquaplanet fit is 3.1713e-3 / 1.0132e-2 / 2 
   c_acbar_wind = 1.6            ! factor on the cross-isobar angle used to ROTATE the surface wind in usur.
 
   !-----------------------------------------------------------
@@ -52,7 +53,7 @@
   c_mmc_had = 0.3               ! parameter for strength of Hadley cells
   c_mmc_q = 1.0                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
-  c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
+  c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor 
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
@@ -63,7 +64,7 @@
                                 !                        criterion (tropopause height x bulk dry stability)
   c_mmc_dt2 = 0.25              ! exponent of the supercriticality scaling of the Hadley width, used only if i_mmc_wid=1
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity, used only if i_mmc_wid=1
-  c_mmc_z = 1500.               ! m, elevation at which the zonal mean topography fully damps the meridional cells in the PBL; 0 = damping off
+  c_mmc_z = 0.                  ! m, elevation at which the zonal mean topography fully damps the meridional cells in the PBL; 0 = damping off
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
   dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
@@ -196,8 +197,8 @@
   i_diff = 2                    ! macro-diffusivity closure (energy, water, dust):
                                 ! 1 = c_diff*sqrt(EKE), K = c*V'
                                 ! 2 = c_diff*EKE,       K = c*V'^2 (Caballero & Hanley 2012)
-  c_diff = 3.e4                 ! macro-diffusivity factor
-  h_diff = 4000.                ! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983 vertical structure of the baroclinic eddy flux)
+  c_diff = 3.5e4                ! macro-diffusivity factor
+  h_diff = 3000.                ! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983 vertical structure of the baroclinic eddy flux)
                                 ! <=0 = vertically uniform.
   i_hdiff_ref = 2               ! height reference for h_diff:
                                 ! 1 = height above the local surface
@@ -219,7 +220,7 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.53                !
+  c_cld_1 = 0.52                !
   c_cld_2 = 0.54                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
