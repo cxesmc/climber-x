@@ -54,7 +54,7 @@
   c_mmc_q = 1.0                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
   c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
-  c_mmc_pol = 0.01              ! parameter for strength of Polar cells
+  c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor 
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
   c_mmc_dt0 = 72.               ! deg, total Hadley width at zero tropical contrast
