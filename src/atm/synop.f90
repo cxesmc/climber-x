@@ -31,7 +31,7 @@ module synop_mod
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin
   use atm_params, only : tau_fac
-  use atm_params, only : i_diff, c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl, c_diffx_pol
+  use atm_params, only : i_diff, c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
@@ -312,14 +312,10 @@ contains
       if (imi.lt.1) imi=im
       do j=1,jm
         diffx(i,j) = fdiff_eq(j) * 0.5_wp*(kdif(imi,j)+kdif(i,j))
-        ! limit the zonal diffusivities. Explicit scheme: CFL stability requires the
-        ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
-        ! Implicit scheme: unconditionally stable, but near the pole (dxt->0) the
-        ! zonal conductance ~1/dxt becomes very large => limit
         if (.not.l_diff_impl) then
+          ! limit the zonal diffusivities for the explicit scheme: CFL stability requires the
+          ! zonal diffusion number diffx*tstep/dxt^2 < 0.5, i.e. diffx <= diffxmx.
           diffx(i,j) = min(diffx(i,j),diffxmx(j))
-        else
-          diffx(i,j) = min(diffx(i,j),2._wp*c_diffx_pol*diffxmx(j))
         endif
       enddo
     enddo 

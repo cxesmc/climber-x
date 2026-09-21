@@ -54,7 +54,7 @@
   c_mmc_q = 1.0                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
   c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
-  c_mmc_pol = 0.005             ! parameter for strength of Polar cells
+  c_mmc_pol = 0.01              ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor 
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
   c_mmc_dt0 = 72.               ! deg, total Hadley width at zero tropical contrast
@@ -213,8 +213,7 @@
                                 ! 1 = first order upstream (donor cell)
                                 ! 2 = flux corrected transport (Zalesak 1979)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
-  c_diffx_pol = 2.              ! implicit scheme: max zonal diffusion number for the polar limiter on the zonal diffusivities; large value = no limit
-  c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr) to suppress grid-scale checkerboard; 0 = off
+  c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr/convdst) to suppress grid-scale checkerboard; 0 = off
   nord_filt_conv = 2            ! order (selectivity) of the convergence 2dx filter
 
   !-----------------------------------------------------------
