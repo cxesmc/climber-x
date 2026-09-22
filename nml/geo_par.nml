@@ -19,6 +19,10 @@
  l_connect_ocn    = T           ! enforce connectivity of the ocean on the coarse ocean model grid?
  l_close_panama   = T           ! enforce closed Panama strait?
  l_close_bering   = F           ! enforce closed Bering strait?
+ l_close_iberia   = F           ! close the strait through Iberia (Alboran-Biscay v-face at 40N) by removing the Biscay cell (-2.5E,42.5N)?
+ l_f_crit_shallow = F           ! treat shallow coastal areas as land: coarse cells with ocean fraction < f_crit_shallow AND ocean-only mean depth shallower than z_crit_shallow 
+ f_crit_shallow   = 0.3         ! ocean-fraction threshold for l_f_crit_shallow
+ z_crit_shallow   = 200.        ! m, depth threshold for l_f_crit_shallow
  l_close_hudson   = F           ! enforce closed Hudson strait?
  l_close_baltic   = F           ! enforce disconnected Baltic Sea?
  i_fix_cell_grl   = 0
@@ -100,7 +104,9 @@
  !-------------------------------------------------------
  i_z_min_max = 1
  sigma_filter = 100.        ! km, sigma for topography smoothing for sub-grid standard deviation
- z_ocn_max_quant = 90.
+ z_ocn_max_quant = 90.      ! %, elevation quantile of the ocean points defining z_ocn_max_q (shallow side, used by the shelf/downslope scheme)
+ z_ocn_min_quant = 25.      ! %, elevation quantile of the ocean points defining z_ocn_min_q (deep side)
+ i_z_ocn = 2                ! bathymetry passed to the ocean model: 1 = z_bed (whole-cell mean bed elevation, land included), 2 = z_ocn (mean over the ocean points only), 3 = z_ocn_min_q (deep-side quantile of the ocean points; keeps channels/passages in fractional cells)
 
  !-------------------------------------------------------
  ! geothermal heat flux

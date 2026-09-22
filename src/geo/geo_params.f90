@@ -61,6 +61,10 @@ module geo_params
   logical :: l_connect_ocn
   logical :: l_close_panama
   logical :: l_close_bering
+  logical :: l_close_iberia
+  logical :: l_f_crit_shallow   !! treat shallow coastal slivers as land: cells with f_ocn < f_crit_shallow and ocean-only mean depth shallower than z_crit_shallow?
+  real(wp) :: f_crit_shallow
+  real(wp) :: z_crit_shallow
   logical :: l_close_hudson
   logical :: l_close_baltic
   integer :: i_fix_cell_grl
@@ -70,6 +74,8 @@ module geo_params
   integer :: i_z_min_max
   real(wp) :: sigma_filter
   real(wp) :: z_ocn_max_quant
+  real(wp) :: z_ocn_min_quant   !! elevation quantile (%) of the ocean points of a cell defining z_ocn_min_q (the deep-side depth)
+  integer :: i_z_ocn            !! bathymetry passed to the ocean model: 1 = z_bed (whole-cell mean), 2 = z_ocn (ocean-points mean), 3 = z_ocn_min_q (deep-side quantile of the ocean points)
 
   integer :: i_lakes
   real(wp) :: lake_area_crit 
@@ -134,6 +140,10 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","l_connect_ocn",l_connect_ocn)
     call nml_read(filename,"geo_par","l_close_panama",l_close_panama)
     call nml_read(filename,"geo_par","l_close_bering",l_close_bering)
+    call nml_read(filename,"geo_par","l_close_iberia",l_close_iberia)
+    call nml_read(filename,"geo_par","l_f_crit_shallow",l_f_crit_shallow)
+    call nml_read(filename,"geo_par","f_crit_shallow",f_crit_shallow)
+    call nml_read(filename,"geo_par","z_crit_shallow",z_crit_shallow)
     call nml_read(filename,"geo_par","l_close_hudson",l_close_hudson)
     call nml_read(filename,"geo_par","l_close_baltic",l_close_baltic)
     call nml_read(filename,"geo_par","i_fix_cell_grl",i_fix_cell_grl)
@@ -141,6 +151,8 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","i_z_min_max",i_z_min_max)
     call nml_read(filename,"geo_par","sigma_filter",sigma_filter)
     call nml_read(filename,"geo_par","z_ocn_max_quant",z_ocn_max_quant)
+    call nml_read(filename,"geo_par","z_ocn_min_quant",z_ocn_min_quant)
+    call nml_read(filename,"geo_par","i_z_ocn",i_z_ocn)
     call nml_read(filename,"geo_par","i_equilibrium",i_equilibrium)
     call nml_read(filename,"geo_par","l_z_bed_ini_eq",l_z_bed_ini_eq)
     call nml_read(filename,"geo_par","dz_bed_ini",dz_bed_ini)

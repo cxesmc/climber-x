@@ -83,6 +83,12 @@ module ocn_params
 
      type drag_par_type
        real(wp) :: adrag
+       integer :: i_drag_topo      !! topographic drag enhancement: 0 = shallow-water depth criterion, 3 = bumps (closed f/H contours)
+       real(wp) :: c_drag_bump     !! bump drag coefficient, drag = adrag*(1+c_drag_bump*bump) (i_drag_topo=1)
+       real(wp) :: z_drag_bump     !! m, depth scale weighting the bump measure by H/z_drag_bump for H < z_drag_bump (i_drag_topo=1)
+       real(wp) :: z_drag_bump_deep !! m, bump weight fades linearly from 1 at z_drag_bump to 0 at z_drag_bump_deep (i_drag_topo=1)
+       real(wp) :: drag_topo_fac_max !! cap on the bump drag enhancement factor (i_drag_topo=1)
+       real(wp) :: drag_topo_fac_max_coast !! cap on the bump drag enhancement factor for cells adjacent to land (i_drag_topo=1)
        integer :: drag_topo_n
        real(wp) :: drag_topo_fac
        real(wp) :: drag_frac_fac
@@ -265,6 +271,12 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","urelax",urelax)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
+    call nml_read(filename,"ocn_par","i_drag_topo",drag_par%i_drag_topo)
+    call nml_read(filename,"ocn_par","c_drag_bump",drag_par%c_drag_bump)
+    call nml_read(filename,"ocn_par","z_drag_bump",drag_par%z_drag_bump)
+    call nml_read(filename,"ocn_par","z_drag_bump_deep",drag_par%z_drag_bump_deep)
+    call nml_read(filename,"ocn_par","drag_topo_fac_max",drag_par%drag_topo_fac_max)
+    call nml_read(filename,"ocn_par","drag_topo_fac_max_coast",drag_par%drag_topo_fac_max_coast)
     call nml_read(filename,"ocn_par","drag_topo_n",drag_par%drag_topo_n)
     call nml_read(filename,"ocn_par","drag_topo_fac",drag_par%drag_topo_fac)
     call nml_read(filename,"ocn_par","drag_topo_scale_eq",drag_par%drag_topo_scale_eq)

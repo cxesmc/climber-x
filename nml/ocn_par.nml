@@ -68,6 +68,18 @@
  ! friction settings
  !-------------------------------------------------------------------------------------------
  adrag = 4.                   ! days, inverse minimum drag
+ i_drag_topo = 1              ! topographic drag enhancement at psi points: 
+                              ! 0 = shallow water (drag_topo_n, drag_topo_fac, z_drag_shallow);
+                              ! 1 = adrag*(1 + c_drag_bump*bump), bump = ln(mean depth of the wet 3x3 neighbours / cell depth) (>0 only) * depth weight
+ c_drag_bump = 20.            ! bump drag coefficient (i_drag_topo=3)
+ z_drag_bump = 1000.          ! m, bump weight = H/z_drag_bump for H < z_drag_bump (wall-like slivers do not count) (i_drag_topo=3)
+ z_drag_bump_deep = 3000.     ! m, bump weight fades from 1 at z_drag_bump to 0 at z_drag_bump_deep: deep plateaus (Kerguelen, Agulhas,
+                              ! Lord Howe, 1-2 km in 4-5 km water) steer the real ACC/WBCs and are no trapped-mode hazard on smoothed
+                              ! topography; 2000 brings the Lord Howe mode back on raw topography (i_drag_topo=3)
+ drag_topo_fac_max = 5.       ! cap on the bump drag enhancement factor (i_drag_topo=3)
+ drag_topo_fac_max_coast = 2. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
+                              ! because land is excluded from the neighbour mean; with the offshore bumps damped the coasts need
+                              ! no enhancement at all (1.), and the Gulf Stream gains 30% for it
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
  drag_topo_fac = 2.5          ! factor by which to increase drag in shallow water
  drag_topo_scale_eq = 0.
@@ -92,8 +104,8 @@
  i_diff = 1                   ! diffusion schemes:
                               ! 0 = horizontal/vertical diffusion
                               ! 1 = isopycnal/diapycnal diffusion
- diff_iso = 1500              ! m2/s, isopycnal/horizontal diffusivity
- diff_gm = 1500               ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
+ diff_iso = 1000              ! m2/s, isopycnal/horizontal diffusivity
+ diff_gm = 1000               ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
                               ! 0 = uniform with value diff_dia_min
                               ! 1 = tuned Bryan-Lewis type profile

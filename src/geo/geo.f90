@@ -168,6 +168,7 @@ contains
     allocate(geo%z_ocn_min(ni,nj))
     allocate(geo%z_ocn_max(ni,nj))
     allocate(geo%z_ocn_max_q(ni,nj))
+    allocate(geo%z_ocn_min_q(ni,nj))
     allocate(geo%z_veg(ni,nj))
     allocate(geo%z_veg_min(ni,nj))
     allocate(geo%z_veg_max(ni,nj))
@@ -737,7 +738,7 @@ contains
   !-------------------------------------------------------------------
   if (l_connect_ocn) then
     !$ time1 = omp_get_wtime()
-    call connect_ocn(geo%hires%mask,real(geo%grid%G%x,wp),real(geo%grid%G%y,wp),lon_ocn_origin,lat_ocn_origin, &
+    call connect_ocn(geo%hires%mask,geo%hires%z_bed,real(geo%grid%G%x,wp),real(geo%grid%G%y,wp),lon_ocn_origin,lat_ocn_origin, &
       geo%f_ocn) 
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'connect_ocn',time2-time1
@@ -863,7 +864,7 @@ contains
     geo%hires%z_bed, geo%hires%z_sur, geo%hires%z_bed_std, & ! in
     geo%hires%map_runoff, geo%hires%i_runoff_coarse, geo%hires%j_runoff_coarse, &   ! in
     geo%f_ocn, geo%f_ocn2, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_ice_flt, geo%f_lake, geo%f_lake_n, &
-    geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
+    geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ocn_min_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
     geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, &    ! out
     geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice)   ! out
   !$ time2 = omp_get_wtime()
@@ -1057,6 +1058,7 @@ contains
     deallocate(geo%z_ocn_min)
     deallocate(geo%z_ocn_max)
     deallocate(geo%z_ocn_max_q)
+    deallocate(geo%z_ocn_min_q)
     deallocate(geo%z_veg)
     deallocate(geo%z_veg_min)
     deallocate(geo%z_veg_max)

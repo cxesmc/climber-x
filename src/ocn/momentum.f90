@@ -73,6 +73,7 @@ module momentum_mod
   integer, allocatable :: erisl_ipiv(:)   ! row-pivot vector from matinv, replayed by matmult each step
   real(wp), allocatable :: psibc(:)
   real(wp), allocatable :: tmpdrg(:,:)
+  real(wp), allocatable :: bump_cell(:,:)   ! bump measure of each tracer cell for i_drag_topo=1
   real(wp), allocatable :: rho_tb(:,:,:)
 
   private
@@ -243,6 +244,8 @@ contains
     integer :: i1, i1p, j1, ii, ip1
     integer :: n_band, nm_band, off
     real(wp) :: tmp, min_dep, dep_fac, topo_fac, min_frac
+    real(wp) :: hsum, bmp
+    integer :: nwet
 
 
     ! calculate drag at psi points (grid cell corners!)   
@@ -253,36 +256,97 @@ contains
       enddo
     enddo
 
-    ! increase drag in shallow water regions depeding on water depth
+    if (drag_par%i_drag_topo.eq.1) then
+      ! bump drag factor of each cell: a cell shallower than the mean depth of its wet 3x3 neighbours is a local
+      ! maximum of f/H with closed f/H contours (bank, plateau, drowned island) where JEBAR-driven flow recirculates.
+      ! Depth weight H/z_drag_bump below z_drag_bump (wall-like shallow slivers, drag/H already huge, do not count),
+      ! fading to 0 at z_drag_bump_deep (deep plateaus steer the real circulation). 
+      bump_cell = 0._wp
+      do j=1,maxj
+        do i=1,maxi
+          if (k1(i,j).le.maxk) then
+            hsum = 0._wp
+            nwet = 0
+            do j1=max(1,j-1),min(maxj,j+1)
+              do i1=i-1,i+1
+                if (i1.eq.i .and. j1.eq.j) cycle
+                i1p = 1 + mod(maxi+i1-1,maxi)
+                if (k1(i1p,j1).le.maxk) then
+                  hsum = hsum + h(3,i1p,j1)
+                  nwet = nwet + 1
+                endif
+              enddo
+            enddo
+            bmp = 0._wp
+            if (nwet.gt.0) then
+              ! depth weight: H/z_drag_bump below z_drag_bump, fading to 0 at z_drag_bump_deep
+              if (h(3,i,j).lt.drag_par%z_drag_bump) then
+                tmp = h(3,i,j)/drag_par%z_drag_bump
+              else
+                tmp = max(0._wp, (drag_par%z_drag_bump_deep-h(3,i,j))/(drag_par%z_drag_bump_deep-drag_par%z_drag_bump))
+              endif
+              bmp = max(0._wp, log(hsum/real(nwet,wp)/h(3,i,j))) * tmp
+            endif
+            ! adjacent to land (4 neighbours)?
+            if (k1(i-1,j).gt.maxk .or. k1(i+1,j).gt.maxk .or. k1(i,j-1).gt.maxk .or. k1(i,j+1).gt.maxk) then
+              bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max_coast)
+            else
+              bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max)
+            endif
+          endif
+        enddo
+      enddo
+      bump_cell(0,:) = bump_cell(maxi,:)
+      bump_cell(maxi+1,:) = bump_cell(1,:)
+    endif
+
+    ! topographic drag enhancement at psi points
     do j=0,maxj
       do i=0,maxi
-        if (drag_par%drag_topo_n.eq.1) then
-          min_dep = min(-zw(min(maxk,k1(i,j))),-zw(min(maxk,k1(i+1,j))),-zw(min(maxk,k1(i,j+1))),-zw(min(maxk,k1(i+1,j+1))))
-        else if (drag_par%drag_topo_n.eq.2) then
-          min_dep = -zw(min(maxk,k1(i,j)))
-          do j1=max(0,j-1),min(maxj+1,j+2)
-            do i1=i-1,i+2
-              i1p = 1 + mod(maxi + i1-1,maxi)
-              min_dep = min(min_dep,-zw(min(maxk,k1(i1p,j1))))
-            enddo
-          enddo 
-        endif
-        dep_fac = max(0._wp,(drag_par%z_drag_shallow-min_dep)/drag_par%z_drag_shallow)
-
-        !topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq*cv(j))
-        if (latv(j+1).ge.-20._wp .and. latv(j+1).le.20._wp) then
-          topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq)
-        else
-          topo_fac = drag_par%drag_topo_fac
-        endif
 
         ii = i
         if (ii.eq.0) ii=maxi
         ip1 = modulo(i,maxi) + 1
         min_frac = min(f_ocn(ii,max(1,j)),f_ocn(ip1,max(1,j)),f_ocn(ii,min(maxj,j+1)),f_ocn(ip1,min(maxj,j+1)))
 
-        !tmp = drag_par%adrag*(1._wp + min(drag_par%drag_topo_fac,topo_fac*dep_fac) + drag_par%drag_frac_fac*(1._wp-min_frac))
-        tmp = drag_par%adrag*(1._wp + topo_fac*dep_fac + drag_par%drag_frac_fac*(1._wp-min_frac))
+        if (drag_par%i_drag_topo.eq.0) then
+
+          ! increase drag in shallow water regions depending on water depth
+          if (drag_par%drag_topo_n.eq.1) then
+            min_dep = min(-zw(min(maxk,k1(i,j))),-zw(min(maxk,k1(i+1,j))),-zw(min(maxk,k1(i,j+1))),-zw(min(maxk,k1(i+1,j+1))))
+          else if (drag_par%drag_topo_n.eq.2) then
+            min_dep = -zw(min(maxk,k1(i,j)))
+            do j1=max(0,j-1),min(maxj+1,j+2)
+              do i1=i-1,i+2
+                i1p = 1 + mod(maxi + i1-1,maxi)
+                min_dep = min(min_dep,-zw(min(maxk,k1(i1p,j1))))
+              enddo
+            enddo 
+          endif
+          dep_fac = max(0._wp,(drag_par%z_drag_shallow-min_dep)/drag_par%z_drag_shallow)
+
+          !topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq*cv(j))
+          if (latv(j+1).ge.-20._wp .and. latv(j+1).le.20._wp) then
+            topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq)
+          else
+            topo_fac = drag_par%drag_topo_fac
+          endif
+
+          !tmp = drag_par%adrag*(1._wp + min(drag_par%drag_topo_fac,topo_fac*dep_fac) + drag_par%drag_frac_fac*(1._wp-min_frac))
+          tmp = drag_par%adrag*(1._wp + topo_fac*dep_fac + drag_par%drag_frac_fac*(1._wp-min_frac))
+
+        else if (drag_par%i_drag_topo.eq.1) then
+
+          ! bump drag: largest (capped) bump factor of the four cells around the psi point; land cells carry 0
+          bmp = max(1._wp,bump_cell(i,j),bump_cell(i+1,j),bump_cell(i,j+1),bump_cell(i+1,j+1))
+
+          tmp = drag_par%adrag*(bmp + drag_par%drag_frac_fac*(1._wp-min_frac))
+
+        else
+
+          stop 'momentum_update_grid: i_drag_topo must be 0 or 1'
+
+        endif
 
         if (tmp.gt.tmpdrg(i,j)) then
           tmpdrg(i,j) = tmp
@@ -431,6 +495,7 @@ contains
 
     ! allocate variables
     allocate(ubar_wind(maxi,maxj))
+    allocate(bump_cell(0:maxi+1,0:maxj+1))
     allocate(ubar_jbar(maxi,maxj))
     allocate(ratm(mpxi*mpxj,mpxi+1))
     allocate(gb(mpxi*mpxj))

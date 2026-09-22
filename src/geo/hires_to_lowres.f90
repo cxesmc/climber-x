@@ -31,8 +31,9 @@ module hires_to_lowres_mod
   use climber_grid, only : lat
   use geo_params, only : f_crit, f_crit_eq
   use geo_params, only : l_ocn_below_shelf
-  use geo_params, only : l_close_panama, l_close_bering
-  use geo_params, only : i_z_min_max, z_ocn_max_quant
+  use geo_params, only : l_close_panama, l_close_bering, l_close_iberia
+  use geo_params, only : l_f_crit_shallow, f_crit_shallow, z_crit_shallow
+  use geo_params, only : i_z_min_max, z_ocn_max_quant, z_ocn_min_quant
   use geo_params, only : l_use_z_bed_std_lowres
   use geo_grid, only : ni, nj, n_topo_sur, i_topo_sur, j_topo_sur, i0_topo, i1_topo, j0_topo, j1_topo
 
@@ -46,7 +47,7 @@ contains
   subroutine hires_to_lowres(n_lakes, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, hires_z_bed_std, &
     hires_map_runoff, hires_i_runoff, hires_j_runoff, &  ! in
     f_ocn, f_ocn2, f_lnd, f_ice, f_ice_grd, f_ice_flt, f_lake, f_lake_n, &   ! out
-    z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, &   ! out
+    z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ocn_min_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, &   ! out
     z_sur_std, z_sur_smooth_std, z_veg_std, &    ! out
     f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice)   ! out
 
@@ -77,6 +78,7 @@ contains
   real(wp), intent(out) :: z_ocn_min(:,:)
   real(wp), intent(out) :: z_ocn_max(:,:)
   real(wp), intent(out) :: z_ocn_max_q(:,:)
+  real(wp), intent(out) :: z_ocn_min_q(:,:)
   real(wp), intent(out) :: z_ice(:,:)
   real(wp), intent(out) :: z_lake(:,:)
   real(wp), intent(out) :: z_veg(:,:)
@@ -167,6 +169,15 @@ contains
       if (f_ocn(i,j).lt.fcrit) then
         f_ocn(i,j) = 0._wp
       endif
+      ! option to treat shallow coastal slivers as land: a cell with a small ocean fraction whose ocean part
+      ! is shallow (shelf) gets f_ocn=0, so that the coastline follows the shelf break; deep slivers (fjords,
+      ! marginal seas, straits) are kept. Removes e.g. the Hatteras/New England/Nova Scotia/Gulf of Thailand
+      ! slivers, which misplace the western boundary currents and are 1/H cliffs for the barotropic solve.
+      if (l_f_crit_shallow .and. nocn.gt.0 .and. f_ocn(i,j).gt.0._wp .and. f_ocn(i,j).lt.f_crit_shallow) then
+        if (sum(z_bed_cell, mask_cell.eq.2)/real(nocn,wp) .gt. -z_crit_shallow) then
+          f_ocn(i,j) = 0._wp
+        endif
+      endif
 
       ! fix for Panama
       if (l_close_panama) then
@@ -180,6 +191,13 @@ contains
       if (l_close_bering) then
         ! close Bering, ocean fraction=0
         f_ocn(1:4,32) = 0._wp
+      endif
+      ! option to close the spurious strait through Iberia: the Alboran cell (-2.5E,37.5N) and the Biscay cell
+      ! (-2.5E,42.5N) are both fractional ocean cells, so their common v-face is open and ~4 Sv circulate
+      ! Atlantic -> Gibraltar -> Alboran -> Biscay -> Atlantic; removing the Biscay cell closes both this face
+      ! and the u-face to the Gulf of Lion cell (2.5E,42.5N)
+      if (l_close_iberia) then
+        f_ocn(36,27) = 0._wp
       endif
 
       ! land fraction
@@ -476,12 +494,14 @@ contains
         z_ocn_tmp = pack(z_bed_cell, mask_cell.eq.2,z_ocn_tmp2)
         call bubble_sort(z_ocn_tmp)
         z_ocn_max_q(i,j) = z_ocn_tmp(max(1,nint(real(nocn,wp)*z_ocn_max_quant/100._wp)))
+        z_ocn_min_q(i,j) = z_ocn_tmp(max(1,nint(real(nocn,wp)*z_ocn_min_quant/100._wp)))   ! deep-side quantile (sorted ascending: most negative first)
         !print *,'nocn,z,z_min,z_max,z_q10',nocn,z_ocn(i,j),z_ocn_min(i,j),maxval(z_bed_cell, mask_cell.eq.2),z_ocn_max_q(i,j)
       else
         z_ocn(i,j) = 0._wp
         z_ocn_min(i,j) = 0._wp 
         z_ocn_max(i,j) = 0._wp
         z_ocn_max_q(i,j) = 0._wp
+        z_ocn_min_q(i,j) = 0._wp
       endif
 
       ! grid-cell mean ice-free and land-free land elevation 

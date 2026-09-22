@@ -207,6 +207,7 @@ contains
       call nc_write(fnm,"z_ocn_min", geo%z_ocn_min,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="min elevation of ocean",units="m",ncid=ncid)
       call nc_write(fnm,"z_ocn_max", geo%z_ocn_max,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="max elevation of ocean",units="m",ncid=ncid)
       call nc_write(fnm,"z_ocn_max_q", geo%z_ocn_max_q,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="quantile elevation of ocean",units="m",ncid=ncid)
+      call nc_write(fnm,"z_ocn_min_q", geo%z_ocn_min_q,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="deep-side quantile elevation of ocean part (z_ocn_min_quant)",units="m",ncid=ncid)
       call nc_write(fnm,"z_ice", geo%z_ice,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="mean ice elevation",units="m",ncid=ncid)
       call nc_write(fnm,"z_lake", geo%z_lake,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="mean lake elevation",units="m",ncid=ncid)
       call nc_write(fnm,"z_veg", geo%z_veg,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="mean elevation of ice-free land",units="m",ncid=ncid)

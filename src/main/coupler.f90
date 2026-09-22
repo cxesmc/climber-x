@@ -80,7 +80,7 @@ module coupler
     use lnd_grid, only : is_veg, is_ice, is_lake, nl
     USE bgc_params, ONLY : l_sediments, l_spinup_bgc, i_compensate, l_conserve_phos, l_conserve_sil, l_conserve_alk, i_bgc_fw
     use bgc_params, only : iatmco2, iatmo2, iatmn2, iatmc13, iatmc14, isssc12, issssil, rcar
-    use geo_params, only : h_ice_min
+    use geo_params, only : h_ice_min, i_z_ocn
 
     !$use omp_lib
 
@@ -3311,7 +3311,16 @@ contains
     ! surface elevation on common grid
     cmn%z_sur = geo%z_sur
     cmn%z_ocn_max = geo%z_ocn_max_q
-    cmn%z_ocn = geo%z_bed   
+    ! bathymetry passed to the ocean model
+    if (i_z_ocn.eq.1) then
+      cmn%z_ocn = geo%z_bed         ! whole-cell mean bed elevation (land points included)
+    else if (i_z_ocn.eq.2) then
+      cmn%z_ocn = geo%z_ocn         ! mean over the ocean points of the cell
+    else if (i_z_ocn.eq.3) then
+      cmn%z_ocn = geo%z_ocn_min_q   ! deep-side elevation quantile of the ocean points (keeps channels in fractional cells)
+    else
+      stop 'ERROR: i_z_ocn must be 1, 2 or 3'
+    endif
     cmn%z_veg = geo%z_veg
     cmn%z_veg_min = geo%z_veg_min
     cmn%z_veg_max = geo%z_veg_max

@@ -117,6 +117,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_ocn_min     !! grid cell min elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_ocn_max     !! grid cell max elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_ocn_max_q   !! grid cell quantile elevation of ocean part [m]
+      real(wp), dimension(:,:), allocatable :: z_ocn_min_q   !! grid cell deep-side quantile elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_veg     !! grid cell mean elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_min     !! grid cell max elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_max     !! grid cell min elevation of ice-free land part [m]

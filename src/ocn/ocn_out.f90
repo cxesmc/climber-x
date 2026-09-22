@@ -36,7 +36,8 @@ module ocn_out
   use timer, only : n_accel, year, year_clim, year_now, mon, doy, nyears, sec_day, sec_year, nday_year
   use constants, only : pi, cap_w, g, rho_w
   use control, only: out_dir
-  use climber_grid, only : lon, lat, lonu, latv, basin_mask, basin_mask2, i_atlantic, i_pacific, i_indian, i_southern
+  use climber_grid, only : lon, lat, lonu, latv, i_atlantic, i_pacific, i_indian, i_southern, i_medi
+  use climber_grid, only : basin_mask_grid => basin_mask, basin_mask2_grid => basin_mask2
   use ocn_grid, only: mask_c, mask_v, k1, k1_shelf, k1_1000, k1_3000, topo, bathy ,maxi, maxj, maxk
   use ocn_grid, only : zro, zw, dx, dy, dz, dza, dxv, ocn_area, ocn_area_tot, ocn_vol, ocn_vol_tot, rdy, dphi, phi0, s, sv
   use ocn_grid, only: maxisles, n_isles
@@ -68,6 +69,9 @@ module ocn_out
   integer :: jsf    !! j index where Southern ocean finishes and Atlantic/Pacific/Indian oceans start
   integer :: J26N, jas, jan1, jan2, jps, JNS, k1_buoy
   integer, dimension(:), allocatable :: jan
+  ! basin masks used for the diagnostics: copies of the climber_grid masks with the Mediterranean merged
+  ! into the Atlantic (the physics keeps using the original masks)
+  integer, dimension(:,:), allocatable :: basin_mask, basin_mask2
   integer, dimension(2) :: loc_drake, loc_bering, loc_davis, loc_medi, loc_indo, loc_agulhas
   integer :: j_fram, i_fram(2)
   integer :: j_denmark, i_denmark(2)
@@ -141,6 +145,7 @@ module ocn_out
   type o_out
      real(wp), dimension(:,:), allocatable :: f_ocn
      integer, dimension(:,:), allocatable :: mask_ocn
+     integer, dimension(:,:), allocatable :: basin_mask, basin_mask2
      real(wp), dimension(:,:), allocatable :: area
      integer, dimension(:,:), allocatable :: k1
      real(wp), dimension(:,:), allocatable :: topo
@@ -213,7 +218,7 @@ contains
     real(wp), parameter :: lon_davis=-62.5_wp, lat_davis=67.5_wp
     real(wp), parameter :: lon_indo=117.5_wp, lat_indo=-7.5_wp
     real(wp), parameter :: lon_agulhas=22._wp, lat_agulhas=-37.5_wp
-    real(wp), parameter :: lon_medi=-2.5_wp, lat_medi=37.5_wp
+    real(wp), parameter :: lon_medi=-7.5_wp, lat_medi=37.5_wp   ! cell whose east face (-5E, 37.5N) is the Gibraltar strait
     real(wp), parameter :: lon_fram_1 = -30., lon_fram_2 = 15., lat_fram = 80.
     real(wp), parameter :: lon_denmark_1 = -47.5, lon_denmark_2 = -17.5, lat_denmark = 67.5
     real(wp), parameter :: lon_atlN_1=-100_wp, lon_atlN_2=100._wp, lat_atlN_1=50._wp , lat_atlN_2=90._wp
@@ -239,8 +244,18 @@ contains
     ! allocate
     allocate(ann_ts(ny_out_ts))
 
+    ! diagnostic basin masks
+    allocate(basin_mask(maxi,maxj))
+    allocate(basin_mask2(maxi,maxj))
+    basin_mask  = basin_mask_grid
+    basin_mask2 = basin_mask2_grid
+    where (basin_mask.eq.i_medi)  basin_mask  = i_atlantic
+    where (basin_mask2.eq.i_medi) basin_mask2 = i_atlantic
+
     allocate(ann_o%f_ocn(maxi,maxj))
     allocate(ann_o%mask_ocn(maxi,maxj))
+    allocate(ann_o%basin_mask(maxi,maxj))
+    allocate(ann_o%basin_mask2(maxi,maxj))
     allocate(ann_o%area(maxi,maxj))
     allocate(ann_o%k1(maxi,maxj))
     allocate(ann_o%map_isles(maxi,maxj))
@@ -1090,7 +1105,7 @@ contains
     real(wp), save :: rsl_steric0, rsl_mass0
     real(wp) :: rsl_steric, rsl_mass
     real(wp), save :: rsl_hosing
-    logical :: int_drake, int_bering, int_davis, int_medi, int_indo, int_agulhas
+    logical :: int_drake, int_bering, int_davis, int_indo, int_agulhas
     real(wp) :: tf_drake, tf_bering, tf_davis, tf_fram, tf_denmark, tf_medi, tf_indo, tf_agulhas
     real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
     real(wp) :: area_atlN50, area_lab, area_irm, area_gin, area_bkn, area_wedd, area_ross, area_so, area_pacN, area_pacN30
@@ -1633,7 +1648,7 @@ contains
     ! All independent per-timestep diagnostic blocks run concurrently in a single OpenMP sections region
     !$omp parallel sections default(shared) &
     !$omp private(i,j,k,n,ntot,nxa,JNS,ou_g,ou_p,ou_i,ou_a,og_g,og_p,og_i,og_a,vbar,dxdz,vzab,vzam,sza1,sza2,fazz,alpha,beta) &
-    !$omp private(int_drake,int_bering,int_davis,int_medi,int_indo,int_agulhas,mldst,rho_maxk,rho_k,rho1,rho2)
+    !$omp private(int_drake,int_bering,int_davis,int_indo,int_agulhas,mldst,rho_maxk,rho_k,rho1,rho2)
     !$omp section
     ! initialize
     opsi  = 0._wp
@@ -1983,30 +1998,16 @@ contains
     tf_denmark = tf_denmark*1.e-6_wp  ! Sv
     fw_denmark = fw_denmark*1.e-6_wp  ! Sv
 
-    ! 5. Gibraltar Strait through flow (Sv)
+    ! 5. Gibraltar Strait through flow (Sv): net zonal transport through the single u-face at -5E, 37.5N.
+    ! (Integrating along the whole ocean column at that longitude, as for the other straits, would add the
+    ! faces at 42.5N and 47.5N, which are open Atlantic / the Iberian-loop return, and cancel the signal.)
     tf_medi = 0.0
-    int_medi = .true.
-    do j=loc_medi(2),maxj
-       if (int_medi.and.k1(loc_medi(1),j).le.maxk) then
-          do k=k1(loc_medi(1),j),maxk
-             tf_medi = tf_medi + ocn%u(1,loc_medi(1),j,k)*dy*dz(k) ! m3/s
-!	print *,'u',ocn%u(1,loc_medi(1),j,k),loc_medi(1),j,k
-          enddo
-       else
-          int_medi = .false.
-       endif
-    enddo
-    int_medi = .true.
-    do j=loc_medi(2)-1,1,-1
-       if (int_medi.and.k1(loc_medi(1),j).le.maxk) then
-          do k=k1(loc_medi(1),j),maxk
-             tf_medi = tf_medi + ocn%u(1,loc_medi(1),j,k)*dy*dz(k) ! m3/s
-!        print *,'u',ocn%u(1,loc_medi(1),j,k),loc_medi(1),j,k
-          enddo
-       else
-          int_medi = .false.
-       endif
-    enddo
+    j = loc_medi(2)
+    if (k1(loc_medi(1),j).le.maxk) then
+       do k=k1(loc_medi(1),j),maxk
+          tf_medi = tf_medi + ocn%u(1,loc_medi(1),j,k)*dy*dz(k) ! m3/s
+       enddo
+    endif
     tf_medi = tf_medi*1.e-6_wp  ! Sv
 !        print *,'loc_drake',loc_drake
 !        print *,'tf_drake',tf_drake
@@ -3502,6 +3503,14 @@ contains
 
      ann_o%f_ocn = ocn%f_ocn
      ann_o%mask_ocn = ocn%grid%mask_ocn
+     ! basin masks, masked with the current ocean mask (land cells = missing value)
+     where (ocn%grid%mask_ocn.eq.1)
+       ann_o%basin_mask  = basin_mask
+       ann_o%basin_mask2 = basin_mask2
+     elsewhere
+       ann_o%basin_mask  = int(missing_value)
+       ann_o%basin_mask2 = int(missing_value)
+     endwhere
      ann_o%area = ocn%f_ocn*ocn%grid%ocn_area
      ann_o%topo = topo
      ann_o%bathy = bathy
@@ -4033,6 +4042,8 @@ contains
 
     if (ndat.eq.13) then
     call nc_write(fnm,"mask_ocn",    vars%mask_ocn,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="surface ocean mask",units="/",missing_value=int(missing_value),ncid=ncid)
+    call nc_write(fnm,"basin_mask",  vars%basin_mask,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="basin mask used for the overturning and budget diagnostics (1=Atlantic incl. Mediterranean 2=Pacific 3=Indian 4=Southern)",units="/",missing_value=int(missing_value),ncid=ncid)
+    call nc_write(fnm,"basin_mask2", vars%basin_mask2, dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="basin mask used for the basin heat/freshwater transport and zonal-mean diagnostics (1=Atlantic incl. Mediterranean 2=Pacific 3=Indian)",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"f_ocn",    sngl(vars%f_ocn),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="surface ocean fraction",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"area",    sngl(vars%area), dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="surface ocean area",units="m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"k1",    vars%k1,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="index of first (bottom) layer",units="/",missing_value=int(missing_value),ncid=ncid)

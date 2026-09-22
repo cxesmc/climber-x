@@ -28,7 +28,8 @@ module connect_ocn_mod
   use precision, only : wp
   use constants, only : pi
   use geo_params, only : f_crit, f_crit_eq
-  use geo_params, only : l_close_panama, l_close_bering 
+  use geo_params, only : l_close_panama, l_close_bering, l_close_iberia 
+  use geo_params, only : l_f_crit_shallow, f_crit_shallow, z_crit_shallow
   use geo_params, only : l_ocn_below_shelf
   use geo_grid, only : ni, nj, n_topo_sur, i_topo_sur, j_topo_sur, i0_topo, i1_topo, j0_topo, j1_topo
   use fill_ocean_mod, only : fill_ocean_lowres
@@ -40,12 +41,13 @@ module connect_ocn_mod
 
 contains
 
-  subroutine connect_ocn(hires_mask, lon, lat, lon_ocn_origin, lat_ocn_origin, &
+  subroutine connect_ocn(hires_mask, hires_z_bed, lon, lat, lon_ocn_origin, lat_ocn_origin, &
       f_ocn)
 
   implicit none
 
   integer, intent(inout) :: hires_mask(:,:)
+  real(wp), intent(in) :: hires_z_bed(:,:)   !! high resolution bedrock elevation [m]
   real(wp), intent(in) :: lat(:)
   real(wp), intent(in) :: lon(:)
   real(wp), intent(in) :: lat_ocn_origin  
@@ -57,16 +59,19 @@ contains
   real(wp) :: fcrit
 
   integer, dimension(:), allocatable :: mask_cell
+  real(wp), dimension(:), allocatable :: z_bed_cell
   integer, dimension(:,:), allocatable :: mask_ocn_connect
 
 
   allocate( mask_cell(n_topo_sur) )
+  allocate( z_bed_cell(n_topo_sur) )
 
-  !$omp parallel do private(i,j,fcrit,nocn,mask_cell)
+  !$omp parallel do private(i,j,fcrit,nocn,mask_cell,z_bed_cell)
   do j=1,nj
     do i=1,ni
 
       mask_cell = pack(hires_mask(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
+      z_bed_cell = pack(hires_z_bed(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
 
       ! ocean fraction
       if (l_ocn_below_shelf) then
@@ -87,6 +92,15 @@ contains
       if (f_ocn(i,j).lt.fcrit) then
         f_ocn(i,j) = 0._wp
       endif
+      ! option to treat shallow coastal slivers as land: a cell with a small ocean fraction whose ocean part
+      ! is shallow (shelf) gets f_ocn=0, so that the coastline follows the shelf break; deep slivers (fjords,
+      ! marginal seas, straits) are kept. Removes e.g. the Hatteras/New England/Nova Scotia/Gulf of Thailand
+      ! slivers, which misplace the western boundary currents and are 1/H cliffs for the barotropic solve.
+      if (l_f_crit_shallow .and. nocn.gt.0 .and. f_ocn(i,j).gt.0._wp .and. f_ocn(i,j).lt.f_crit_shallow) then
+        if (sum(z_bed_cell, mask_cell.eq.2)/real(nocn,wp) .gt. -z_crit_shallow) then
+          f_ocn(i,j) = 0._wp
+        endif
+      endif
 
       ! fix for Panama
       if (l_close_panama) then
@@ -100,6 +114,13 @@ contains
       if (l_close_bering) then
         ! close Bering, ocean fraction=0
         f_ocn(1:4,32) = 0._wp
+      endif
+      ! option to close the spurious strait through Iberia: the Alboran cell (-2.5E,37.5N) and the Biscay cell
+      ! (-2.5E,42.5N) are both fractional ocean cells, so their common v-face is open and ~4 Sv circulate
+      ! Atlantic -> Gibraltar -> Alboran -> Biscay -> Atlantic; removing the Biscay cell closes both this face
+      ! and the u-face to the Gulf of Lion cell (2.5E,42.5N)
+      if (l_close_iberia) then
+        f_ocn(36,27) = 0._wp
       endif
 
     enddo
@@ -145,6 +166,7 @@ contains
   !$omp end parallel do
 
   deallocate( mask_cell )
+  deallocate( z_bed_cell )
   deallocate( mask_ocn_connect)
 
 
