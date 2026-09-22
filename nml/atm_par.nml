@@ -76,7 +76,7 @@
   p0 = 101100                   ! Pa, mean sea level pressure, used only if l_p0_var==F
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
-  c_slp_3 = 7.                  ! parameter for polar damping of azonal sea level pressure 
+  c_slp_3 = 12.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
