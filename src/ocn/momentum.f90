@@ -38,10 +38,10 @@ module momentum_mod
   use climber_grid, only : lon, latv
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
-  use ocn_params, only : i_eos
+  use ocn_params, only : i_eos, i_cor_form, nbw, qcor
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
   use ocn_grid, only : maxisles, n_isles, psiles
-  use ocn_grid, only : dx, dy, dz, zw, zro, s, sv, cv, k1, h
+  use ocn_grid, only : dx, dy, dz, zw, zro, s, sv, cv, rh, k1, h
 
   use eos_mod, only : eos_tb
   use invert_mod, only : invert
@@ -65,8 +65,8 @@ module momentum_mod
   ! contiguous band-storage copies of the LU factors used by ubarsolv (built once per mask
   ! update from ratm/gap), so the per-step substitutions are unit-stride
   real(wp), allocatable :: Lband(:,:)   ! lower factors,  Lband(off,i) = ratm(i+off,off)
-  real(wp), allocatable :: Uband(:,:)   ! upper factors,  Uband(off,i) = gap(i,n+2+off)
-  real(wp), allocatable :: Udiag(:)     ! diagonal,        Udiag(i)    = gap(i,n+2)
+  real(wp), allocatable :: Uband(:,:)   ! upper factors,  Uband(off,i) = gap(i,nbw+1+off)
+  real(wp), allocatable :: Udiag(:)     ! diagonal,        Udiag(i)    = gap(i,nbw+1)
   real(wp), allocatable :: psisl(:,:,:)
   real(wp), allocatable :: ubisl(:,:,:,:)
   real(wp), allocatable :: erisl(:,:)
@@ -165,7 +165,7 @@ contains
     do isl=1,n_isles
        call island(ub,tau,bp, &
                    isl,1, &
-                   erisl(isl,n_isles+1))
+                   erisl(isl,n_isles+1), psi)
     enddo
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: islands',time2-time1
@@ -419,18 +419,28 @@ contains
 
     ! for barotropic velocity
 
+    if (i_cor_form.eq.1) then
+      ! f/H at tracer points for the J3 Coriolis term (zero on land, so dry cells drop out of the stencil)
+      qcor(:,:) = 0._wp
+      do j=1,maxj
+        do i=0,maxi+1
+          if (k1(i,j).le.maxk) qcor(i,j) = fcor(j)*rh(3,i,j)
+        enddo
+      enddo
+    endif
+
     call invert(gap,ratm)
 
     ! repack the banded LU factors into contiguous band storage so the per-step ubarsolv
     ! substitutions are unit-stride (cache- and SIMD-friendly). done once per mask update;
     ! the arithmetic is unchanged, only the memory layout differs
-    n_band  = mpxi
+    n_band  = nbw
     nm_band = mpxi*mpxj
     do i=1,nm_band
-      Udiag(i) = gap(i,n_band+2)
-      do off=1,min(n_band+1,nm_band-i)
+      Udiag(i) = gap(i,n_band+1)
+      do off=1,min(n_band,nm_band-i)
         Lband(off,i) = ratm(i+off,off)        ! lower factor (forward substitution)
-        Uband(off,i) = gap(i,n_band+2+off)     ! upper factor (back substitution)
+        Uband(off,i) = gap(i,n_band+1+off)     ! upper factor (back substitution)
       enddo
     enddo
 
@@ -455,7 +465,7 @@ contains
        do isl=1,n_isles
           call island(ubisl(:,:,:,isol),tau,bp, &  ! tau and bp not used in this call (indj==0)!
                       isl,0, &
-                      erisl(isl,isol))  ! erisl in m/s2
+                      erisl(isl,isol), psisl(:,:,isol))  ! erisl in m/s2
        enddo
     enddo
 
@@ -497,11 +507,15 @@ contains
     allocate(ubar_wind(maxi,maxj))
     allocate(bump_cell(0:maxi+1,0:maxj+1))
     allocate(ubar_jbar(maxi,maxj))
-    allocate(ratm(mpxi*mpxj,mpxi+1))
+    allocate(qcor(0:maxi+1,0:maxj+1))
+    qcor(:,:) = 0._wp
+    ! half band width of the streamfunction matrix (5-point stencil for both i_cor_form)
+    nbw = mpxi+1
+    allocate(ratm(mpxi*mpxj,nbw))
     allocate(gb(mpxi*mpxj))
-    allocate(gap(mpxi*mpxj,2*mpxi+3))
-    allocate(Lband(mpxi+1,mpxi*mpxj))
-    allocate(Uband(mpxi+1,mpxi*mpxj))
+    allocate(gap(mpxi*mpxj,2*nbw+1))
+    allocate(Lband(nbw,mpxi*mpxj))
+    allocate(Uband(nbw,mpxi*mpxj))
     allocate(Udiag(mpxi*mpxj))
     allocate(bp(maxi+1,maxj,maxk))
     allocate(psisl(0:maxi,0:maxj,maxisles))

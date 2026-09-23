@@ -109,6 +109,9 @@ module ocn_params
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
      real(wp) :: drhcor_max
+     integer :: i_cor_form      
+     integer :: nbw             !! half band width of the streamfunction matrix (maxi+1, 5-point stencil)
+     real(wp), allocatable :: qcor(:,:)  !! f/H at tracer points, used by the J3 Coriolis term (i_cor_form=1)
      integer :: i_diff
      integer :: i_diff_dia
      real(wp) :: diff_iso, diff_dia_zref
@@ -286,6 +289,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","i_eos",i_eos)
 
     call nml_read(filename,"ocn_par","drhcor_max",drhcor_max)
+    call nml_read(filename,"ocn_par","i_cor_form",i_cor_form)
 
     call nml_read(filename,"ocn_par","fcormin",fcormin)
     fcormin_ref = fcormin

@@ -31,7 +31,7 @@ module island_mod
   use precision, only : wp
   use ocn_grid, only : maxi, maxj, maxk, c, dphi, rcv, dsv, dz, rh, R_earth, ku
   use ocn_grid, only : npi, lpisl, ipisl, jpisl
-  use ocn_params, only : fcor, fcorv, drag, rho0
+  use ocn_params, only : fcor, fcorv, drag, rho0, i_cor_form, qcor
   !$use om_lib
 
   implicit none
@@ -47,7 +47,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine island(ubloc,tau,bp, &
                    isl,indj, &
-                   erisl1)
+                   erisl1, psiloc)
 
     implicit none
 
@@ -57,8 +57,11 @@ contains
     integer, intent(in) :: isl, indj
   
     real(wp), intent(out) :: erisl1
+    ! streamfunction of the same solution as ubloc, required by the J3 flux form (i_cor_form=1), whose Coriolis
+    ! integrand is psi itself rather than the velocity
+    real(wp), dimension(0:,0:), intent(in), optional :: psiloc
 
-    integer :: i, k, lpi, ipi, jpi
+    integer :: i, k, lpi, ipi, jpi, im1
     real(wp) :: cor, tv1, tv2
 
 
@@ -80,6 +83,13 @@ contains
               + fcor(jpi+1)*0.5_wp*(ubloc(1,ipi-1,jpi+1) + ubloc(1,ipi,jpi+1)))
        endif
 
+       if (i_cor_form.eq.1) then
+          ! J3 flux form: the Coriolis flux through a face is 0.5*(psi at the two ends of the face)*(q across the face),
+          ! with the metric factors of the segment length cancelling, so it is added here already multiplied by its length
+          ! (and divided below by the length that the common factor applies)
+          cor = 0._wp
+       endif
+
        if (jpi.lt.maxj) then ! to avoid acessing rcv(maxj) and dsv(maxj), out of bound!
           erisl1 = erisl1 + sign(1,lpi)*(drag(abs(lpi),ipi,jpi) &  ! m/s2
               * ubloc(abs(lpi),ipi,jpi) + cor &
@@ -91,6 +101,23 @@ contains
               * ubloc(abs(lpi),ipi,jpi) + cor &
               - indj*tau(abs(lpi),ipi,jpi)/rho0*rh(abs(lpi),ipi,jpi)) &
               * (c(jpi)*dphi*(2._wp - abs(lpi)))
+       endif
+
+       if (i_cor_form.eq.1) then
+          ! flux form J3: sign * 0.5*(psi at the two ends of the face) * (q difference across the face) / (rho0 R).
+          ! Its area sum over the enclosed psi points is exactly the J3 Coriolis term of stencil_coef, so the value of
+          ! the path integral does not depend on the path taken around the island
+          im1 = ipi-1
+          if (im1.lt.0) im1 = im1+maxi
+          if (abs(lpi).eq.1) then
+             ! u-face (1,ipi,jpi): spans psi(ipi,jpi-1)..psi(ipi,jpi), separates cells (ipi,jpi) and (ipi+1,jpi)
+             erisl1 = erisl1 + sign(1,lpi)*0.5_wp*(psiloc(ipi,jpi-1) + psiloc(ipi,jpi)) &
+                    * (qcor(ipi+1,jpi) - qcor(ipi,jpi))/(rho0*R_earth)
+          else
+             ! v-face (2,ipi,jpi): spans psi(ipi-1,jpi)..psi(ipi,jpi), separates cells (ipi,jpi) and (ipi,jpi+1)
+             erisl1 = erisl1 + sign(1,lpi)*0.5_wp*(psiloc(im1,jpi) + psiloc(ipi,jpi)) &
+                    * (qcor(ipi,jpi+1) - qcor(ipi,jpi))/(rho0*R_earth)
+          endif
        endif
 
        ! calc tricky bits and add to source term for path integral round 

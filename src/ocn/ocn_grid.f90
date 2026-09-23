@@ -759,6 +759,9 @@ contains
       h(1,i,j) = min(h(3,i,j),h(3,i+1,j))
       if (max(k1(i,j),k1(i+1,j)).le.maxk) rh(1,i,j) = 1._wp/h(1,i,j)
      enddo
+     ! periodic copy (needed by the flux-form Coriolis stencil, which reaches the u-face i+1 at i=maxi)
+     h(1,maxi+1,j) = h(1,1,j)
+     rh(1,maxi+1,j) = rh(1,1,j)
     enddo
     do j=0,maxj
      do i=0,maxi+1
@@ -800,9 +803,6 @@ contains
       map = 0     ! ocean
       map_isles = 0
     endwhere
-
-    ! try to connect lonely land cells to larger islands close by
-    call lonely_cell(f_ocn,map,map_isles)
 
     ! identify isles
     if (i_isl.eq.0) then
@@ -869,9 +869,10 @@ contains
                 endwhere
               endif
             else
-              ! add island to mainland (island 1)
+              ! landmass not selected as an island: mark it, it is resolved after the labelling
+              ! (attached to a nearby island if there is one, otherwise to the mainland)
               where (islands.eq.1)
-                map_isles = 1
+                map_isles = -2
               endwhere
             endif
           endif
@@ -982,10 +983,9 @@ contains
       deallocate(map_edge_tmp)
     endif
 
-    ! attach the sub-threshold land to the mainland (largest landmass, label 1)
-    if (i_isl.eq.0) then
-      where (map_isles.eq.-2) map_isles = 1
-    endif
+    ! Land that belongs to no island (too small, or not selected) is attached to the closest island if it sits within a couple grid cells from it
+    call attach_small_landmasses(map_isles)
+    where (map_isles.eq.-2) map_isles = 1
 
     ! number of isles, remove the mainland
     n_isles = n_isles-1
@@ -1575,88 +1575,61 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  l o n e l y _ c e l l
-  ! Purpose  :  find lonely land cells and try to connect them to larger islands nearby
+  ! Subroutine :  a t t a c h _ s m a l l _ l a n d m a s s e s
+  ! Purpose    :  give land that belongs to no island (map_isles = -2) the label of an island lying within
+  !               n_attach cells, so that the psi points around it carry that island's streamfunction constant
+  !               instead of being pinned to the mainland value psi = 0.
+  !               Land further away from any island keeps its -2 marker and is tied to the mainland.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lonely_cell(f_ocn,map,map_isles)
+  subroutine attach_small_landmasses(map_isles)
 
     implicit none
 
-    real(wp), intent(in) :: f_ocn(:,:)
-    integer, intent(inout) :: map(:,:)
     integer, intent(inout) :: map_isles(:,:)
 
-    integer :: i, j, ii, jj, iii, jjj, i1, j1, ii1, jj1, iii1, jjj1, iiii1, jjjj1
-    integer :: ncell_ocn, n, nfill, ncell_lnd(8), idx(8), jdx(8)
-    real(wp) :: focn(8)
+    integer, allocatable :: map_new(:,:)
+    integer :: i, j, ii, jj, iii, r, isl
+    logical :: l_main
+    integer, parameter :: n_attach = 2   ! search radius [cells]
 
 
-    ! Loop through cells counting 9 cell neighbours
-    do i=1,maxi
-      do j=1,maxj
-        if (map(i,j).eq.1) then ! land point
-          ! count number of ocean neighbors
-          ncell_ocn = 0
-          do ii=i-1,i+1
-            do jj=j-1,j+1
+    allocate(map_new, MOLD=map_isles)
+    map_new = map_isles
+
+    do j=1,maxj
+      do i=1,maxi
+        if (map_isles(i,j).ne.-2) cycle    ! land not belonging to any island
+        isl = 0
+        ! nearest labelled landmass, searching outward ring by ring. The mainland wins ties: a landmass that is
+        ! no further from the mainland than from an island keeps psi = 0, as before
+        do r=1,n_attach
+          isl = 0
+          l_main = .false.
+          do jj=max(1,j-r),min(maxj,j+r)
+            do ii=i-r,i+r
+              if (max(abs(ii-i),abs(jj-j)).ne.r) cycle   ! ring of radius r only
               iii = ii
-              if (iii.eq.0) iii = maxi
-              if (iii.eq.maxi+1) iii = 1
-              jjj = jj
-              jjj = max(1,jjj)
-              jjj = min(maxj,jjj)
-              if (map(iii,jjj).eq.0) then !  ocean
-                ncell_ocn = ncell_ocn+1
-              endif
+              if (iii.lt.1) iii = iii+maxi
+              if (iii.gt.maxi) iii = iii-maxi
+              if (map_isles(iii,jj).eq.1) l_main = .true.                             ! mainland
+              if (map_isles(iii,jj).ge.2 .and. isl.eq.0) isl = map_isles(iii,jj)      ! island
             enddo
           enddo
-          if (ncell_ocn.eq.8) then  ! isolated land point, all neighbors are ocean
-            ! count number of land point neighbors of neighbors
-            n=0
-            ncell_lnd(:) = 0
-            focn(:) = 0._wp
-            do i1=i-1,i+1
-              do j1=j-1,j+1
-                ii1 = i1
-                if (ii1.eq.0) ii1 = maxi
-                if (ii1.eq.maxi+1) ii1 = 1
-                jj1 = j1
-                jj1 = max(1,jj1)
-                jj1 = min(maxj,jj1)
-                if (.not.(ii1.eq.i .and. jj1.eq.j)) then
-                  n=n+1
-                  idx(n) = ii1
-                  jdx(n) = jj1
-                  focn(n) = f_ocn(ii1,jj1)
-                  do iii1=ii1-1,ii1+1
-                    do jjj1=jj1-1,jj1+1
-                      iiii1 = iii1
-                      if (iiii1.eq.0) iiii1 = maxi
-                      if (iiii1.eq.maxi+1) iiii1 = 1
-                      jjjj1 = jjj1
-                      jjjj1 = max(1,jjjj1)
-                      jjjj1 = min(maxj,jjjj1)
-                      if (map(iiii1,jjjj1).eq.1) then !  land
-                        ncell_lnd(n) = ncell_lnd(n)+1
-                        ncell_lnd(n) = min(2,ncell_lnd(n))
-                      endif
-                    enddo
-                  enddo
-                endif
-              enddo
-            enddo
-            ! find index of cell with most land neighbors and consider also land fraction
-            nfill = maxloc(ncell_lnd+(1._wp-focn),1)
-            ! turn ocean cell to land to connect isolated land point
-            map(idx(nfill),jdx(nfill)) = 1
-            map_isles(idx(nfill),jdx(nfill)) = -1
+          if (l_main) then
+            isl = 0
+            exit
           endif
-        endif
+          if (isl.gt.0) exit
+        enddo
+        if (isl.gt.0) map_new(i,j) = isl
       enddo
     enddo
 
+    map_isles = map_new
 
-  end subroutine lonely_cell
+    deallocate(map_new)
+
+  end subroutine attach_small_landmasses
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

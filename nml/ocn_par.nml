@@ -50,9 +50,14 @@
  dbl = 50.                    ! m, depth of surface boundary layer
 
  !-------------------------------------------------------------------------------------------
- ! parameters for stability 
+ ! Coriolis term settings
  !-------------------------------------------------------------------------------------------
- drhcor_max = 0.005           ! maximum inverse slope gradient for Coriolis term in barotropic streamfunction equation
+ i_cor_form = 1               ! Coriolis term of the barotropic streamfunction operator and the matching island integrand:
+                              ! 0 = original advective-form J(psi,f/H) with the drhcor_max limiter + the path integral of island.f90. The advective
+                              !     Jacobian is not a discrete divergence, so no line integrand matches it and the island constants depend on the integration path 
+                              ! 1 = flux form: J3 Jacobian d_phi(psi d_s q) - d_s(psi d_phi q) with q = f/H at tracer points, and the matching
+                              !     path integral (0.5*(psi+psi)*delta_q). Path-independent
+ drhcor_max = 0.005           ! maximum inverse slope gradient for Coriolis term in barotropic streamfunction equation (i_cor_form=0 only)
 
  !-------------------------------------------------------------------------------------------
  ! velocity relaxation settings
@@ -77,7 +82,7 @@
                               ! Lord Howe, 1-2 km in 4-5 km water) steer the real ACC/WBCs and are no trapped-mode hazard on smoothed
                               ! topography; 2000 brings the Lord Howe mode back on raw topography (i_drag_topo=3)
  drag_topo_fac_max = 5.       ! cap on the bump drag enhancement factor (i_drag_topo=3)
- drag_topo_fac_max_coast = 2. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
+ drag_topo_fac_max_coast = 1. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
                               ! because land is excluded from the neighbour mean; with the offshore bumps damped the coasts need
                               ! no enhancement at all (1.), and the Gulf Stream gains 30% for it
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours

@@ -29,7 +29,7 @@
 module ubarsolv_mod
 
   use precision, only : wp
-  use ocn_params, only : rho0
+  use ocn_params, only : rho0, nbw
   use ocn_grid, only : maxi, maxj, c, rcv, rdphi, rds, rh, R_earth
 
   implicit none
@@ -50,7 +50,7 @@ contains
     implicit none
 
     ! contiguous band storage of the LU factors (built once in momentum from ratm/gap):
-    !   Lband(off,i) = ratm(i+off,off) ; Uband(off,i) = gap(i,n+2+off) ; Udiag(i) = gap(i,n+2)
+    !   Lband(off,i) = ratm(i+off,off) ; Uband(off,i) = gap(i,nbw+1+off) ; Udiag(i) = gap(i,nbw+1)   (half band width nbw)
     real(wp), dimension(:,:), intent(in) :: Lband
     real(wp), dimension(:,:), intent(in) :: Uband
     real(wp), dimension(:),   intent(in) :: Udiag
@@ -70,7 +70,7 @@ contains
 
     ! forward substitution: gb(i+1:im) -= gb(i)*Lband(1:im-i,i) 
     do i=1,n*m-1
-       im = min(i+n+1,n*m)
+       im = min(i+nbw,n*m)
        do off=1,im-i
           gb(i+off) = gb(i+off) - Lband(off,i)*gb(i)
        enddo
@@ -78,7 +78,7 @@ contains
     ! back substitution: unit-stride dot product over the upper band
     gb(n*m) = gb(n*m)/Udiag(n*m)
     do i=n*m-1,1,-1
-       km=min(n+1,n*m-i)
+       km=min(nbw,n*m-i)
        do k=1,km
           gb(i)=gb(i) - Uband(k,i)*gb(i+k)
        enddo
