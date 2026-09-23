@@ -135,7 +135,7 @@
     !------------------------------------------------------------------------------------
     ! dust emissions params
     !------------------------------------------------------------------------------------
-    b0 = 4.e-9                  ! dust emission flux constant [kg s^2 m^-5]
+    b0 = 3.e-9                  ! dust emission flux constant [kg s^2 m^-5]
     qd = 0.01                   ! desert dust source scaling constant
     qg = 0.005                  ! grass dust source scaling constant
     wind_gust_fac = 0.          ! 1/(1000 m), factor to scale wind to account for topographic roughness-dependent wind gusts
