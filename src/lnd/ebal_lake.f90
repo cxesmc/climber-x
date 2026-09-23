@@ -216,7 +216,7 @@ contains
       endif
     endif
 
-    if( t_skin_old.gt.350._wp .or. t_skin_old.lt.190._wp ) then
+    if( t_skin_old.gt.350._wp .or. t_skin_old.lt.150._wp ) then
       print *,'t_skin_old over lake out of range!!!',t_skin_old,i,j
       print *,'t_skin',t_skin
       print *,'lambda_lake',lambda_lake
@@ -225,7 +225,7 @@ contains
 
     endif
 
-    if( t_skin.gt.350._wp .or. t_skin.lt.190._wp ) then
+    if( t_skin.gt.350._wp .or. t_skin.lt.150._wp ) then
     !if( i.eq.21 .and. j.eq.33 ) then
       print *,''
       print *,'t_skin over lake out of range!!!',t_skin,i,j
