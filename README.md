@@ -10,7 +10,7 @@ CLIMBER-X is a comprehensive fast Earth System Model, designed to simulate the e
 - Land model (PALADYN): [Willeit and Ganopolski 2016](https://gmd.copernicus.org/articles/9/3817/2016/)
 - Ice Sheet model (Yelmo): [Yelmo](https://github.com/palma-ice/yelmo)
 - Ice Sheet model (SICOPOLIS): [SICOPOLIS](http://www.sicopolis.net/)
-- Viscoelastic Lithosphere and Mantle model (VILMA)
+- Viscoelastic Lithosphere and Mantle model: VILMA2 ([fesmc/vilma](https://github.com/fesmc/vilma)), or the legacy VILMA1
 
 The model is described in detail in the following articles:
 - Willeit, M., Ganopolski, A., Robinson, A., and Edwards, N. R.: The Earth system model CLIMBER-X v1.0 – Part 1: 
@@ -18,7 +18,7 @@ Climate model description and validation, Geosci. Model Dev., 15, 5905–5948, [
 - Willeit, M., Ilyina, T., Liu, B., Heinze, C., Perrette, M., Heinemann, M., Dalmonech, D., Brovkin, V., Munhoven, G., Börker, J., Hartmann, J., Romero-Mujalli, G., and Ganopolski, A.: The Earth system model CLIMBER-X v1.0 – Part 2: The global carbon cycle, Geosci. Model Dev., 16, 3501–3534, [https://doi.org/10.5194/gmd-16-3501-2023](https://doi.org/10.5194/gmd-15-5905-2022), 2023.
 - Willeit, M., Calov, R., Talento, S., Greve, R., Bernales, J., Klemann, V., Bagge, M., and Ganopolski, A.: Glacial inception through rapid ice area increase driven by albedo and vegetation feedbacks, Clim. Past, 20, 597–623, [https://doi.org/10.5194/cp-20-597-2024](https://doi.org/10.5194/cp-20-597-2024), 2024.
 
-While most components of CLIMBER-X are available as open-source code, the access to some parts (ocean biogeochemistry model HAMOCC and solid Earth model Vilma) are still restricted, but the goal is to eventually publish the whole model as open source.
+While most components of CLIMBER-X are available as open-source code, the access to some parts (ocean biogeochemistry model HAMOCC and legacy solid Earth model VILMA1) are still restricted, but the goal is to eventually publish the whole model as open source.
 
 ## COPYRIGHT
 

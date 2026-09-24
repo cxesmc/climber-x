@@ -30,10 +30,10 @@ YELMOROOT = yelmo
 INC_YELMO = -I${YELMOROOT}/libyelmo/include
 LIB_YELMO = -L${YELMOROOT}/libyelmo/include -lyelmo
 
-# VILMA
-VILMAROOT = src/vilma
-INC_VILMA = -I${VILMAROOT}/include
-LIB_VILMA = ${VILMAROOT}/lib/vega_pism.a
+# VILMA1 (legacy VILMA)
+VILMA1ROOT = src/vilma1
+INC_VILMA1 = -I${VILMA1ROOT}/include
+LIB_VILMA1 = ${VILMA1ROOT}/lib/vega_pism.a
 
 ### Compiler options #############
 
@@ -45,8 +45,8 @@ DFLAGS_NODEBUG = -Ofast -xHASWELL -traceback #-O3  #-O2 -fp-model precise
 DFLAGS_DEBUG   = -C  -fp-model precise -traceback -ftrapuv -fpe0 -check all -init=snan,arrays -warn -debug extended -gen-interfaces -warn interfaces -check arg_temp_created
 DFLAGS_PROFILE = -O3 -pg -g #-O2 -fp-model precise -pg 
 
-FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA) $(INC_FFTW)
+FFLAGS_DEFAULT = -module $(objdir) -L$(objdir) $(INC_NC) $(INC_FESMUTILS) $(INC_LIS) $(INC_YELMO) $(INC_VILMA1) $(INC_FFTW)
 FFLAGS_OPENMP  = $(FFLAGS_DEFAULT) -qopenmp #-parallel -qopt-report-phase=par #-qopt-report=5 #-ipo -parallel -par-threshold90 -qopt-report #-mcmodel=medium
 
-LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FESMUTILS) $(LIB_YELMO) $(LIB_VILMA) $(LIB_FFTW) -Wl,-zmuldefs
+LFLAGS  = $(LIB_NC) $(LIB_LIS) $(LIB_FESMUTILS) $(LIB_YELMO) $(LIB_VILMA1) $(LIB_FFTW) -Wl,-zmuldefs
 

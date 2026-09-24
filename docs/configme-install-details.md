@@ -9,9 +9,9 @@ on your behalf.
 `configme install` performs the following phases:
 
 1. **Clone** the CLIMBER-X checkout and each component repository it needs. The
-   open components (`fesm-utils`, `yelmo`) are cloned at the
+   open components (`fesm-utils`, `yelmo`, `vilma2`) are cloned at the
    CLIMBER-X root; `yelmo` is pinned to its `climber-x` branch. The private
-   components (`bgc`, `vilma`) are attempted too, but a clone failure (no access)
+   components (`bgc`, `vilma1`) are attempted too, but a clone failure (no access)
    is a soft skip recorded as "unavailable" — never a hard failure. They live
    inside CLIMBER-X's own `src/` tree.
 2. **Manifest** — write `.configme/manifest.toml` so the checkout is
@@ -46,15 +46,17 @@ git clone git@github.com:fesmc/fesm-utils.git $CLIMBERXROOT/fesm-utils
 # fesm-utils/utils: component of fesm-utils (not cloned)
 git clone git@github.com:fesmc/yelmo.git $CLIMBERXROOT/yelmo
 (cd $CLIMBERXROOT/yelmo && git checkout climber-x)
+git clone git@github.com:fesmc/vilma.git $CLIMBERXROOT/vilma2
 git clone git@github.com:cxesmc/bgc.git $CLIMBERXROOT/src/bgc          # private (soft skip without access)
 (cd $CLIMBERXROOT/src/bgc && git submodule update --init --recursive)  # M4AGO submodule
-git clone git@github.com:cxesmc/vilma.git $CLIMBERXROOT/src/vilma      # private (soft skip without access)
+git clone git@github.com:cxesmc/vilma.git $CLIMBERXROOT/src/vilma1     # private (soft skip without access)
 
 # --- manifest ---
 mkdir -p $CLIMBERXROOT/.configme  # write .configme/manifest.toml
 
 # --- links ---
 ln -s ../fesm-utils $CLIMBERXROOT/yelmo/fesm-utils
+ln -s ../fesm-utils $CLIMBERXROOT/vilma2/fesm-utils
 
 # --- configure (per package) ---
 # fesm-utils: build with autotools (slow, ~10-30 min):
@@ -64,8 +66,9 @@ ln -s ../fesm-utils $CLIMBERXROOT/yelmo/fesm-utils
 (cd $CLIMBERXROOT/fesm-utils/utils && make openmp=0 fesmutils-static)
 (cd $CLIMBERXROOT/fesm-utils/utils && make openmp=1 fesmutils-static)
 (cd $CLIMBERXROOT/yelmo && configme config yelmo -m pik_hpc2024 -c ifx)
+(cd $CLIMBERXROOT/vilma2 && configme config vilma2 -m pik_hpc2024 -c ifx)
 # bgc: clone-only (configme does not configure it)
-# vilma: clone-only (configme does not configure it)
+# vilma1: clone-only (configme does not configure it)
 (cd $CLIMBERXROOT && configme config climber-x -m pik_hpc2024 -c ifx)
 
 # --- extras ---
