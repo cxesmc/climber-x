@@ -7,7 +7,7 @@ Entries marked **Results** may change model output relative to the previous vers
 
 ### Changed
 - FastEarth3D renamed to VILMA (`fesmc/vilma`), referred to in CLIMBER-X as VILMA2 and cloned at `vilma2/`; the legacy VILMA (`cxesmc/vilma`) is now VILMA1 at `src/vilma1`. Build toggles `vilma1=`/`vilma2=` (`-DVILMA1`/`-DVILMA2`); `i_geo` unchanged (2=VILMA1, 3=VILMA2).
-- `geo_par`: `vilma_grid_file` → `vilma1_grid_file`; namelist group `&fe3d` → `&vilma`, now with the explicit 11-layer PREM/Clemens structure, `deg1_frame="cm"`, `l_toroidal=.false.`. VILMA2 inputs in `input/vilma2/` + `input/vilma_defaults.nml`; restart in `vilma2/vilma_restart.nc`. **Results** (i_geo=3): `deg1_frame="cm"`.
+- `geo_par`: `vilma_grid_file` → `vilma1_grid_file`; namelist group `&fe3d` → `&vilma`, now with the explicit 11-layer PREM/Clemens structure. VILMA2 inputs in `input/vilma2/` + `input/vilma_defaults.nml`; restart in `vilma2/vilma_restart.nc`. **Results** (i_geo=3): VILMA2 defaults now `deg1_frame="cm"`, `l_toroidal=.false.`.
 
 ## [1.5.4] - 2026-07-17
 
