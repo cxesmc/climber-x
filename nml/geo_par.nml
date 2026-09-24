@@ -7,8 +7,8 @@
  i_geo = 2                     ! geography update model:
                                ! 0 = No bed model, only sea level from ice volume
                                ! 1 = Local Litosphere Relaxing Astenosphere GIA model + sea level from ice volume
-                               ! 2 = VILMA solid Earth model
-                               ! 3 = FastEarth3D solid Earth model (configured via the &fe3d group below)
+                               ! 2 = VILMA1 solid Earth model (legacy VILMA)
+                               ! 3 = VILMA2 solid Earth model (fesmc/vilma; configured via the &vilma group below)
 
  !-------------------------------------------------------
  ! land-sea mask and Straits settings  
@@ -42,7 +42,7 @@
  l_use_z_bed_std_lowres = F     ! apply standard deviation of high-res subgrid topography to low-res geo fields?
 
  !-------------------------------------------------------
- ! equilibrated bedrock elevation and ice thickness, only for i_geo==2 (VILMA) and geo_restart==F
+ ! equilibrated bedrock elevation and ice thickness, only for i_geo==2 (VILMA1) and geo_restart==F
  !-------------------------------------------------------
  i_equilibrium = 1             ! choice of equilibrated bedrock elevation and associated ice thickness
                                ! 0 = equal to initial bedrock elevation and ice thickness
@@ -68,12 +68,12 @@
  gia_time_lag = 3000.   ! years, time lag of the relaxing asthenosphere
 
  !-------------------------------------------------------
- ! VILMA solid Earth model (used only if i_geo==2)
+ ! VILMA1 solid Earth model (used only if i_geo==2)
  !-------------------------------------------------------
  l_visc_3d = T          ! use 3d viscosity structure?
  visc_1d_file = "visko_80_420_122_Clemens.inp"    ! name of file containing 1d viscosity structure, used only if l_visc_3d==F
  visc_3d_file = "visc3d_Bagge2021_min_19.5.nc"    ! name of file containing 3d viscosity structure, used only if l_visc_3d==T
- vilma_grid_file = "input/vilma/vilma_grid.nc"
+ vilma1_grid_file = "input/vilma/vilma_grid.nc"
  ! viscosity uncertainty perturbation (applied to whichever of the above is active)
  f_visc_sd = 0.0        ! viscosity perturbation factor: log10(visc) -> log10(visc) + f_visc_sd*sigma_log10_visc (0 = no perturbation)
  sigma_log10_visc = 0.5 ! 1-sigma uncertainty of viscosity in log10 units (dex), applied uniformly
@@ -121,15 +121,27 @@
  l_output_hires = T
 /
 
-&fe3d
+&vilma
  !-------------------------------------------------------
- ! FastEarth3D solid Earth model (used only if i_geo==3)
- ! Minimal overrides only. Every other &fe3d parameter comes from the complete
- ! default set input/fastearth3d_defaults.nml (loaded as defaults_file by
- ! fe_par_load); any key omitted here falls back to that file.
+ ! VILMA2 solid Earth model (fesmc/vilma; used only if i_geo==3)
+ ! Minimal overrides only. Every other &vilma parameter comes from the complete
+ ! default set input/vilma_defaults.nml (loaded as defaults_file by
+ ! vilma_par_load); any key omitted here falls back to that file.
  !-------------------------------------------------------
- lmax           = 170         ! maximum spherical-harmonic degree (spectral resolution); matches VILMA jmax=170
- earth          = "PREM"      ! radial structure; PREM (incompressible) to match VILMA (l_prem=1)
+ lmax           = 170         ! maximum spherical-harmonic degree (spectral resolution); matches VILMA1 jmax=170
+ ! radial structure: PREM (incompressible) to match VILMA1 (l_prem=1). 80 km elastic
+ ! lithosphere + 9 Maxwell mantle layers + fluid core, "Clemens" 1-D eta reference.
+ ! rho/mu are auto-filled from PREM (values below ignored); geometry, eta, rheology are read.
+ earth          = "PREM"
+ n_layer        = 11
+ r_bot          = 6291.0e3, 6151.0e3, 5971.0e3, 5771.0e3, 5701.0e3, 5600.0e3, 4943.0e3, 4287.0e3, 3630.0e3, 3480.0e3,    0.0
+ r_top          = 6371.0e3, 6291.0e3, 6151.0e3, 5971.0e3, 5771.0e3, 5701.0e3, 5600.0e3, 4943.0e3, 4287.0e3, 3630.0e3, 3480.0e3
+ rho            =   3175.1,   3367.3,   3489.4,   3848.4,   3984.9,   4411.9,   4628.0,   4986.1,   5318.7,   5538.8,  10987.2   ! auto-filled; ignored
+ mu             = 5.727e10, 6.655e10, 7.732e10, 1.051e11, 1.225e11, 1.638e11, 1.926e11, 2.313e11, 2.690e11, 2.913e11,      0.0   ! auto-filled; ignored
+ eta            = 1.0e40,   4.0e20,   4.0e20,   4.0e20,   4.0e20,   1.0e22,   1.0e22,   1.0e22,   1.0e22,   1.0e22,      0.0
+ rheology       = 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2
+ deg1_frame     = "cm"        ! degree-1 frame: "cf" (no degree 1 in rsl) | "cm" (centre of mass, incl. geocenter motion, as VILMA1)
+ l_toroidal     = .false.     ! carry the toroidal field in 3-D elements? (.false. = spheroidal only)
  l_visc_3d      = .true.      ! use a lateral (3d) log10(viscosity) field?
- visc_3d_file   = "input/fastearth/visc3d_Bagge2021.nc"   ! 3d viscosity file, used only if l_visc_3d==T
+ visc_3d_file   = "input/vilma2/visc3d_Bagge2021.nc"   ! 3d viscosity file, used only if l_visc_3d==T
 /

@@ -6,10 +6,11 @@
 #   FFLAGS_BASE / FFLAGS_OPENMP / CPPFLAGS_PP  (compiler fragment)
 #   INC_NC / LIB_NC                            (machine or auto-detected netCDF)
 #
-# External dependency repos (fesm-utils, yelmo) live at the
-# climber-x root — the layout configme uses for every orchestrator. VILMA is
-# optional and user-provided under src/vilma (not managed by configme); it is
-# only referenced by the fully-coupled (FULL) build variant.
+# External dependency repos (fesm-utils, yelmo, vilma2) live at the
+# climber-x root — the layout configme uses for every orchestrator. VILMA1 (the
+# legacy VILMA) is optional and private, cloned by configme under src/vilma1 when
+# accessible. Both solid-earth backends (VILMA1, VILMA2 = fesmc/vilma) are only
+# referenced by the fully-coupled (FULL) build variant.
 #
 # NOTE: FFLAGS_CLIM / FFLAGS_FULL are composed from $(FFLAGS_BASE), NOT $(FFLAGS):
 # the template reassigns `FFLAGS = $(FFLAGS_CLIM)` per build target, so referring
@@ -60,23 +61,24 @@ FASTHYDROROOT = yelmo/FastHydrology
 INC_FASTHYDRO = -I${FASTHYDROROOT}/include
 LIB_FASTHYDRO = -L${FASTHYDROROOT}/include -lfasthydro
 
-# --- VILMA (optional solid-earth lib; user-provided, not managed by configme)
-VILMAROOT = src/vilma
-INC_VILMA = -I${VILMAROOT}/include
-LIB_VILMA = ${VILMAROOT}/lib/vega_pism.a
+# --- VILMA1 (legacy VILMA; optional prebuilt solid-earth lib, private repo
+# cloned by configme under src/vilma1 when accessible). Selected with i_geo=2.
+VILMA1ROOT = src/vilma1
+INC_VILMA1 = -I${VILMA1ROOT}/include
+LIB_VILMA1 = ${VILMA1ROOT}/lib/vega_pism.a
 
-# --- FastEarth3D (alternative solid-earth model; cloned at the climber-x root by
-# configme, like yelmo, and built from source against the SAME fesm-utils as
-# climber-x: `make fastearth-static` -> obj/libfastearth.a, .mod files in obj/).
-# It is a swappable alternative to VILMA, selected at runtime with i_geo=3.
-FASTEARTHROOT = FastEarth3D
-INC_FASTEARTH = -I${FASTEARTHROOT}/obj
-LIB_FASTEARTH = ${FASTEARTHROOT}/obj/libfastearth.a
+# --- VILMA2 (fesmc/vilma solid-earth model; cloned at vilma2/ by configme, like
+# yelmo, and built from source against the SAME fesm-utils as climber-x:
+# `make vilma-static` -> obj/libvilma.a, .mod files in obj/).
+# It is a swappable alternative to VILMA1, selected at runtime with i_geo=3.
+VILMA2ROOT = vilma2
+INC_VILMA2 = -I${VILMA2ROOT}/obj
+LIB_VILMA2 = ${VILMA2ROOT}/obj/libvilma.a
 
 # --- SHTns (spherical-harmonic transforms; provided by fesm-utils, pulled in by
-# FastEarth3D). FFTW (wired above) is linked after it (SHTns calls FFTW). Serial
+# VILMA2). FFTW (wired above) is linked after it (SHTns calls FFTW). Serial
 # by default; the OpenMP variant (shtns-omp, -lshtns_omp) is swapped in below for
-# openmp=1 to match FastEarth3D's own openmp= dependency swap.
+# openmp=1 to match VILMA2's own openmp= dependency swap.
 SHTNSROOT = fesm-utils/SHTns/shtns-serial
 INC_SHTNS = -I${SHTNSROOT}/include
 LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns
@@ -102,26 +104,26 @@ ifeq ($(openmp), 1)
     LIB_SHTNS = -L${SHTNSROOT}/lib -lshtns_omp
 endif
 
-# --- solid-earth backend selection (FULL build). The vilma= / fastearth= toggles
+# --- solid-earth backend selection (FULL build). The vilma1= / vilma2= toggles
 # (defined in config/Makefile, default 1) gate each backend's -D flag plus its
 # include/link flags, accumulated into the *_EARTH pieces spliced into the FULL
-# sets below. -DVILMA and -DFASTEARTH are independent; both are on by default and
-# chosen at runtime by i_geo (2=VILMA, 3=FastEarth3D). A backend toggled off is
-# compiled as a stub that aborts cleanly if selected (see vilma.F90/fastearth.F90).
+# sets below. -DVILMA1 and -DVILMA2 are independent; both are on by default and
+# chosen at runtime by i_geo (2=VILMA1, 3=VILMA2). A backend toggled off is
+# compiled as a stub that aborts cleanly if selected (see vilma1.F90/vilma2.F90).
 CPPFLAGS_EARTH =
 INC_EARTH =
 LIB_EARTH =
-ifeq ($(vilma),1)
-    CPPFLAGS_EARTH += -DVILMA
-    INC_EARTH      += $(INC_VILMA)
-    LIB_EARTH      += $(LIB_VILMA)
+ifeq ($(vilma1),1)
+    CPPFLAGS_EARTH += -DVILMA1
+    INC_EARTH      += $(INC_VILMA1)
+    LIB_EARTH      += $(LIB_VILMA1)
 endif
-ifeq ($(fastearth),1)
-    CPPFLAGS_EARTH += -DFASTEARTH
-    INC_EARTH      += $(INC_FASTEARTH) $(INC_SHTNS)
-    # order: LIB_FASTEARTH precedes LIB_SHTNS (it calls SHTns), which precedes the
+ifeq ($(vilma2),1)
+    CPPFLAGS_EARTH += -DVILMA2
+    INC_EARTH      += $(INC_VILMA2) $(INC_SHTNS)
+    # order: LIB_VILMA2 precedes LIB_SHTNS (it calls SHTns), which precedes the
     # trailing LIB_FFTW in LFLAGS_FULL (SHTns calls FFTW).
-    LIB_EARTH      += $(LIB_FASTEARTH) $(LIB_SHTNS)
+    LIB_EARTH      += $(LIB_VILMA2) $(LIB_SHTNS)
 endif
 
 # --- compile-flag sets: climate-only (CLIM) vs fully-coupled (FULL, adds ice +
@@ -143,5 +145,5 @@ LFLAGS_CLIM = $(LIB_NC) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)
 # symbols); the trailing LIB_FFTW resolves the FFTW symbols pulled in by fasthydro
 # and fesmutils (static archives resolve left-to-right, so deps must come after
 # dependents). LIB_EARTH (the selected solid-earth libs, see above) precedes
-# LIB_FESMUTILS, which resolves the coords/ncio symbols VILMA and FastEarth3D share.
+# LIB_FESMUTILS, which resolves the coords/ncio symbols VILMA1 and VILMA2 share.
 LFLAGS_FULL = $(LIB_NC) $(LIB_FFTW) $(LIB_LIS) $(LIB_YELMO) $(LIB_ELSA) $(LIB_TRACER) $(LIB_FASTHYDRO) $(LIB_EARTH) $(LIB_FESMUTILS) $(LIB_FFTW) $(LFLAGS_EXTRA)

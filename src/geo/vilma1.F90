@@ -1,10 +1,10 @@
-module vilma_model
+module vilma1_model
 
     use precision, only : wp
     use timer, only : dt_geo, sec_year
 
-#ifdef VILMA
-    ! modules from the VILMA library
+#ifdef VILMA1
+    ! modules from the VILMA1 library
     use mod_cons
     use mod_firstlevel
     use mod_struct_vg
@@ -15,7 +15,7 @@ module vilma_model
     use timer, only : year_ini, nyears, n_year_geo
     use control, only : out_dir, geo_restart, restart_in_dir
     use constants, only : rho_i, rho_sw, map_gen
-    use geo_params, only : vilma_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
+    use geo_params, only : vilma1_grid_file, l_visc_3d, visc_1d_file, visc_3d_file
     use geo_params, only : f_visc_sd, sigma_log10_visc, visc_log10_min, visc_log10_max
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
@@ -24,8 +24,8 @@ module vilma_model
     implicit none
 
     private
-    public :: vilma_init, vilma_update, vilma_end
-    public :: vilma_write_restart
+    public :: vilma1_init, vilma1_update, vilma1_end
+    public :: vilma1_write_restart
 
     logical, parameter :: l_load_hist = .false.
 
@@ -39,17 +39,17 @@ module vilma_model
     real(wp), dimension(:,:), allocatable :: h_ice_eq(:,:)
     real(wp), dimension(:,:), allocatable :: h_ice(:,:)
 
-    type(grid_class) :: vilma_grid
-    type(map_class) :: maps_geo_to_vilma, maps_vilma_to_geo
+    type(grid_class) :: vilma1_grid
+    type(map_class) :: maps_geo_to_vilma1, maps_vilma1_to_geo
 
 
 contains
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  v i l m a _ u p d a t e
+  ! Function :  v i l m a 1 _ u p d a t e
   ! Purpose  :  update solid Earth
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma_update(geo_grid, h_ice_g, &
+  subroutine vilma1_update(geo_grid, h_ice_g, &
       rsl_g, z_bed_g)
 
     implicit none
@@ -68,7 +68,7 @@ contains
     integer :: ncid
 
 
-#ifdef VILMA
+#ifdef VILMA1
     ! delete old restart files
     open(unit=1, iostat=stat, file=io_rsl_rs%n, status='old')
     if (stat == 0) close(1, status='delete')
@@ -89,17 +89,17 @@ contains
 
     iepoch = iepoch + 1
 
-    ! interpolate ice thickness to vilma grid
-    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
+    ! interpolate ice thickness to vilma1 grid
+    call map_field(maps_geo_to_vilma1,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
-    allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
+    allocate(mask_ice(vilma1_grid%G%nx,vilma1_grid%G%ny))
     where (h_ice_g>0._wp) 
       mask_ice_g = 1.
     elsewhere
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma1,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
@@ -122,14 +122,14 @@ contains
 
     endif
 
-    !print *,'ice vol vilma',sum(h_ice*vilma_grid%area, mask=vilma_grid%lat>0._wp)
+    !print *,'ice vol vilma',sum(h_ice*vilma1_grid%area, mask=vilma1_grid%lat>0._wp)
 
     write (6,*) 'call time_evolution for ', vg%btime, 'to', vg%etime
     call time_evolution
 
-    ! interpolate from Gauss-Legendre vilma_grid to geo_grid (regular lat-lon)
+    ! interpolate from Gauss-Legendre vilma1_grid to geo_grid (regular lat-lon)
     ! relative sea level
-    call map_field(maps_vilma_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_vilma1_to_geo,"rsl",transpose(real(rsl,wp)),rsl_g,stat="mean",missing_value=-9999._dp)
 
     ! update bedrock elevation
     z_bed_g = z_bed_eq_g - rsl_g
@@ -157,14 +157,14 @@ contains
 
    return
 
-  end subroutine vilma_update
+  end subroutine vilma1_update
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  v i l m a _ i n i t
+  ! Function :  v i l m a 1 _ i n i t
   ! Purpose  :  initialize solid Earth
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma_init(geo_grid, z_bed_eq_g_in, h_ice_eq_g, h_ice_g)
+  subroutine vilma1_init(geo_grid, z_bed_eq_g_in, h_ice_eq_g, h_ice_g)
 
     implicit none
 
@@ -183,14 +183,14 @@ contains
     integer :: cstat, estat
     character(len=256) :: cmsg
 
-#ifdef VILMA
+#ifdef VILMA1
     
-    ni = nc_size(trim(vilma_grid_file),"lon")
-    nj = nc_size(trim(vilma_grid_file),"lat")
+    ni = nc_size(trim(vilma1_grid_file),"lon")
+    nj = nc_size(trim(vilma1_grid_file),"lat")
     allocate( lon(ni) )
     allocate( lat(nj) )
-    call nc_read(trim(vilma_grid_file),"lon",lon)
-    call nc_read(trim(vilma_grid_file),"lat",lat)
+    call nc_read(trim(vilma1_grid_file),"lon",lon)
+    call nc_read(trim(vilma1_grid_file),"lat",lat)
    
     allocate(tmp(ni,nj))
     allocate(z_bed_eq(ni,nj))
@@ -199,13 +199,13 @@ contains
     allocate(h_ice(ni,nj))
 
     ! generate grid object
-    call grid_init(vilma_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
+    call grid_init(vilma1_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
 
-    ! generate maps for mapping between geo and vilma
-    call map_init(maps_geo_to_vilma,geo_grid,vilma_grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
-    call map_init(maps_vilma_to_geo,vilma_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+    ! generate maps for mapping between geo and vilma1
+    call map_init(maps_geo_to_vilma1,geo_grid,vilma1_grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
+    call map_init(maps_vilma1_to_geo,vilma1_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
 
-    ! initialize VILMA
+    ! initialize VILMA1
 
     ! definition of general parameters (replaces call to r_cli subroutine where parameteres are read from stdin)
     ! 1.jmin and jmax // spectral resolution
@@ -350,19 +350,19 @@ contains
 
 
     z_bed_eq_g = z_bed_eq_g_in
-    ! interpolate to vilma grid
-    call map_field(maps_geo_to_vilma,"zeq ",z_bed_eq_g,z_bed_eq,stat="mean",missing_value=-9999._dp)
-    call map_field(maps_geo_to_vilma,"hice",h_ice_eq_g,h_ice_eq,stat="mean",missing_value=-9999._dp)
-    call map_field(maps_geo_to_vilma,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
+    ! interpolate to vilma1 grid
+    call map_field(maps_geo_to_vilma1,"zeq ",z_bed_eq_g,z_bed_eq,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma1,"hice",h_ice_eq_g,h_ice_eq,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma1,"hice",h_ice_g,h_ice,stat="mean",missing_value=-9999._dp)
     allocate(mask_ice_g(geo_grid%G%nx,geo_grid%G%ny))
-    allocate(mask_ice(vilma_grid%G%nx,vilma_grid%G%ny))
+    allocate(mask_ice(vilma1_grid%G%nx,vilma1_grid%G%ny))
     where (h_ice_eq_g>0._wp) 
       mask_ice_g = 1.
     elsewhere
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma1,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice_eq = 0._wp
     where (h_ice_g>0._wp) 
       mask_ice_g = 1.
@@ -370,7 +370,7 @@ contains
       mask_ice_g = 0.
     endwhere
     mask_ice = 1.
-    call map_field(maps_geo_to_vilma,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
+    call map_field(maps_geo_to_vilma1,"mask",mask_ice_g,mask_ice,stat="mean",missing_value=-9999._dp)
     where (mask_ice<0.5) h_ice = 0._wp
     deallocate(mask_ice_g)
     deallocate(mask_ice)
@@ -446,18 +446,18 @@ contains
     
     print*
     print*,'======================================================='
-    print*,' Initialisation of VILMA complete'
+    print*,' Initialisation of VILMA1 complete'
     print*,'======================================================='
     print*
 
 #else
 
-    ! VILMA backend not compiled in (built with vilma=0). Fail fast rather than
+    ! VILMA1 backend not compiled in (built with vilma1=0). Fail fast rather than
     ! silently no-op (which would leave rsl/z_bed unset).
     print*,'======================================================='
-    print*,' ERROR: i_geo=2 requires the VILMA solid-earth backend,'
-    print*,'        but this binary was built with vilma=0.'
-    print*,'        Rebuild with vilma=1, or choose i_geo=0/1/3.'
+    print*,' ERROR: i_geo=2 requires the VILMA1 solid-earth backend,'
+    print*,'        but this binary was built with vilma1=0.'
+    print*,'        Rebuild with vilma1=1, or choose i_geo=0/1/3.'
     print*,'======================================================='
     stop 1
 
@@ -465,13 +465,13 @@ contains
 
     return
 
-  end subroutine vilma_init
+  end subroutine vilma1_init
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   ! Function :  p e r t u r b _ v i s c o s i t y
   ! Purpose  :  perturb the input viscosity field by f_visc_sd standard
-  !             deviations and repoint the active VILMA viscosity input
+  !             deviations and repoint the active VILMA1 viscosity input
   !             file to the perturbed copy written in out_dir.
   !             The perturbation is applied in log10 space:
   !               log10(visc) -> log10(visc) + f_visc_sd*sigma_log10_visc
@@ -481,7 +481,7 @@ contains
 
     implicit none
 
-#ifdef VILMA
+#ifdef VILMA1
 
     integer :: estat, cstat
     character(len=256) :: cmsg
@@ -552,7 +552,7 @@ contains
 
     print*
     print*,'======================================================='
-    print*,' VILMA viscosity perturbed: f_visc_sd      =',f_visc_sd
+    print*,' VILMA1 viscosity perturbed: f_visc_sd      =',f_visc_sd
     print*,'                            sigma_log10_visc=',sigma_log10_visc
     print*,'                            clamp [min,max] =',visc_log10_min,visc_log10_max
     if (l_visc_3d) then
@@ -571,15 +571,15 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  v i l m a _ end
+  ! Function :  v i l m a 1 _ end
   ! Purpose  :  end solid Earth
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma_end
+  subroutine vilma1_end
 
     implicit none
 
 
-#ifdef VILMA
+#ifdef VILMA1
 
     call close_evolution
 
@@ -587,14 +587,14 @@ contains
 
     return
 
-  end subroutine vilma_end
+  end subroutine vilma1_end
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  v i l m a _ w r i t e _ r e s t a r t
+  ! Function :  v i l m a 1 _ w r i t e _ r e s t a r t
   ! Purpose  :  Write restart netcdf file 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma_write_restart(dir)
+  subroutine vilma1_write_restart(dir)
 
     implicit none
 
@@ -603,7 +603,7 @@ contains
     integer :: cstat, estat
     character(len=256) :: cmsg
 
-#ifdef VILMA
+#ifdef VILMA1
     
     ! rename restart files for restart output writing location
     io_mos_indx%n   = trim(dir)//'/vilma/mos_indx.nc'  !matrix of Galerkin System
@@ -636,8 +636,8 @@ contains
 
    return
 
-  end subroutine vilma_write_restart
+  end subroutine vilma1_write_restart
 
 
-end module vilma_model
+end module vilma1_model
 
