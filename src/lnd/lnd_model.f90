@@ -540,7 +540,7 @@ contains
       call canopy_water(lnd%frac_surf,lnd%lai,lnd%sai,lnd%r_a,lnd%t_skin, &
                        lnd%pressure,lnd%qatm,lnd%rain,lnd%snow, &
                        lnd%w_can,lnd%w_can_old,lnd%s_can,lnd%s_can_old, &
-                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can,lnd%f_wat_can, &
+                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_wat_can,lnd%f_snow_can, &
                        lnd%rain_iso,lnd%snow_iso, &
                        lnd%w_can_iso,lnd%w_can_iso_old,lnd%s_can_iso,lnd%s_can_iso_old, &
                        lnd%rain_ground_iso,lnd%snow_ground_iso,lnd%evap_can_iso,lnd%subl_can_iso)
