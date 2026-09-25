@@ -78,9 +78,8 @@ module atm_params
 
   real(wp) :: c_uter_pol
   real(wp) :: c_uter_eq
-  integer :: i_mass_com_topo
+  integer :: i_mass_com
   real(wp) :: dps_com_topo
-  integer :: i_mass_com_vert
 
   real(wp) :: c_slp_1
   real(wp) :: c_slp_2
@@ -98,7 +97,7 @@ module atm_params
   real(wp) :: zmax
   real(wp) :: dpc
   real(wp) :: dp_com
-  real(wp) :: ptop_com
+  real(wp) :: p_com_bot
   real(wp) :: ptopdyn
 
   real(wp) :: hcld_base
@@ -330,9 +329,8 @@ contains
     call nml_read(filename,"atm_par","c_mmc_z",c_mmc_z)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
-    call nml_read(filename,"atm_par","i_mass_com_topo",i_mass_com_topo)
+    call nml_read(filename,"atm_par","i_mass_com",i_mass_com)
     call nml_read(filename,"atm_par","dps_com_topo",dps_com_topo)
-    call nml_read(filename,"atm_par","i_mass_com_vert",i_mass_com_vert)
     call nml_read(filename,"atm_par","l_p0_var",l_p0_var)
     call nml_read(filename,"atm_par","p0",p0)
     call nml_read(filename,"atm_par","c_slp_1",c_slp_1)
@@ -351,7 +349,7 @@ contains
     call nml_read(filename,"atm_par","zmax",zmax)
     call nml_read(filename,"atm_par","dpc",dpc)
     call nml_read(filename,"atm_par","dp_com",dp_com)
-    call nml_read(filename,"atm_par","ptop_com",ptop_com)
+    call nml_read(filename,"atm_par","p_com_bot",p_com_bot)
     call nml_read(filename,"atm_par","ptopdyn",ptopdyn)
     call nml_read(filename,"atm_par","pblp",pblp)
     call nml_read(filename,"atm_par","pble",pble)

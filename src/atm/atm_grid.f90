@@ -111,6 +111,7 @@ module atm_grid
 
   real(wp), allocatable :: pl(:)
   real(wp), allocatable :: dpl(:)
+  real(wp), allocatable :: rdpl(:)   ! 1/dpl
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
   real(wp), allocatable :: cheat(:,:)    !! column heat capacity, J/m2/K; see atm_grid_update
@@ -151,6 +152,7 @@ contains
     ! allocate
     allocate(pl(kmc))
     allocate(dpl(km))
+    allocate(rdpl(km))
     allocate(zl(kmc))
     allocate(zc(km))
     allocate(cheat(im,jm))
@@ -275,6 +277,7 @@ contains
    
     do k=1,km
       dpl(k) = pl(k)-pl(k+1)
+      rdpl(k) = 1._wp/dpl(k)
     enddo
 
     ! model z-levels
