@@ -81,8 +81,8 @@
  z_drag_bump_deep = 3000.     ! m, bump weight fades from 1 at z_drag_bump to 0 at z_drag_bump_deep: deep plateaus (Kerguelen, Agulhas,
                               ! Lord Howe, 1-2 km in 4-5 km water) steer the real ACC/WBCs and are no trapped-mode hazard on smoothed
                               ! topography; 2000 brings the Lord Howe mode back on raw topography (i_drag_topo=3)
- drag_topo_fac_max = 5.       ! cap on the bump drag enhancement factor (i_drag_topo=3)
- drag_topo_fac_max_coast = 1. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
+ drag_topo_fac_max = 2.       ! cap on the bump drag enhancement factor (i_drag_topo=3)
+ drag_topo_fac_max_coast = 2. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
                               ! because land is excluded from the neighbour mean; with the offshore bumps damped the coasts need
                               ! no enhancement at all (1.), and the Gulf Stream gains 30% for it
  drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
@@ -109,8 +109,8 @@
  i_diff = 1                   ! diffusion schemes:
                               ! 0 = horizontal/vertical diffusion
                               ! 1 = isopycnal/diapycnal diffusion
- diff_iso = 1000              ! m2/s, isopycnal/horizontal diffusivity
- diff_gm = 1000               ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
+ diff_iso = 750               ! m2/s, isopycnal/horizontal diffusivity
+ diff_gm = 750                ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
                               ! 0 = uniform with value diff_dia_min
                               ! 1 = tuned Bryan-Lewis type profile
@@ -120,7 +120,7 @@
  diff_dia_zref = 1000.        ! m2/s, diapycnal/vertical diffusivity (value at 2500m depth if not uniform)
  diff_dia_ref = 2e-5          ! m2/s, reference diapycnal diffusivity, used only if l_diff_dia_strat==T
  diff_dia_min = 1.e-5         ! m2/s, minimum (surface) diapycnal diffusivity, used only if i_diff_dia==0,3,4
- diff_dia_max = 1.5e-4        ! m2/s, maximum (deep ocean) diapycnal diffusivity, used only if i_diff_dia==3
+ diff_dia_max = 1.25e-4       ! m2/s, maximum (deep ocean) diapycnal diffusivity, used only if i_diff_dia==3
  l_diff_dia_strat = F         ! use stratification dependent vertical diffusivity? Added on top of the reference profile set by i_diff_dia
  alpha_strat = 1.0            ! exponent of Brunt-Vaisala frequency dependence for stratification dependent vertical diffusivity
  brunt_vaisala_ref = 7.e-3    ! 1/s, reference Brunt-Vaisala frequency for stratification dependent vertical diffusivity.  (~drho/dz=-5e-3 kg/m3 /m)
