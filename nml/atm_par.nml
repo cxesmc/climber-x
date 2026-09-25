@@ -76,7 +76,7 @@
   p0 = 101100                   ! Pa, mean sea level pressure, used only if l_p0_var==F
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
-  c_slp_3 = 12.                 ! parameter for polar damping of azonal sea level pressure 
+  c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
@@ -219,13 +219,13 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.51                !
+  c_cld_1 = 0.52                 !
   c_cld_2 = 0.54                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
   q_cld_low = 0.005
-  c_cld_5 = 1.0                 !
+  c_cld_5 = 0.75                !
   c_cld_5_sc = 2.               ! i_cld_low=4 only: c_cld_5 for the warm subtropical stratocumulus regime (qam above c_cld_8)
   c_cld_6 = 0.1                 ! half-width of the inversion window (r2a-ram)
   c_cld_60_ocn = 0.0            ! centre of the inversion window (r2a-ram) over ocn+sic+lake
