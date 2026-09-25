@@ -346,7 +346,7 @@ contains
     real(wp), intent(out  ) :: ps(:,:,:)
 
     integer :: i, j, k, n, imi, ipl
-    real(wp) :: dp, px, py
+    real(wp) :: dp, px, py, pxd, pyd, dpld
 
 
     zs = zsa_scale * zs
@@ -456,6 +456,10 @@ contains
         if (imi.lt.1) imi=im 
 
         px = (pzsa(i,j)+pzsa(imi,j))*0.5_wp
+        ! face surface pressure of the diffusive fluxes: the higher of the two surfaces, so that
+        ! only layers with air on both sides diffuse (below it one column has only its
+        ! extrapolated sub-surface profile)
+        pxd = min(pzsa(i,j),pzsa(imi,j))
 
         plx(i,j) = 0._wp
         plx_trop(i,j) = 0._wp
@@ -484,15 +488,16 @@ contains
           endif
           plx(i,j) = plx(i,j)+dplx(i,j,k)
           ! face layer mass weighted by the vertical profile of the macro-diffusivity,
-          ! decaying with height above the face surface (-hatm*log(px)) or above sea level
+          ! decaying with height above the face surface (-hatm*log(pxd)) or above sea level
+          dpld = max(0._wp,min(pl(k),pxd)-pl(k+1))*amas
           if (h_diff.gt.0._wp) then
             if (i_hdiff_ref.eq.1) then
-              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(px))/h_diff)
+              dplx_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k)+hatm*log(pxd))/h_diff)
             else
-              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+              dplx_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k))/h_diff)
             endif
           else
-            dplx_dif(i,j,k) = dplx(i,j,k)
+            dplx_dif(i,j,k) = dpld
           endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) then
@@ -516,6 +521,7 @@ contains
       do j=2,jm
 
         py = (pzsa(i,j)+pzsa(i,j-1))*0.5_wp
+        pyd = min(pzsa(i,j),pzsa(i,j-1))
 
         ply(i,j) = 0._wp
         ply_trop(i,j) = 0._wp
@@ -530,14 +536,15 @@ contains
             dply(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
           ply(i,j) = ply(i,j)+dply(i,j,k)
+          dpld = max(0._wp,min(pl(k),pyd)-pl(k+1))*amas
           if (h_diff.gt.0._wp) then
             if (i_hdiff_ref.eq.1) then
-              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(py))/h_diff)
+              dply_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k)+hatm*log(pyd))/h_diff)
             else
-              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+              dply_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k))/h_diff)
             endif
           else
-            dply_dif(i,j,k) = dply(i,j,k)
+            dply_dif(i,j,k) = dpld
           endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) then

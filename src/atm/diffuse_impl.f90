@@ -16,7 +16,7 @@
 !            where conv_expl = (fdx(i)-fdx(i+1))/sqr is adifa's EXACT zonal
 !            diffusive flux convergence (the original layer-resolved physics; the
 !            gad*z term cancels because adifa differences tp at common height
-!            levels and zeroes sub-surface layers via the face mass dplx), and L
+!            levels and zeroes sub-surface layers via the face mass dplx_dif), and L
 !            is a column Laplacian present ONLY on the LHS, so it does not change
 !            WHAT is diffused - it only damps the stiff polar grid-scale modes.
 !

@@ -142,6 +142,8 @@ contains
         ! in front, so away from the fcort floor the production is proportional to the
         ! horizontal temperature gradient with no Coriolis suppression of its own. The
         ! only equatorial cut-off is the c_uter_eq factor already carried by ut3f/vt3f.
+        ! ut3f/vt3f contain only the shear of layers above the highest surface of their
+        ! stencil (u3d), so sub-surface levels do not produce synoptic energy over topography.
         synprod(i,j) = c_syn_1 + c_syn_2 * 2._wp*omega*abs(sint(j)) / Nfreq * ugrad 
         synprod(i,j) = max(0._wp,synprod(i,j))
 

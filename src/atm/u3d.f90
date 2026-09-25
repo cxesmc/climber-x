@@ -212,6 +212,8 @@ contains
 
     real(wp), dimension(kmc) :: uteri
     real(wp), dimension(kmc) :: vteri
+    real(wp), dimension(kmc) :: uterif, vterif   ! thermal wind on levels for the EKE production
+    real(wp) :: pst
     real(wp), dimension(km) :: rdpl   ! 1/(pl(k)-pl(k+1)), column-invariant
 
 
@@ -227,7 +229,7 @@ contains
       rdpl(k) = 1._wp/(pl(k)-pl(k+1))
     enddo
 
-    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,ctv,c_damp_eq,c_damp_pol)
+    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,pst,ctv,c_damp_eq,c_damp_pol)
     do j=1,jm
       do i=1,im
 
@@ -325,6 +327,23 @@ contains
             vteri(k+1) = vteri(k)+ctv*(t3(ipl,j,k)-t3(imi,j,k))/(2._wp*dxt(j)) 
           enddo
 
+          ! thermal wind for the EKE production: a layer adds to the shear only if its centre,
+          ! sqrt(pl(k)*pl(k+1)) = exp(-zc/hatm), is above the highest surface of the gradient stencil
+          pst = min(pzsa(i,j),pzsa(i,jmi),pzsa(i,j+1),pzsa(ipl,j),pzsa(imi,j))
+          uterif(1) = 0._wp
+          vterif(1) = 0._wp
+          uterif(km+1) = 0._wp
+          vterif(km+1) = 0._wp
+          do k=1,km-1
+            if (sqrt(pl(k)*pl(k+1)).gt.pst) then
+              uterif(k+1) = uterif(k)
+              vterif(k+1) = vterif(k)
+            else
+              uterif(k+1) = uterif(k) + (uteri(k+1)-uteri(k))
+              vterif(k+1) = vterif(k) + (vteri(k+1)-vteri(k))
+            endif
+          enddo
+
           ! thermal wind in layers, dampened at equator and poles
           c_damp_pol = min(1._wp,c_uter_pol*cost(j)**2)
           c_damp_eq  = min(1._wp, c_uter_eq*sint(j)**2)
@@ -332,8 +351,8 @@ contains
             uter(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * c_damp_eq * c_damp_pol 
             vter(i,j,k) = 0.5_wp*(vteri(k)+vteri(k+1)) * c_damp_eq * c_damp_pol 
             ! thermal wind without polar damping needed for EKE production
-            uterf(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * c_damp_eq 
-            vterf(i,j,k) = 0.5_wp*(vteri(k)+vteri(k+1)) * c_damp_eq
+            uterf(i,j,k) = 0.5_wp*(uterif(k)+uterif(k+1)) * c_damp_eq 
+            vterf(i,j,k) = 0.5_wp*(vterif(k)+vterif(k+1)) * c_damp_eq
           enddo
 
         endif
