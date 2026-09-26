@@ -102,7 +102,7 @@ module coupler
     public :: geo_to_bmb
     public :: ice_to_cmn
     public :: ice_to_geo, geo_to_ice
-    public :: geo_to_smb, geo_to_cmn
+    public :: geo_to_smb, geo_to_cmn, geo_z_ocn
     public :: bnd_to_geo, cmn_to_geo
     public :: cmn_to_co2, co2_to_cmn
     public :: cmn_to_ch4, ch4_to_cmn
@@ -3312,15 +3312,7 @@ contains
     cmn%z_sur = geo%z_sur
     cmn%z_ocn_max = geo%z_ocn_max_q
     ! bathymetry passed to the ocean model
-    if (i_z_ocn.eq.1) then
-      cmn%z_ocn = geo%z_bed         ! whole-cell mean bed elevation (land points included)
-    else if (i_z_ocn.eq.2) then
-      cmn%z_ocn = geo%z_ocn         ! mean over the ocean points of the cell
-    else if (i_z_ocn.eq.3) then
-      cmn%z_ocn = geo%z_ocn_min_q   ! deep-side elevation quantile of the ocean points (keeps channels in fractional cells)
-    else
-      stop 'ERROR: i_z_ocn must be 1, 2 or 3'
-    endif
+    cmn%z_ocn = geo_z_ocn(geo)
     cmn%z_veg = geo%z_veg
     cmn%z_veg_min = geo%z_veg_min
     cmn%z_veg_max = geo%z_veg_max
@@ -3362,6 +3354,34 @@ contains
     return
 
   end subroutine geo_to_cmn
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Function :  g e o _ z _ o c n
+  ! Purpose  :  bathymetry passed to the ocean model, selected by i_z_ocn.
+  !             Used both for ocn_init and by geo_to_cmn, so that the ocean grid
+  !             at initialisation is the same as after the first coupling step
+  !             (otherwise columns deepen at the first step, below the layers
+  !             where bgc was initialised)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function geo_z_ocn(geo) result(z_ocn)
+
+    implicit none
+
+    type(geo_class), intent(in) :: geo
+    real(wp) :: z_ocn(size(geo%z_bed,1),size(geo%z_bed,2))
+
+    if (i_z_ocn.eq.1) then
+      z_ocn = geo%z_bed         ! whole-cell mean bed elevation (land points included)
+    else if (i_z_ocn.eq.2) then
+      z_ocn = geo%z_ocn         ! mean over the ocean points of the cell
+    else if (i_z_ocn.eq.3) then
+      z_ocn = geo%z_ocn_min_q   ! deep-side elevation quantile of the ocean points (keeps channels in fractional cells)
+    else
+      stop 'ERROR: i_z_ocn must be 1, 2 or 3'
+    endif
+
+  end function geo_z_ocn
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -54,7 +54,7 @@ program climber
     &                ice_to_smb, ice_to_cmn, smb_to_ice, &
     &                bmb_to_cmn, cmn_to_bmb, &
     &                ice_to_bmb, bmb_to_ice, &
-    &                cmn_to_geo, geo_to_cmn, &
+    &                cmn_to_geo, geo_to_cmn, geo_z_ocn, &
     &                ice_to_geo, bnd_to_geo, geo_to_ice, &
     &                geo_to_smb, geo_to_bmb, &
     &                co2_to_cmn, cmn_to_co2, &
@@ -252,7 +252,7 @@ program climber
        else
          n_tracers_bgc = 0
        endif
-       call ocn_init(ocn,geo%f_ocn,geo%z_bed,geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
+       call ocn_init(ocn,geo%f_ocn,geo_z_ocn(geo),geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
        call ocn_diag_init
     endif
 
