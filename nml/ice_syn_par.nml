@@ -26,8 +26,6 @@
   slope_out   = 6.09e-3  ! m/m, linear outside ramp (unused for thickness)
   z_max_in    = 2500.0   ! m, inside cap
   z_max_out   = 200.0    ! m, outside floor
-  rho_ice     = 910.0    ! kg/m3
-  g           = 9.81     ! m/s2
 
   !--- grounded-only constraint ---
   ! inside the target mask, H >= (z_sl - z_bed)*rho_sw/rho_i + h_grd_min

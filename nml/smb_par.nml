@@ -222,8 +222,6 @@
   slope_out   = 6.09e-3! m/m, linear outside ramp
   z_max_in    = 2500.0 ! m, inside cap
   z_max_out   = 200.0  ! m, outside floor
-  rho_ice     = 910.0  ! kg/m3
-  g           = 9.81   ! m/s2
 
   !--- surface temperature  t_srf = t_sl - gamma_t*max(z_syn, 0) ---
   gamma_t   = 6.5e-3   ! K/m lapse rate

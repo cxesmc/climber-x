@@ -29,7 +29,8 @@ module ice_model
     use control, only : out_dir, l_ice_syn
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
-    use constants, only : map_gen
+    use constants, only : map_gen, constants_phys_const
+    use phys_constants, only : phys_const_class, phys_const_compare
     use ice_def, only : ice_class
     use yelmo, only : wp_yelmo, yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
@@ -297,6 +298,7 @@ contains
         real(wp), allocatable :: h_sed(:,:)    ! sediment thickness on ice sheet grid [m]
         integer, allocatable :: id_mask(:,:)    ! ice id mask 
         type(map_class) :: maps_geo_to_ice
+        type(phys_const_class) :: cnst_cx
 
         type(yelmo_class),   pointer :: ylmo
         type(sico_class),    pointer :: sico 
@@ -420,6 +422,14 @@ contains
                 ylmo%bnd%H_ice_ref   = ylmo%tpo%now%H_ice 
                 ylmo%bnd%z_bed_ref   = ylmo%bnd%z_bed 
 
+
+                ! Report where CLIMBER-X's own physical constants differ from
+                ! the set Yelmo loaded, so that a disagreement inside one
+                ! executable is a logged decision rather than a silent one.
+                call constants_phys_const(cnst_cx)
+                call phys_const_compare(cnst_cx, ylmo%bnd%cnst, &
+                                        label1="CLIMBER-X constants", &
+                                        label2="Yelmo "//trim(ylmo%bnd%cnst%label))
 
                 ! Finish state initialization of all Yelmo components
                 call yelmo_init_state(ylmo,real(time,wp_yelmo),thrm_method="robin-cold")

@@ -268,11 +268,11 @@ contains
         real(wp), intent(in)  :: slope_out
         real(wp), intent(in)  :: z_max_in
         real(wp), intent(in)  :: z_max_out
-        real(wp), optional, intent(in) :: rho_ice
-        real(wp), optional, intent(in) :: g
+        real(wp), intent(in)  :: rho_ice
+        real(wp), intent(in)  :: g
 
         integer  :: nx, ny, i, j
-        real(wp) :: zr, d, C, rho_use, g_use
+        real(wp) :: zr, d, C
 
         nx = size(z_syn, 1)
         ny = size(z_syn, 2)
@@ -289,12 +289,11 @@ contains
             error stop "compute_z_syn_plastic: tau0 must be > 0"
         end if
 
-        rho_use = 910.0_wp
-        g_use   =   9.81_wp
-        if (present(rho_ice)) rho_use = rho_ice
-        if (present(g))       g_use   = g
+        if (rho_ice <= 0.0_wp .or. g <= 0.0_wp) then
+            error stop "compute_z_syn_plastic: rho_ice and g must be > 0"
+        end if
 
-        C = sqrt(2.0_wp * tau0 / (rho_use * g_use))
+        C = sqrt(2.0_wp * tau0 / (rho_ice * g))
 
         do j = 1, ny
             do i = 1, nx

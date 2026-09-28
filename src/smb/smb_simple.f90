@@ -70,6 +70,7 @@
 module smb_simple_m
 
     use precision, only : wp
+    use constants, only : rho_i, g
     use ice_syn_topo, only : compute_signed_distance, compute_z_syn_linear, compute_z_syn_plastic
     use nml
     use ncio
@@ -131,8 +132,6 @@ module smb_simple_m
         real(wp) :: z_max_out   =  200.0_wp   ! m, outside floor
 
         ! Plastic profile physical constants
-        real(wp) :: rho_ice = 910.0_wp        ! kg/m^3
-        real(wp) :: g       =   9.81_wp       ! m/s^2
 
         ! Surface temperature  t_srf = t_sl - gamma_t*max(z_syn, 0)
         real(wp) :: gamma_t   = 6.5e-3_wp     ! K/m (lapse rate)
@@ -436,7 +435,7 @@ contains
             call compute_z_syn_plastic(z_syn, d_m, z_sur, mask_target,     &
                                        p%tau0, p%slope_out,                &
                                        p%z_max_in, p%z_max_out,            &
-                                       p%rho_ice, p%g)
+                                       rho_i, g)
         else
             call compute_z_syn_linear(z_syn, d_m, z_sur, mask_target,      &
                                       p%slope, p%z_max_in, p%z_max_out)
@@ -745,8 +744,6 @@ contains
         call nml_read(filename,nml_group,"slope_out",  smbs%par%slope_out,  init=init_pars)
         call nml_read(filename,nml_group,"z_max_in",   smbs%par%z_max_in,   init=init_pars)
         call nml_read(filename,nml_group,"z_max_out",  smbs%par%z_max_out,  init=init_pars)
-        call nml_read(filename,nml_group,"rho_ice",    smbs%par%rho_ice,    init=init_pars)
-        call nml_read(filename,nml_group,"g",          smbs%par%g,          init=init_pars)
         call nml_read(filename,nml_group,"gamma_t",    smbs%par%gamma_t,    init=init_pars)
         call nml_read(filename,nml_group,"t_ice_max",  smbs%par%t_ice_max,  init=init_pars)
         call nml_read(filename,nml_group,"smb_min",    smbs%par%smb_min,    init=init_pars)

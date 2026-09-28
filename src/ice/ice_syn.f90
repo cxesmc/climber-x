@@ -35,7 +35,7 @@
 module ice_syn
 
     use precision, only : wp, dp
-    use constants, only : rho_i, rho_sw, map_gen
+    use constants, only : rho_i, rho_sw, g, map_gen
     use coords, only : grid_class, grid_init, map_class, map_init, map_field
     use ice_syn_topo, only : compute_signed_distance, compute_z_syn_linear, compute_z_syn_plastic
     use nml
@@ -66,8 +66,6 @@ module ice_syn
         real(wp) :: slope_out   = 6.09e-3_wp      ! m/m, linear outside ramp
         real(wp) :: z_max_in    = 2500.0_wp       ! m, inside cap
         real(wp) :: z_max_out   = 200.0_wp        ! m, outside floor
-        real(wp) :: rho_ice     = 910.0_wp        ! kg/m3
-        real(wp) :: g           = 9.81_wp         ! m/s2
         ! grounded-only constraint: inside the target mask ice is at least
         ! thick enough to be grounded (H >= (z_sl-z_bed)*rho_sw/rho_i + h_grd_min)
         real(wp) :: h_grd_min   = 10.0_wp         ! m
@@ -178,7 +176,7 @@ contains
         if (syn%par%use_plastic) then
             call compute_z_syn_plastic(syn%z_syn, syn%d_m, z_bed, syn%mask_target, &
                                        syn%par%tau0, syn%par%slope_out, syn%par%z_max_in, syn%par%z_max_out, &
-                                       rho_ice=syn%par%rho_ice, g=syn%par%g)
+                                       rho_ice=rho_i, g=g)
         else
             call compute_z_syn_linear(syn%z_syn, syn%d_m, z_bed, syn%mask_target, &
                                       syn%par%slope, syn%par%z_max_in, syn%par%z_max_out)
@@ -472,8 +470,6 @@ contains
         call nml_read(filename, group, "slope_out",   par%slope_out)
         call nml_read(filename, group, "z_max_in",    par%z_max_in)
         call nml_read(filename, group, "z_max_out",   par%z_max_out)
-        call nml_read(filename, group, "rho_ice",     par%rho_ice)
-        call nml_read(filename, group, "g",           par%g)
         call nml_read(filename, group, "h_grd_min",   par%h_grd_min)
 
     end subroutine ice_syn_par_load

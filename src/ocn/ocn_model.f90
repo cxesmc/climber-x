@@ -652,7 +652,7 @@ contains
     if (l_ocn_input_fix .and. i_ocn_input_fix.eq.2) then
     
       fnm = trim(ocn_input_fix_file)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.FALSE.)
       call nc_read(fnm,"stressxu   ",ocn%daily_input_save%stressxu   ,ncid=ncid)
       call nc_read(fnm,"stressyv   ",ocn%daily_input_save%stressyv   ,ncid=ncid)
       call nc_read(fnm,"stressxv   ",ocn%daily_input_save%stressxv   ,ncid=ncid)
@@ -1076,7 +1076,7 @@ contains
     
       fnm = trim(out_dir)//"/ocn_input_fix.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
       call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
       call nc_write_dim(fnm,"day",x=1._wp,dx=1._wp,nx=nday_year,units="doy",ncid=ncid)

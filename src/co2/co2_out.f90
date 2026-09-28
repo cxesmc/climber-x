@@ -215,7 +215,7 @@ contains
     character (len=*) :: fnm
     integer :: ndat, y, ncid, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", dble([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))]), &
     dim1=dim_time,start=[ndat],count=[y],ncid=ncid)    
     call nc_write(fnm,"co2", vars%co2, dim1=dim_time,start=[ndat],count=[y],long_name="atmospheric co2 concentration",units="ppm",ncid=ncid) 
