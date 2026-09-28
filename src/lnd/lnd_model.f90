@@ -2215,7 +2215,7 @@ end subroutine lnd_update
    endif
 
 
-   call nc_open(fnm,ncid)
+   call nc_open(fnm,ncid,writable=.TRUE.)
 
    call nc_write(fnm,"Cflx_avg",  l0d%Cflx_avg,dim1="p",long_name="average land-atm carbon flux",ncid=ncid)
    call nc_write(fnm,"weath_carb_avg",  l0d%weath_carb_avg,dim1="p",long_name="average carbonate weathering flux",ncid=ncid)

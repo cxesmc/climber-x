@@ -1431,7 +1431,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_x,x=ice%grid%x0,dx=ice%grid%dx,nx=ice%grid%IMAX+1,axis="x",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_y,x=ice%grid%y0,dx=ice%grid%dx,nx=ice%grid%JMAX+1,axis="y",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_kc,x=1,dx=1,nx=ice%grid%KCMAX+1,axis="z",units="#",ncid=ncid)

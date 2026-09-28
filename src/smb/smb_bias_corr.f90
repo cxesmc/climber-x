@@ -68,7 +68,7 @@ contains
    write (i2,'(I4)') year_end_smb_ref+2000
    fnm = trim(out_dir)//"/CLIMBER-X_SMB_"//trim(grid%name)//"_clim_"//trim(i1)//"_"//trim(i2)//".nc"
    call nc_create(fnm)
-   call nc_open(fnm,ncid)
+   call nc_open(fnm,ncid,writable=.TRUE.)
    call nc_write_dim(fnm, "y", x=grid%G%y0, dx=grid%G%dy, nx=grid%G%ny,&
      axis="y", units="km", ncid=ncid)
    call nc_write_dim(fnm, "x", x=grid%G%x0, dx=grid%G%dx, nx=grid%G%nx,&
