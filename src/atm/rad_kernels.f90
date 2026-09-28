@@ -310,7 +310,7 @@ contains
 
     fnm = trim(out_dir)//"/radiative_kernels.nc"
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
 

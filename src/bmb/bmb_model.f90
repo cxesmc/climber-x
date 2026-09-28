@@ -561,7 +561,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_x,x=bmb%grid%G%x0,dx=bmb%grid%G%dx,nx=nx,axis="x",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_y,x=bmb%grid%G%y0,dx=bmb%grid%G%dy,nx=ny,axis="y",units="m",ncid=ncid)
 
