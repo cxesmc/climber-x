@@ -41,7 +41,6 @@
     surf_gl_method      = 0                 ! 0: binary (max grnd/flt elevation), 1: subgrid average elevation
     grad_lim            = 0.1               ! [m/m] Maximum allowed sloped in gradient calculations (dz/dx,dH/dx)
     grad_lim_zb         = 0.05              ! [m/m] Maximum allowed sloped in bed gradient (dzb/dx)
-    dHdt_dyn_lim        = 100.0             ! [m/yr] Maximum allowed ice thickness change due to dynamics
     margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
     front_subgrid       = "marine"          ! Subgrid ice fronts: "none" (binary f_ice), "floating", "marine" (floating + marine-grounded)
     front_H_eff_min     = 50.0              ! [m] Minimum effective thickness of front cells (front_subgrid)
