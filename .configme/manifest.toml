@@ -3,7 +3,7 @@ package = "climber-x"
 deps = [
     "fesm-utils:dev",
     "yelmo:dev",
-    "FastEarth3D:dev",
+    "vilma2",
     "bgc",
-    "vilma",
+    "vilma1:@machine",
 ]

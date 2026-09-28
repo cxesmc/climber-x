@@ -49,8 +49,8 @@ module geo_mod
   use fill_ocean_mod, only : fill_ocean
   use topo_fill_mod, only : topo_fill
   use topo_filter_mod, only : topo_filter
-  use vilma_model, only : vilma_init, vilma_update, vilma_end, vilma_write_restart
-  use fastearth_model, only : fastearth_init, fastearth_update, fastearth_end, fastearth_write_restart
+  use vilma1_model, only : vilma1_init, vilma1_update, vilma1_end, vilma1_write_restart
+  use vilma2_model, only : vilma2_init, vilma2_update, vilma2_end, vilma2_write_restart
   use gia_mod, only : gia_init, gia_update
   use q_geo_mod, only : geo_heat
   use sed_mod, only : sed
@@ -556,13 +556,13 @@ contains
     endif
 
     !-------------------------------------------------------------------
-    ! initialize VILMA
+    ! initialize solid Earth model (VILMA1 or VILMA2)
     !-------------------------------------------------------------------
     if (flag_geo .and. i_geo.eq.2) then
-      call vilma_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+      call vilma1_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
     endif
     if (flag_geo .and. i_geo.eq.3) then
-      call fastearth_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+      call vilma2_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
     endif
 
     print*
@@ -625,23 +625,23 @@ contains
 
     else if (i_geo==2) then
       !-------------------------------------------------------------------
-      ! VILMA solid Earth model
+      ! VILMA1 solid Earth model
 
       if (.not.firstcall) then
         ! takes current ice load (thickness) as input
         ! returns relative sea level and new bedrock elevation
-        call vilma_update(geo%hires%grid, geo%hires%h_ice, & ! in
+        call vilma1_update(geo%hires%grid, geo%hires%h_ice, & ! in
           geo%hires%rsl, geo%hires%z_bed)    ! out
       endif
 
     else if (i_geo==3) then
       !-------------------------------------------------------------------
-      ! FastEarth3D solid Earth model
+      ! VILMA2 solid Earth model
 
       if (.not.firstcall) then
         ! takes current ice load (thickness) as input
         ! returns relative sea level and new bedrock elevation
-        call fastearth_update(geo%hires%h_ice, &  ! in
+        call vilma2_update(geo%hires%h_ice, &  ! in
           geo%hires%rsl, geo%hires%z_bed)    ! out
       endif
 
@@ -982,12 +982,12 @@ contains
 
 
     if (flag_geo .and. i_geo==2) then
-      ! end VILMA
-      call vilma_end
+      ! end VILMA1
+      call vilma1_end
     endif
     if (flag_geo .and. i_geo==3) then
-      ! end FastEarth3D
-      call fastearth_end
+      ! end VILMA2
+      call vilma2_end
     endif
 
     call geo_dealloc(geo)
@@ -1121,10 +1121,10 @@ contains
     call nc_write(fnm,"mask  ", geo%hires%mask  , dims=["lon","lat"],long_name="mask  ",units="1")
 
     if (flag_geo .and. i_geo.eq.2) then
-      call vilma_write_restart(dir)
+      call vilma1_write_restart(dir)
     endif
     if (flag_geo .and. i_geo.eq.3) then
-      call fastearth_write_restart(dir)
+      call vilma2_write_restart(dir)
     endif
 
    return

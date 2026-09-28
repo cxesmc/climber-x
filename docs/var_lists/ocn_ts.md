@@ -23,6 +23,8 @@
 | buoy_N | time | N | Surface bouyancy flux north of 30N |
 | buoy_NA | lat, time | N | Bouyancy flux over North Atlantic |
 | buoy_NA55 | time | N | Bouyancy flux over North Atlantic |
+| buoy_pacN | time | N | Buoyancy flux over the North Pacific |
+| buoy_pacN30 | time | N | Buoyancy flux over the North Pacific (>30N) |
 | buoy_ross | time | N | Buoyancy flux over the Ross Sea |
 | buoy_S | time | N | Surface bouyancy flux south of 30S |
 | buoy_so | time | N | Buoyancy flux over the Southern Ocean around Antarctica |
@@ -127,14 +129,18 @@
 | mld_gin | time | m | Maximum mixed layer depth in the GIN seas |
 | mld_irm | time | m | Maximum mixed layer depth in Irminger Sea |
 | mld_lab | time | m | Maximum mixed layer depth in Labrador Sea |
+| mld_pacN | time | m | Maximum mixed layer depth in the North Pacific |
+| mld_pacN30 | time | m | Maximum mixed layer depth in the North Pacific (>30N) |
 | mld_ross | time | m | Maximum mixed layer depth in the Ross Sea |
 | mld_so | time | m | Maximum mixed layer depth in the Southern Ocean around Antarctica |
 | mld_wedd | time | m | Maximum mixed layer depth in the Weddel Sea |
-| mldst_atlN50 | time | m | Maximum mixed layer depth based on sigma-t in Atlantic <50N |
+| mldst_atlN50 | time | m | Maximum mixed layer depth based on sigma-t in Atlantic >50N |
 | mldst_bkn | time | m | Maximum mixed layer depth based on sigma-t in the Barents-Kara-Nansen seas |
 | mldst_gin | time | m | Maximum mixed layer depth based on sigma-t in the GIN seas |
 | mldst_irm | time | m | Maximum mixed layer depth based on sigma-t in Irminger Sea |
 | mldst_lab | time | m | Maximum mixed layer depth based on sigma-t in Labrador Sea |
+| mldst_pacN | time | m | Maximum mixed layer depth based on sigma-t in the North Pacific |
+| mldst_pacN30 | time | m | Maximum mixed layer depth based on sigma-t in the North Pacific (>30N) |
 | mldst_ross | time | m | Maximum mixed layer depth based on sigma-t in the Ross Sea |
 | mldst_so | time | m | Maximum mixed layer depth based on sigma-t in the Southern Ocean around Antarctica |
 | mldst_wedd | time | m | Maximum mixed layer depth based on sigma-t in the Weddel Sea |
@@ -182,6 +188,8 @@
 | pe_gin | time | J | Potential energy released by convection in the GIN seas |
 | pe_irm | time | J | Potential energy released by convection in Irminger Sea |
 | pe_lab | time | J | Potential energy released by convection in Labrador Sea |
+| pe_pacN | time | J | Potential energy released by convection in the North Pacific |
+| pe_pacN30 | time | J | Potential energy released by convection in the North Pacific (>30N) |
 | pe_ross | time | J | Potential energy released by convection in the Ross Sea |
 | pe_so | time | J | Potential energy released by convection in the Southern Ocean around Antarctica |
 | pe_wedd | time | J | Potential energy released by convection in the Weddel Sea |
@@ -218,38 +226,42 @@
 | runoff_veg_ind | time | Sv | Indian ocean runoff flux from ice- and lake-free land to ocean |
 | runoff_veg_pac | time | Sv | Pacific runoff flux from ice- and lake-free land to ocean |
 | runoff_veg_so | time | Sv | Southern ocean runoff flux from ice- and lake-free land to ocean |
-| s_atlN50 | time | degC | Average sea surface salinity in Atlantic >50N |
-| s_bkn | time | degC | Average sea surface salinity in the Barents-Kara-Nansen seas |
 | s_deep | time | psu | volume averaged deep ocean salinity (below 1000 m) |
 | s_deep_atl | time | psu | volume averaged deep Atlantic ocean salinity (below 1000 m) |
 | s_deep_ind | time | psu | volume averaged deep Indian ocean salinity (below 1000 m) |
 | s_deep_pac | time | psu | volume averaged deep Pacific ocean salinity (below 1000 m) |
 | s_deep_so | time | psu | volume averaged deep Southern ocean salinity (below 1000 m) |
-| s_gin | time | degC | Average sea surface salinity in the GIN seas |
-| s_irm | time | degC | Average sea surface salinity in Irminger Sea |
-| s_lab | time | degC | Average sea surface salinity in Labrador Sea |
-| s_ross | time | degC | Average sea surface salinity in the Ross Sea |
-| s_so | time | degC | Average sea surface salinity in the Southern Ocean around Antarctica |
-| s_wedd | time | degC | Average sea surface salinity in the Weddel Sea |
 | saln0 | time | psu | reference salinity |
 | shelf | time | mln km2 | Total area of ocean shelf |
 | sss | time | psu | sea surface salinity |
+| sss_atlN50 | time | psu | Average sea surface salinity in Atlantic >50N |
+| sss_bkn | time | psu | Average sea surface salinity in the Barents-Kara-Nansen seas |
+| sss_gin | time | psu | Average sea surface salinity in the GIN seas |
+| sss_irm | time | psu | Average sea surface salinity in Irminger Sea |
+| sss_lab | time | psu | Average sea surface salinity in Labrador Sea |
+| sss_pacN | time | psu | Average sea surface salinity in the North Pacific |
+| sss_pacN30 | time | psu | Average sea surface salinity in the North Pacific (>30N) |
+| sss_ross | time | psu | Average sea surface salinity in the Ross Sea |
+| sss_so | time | psu | Average sea surface salinity in the Southern Ocean around Antarctica |
+| sss_wedd | time | psu | Average sea surface salinity in the Weddel Sea |
 | sst | time | C | sea surface temperature |
+| sst_atlN50 | time | degC | Average sea surface temperature in Atlantic >50N |
+| sst_bkn | time | degC | Average sea surface temperature in the Barents-Kara-Nansen seas |
+| sst_gin | time | degC | Average sea surface temperature in the GIN seas |
+| sst_ibe | time | degC | Annual mean sea surface temperature at the Iberian margin |
+| sst_irm | time | degC | Average sea surface temperature in Irminger Sea |
+| sst_lab | time | degC | Average sea surface temperature in Labrador Sea |
+| sst_pacN | time | degC | Average sea surface temperature in the North Pacific |
+| sst_pacN30 | time | degC | Average sea surface temperature in the North Pacific (>30N) |
+| sst_ross | time | degC | Average sea surface temperature in the Ross Sea |
+| sst_so | time | degC | Average sea surface temperature in the Southern Ocean around Antarctica |
+| sst_wedd | time | degC | Average sea surface temperature in the Weddel Sea |
 | svol | time | psu | volume averaged ocean salinity |
-| t_atlN50 | time | degC | Average sea surface temperature in Atlantic >50N |
-| t_bkn | time | degC | Average sea surface temperature in the Barents-Kara-Nansen seas |
 | t_deep | time | C | volume averaged deep ocean potential temperature (below 1000 m) |
 | t_deep_atl | time | C | volume averaged deep Atlantic ocean potential temperature (below 1000 m) |
 | t_deep_ind | time | C | volume averaged deep Indian ocean potential temperature (below 1000 m) |
 | t_deep_pac | time | C | volume averaged deep Pacific ocean potential temperature (below 1000 m) |
 | t_deep_so | time | C | volume averaged deep Southern ocean potential temperature (below 1000 m) |
-| t_gin | time | degC | Average sea surface temperature in the GIN seas |
-| t_ibe | time | degC | Annual mean sea surface temperature at the Iberian margin |
-| t_irm | time | degC | Average sea surface temperature in Irminger Sea |
-| t_lab | time | degC | Average sea surface temperature in Labrador Sea |
-| t_ross | time | degC | Average sea surface temperature in the Ross Sea |
-| t_so | time | degC | Average sea surface temperature in the Southern Ocean around Antarctica |
-| t_wedd | time | degC | Average sea surface temperature in the Weddel Sea |
 | tvol | time | C | volume averaged ocean potential temperature |
 | vol | time | mln km3 | Total ocean volume |
 | vsf_atl | time | Sv | Atlantic virtual salinity flux |

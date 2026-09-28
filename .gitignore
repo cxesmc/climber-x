@@ -18,7 +18,7 @@ src/utils/fesm-utils*
 src/utils/fftw*
 src/utils/lis*
 src/yelmo*
-src/vilma
+src/vilma1
 bench
 matlab
 julia
@@ -34,5 +34,5 @@ docs/.quarto/
 fesm-utils
 yelmo
 FastHydrology
-FastEarth3D
+vilma2
 analysis

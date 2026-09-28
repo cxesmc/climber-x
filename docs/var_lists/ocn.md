@@ -76,10 +76,10 @@
 | mldmax | lon, lat, time | m | maximum mixed layer depth from mixed layer scheme |
 | mldst | lon, lat, month, time | m | mixed layer depth from sigma-t criterion |
 | nconv | lon, lat, month, time | \ | number of mixed layers |
-| opsi | latv1, levw, month, time | Sv | global overturning circulation |
-| opsi_a | latv1, levw, month, time | Sv | Atlantic overturning circulation |
-| opsi_i | latv1, levw, month, time | Sv | Indian overturning circulation |
-| opsi_p | latv1, levw, month, time | Sv | Pacific overturning circulation |
+| opsi | latv1, levw, time | Sv | global overturning circulation |
+| opsi_a | latv1, levw, time | Sv | Atlantic overturning circulation |
+| opsi_i | latv1, levw, time | Sv | Indian overturning circulation |
+| opsi_p | latv1, levw, time | Sv | Pacific overturning circulation |
 | p_e_sic | lon, lat, month, time | kg/m2/day | net ocean P-E+sea ice fluxes |
 | psi | lon, lat, month, time | Sv | barotropic streamfunction |
 | rho | lon, lat, lev, month, time | kg/m3 | in-situ density |

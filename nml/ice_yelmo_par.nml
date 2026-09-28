@@ -26,12 +26,10 @@
     dt_method       = 2                 ! 0: no internal timestep, 1: adaptive, cfl, 2: adaptive, pc
     dt_min          = 0.01              ! [a] Minimum timestep 
     cfl_max         = 0.5               ! Maximum value is 1.0, lower will be more stable
-    cfl_diff_max    = 0.12              ! Bueler et al (2007), Eq. 25  
     pc_method       = "AB-SAM"          ! "FE-SBE", "AB-SAM", "HEUN"
     pc_controller   = "PI42"            ! PI42, H312b, H312PID, H321PID, PID1
     pc_use_H_pred   = True              ! Use predicted H_ice instead of corrected H_ice 
     pc_filter_vel   = True              ! Use mean vel. solution of current and previous timestep
-    pc_corr_vel     = False             ! Calculate dynamics again for corrected H_ice
     pc_n_redo       = 5                 ! How many times can the same iteration be repeated (when high error exists)
     pc_tol          = 5.0               ! [m/a] Tolerance threshold to redo timestep
     pc_eps          = 1.0               ! Predictor-corrector tolerance  
@@ -139,7 +137,6 @@
     ssa_iter_rel        = 0.7             ! [--] Relaxation fraction [0:1] to stabilize ssa iterations
     ssa_iter_conv       = 1e-1            ! [--] L2 relative error convergence limit to exit ssa iterations (1e-2)
     taud_lim            = 2e5             ! [Pa] Maximum allowed driving stress
-    cb_sia              = 0.0             ! [m a-1 Pa-1] Bed roughness coefficient for SIA sliding
     neff_nxi            = 0               ! Subgrid interp. of hyd%N onto dyn%N_eff. 0: none, 1: Gaussian quad., >1: nxi x nxi (was yneff.nxi)
 
 /
@@ -249,7 +246,7 @@
     zeta_scale_rock = "exp-inv"         ! "linear", "exp-inv"
     zeta_exp_rock   = 2.0  
     H_rock          = 2000.0            ! [m] Lithosphere thickness 
-    cp_rock         = 1000.0            ! [J kg-1 K-1] Specific heat capacity of bedrock
+    rhoc_rock       = 2.0e6             ! [J m-3 K-1] Volumetric heat capacity of bedrock (rho*cp)
     kt_rock         = 6.3e7             ! [J a-1 m-1 K-1] Thermal conductivity of bedrock [W m-1 K-1 * sec_year] => [J a-1 m-1 K-1]
 /
 

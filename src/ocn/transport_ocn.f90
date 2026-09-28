@@ -37,13 +37,13 @@ module transport_ocn_mod
   use climber_grid, only : lon, lat
   use constants, only : g, pi
   use ocn_grid, only : mask_ocn, mask_c, mask_u, mask_v, mask_w, k1
-  use ocn_grid, only : maxi, maxj, maxk
+  use ocn_grid, only : maxi, maxj, maxk, mask_v, mask_w
   use ocn_grid, only : zro, zw, dz, rdza, z2dzg, depth, dx, dxv, rdx, dy, rdy
   use ocn_params, only : dt, rho0
   use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
   use ocn_params, only : i_advection
   use ocn_params, only : i_diff, i_diff_dia
-  use ocn_params, only : diff_iso
+  use ocn_params, only : diff_iso, diff_gm
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
   use ocn_params, only : slope_max, slope_crit
@@ -59,9 +59,10 @@ module transport_ocn_mod
   implicit none
 
   real(wp), dimension(:,:,:), allocatable :: drho_dx, drho_dy, drho_dz, Ri
+  real(wp), dimension(:,:,:), allocatable :: v_gm   !! Gent-McWilliams eddy-induced meridional velocity on the v-grid, diagnostic only [m/s]
 
   private
-  public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri
+  public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri, v_gm
 
 contains
 
@@ -225,6 +226,10 @@ contains
          enddo
        enddo
       !$omp end parallel do
+
+      ! eddy-induced meridional velocity, needed only for the overturning and heat transport diagnostics
+      call eddy_induced_velocity
+
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: diffini ',time2-time1
     endif
@@ -383,6 +388,60 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  e d d y _ i n d u c e d _ v e l o c i t y
+  !   Purpose    :  Gent-McWilliams eddy-induced (bolus) meridional velocity, diagnostic only.
+  !                 GM enters the model as a skew flux in diffusion.f90; its advective
+  !                 equivalent is v* = d(psi)/dz with the streamfunction psi = diff_gm*taper*slope_y
+  !                 on the w-levels (same slope, taper and sign convention as the skew flux),
+  !                 zero at the surface, the bottom and closed faces, so that v* integrates to
+  !                 zero over each column. Used to put the overturning streamfunctions and the
+  !                 overturning/gyre heat transport split on the CMIP definition (resolved plus
+  !                 parameterized advection).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine eddy_induced_velocity
+
+    implicit none
+
+    integer :: i, j, k, n
+    real(wp) :: drhody, slope_y, taper
+    real(wp) :: psi(0:maxk)
+    real(wp), parameter :: eps = 1.e-15_wp
+
+
+    v_gm(:,maxj,:) = 0._wp   ! no v-points on the last row
+    !$omp parallel do collapse(2) private(i,j,k,n,drhody,slope_y,taper,psi)
+    do j=1,maxj-1
+      do i=1,maxi
+        psi(:) = 0._wp
+        do k=1,maxk-1
+          ! interface between levels k and k+1 of the v-column
+          if (mask_v(i,j,k).eq.1 .and. mask_v(i,j,k+1).eq.1) then
+            drhody = 0.5_wp*(drho_dy(i,j,k)+drho_dy(i,j,k+1))
+            ! average over the two adjacent tracer columns
+            do n=0,1
+              if (mask_w(i,j+n,k).eq.1) then
+                slope_y = drhody/min(-eps,drho_dz(i,j+n,k))
+                taper = min(1._wp,slope_crit(j+n,k)**2/(slope_y**2+eps))   ! safe for slope_y=0
+                psi(k) = psi(k) + 0.5_wp*diff_gm*taper*slope_y   ! m2/s
+              endif
+            enddo
+          endif
+        enddo
+        do k=1,maxk
+          if (mask_v(i,j,k).eq.1) then
+            v_gm(i,j,k) = (psi(k)-psi(k-1))/dz(k)   ! m/s
+          else
+            v_gm(i,j,k) = 0._wp
+          endif
+        enddo
+      enddo
+    enddo
+    !$omp end parallel do
+
+  end subroutine eddy_induced_velocity
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  t r a n s p o r t _ i n i t
   !   Purpose    :  initialize transport
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -407,11 +466,13 @@ contains
     allocate(drho_dy(maxi,maxj,maxk))
     allocate(drho_dz(maxi,maxj,maxk))
     allocate(Ri(maxi,maxj,maxk))
+    allocate(v_gm(maxi,maxj,maxk))
 
     drho_dz = 0._wp
     drho_dx = 0._wp
     drho_dy = 0._wp
     Ri = 0._wp
+    v_gm = 0._wp
   
     ! mld scheme - calculate wind decay efficiency
     do k=maxk,1,-1
