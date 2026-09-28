@@ -50,6 +50,8 @@ website:
             text: Pre-industrial spinup
           - href: use-cases/03-lgm/index.md
             text: Last glacial maximum
+          - href: use-cases/04-synthetic-ice/index.md
+            text: Synthetic ice-sheet geometry
       - section: "Output description"
         contents:
           - href: var_lists/index.md

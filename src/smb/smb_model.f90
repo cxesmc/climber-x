@@ -50,7 +50,7 @@ module smb_model
 
   use topo_mod, only : topo_filter, topo_grad_map, topo_factors
   use ice_mod, only : frac_ice, albedo_ice, margin_ice
-  use smb_simple_m, only : smb_simple_init, smb_simple_set_mask, smb_simple_update
+  use smb_simple_m, only : smb_simple_init, smb_simple_set_mask, smb_simple_set_mask_ice, smb_simple_update
   use smb_pdd_m, only : smb_pdd
   use semi_m, only : semi
   use smb_bias_corr_mod, only : smb_ref_write, smb_bias_corr, t2m_bias_corr, prc_bias_corr
@@ -685,6 +685,11 @@ contains
         ! feed live coupled climate (CO2 and 65N summer insolation)
         smb%smbsimple%co2 = real(smb_in%co2,wp)
         smb%smbsimple%f   = real(smb_in%Smax65N,wp)
+        ! synthetic surface supplied by the ice component (ice_syn): the
+        ! target mask follows the ice mask delivered with it each year
+        if (smb%smbsimple%l_z_syn_external) then
+          call smb_simple_set_mask_ice(smb%smbsimple, smb%mask_ice)
+        endif
         ! at this point smb%t_ice holds the annual-mean sea-level temperature [K]
         call smb_simple_update(smb%smbsimple, smb%z_sur_eff, smb%t_ice)   ! in: z_srf, t_sl
 
@@ -830,6 +835,8 @@ contains
         smb%grid%x, smb%grid%y, smb%grid%lat, group="smb_simple", units="km")
       ! target mask: maximum ice extent (already read + mapped to the ice grid).
       ! An optional mask_file in the &smb_simple namelist overrides this.
+      ! With l_z_syn_external the mask is refreshed every year from the ice
+      ! mask delivered by the ice component instead.
       call smb_simple_set_mask(smb%smbsimple, real(smb%mask_maxice,wp))
     endif
 

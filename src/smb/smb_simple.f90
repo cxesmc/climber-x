@@ -61,11 +61,8 @@
 !   - calc_smb_simple_pwl : low-level piecewise-linear SMB(z) kernel,
 !                           exposed for diagnostics / testing.
 !   - calc_smb_simple_tg24: 2-D field entry point for the TG24 scheme.
-!   - compute_signed_distance : signed distance (m) to target-mask
-!                               boundary, from 2-D x/y coordinate pairs
-!                               (Cartesian or lon/lat per `units`).
-!   - compute_z_syn_linear : linear wedge profile inside the mask.
-!   - compute_z_syn_plastic: Nye/Vialov plastic profile inside the mask.
+!   (signed distance and synthetic-elevation profile kernels live in
+!    ice_syn_topo and are imported from there)
 !   - apply_smb_min_outside: post-process SMB floor outside the mask.
 !   - compute_t_srf_lapse  : surface temperature from t_sl and an
 !                            elevation lapse-rate correction.
@@ -73,6 +70,8 @@
 module smb_simple_m
 
     use precision, only : wp
+    use constants, only : rho_i, g
+    use ice_syn_topo, only : compute_signed_distance, compute_z_syn_linear, compute_z_syn_plastic
     use nml
     use ncio
     implicit none
@@ -84,13 +83,11 @@ module smb_simple_m
     public :: smb_simple_init
     public :: smb_simple_par_load
     public :: smb_simple_set_mask
+    public :: smb_simple_set_mask_ice
     public :: smb_simple_update
     public :: calc_smb_simple_syn
     public :: calc_smb_simple_pwl
     public :: calc_smb_simple_tg24
-    public :: compute_signed_distance
-    public :: compute_z_syn_linear
-    public :: compute_z_syn_plastic
     public :: apply_smb_min_outside
     public :: compute_t_srf_lapse
 
@@ -135,8 +132,6 @@ module smb_simple_m
         real(wp) :: z_max_out   =  200.0_wp   ! m, outside floor
 
         ! Plastic profile physical constants
-        real(wp) :: rho_ice = 910.0_wp        ! kg/m^3
-        real(wp) :: g       =   9.81_wp       ! m/s^2
 
         ! Surface temperature  t_srf = t_sl - gamma_t*max(z_syn, 0)
         real(wp) :: gamma_t   = 6.5e-3_wp     ! K/m (lapse rate)
@@ -181,6 +176,8 @@ module smb_simple_m
         character(len=512)   :: mask_file = "" ! target-mask file ("" => H_ice_ref)
         character(len=56)    :: mask_var  = "" ! target-mask variable name
         integer              :: mask_idx = 1 ! index along the 3rd (e.g. time) dim of mask_var
+        logical              :: l_z_syn_external = .false. ! T => z_syn and target mask supplied by the
+                                             ! ice component (e.g. ice_syn) each update; no internal profile
         character(len=16)    :: units       ! coordinate units for distance ("m")
 
         ! Static grid (stored once so update needs no grid arguments)
@@ -294,6 +291,28 @@ contains
     end subroutine smb_simple_set_mask
 
     !-----------------------------------------------------------------
+    !> Set the target mask directly from an ice mask (1 = ice) supplied
+    !> by the ice component, ignoring mask_file. Used each update when
+    !> l_z_syn_external is set.
+    !-----------------------------------------------------------------
+    subroutine smb_simple_set_mask_ice(smbs, mask_ice)
+
+        type(smb_simple_class), intent(inout) :: smbs
+        integer,                intent(in)    :: mask_ice(:,:)
+
+        if (.not. allocated(smbs%mask)) then
+            error stop "smb_simple_set_mask_ice: smbs not initialized"
+        end if
+        if (size(mask_ice, 1) /= size(smbs%mask, 1) .or. &
+            size(mask_ice, 2) /= size(smbs%mask, 2)) then
+            error stop "smb_simple_set_mask_ice: mask_ice shape mismatch"
+        end if
+
+        smbs%mask = (mask_ice > 0)
+
+    end subroutine smb_simple_set_mask_ice
+
+    !-----------------------------------------------------------------
     !> Compute the SMB (mm w.e./yr) and surface temperature (K) fields
     !> for the active scheme, storing them in smbs%smb and smbs%t_srf.
     !> Only the synthetic-elevation scheme ("syn") is currently wired;
@@ -308,9 +327,17 @@ contains
         select case (trim(smbs%scheme))
 
             case ("syn")
-                call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
-                                         smbs%x, smbs%y, smbs%lat, t_sl, &
-                                         smbs%co2, smbs%f, smbs%par, units=smbs%units)
+                if (smbs%l_z_syn_external) then
+                    ! z_srf already is the synthetic surface (from the ice component)
+                    call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
+                                             smbs%x, smbs%y, smbs%lat, t_sl, &
+                                             smbs%co2, smbs%f, smbs%par, units=smbs%units, &
+                                             z_syn_in=z_srf)
+                else
+                    call calc_smb_simple_syn(smbs%smb, smbs%t_srf, z_srf, smbs%mask, &
+                                             smbs%x, smbs%y, smbs%lat, t_sl, &
+                                             smbs%co2, smbs%f, smbs%par, units=smbs%units)
+                end if
 
             case default
                 write(*,*) "smb_simple_update: scheme not supported: ", trim(smbs%scheme)
@@ -335,7 +362,9 @@ contains
     !>      coordinate pairs x/y interpreted per `units` ("m"/"km"
     !>      Cartesian, "degrees" lon/lat)
     !>   2. z_syn from (d, z_sur, mask_target) per p%use_plastic
-    !>      (.true. → plastic Nye/Vialov; .false. → linear wedge)
+    !>      (.true. → plastic Nye/Vialov; .false. → linear wedge),
+    !>      or taken as given when z_syn_in is present (surface supplied
+    !>      by the ice component, e.g. ice_syn)
     !>   3. SMB = acc - abl kernel on z_syn (dz_SL = 0), with acc the maritime
     !>      accumulation field from compute_acc; all tuned params are in
     !>      mm w.e./yr, so no unit conversion is needed.
@@ -350,7 +379,7 @@ contains
     !> optional and defaults to "m".
     !-----------------------------------------------------------------
     subroutine calc_smb_simple_syn(smb, t_srf, z_sur, mask_target, x, y, lat, &
-                                   t_sl, CO2, f, p, units)
+                                   t_sl, CO2, f, p, units, z_syn_in)
         real(wp), intent(out) :: smb(:,:)
         real(wp), intent(out) :: t_srf(:,:)
         real(wp), intent(in)  :: z_sur(:,:)
@@ -363,6 +392,7 @@ contains
         real(wp), intent(in)  :: f
         type(smb_params_syn), intent(in) :: p
         character(len=*), intent(in), optional :: units
+        real(wp), intent(in), optional :: z_syn_in(:,:)   ! externally supplied synthetic surface; skips step 2
 
         integer :: nx, ny
         real(wp), allocatable :: d_m(:,:), z_syn(:,:)
@@ -396,11 +426,16 @@ contains
 
         call compute_signed_distance(d_m, mask_target, x, y, units_use)
 
-        if (p%use_plastic) then
+        if (present(z_syn_in)) then
+            if (size(z_syn_in, 1) /= nx .or. size(z_syn_in, 2) /= ny) then
+                error stop "calc_smb_simple_syn: z_syn_in shape mismatch"
+            end if
+            z_syn = z_syn_in
+        else if (p%use_plastic) then
             call compute_z_syn_plastic(z_syn, d_m, z_sur, mask_target,     &
                                        p%tau0, p%slope_out,                &
                                        p%z_max_in, p%z_max_out,            &
-                                       p%rho_ice, p%g)
+                                       rho_i, g)
         else
             call compute_z_syn_linear(z_syn, d_m, z_sur, mask_target,      &
                                       p%slope, p%z_max_in, p%z_max_out)
@@ -568,282 +603,6 @@ contains
     end subroutine calc_smb_simple_tg24
 
     !=================================================================
-    ! Signed distance to mask boundary (m)
-    !=================================================================
-
-    !-----------------------------------------------------------------
-    !> Per-cell signed distance to the nearest target-mask boundary, in
-    !> metres. Positive inside the mask, negative outside.
-    !>
-    !> x(:,:), y(:,:) are the (unique) 2-D coordinates of each cell.
-    !> `units` selects how they are interpreted (optional, default "m"):
-    !>   "m"       Cartesian, already metres: sqrt(dx^2 + dy^2)
-    !>   "km"      Cartesian in km; result converted to metres (x1000)
-    !>   "degrees" x = lon, y = lat (deg); local flat-Earth metric
-    !>             (R = 6.371e6 m, mid-latitude cos(phi) factor for dlon,
-    !>             longitude wrap to [-180, 180)).
-    !> The result is always in metres, regardless of `units`.
-    !-----------------------------------------------------------------
-    subroutine compute_signed_distance(d, mask_target, x, y, units)
-        real(wp), intent(out) :: d(:,:)
-        logical,  intent(in)  :: mask_target(:,:)
-        real(wp), intent(in)  :: x(:,:)
-        real(wp), intent(in)  :: y(:,:)
-        character(len=*), intent(in), optional :: units
-
-        integer  :: nx, ny, i, j, ib, jb, k, nb, kk
-        logical  :: m, is_bnd, latlon
-        real(wp) :: xq, yq, xb, yb, dx, dy, dphi, dlam
-        real(wp) :: phi_mid, dy_m, dx_m, dist, dmin, scale
-        character(len=16) :: units_use
-        integer, allocatable :: bi(:), bj(:)
-        logical, allocatable :: bm(:)
-        real(wp), parameter :: R_earth = 6.371e6_wp   ! m
-        real(wp), parameter :: deg2rad = 3.141592653589793_wp / 180.0_wp
-
-        nx = size(mask_target, 1)
-        ny = size(mask_target, 2)
-
-        units_use = "m"
-        if (present(units)) units_use = units
-
-        if (size(d, 1) /= nx .or. size(d, 2) /= ny) then
-            error stop "compute_signed_distance: d shape /= mask_target"
-        end if
-        if (size(x, 1) /= nx .or. size(x, 2) /= ny .or. &
-            size(y, 1) /= nx .or. size(y, 2) /= ny) then
-            error stop "compute_signed_distance: x, y shape /= mask_target"
-        end if
-        if (nx < 2 .or. ny < 2) then
-            error stop "compute_signed_distance: nx, ny must be >= 2"
-        end if
-
-        select case (trim(units_use))
-        case ("degrees")
-            latlon = .true.;  scale = 1.0_wp
-        case ("km")
-            latlon = .false.; scale = 1000.0_wp
-        case ("m")
-            latlon = .false.; scale = 1.0_wp
-        case default
-            error stop "compute_signed_distance: units must be 'm', 'km', or 'degrees'"
-        end select
-
-        ! Pass 1: count boundary cells (4-connectivity).
-        nb = 0
-        do j = 1, ny
-            do i = 1, nx
-                m      = mask_target(i, j)
-                is_bnd = .false.
-                if (i > 1) then
-                    if (mask_target(i - 1, j) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. i < nx) then
-                    if (mask_target(i + 1, j) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. j > 1) then
-                    if (mask_target(i, j - 1) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. j < ny) then
-                    if (mask_target(i, j + 1) .neqv. m) is_bnd = .true.
-                end if
-                if (is_bnd) nb = nb + 1
-            end do
-        end do
-
-        if (nb == 0) then
-            if (mask_target(1, 1)) then
-                d = huge(1.0_wp)
-            else
-                d = -huge(1.0_wp)
-            end if
-            return
-        end if
-
-        allocate(bi(nb), bj(nb), bm(nb))
-
-        ! Pass 2: fill boundary lists.
-        k = 0
-        do j = 1, ny
-            do i = 1, nx
-                m      = mask_target(i, j)
-                is_bnd = .false.
-                if (i > 1) then
-                    if (mask_target(i - 1, j) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. i < nx) then
-                    if (mask_target(i + 1, j) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. j > 1) then
-                    if (mask_target(i, j - 1) .neqv. m) is_bnd = .true.
-                end if
-                if (.not. is_bnd .and. j < ny) then
-                    if (mask_target(i, j + 1) .neqv. m) is_bnd = .true.
-                end if
-                if (is_bnd) then
-                    k = k + 1
-                    bi(k) = i
-                    bj(k) = j
-                    bm(k) = m
-                end if
-            end do
-        end do
-
-        ! Pass 3: min distance to opposite-mask boundary, per query cell.
-        do j = 1, ny
-            do i = 1, nx
-                m     = mask_target(i, j)
-                xq    = x(i, j)
-                yq    = y(i, j)
-                dmin  = huge(1.0_wp)
-                do kk = 1, nb
-                    if (bm(kk) .eqv. m) cycle
-                    ib    = bi(kk)
-                    jb    = bj(kk)
-                    xb    = x(ib, jb)
-                    yb    = y(ib, jb)
-                    if (latlon) then
-                        dphi    = yq - yb
-                        dlam    = xq - xb
-                        dlam    = modulo(dlam + 180.0_wp, 360.0_wp) - 180.0_wp
-                        phi_mid = 0.5_wp * (yq + yb)
-                        dy_m    = R_earth * dphi * deg2rad
-                        dx_m    = R_earth * cos(phi_mid * deg2rad) * dlam * deg2rad
-                        dist    = sqrt(dy_m * dy_m + dx_m * dx_m)
-                    else
-                        dx   = xq - xb
-                        dy   = yq - yb
-                        dist = scale * sqrt(dx * dx + dy * dy)
-                    end if
-                    if (dist < dmin) dmin = dist
-                end do
-                if (m) then
-                    d(i, j) =  dmin
-                else
-                    d(i, j) = -dmin
-                end if
-            end do
-        end do
-
-        deallocate(bi, bj, bm)
-    end subroutine compute_signed_distance
-
-    !=================================================================
-    ! Synthetic-elevation profiles (linear and plastic)
-    !=================================================================
-
-    !-----------------------------------------------------------------
-    !> Linear wedge profile both inside and outside the mask. d_m is the
-    !> signed distance in metres and slope is in m/m.
-    !>     z_syn_raw  = clamp(slope * d_m, -z_max_out, +z_max_in)
-    !>     z_syn(i,j) = max(z_syn_raw, z_sur(i,j))  if  mask_target(i,j)
-    !>                = min(z_syn_raw, z_sur(i,j))  otherwise
-    !-----------------------------------------------------------------
-    subroutine compute_z_syn_linear(z_syn, d_m, z_sur, mask_target, &
-                                    slope, z_max_in, z_max_out)
-        real(wp), intent(out) :: z_syn(:,:)
-        real(wp), intent(in)  :: d_m(:,:)
-        real(wp), intent(in)  :: z_sur(:,:)
-        logical,  intent(in)  :: mask_target(:,:)
-        real(wp), intent(in)  :: slope
-        real(wp), intent(in)  :: z_max_in
-        real(wp), intent(in)  :: z_max_out
-
-        integer  :: nx, ny, i, j
-        real(wp) :: zr
-
-        nx = size(z_syn, 1)
-        ny = size(z_syn, 2)
-
-        if (size(d_m, 1)         /= nx .or. size(d_m, 2)         /= ny .or. &
-            size(z_sur, 1)       /= nx .or. size(z_sur, 2)       /= ny .or. &
-            size(mask_target, 1) /= nx .or. size(mask_target, 2) /= ny) then
-            error stop "compute_z_syn_linear: shape mismatch among inputs"
-        end if
-        if (z_max_in < 0.0_wp .or. z_max_out < 0.0_wp) then
-            error stop "compute_z_syn_linear: z_max_in and z_max_out must be >= 0"
-        end if
-
-        do j = 1, ny
-            do i = 1, nx
-                zr = slope * d_m(i, j)
-                if (zr >  z_max_in)  zr =  z_max_in
-                if (zr < -z_max_out) zr = -z_max_out
-                if (mask_target(i, j)) then
-                    z_syn(i, j) = max(zr, z_sur(i, j))
-                else
-                    z_syn(i, j) = min(zr, z_sur(i, j))
-                end if
-            end do
-        end do
-    end subroutine compute_z_syn_linear
-
-    !-----------------------------------------------------------------
-    !> Perfect-plasticity (Nye/Vialov) profile inside; linear outside.
-    !> d_m is the signed distance in metres and slope_out is in m/m.
-    !>   inside  (d >= 0):  z_syn_raw = min(z_max_in,  C * sqrt(d_m))
-    !>                       C = sqrt(2 * tau0 / (rho_ice*g))
-    !>   outside (d <  0):  z_syn_raw = max(-z_max_out, slope_out*d_m)
-    !-----------------------------------------------------------------
-    subroutine compute_z_syn_plastic(z_syn, d_m, z_sur, mask_target,         &
-                                     tau0, slope_out, z_max_in, z_max_out,   &
-                                     rho_ice, g)
-        real(wp), intent(out) :: z_syn(:,:)
-        real(wp), intent(in)  :: d_m(:,:)
-        real(wp), intent(in)  :: z_sur(:,:)
-        logical,  intent(in)  :: mask_target(:,:)
-        real(wp), intent(in)  :: tau0
-        real(wp), intent(in)  :: slope_out
-        real(wp), intent(in)  :: z_max_in
-        real(wp), intent(in)  :: z_max_out
-        real(wp), optional, intent(in) :: rho_ice
-        real(wp), optional, intent(in) :: g
-
-        integer  :: nx, ny, i, j
-        real(wp) :: zr, d, C, rho_use, g_use
-
-        nx = size(z_syn, 1)
-        ny = size(z_syn, 2)
-
-        if (size(d_m, 1)         /= nx .or. size(d_m, 2)         /= ny .or. &
-            size(z_sur, 1)       /= nx .or. size(z_sur, 2)       /= ny .or. &
-            size(mask_target, 1) /= nx .or. size(mask_target, 2) /= ny) then
-            error stop "compute_z_syn_plastic: shape mismatch among inputs"
-        end if
-        if (z_max_in < 0.0_wp .or. z_max_out < 0.0_wp) then
-            error stop "compute_z_syn_plastic: z_max_in and z_max_out must be >= 0"
-        end if
-        if (tau0 <= 0.0_wp) then
-            error stop "compute_z_syn_plastic: tau0 must be > 0"
-        end if
-
-        rho_use = 910.0_wp
-        g_use   =   9.81_wp
-        if (present(rho_ice)) rho_use = rho_ice
-        if (present(g))       g_use   = g
-
-        C = sqrt(2.0_wp * tau0 / (rho_use * g_use))
-
-        do j = 1, ny
-            do i = 1, nx
-                d = d_m(i, j)
-                if (d >= 0.0_wp) then
-                    zr = C * sqrt(d)
-                    if (zr > z_max_in) zr = z_max_in
-                else
-                    zr = slope_out * d
-                    if (zr < -z_max_out) zr = -z_max_out
-                end if
-                if (mask_target(i, j)) then
-                    z_syn(i, j) = max(zr, z_sur(i, j))
-                else
-                    z_syn(i, j) = min(zr, z_sur(i, j))
-                end if
-            end do
-        end do
-    end subroutine compute_z_syn_plastic
-
-    !=================================================================
     ! Outside-mask SMB floor
     !=================================================================
 
@@ -962,6 +721,7 @@ contains
         call nml_read(filename,nml_group,"mask_file", smbs%mask_file, init=init_pars)
         call nml_read(filename,nml_group,"mask_var",  smbs%mask_var,  init=init_pars)
         call nml_read(filename,nml_group,"mask_idx",  smbs%mask_idx,  init=init_pars)
+        call nml_read(filename,nml_group,"l_z_syn_external", smbs%l_z_syn_external, init=init_pars)
 
         ! Synthetic-elevation (syn) scheme parameters
         call nml_read(filename,nml_group,"a1",         smbs%par%a1,         init=init_pars)
@@ -984,8 +744,6 @@ contains
         call nml_read(filename,nml_group,"slope_out",  smbs%par%slope_out,  init=init_pars)
         call nml_read(filename,nml_group,"z_max_in",   smbs%par%z_max_in,   init=init_pars)
         call nml_read(filename,nml_group,"z_max_out",  smbs%par%z_max_out,  init=init_pars)
-        call nml_read(filename,nml_group,"rho_ice",    smbs%par%rho_ice,    init=init_pars)
-        call nml_read(filename,nml_group,"g",          smbs%par%g,          init=init_pars)
         call nml_read(filename,nml_group,"gamma_t",    smbs%par%gamma_t,    init=init_pars)
         call nml_read(filename,nml_group,"t_ice_max",  smbs%par%t_ice_max,  init=init_pars)
         call nml_read(filename,nml_group,"smb_min",    smbs%par%smb_min,    init=init_pars)

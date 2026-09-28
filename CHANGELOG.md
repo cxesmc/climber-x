@@ -12,6 +12,16 @@ Entries marked **Results** may change model output relative to the previous vers
 - FastEarth3D renamed to VILMA (`fesmc/vilma`), referred to in CLIMBER-X as VILMA2 and cloned at `vilma2/`; the legacy VILMA (`cxesmc/vilma`) is now VILMA1 at `src/vilma1`. Build toggles `vilma1=`/`vilma2=` (`-DVILMA1`/`-DVILMA2`); `i_geo` unchanged (2=VILMA1, 3=VILMA2).
 - `geo_par`: `vilma_grid_file` → `vilma1_grid_file`; namelist group `&fe3d` → `&vilma`, now with the explicit 11-layer PREM/Clemens structure. VILMA2 inputs in `input/vilma2/` + `input/vilma_defaults.nml`; restart in `vilma2/vilma_restart.nc`. **Results** (i_geo=3): VILMA2 defaults now `deg1_frame="cm"`, `l_toroidal=.false.`.
 
+### Added
+- Synthetic ice-sheet geometry (`ice_model_name='syn'`): a stateless ice-model backend that builds a grounded ice sheet on the regional ice grid from a prescribed, optionally transient, target-extent mask (signed distance → plastic/linear surface profile on the current bedrock). Transient masks are interpolated by blending the signed distances of the bracketing slices, so the margin advances gradually between slice extents. Parameters in `nml/ice_syn_par.nml` (`&ice_syn`, runme alias `icesyn`). Kernels moved from `smb_simple` to `src/ice/ice_syn_topo.f90` and shared.
+- Shadow mode: `ctl.l_ice_syn=T` runs the synthetic geometry alongside Yelmo/SICOPOLIS; `ctl.i_ice_topo_clim=1` makes the geography module and the SMB grid see the synthetic ice sheet inside the target mask (and the ice sheet model's own ice outside it) while the ice sheet model receives the resulting SMB. Solid Earth and sea level always follow the ice sheet model. Output `ice_syn_<domain>.nc`.
+- `geo%hires%h_ice_load`: ice thickness used as solid-Earth load, separate from the climate `h_ice`; written to `geo_hires.nc` and the geo restart (older restarts fall back to `h_ice`). LLRA (`i_geo=1`) classifies load cells from it.
+- `smb_simple.l_z_syn_external`: the simple SMB scheme uses the surface and ice mask delivered by the ice component instead of building its own synthetic elevation.
+- Use-case page `docs/use-cases/04-synthetic-ice/`.
+
+### Build / Infrastructure
+- Declared missing make prerequisites (`precision.o` for the bnd rules, `geo_def.o` etc. for `lakes.o`) that broke clean builds by picking up fesm-utils' single-precision `precision.mod` or a stale `hires_type`.
+
 ## [1.5.4] - 2026-07-17
 
 Namelist sync with Yelmo v2.3.1.

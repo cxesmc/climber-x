@@ -70,7 +70,8 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_topo_fil     !! filtered topography [m]
       real(wp), dimension(:,:), allocatable :: z_topo_fill     !! filled topography [m]
       real(wp), dimension(:,:), allocatable :: z_sur     !! surface elevation [m]
-      real(wp), dimension(:,:), allocatable :: h_ice     !! ice thickness [m]
+      real(wp), dimension(:,:), allocatable :: h_ice     !! ice thickness seen by the climate (topography, masks) [m]
+      real(wp), dimension(:,:), allocatable :: h_ice_load     !! ice thickness used as solid-Earth load [m]
       real(wp), dimension(:,:), allocatable :: h_ice_eq  !! ice thickness associated with equilibrium bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: rsl     !! relative sea level [m]
       integer, dimension(:,:), allocatable :: mask        !! ice/land/ocean/floating ice mask (following sicopolis convention)

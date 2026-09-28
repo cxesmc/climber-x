@@ -263,6 +263,7 @@ contains
         endif
         call nc_write(fnm,"z_sur", sngl(geo%hires%z_sur),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="surface elevation",units="m",ncid=ncid)
         call nc_write(fnm,"h_ice", sngl(geo%hires%h_ice),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="ice sheet thickness",units="m",ncid=ncid)
+        call nc_write(fnm,"h_ice_load", sngl(geo%hires%h_ice_load),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="ice sheet thickness used as solid-Earth load",units="m",ncid=ncid)
         call nc_write(fnm,"mask", geo%hires%mask,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="mask",units="0=ice, 1=land, 2=ocean, 3=floating ice, 4=lake",ncid=ncid)
         call nc_write(fnm,"rsl", sngl(geo%hires%rsl),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="relative sea level relative to equilibrated bedrock elevation",units="m",ncid=ncid)
         call nc_write(fnm,"rsl_ref", sngl(geo%hires%rsl-(geo%hires%z_bed_eq-geo%hires%z_bed_ref)),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[ni,nj,1],long_name="relative sea level relative to reference (PI) bedrock topography",units="m",ncid=ncid)
