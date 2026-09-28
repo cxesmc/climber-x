@@ -39,7 +39,11 @@ module constants
 
   real(wp), parameter :: cap_a   = 1000._wp     !! J/kg/K, specific heat capacity of air
   real(wp), parameter :: cap_i   = 2110._wp     !! J/kg/K, specific heat capacity of ice
-  real(wp), parameter :: cap_w   = 4187._wp     !! J/kg/K, specific heat capacity of water
+  real(wp), parameter :: cap_w   = 4187._wp     !! J/kg/K, specific heat capacity of pure water
+  real(wp), parameter :: cap_sw  = 3974._wp     !! J/kg/K, specific heat capacity of seawater
+                                                !! (phys_constants cp_ocn; use this
+                                                !! where the medium is the ocean, as in
+                                                !! the ice-shelf melt parameterisation)
 
   real(wp), parameter :: lambda_a = 0.023_wp    !! W/m/K, thermal conductivity of air
   real(wp), parameter :: lambda_i = 2.2_wp      !! W/m/K, thermal conductivity of ice
@@ -107,10 +111,8 @@ contains
   !                 component's set can be compared against it with
   !                 phys_const_compare instead of diverging silently.
   !
-  !                 cp_ocn is filled with cap_w: CLIMBER-X uses one water
-  !                 heat capacity throughout its energy budgets and has no
-  !                 separate seawater value. That is exactly the difference
-  !                 a comparison should surface, not hide.
+  !                 cp_w is CLIMBER-X's pure-water capacity and cp_ocn its
+  !                 seawater one, the same split phys_constants makes.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine constants_phys_const(c)
 
@@ -130,7 +132,7 @@ contains
                         L_ice        = real(Lf,     kind(1.d0)),  &
                         cp_ice       = real(cap_i,  kind(1.d0)),  &
                         cp_w         = real(cap_w,  kind(1.d0)),  &
-                        cp_ocn       = real(cap_w,  kind(1.d0)))
+                        cp_ocn       = real(cap_sw, kind(1.d0)))
 
   end subroutine constants_phys_const
 
