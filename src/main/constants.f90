@@ -49,7 +49,10 @@ module constants
   real(wp), parameter :: emis_w = 0.98_wp       !! longwave emissivity of water
 
   real(wp), parameter :: Le      = 2501.e3_wp   !! J/kg, latent heat of evaporation
-  real(wp), parameter :: Lf      = 334.e3_wp    !! J/kg, latent heat of fusion
+  real(wp), parameter :: Lf      = 333.5e3_wp   !! J/kg, latent heat of fusion
+                                                !! (was 334.e3; 3.335e5 is the
+                                                !! standard value and what the
+                                                !! ice sheet model uses)
   real(wp), parameter :: Ls      = Le + Lf      !! J/kg, latent heat of sublimation
 
   real(wp), parameter :: Rd      = 287.058_wp   !! J/kg/K, specific gas constant of dry air 
@@ -95,6 +98,41 @@ module constants
 
 
 contains
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  c o n s t a n t s _ p h y s _ c o n s t
+  !   Purpose    :  express this module's physical constants as a
+  !                 fesm-utils phys_const_class, so that a coupled
+  !                 component's set can be compared against it with
+  !                 phys_const_compare instead of diverging silently.
+  !
+  !                 cp_ocn is filled with cap_w: CLIMBER-X uses one water
+  !                 heat capacity throughout its energy budgets and has no
+  !                 separate seawater value. That is exactly the difference
+  !                 a comparison should surface, not hide.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine constants_phys_const(c)
+
+    use phys_constants, only : phys_const_class, phys_const_set
+
+    implicit none
+
+    type(phys_const_class), intent(out) :: c
+
+    call phys_const_set(c, label="CLIMBER-X", source="src/main/constants.f90", &
+                        g            = real(g,      kind(1.d0)),  &
+                        T0           = real(T0,     kind(1.d0)),  &
+                        rho_ice      = real(rho_i,  kind(1.d0)),  &
+                        rho_w        = real(rho_w,  kind(1.d0)),  &
+                        rho_sw       = real(rho_sw, kind(1.d0)),  &
+                        rho_asth     = real(rho_as, kind(1.d0)),  &
+                        L_ice        = real(Lf,     kind(1.d0)),  &
+                        cp_ice       = real(cap_i,  kind(1.d0)),  &
+                        cp_w         = real(cap_w,  kind(1.d0)),  &
+                        cp_ocn       = real(cap_w,  kind(1.d0)))
+
+  end subroutine constants_phys_const
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
