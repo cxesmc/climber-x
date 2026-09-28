@@ -712,7 +712,7 @@ $(objdir)/carbon_flx_atm_lnd.o : $(dir_lnd)carbon_flx_atm_lnd.f90 $(objdir)/lnd_
 # lndvc rules #########
 
 # ported physics (src/lndvc/smb, ...): clean source names, distinct object names
-$(objdir)/lndvc_const.o : $(dir_lndvc)/constants.f90 $(objdir)/precision.o
+$(objdir)/lndvc_const.o : $(dir_lndvc)/constants.f90 $(objdir)/precision.o $(objdir)/constants.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lndvc_thermo.o : $(dir_lndvc)/thermo.f90 $(objdir)/lndvc_const.o $(objdir)/precision.o
