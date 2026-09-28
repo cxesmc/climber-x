@@ -400,7 +400,7 @@ contains
         n = syn%nout
         fnm = syn%file2D
 
-        call nc_open(fnm, ncid)
+        call nc_open(fnm, ncid, writable=.TRUE.)
         call nc_write(fnm, "time", time, dim1="time", start=[n], count=[1], ncid=ncid)
         call nc_write(fnm, "f_ice_target", real(syn%f_ice_target,wp), dims=["xc  ","yc  ","time"], start=[1,1,n], count=[nx,ny,1], &
             long_name="target ice fraction (time-interpolated)", units="1", ncid=ncid)
