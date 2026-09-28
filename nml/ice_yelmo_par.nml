@@ -99,8 +99,7 @@
     w2                  = 0.0               ! Weighting coefficient of 2nd principal strain/stress
     kt_ref              = 0.0025            ! [m yr-1 Pa-1] vm-l19 calving scaling parameter
     kt_deep             = 0.1               ! [m yr-1 Pa-1] vm-l19 calving scaling parameter for deep ocean
-    tau_ice_flt         = 250.0e3           ! [Pa] Ice strength failure, floating fronts (vm-m16)
-    tau_ice_grnd        = 250.0e3           ! [Pa] Ice strength failure, marine-grounded fronts (vm-m16)
+    tau_ice             = 85.0e3            ! [Pa] Ice strength failure
 
     ! === threshold method ===
     Hc_ref_flt          = 50.0              ! [m] Calving limit in ice thickness (thinner ice calves)
