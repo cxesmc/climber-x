@@ -43,8 +43,9 @@
     grad_lim_zb         = 0.05              ! [m/m] Maximum allowed sloped in bed gradient (dzb/dx)
     dHdt_dyn_lim        = 100.0             ! [m/yr] Maximum allowed ice thickness change due to dynamics
     margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
-    margin_flt_subgrid  = False             ! Allow fractional ice area for floating margins
-    f_ice_method        = "upstream"        ! "upstream" (H_ice/H_neighb) or "lsf" (geometric LSF area fraction)
+    front_subgrid       = "marine"          ! Subgrid ice fronts: "none" (binary f_ice), "floating", "marine" (floating + marine-grounded)
+    front_H_eff_min     = 50.0              ! [m] Minimum effective thickness of front cells (front_subgrid)
+    front_dHdx          = 0.0               ! [m/m] Thickness gradient assumed at a full front (front_subgrid)
     use_bmb             = True              ! Use basal mass balance in mass conservation equation
     topo_fixed          = False             ! Keep ice thickness fixed, perform other ytopo calculations
     topo_rel            = 0                 ! 0: No relaxation; 1: relax shelf; 2: relax shelf + gl; 3: all points 
@@ -86,6 +87,7 @@
     ! === numeric noise === 
     H_min_grnd          = 0.1               ! [m] Minimum ice thickness at grounded margin (thinner ice is ablated) - helps with stability, smaller value will lead to more precise summit
     H_min_flt           = 0.0               ! [m] Minimum ice thickness at floating margin (thinner ice is ablated) - helps with stability
+    H_min_tau           = 10.0              ! [yr] Timescale for removing margin ice thinner than H_min_grnd/H_min_flt and isolated partial cells
     sd_min              = 100.0             ! [m] calv_grnd(z_bed_sd <= sd_min) = 0.0 
     sd_max              = 500.0             ! [m] calv_grnd(z_bed_sd >= sd_max) = calv_max  
     calv_grnd_max       = 0.0               ! [m/a] Maximum grounded calving rate from high stdev(z_bed)
@@ -97,7 +99,8 @@
     w2                  = 0.0               ! Weighting coefficient of 2nd principal strain/stress
     kt_ref              = 0.0025            ! [m yr-1 Pa-1] vm-l19 calving scaling parameter
     kt_deep             = 0.1               ! [m yr-1 Pa-1] vm-l19 calving scaling parameter for deep ocean
-    tau_ice             = 85.0e3            ! [Pa] Ice strength failure
+    tau_ice_flt         = 250.0e3           ! [Pa] Ice strength failure, floating fronts (vm-m16)
+    tau_ice_grnd        = 250.0e3           ! [Pa] Ice strength failure, marine-grounded fronts (vm-m16)
 
     ! === threshold method ===
     Hc_ref_flt          = 50.0              ! [m] Calving limit in ice thickness (thinner ice calves)

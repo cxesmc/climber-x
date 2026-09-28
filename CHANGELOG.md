@@ -12,6 +12,12 @@ Entries marked **Results** may change model output relative to the previous vers
 - FastEarth3D renamed to VILMA (`fesmc/vilma`), referred to in CLIMBER-X as VILMA2 and cloned at `vilma2/`; the legacy VILMA (`cxesmc/vilma`) is now VILMA1 at `src/vilma1`. Build toggles `vilma1=`/`vilma2=` (`-DVILMA1`/`-DVILMA2`); `i_geo` unchanged (2=VILMA1, 3=VILMA2).
 - `geo_par`: `vilma_grid_file` → `vilma1_grid_file`; namelist group `&fe3d` → `&vilma`, now with the explicit 11-layer PREM/Clemens structure. VILMA2 inputs in `input/vilma2/` + `input/vilma_defaults.nml`; restart in `vilma2/vilma_restart.nc`. **Results** (i_geo=3): VILMA2 defaults now `deg1_frame="cm"`, `l_toroidal=.false.`.
 
+### Fixed
+- `nml/ice_yelmo_par.nml` failed `nml_validate` against Yelmo's subgrid-front refactor: `ytopo.margin_flt_subgrid` and `ytopo.f_ice_method` are gone, replaced by `front_subgrid` (+ `front_H_eff_min`, `front_dHdx`), and `ycalv.tau_ice` split into `tau_ice_flt`/`tau_ice_grnd`. **Results**: `front_subgrid = "marine"` gives subgrid fronts at floating *and* marine-grounded margins -- the realistic configuration, and the one Yelmo's own Antarctic and initMIP setups use -- in place of the former binary `f_ice`. With it the `calv_thin` rate is no longer applied on top of `vm-l19`, and `H_min_tau` (10 yr, now set explicitly) also governs removal of isolated partial cells. `tau_ice_flt`/`tau_ice_grnd` take Yelmo's default 250 kPa; the old 85 kPa was inert here, because `tau_ice` only ever fed `vm-m16` and CLIMBER-X calves with `vm-l19` + `calv_grnd_method = "zero"`.
+
+### Build / Infrastructure
+- `yelmo` → `dev`, which `ice_model` requires for `ybound%cnst`; `v2.3.1` predates it.
+
 ## [1.5.4] - 2026-07-17
 
 Namelist sync with Yelmo v2.3.1.
