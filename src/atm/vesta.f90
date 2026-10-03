@@ -29,7 +29,7 @@ module vesta_mod
   use constants, only : fqsat, pi
   use atm_params, only : gad, hatm, p0, ra, zmax
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_rel, nsmooth_gam
-  use atm_params, only : gams_min, gams_max, sh_gams
+  use atm_params, only : gams_min, gams_max, sh_gams, gams_max_conv, sh_gams_conv, dsh_gams_conv
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
@@ -95,7 +95,11 @@ contains
         ! surface layer and drives gam_s towards the well mixed limit gams_max; sha < 0 is a
         ! stable, decoupled surface layer and drives it towards gams_min. sh_gams sets the flux
         ! scale over which the surface layer changes regime.
-        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) 
+        ! A second tanh, centred at the much larger flux sh_gams_conv, raises the ceiling from
+        ! gams_max to gams_max_conv only in very unstable (strongly convective) surface layers,
+        ! leaving the curve unchanged at moderate fluxes.
+        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) &
+                   + (gams_max_conv-gams_max)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_conv)/dsh_gams_conv))
 
         ! bottom
         gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 

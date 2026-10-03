@@ -28,7 +28,9 @@ module u3d_mod
   use atm_params, only : wp
   use constants, only : g, T0, r_earth, pi
   use atm_params, only : amas, ra, i_pbl, dpc, dp_com, ptopdyn
-  use atm_params, only : i_mass_com, dps_com_topo, p_com_bot
+  use atm_params, only : i_pbl_az, dp_pbl_az
+  use atm_params, only : hatm, h_pbl_az
+  use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
   use atm_params, only : c_uter_pol, c_uter_eq
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
   use atm_grid, only : fcort, cost, sint
@@ -182,11 +184,11 @@ contains
     real(wp), intent(out  ) :: fac_topo(:,:)
     ! flux potential of the column mass correction, kg/s
     real(wp), intent(out  ) :: psi(:,:)
-    ! flux potential of its topographic part, zero unless i_mass_com==1
+    ! flux potential of its topographic part, zero unless i_mass_com==1 or 3
     real(wp), intent(out  ) :: psi_topo(:,:)
     ! the corrective mass flux itself, kept per level so that adifa can form the
     ! dry static energy convergence it carries with the same upstream values the
-    ! advection uses; _topo is the grad(psi_topo) part, zero unless i_mass_com==1
+    ! advection uses; _topo is the grad(psi_topo) part, zero unless i_mass_com==1 or 3
     real(wp), intent(out  ) :: fax_psi(:,:,:)
     real(wp), intent(out  ) :: fay_psi(:,:,:)
     real(wp), intent(out  ) :: fax_psi_topo(:,:,:)
@@ -195,7 +197,7 @@ contains
     integer :: i, j, k, ipl, imi, jmi, kpl
     real(wp) :: pzx, pzy, dp_c, pbl_t, pbl_u, dp, pc1, pc2, dp_l, pl1, pl2, fxpbl, fypbl, uabc, vabc, ctv
     real(wp) :: faz, faz_nt, fxw, fxe, fys, fyn
-    real(wp) :: fcx, fcy, fcxt, fcyt, fmean, fmean_topo, divbar, ptrx, ptry
+    real(wp) :: fcx, fcy, fcxt, fcyt, fmean, fmean_topo, divbar, ptrx, ptry, ptrj
     real(wp) :: dfx, dfy
     real(wp), dimension(imc,jm) :: fxcol
     real(wp), dimension(im,jmc) :: fycol
@@ -208,10 +210,73 @@ contains
     real(wp), dimension(kmc) :: vteri
     real(wp), dimension(kmc) :: uterif, vterif   ! thermal wind on levels for the EKE production
     real(wp) :: pst
-    real(wp) :: pbot                  ! i_mass_com==2: bottom of the band
+
+    real(wp), dimension(imc,jm) :: uabm
+    real(wp), dimension(im,jmc) :: vabm
+    real(wp) :: ab_mean, az_mean, ub, vb
+    real(wp), dimension(imc,jm) :: dphx, uazf
+    real(wp), dimension(im,jmc) :: dphy, vazf
+    real(wp) :: pzf
 
 
-    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,pst,ctv,c_damp_eq,c_damp_pol)
+    !-------------------------------------------------------
+    ! Azonal part of the PBL Ekman mass flux 
+    !-------------------------------------------------------
+    ! The zonal mean of the PBL ageostrophic flux is the model's mean meridional circulation and
+    ! keeps the fixed PBL (pblt/pblu) and the return below the tropopause. Its deviation from the
+    ! zonal mean (the stationary overturning cells under the azonal highs and lows) is carried by a
+    ! PBL of constant height h_pbl_az, so its mass flux is (uab-zonal mean)*(PBL depth), and it is
+    ! returned in a band of depth dp_pbl_az right above that PBL: a shallow cold-core high is
+    ! compensated in the lower troposphere, not by subsidence through the whole column. The response
+    ! is set by the height of the return band (PBL depth + dp_pbl_az/2)
+    ! The azonal flux is re-centred on every row, so the zonal mean PBL flux and the mean meridional circulation, are unchanged
+    if (i_pbl_az.eq.1) then
+
+      ! x-component on u-points
+      do j=1,jm
+        ab_mean = sum(uab(1:im,j))/real(im,wp)
+        do i=1,im
+          imi = modulo(i - 2, im) + 1
+          pzf = 0.5_wp*(pzsa(i,j)+pzsa(imi,j))
+          dphx(i,j) = pzf*(1._wp-exp(-h_pbl_az/hatm))
+          uazf(i,j) = (uab(i,j)-ab_mean)*dphx(i,j)
+          uabm(i,j) = ab_mean
+        enddo
+        az_mean = sum(uazf(1:im,j))/real(im,wp)
+        do i=1,im
+          uazf(i,j) = uazf(i,j)-az_mean
+        enddo
+        uabm(imc,j) = uabm(1,j)
+        dphx(imc,j) = dphx(1,j)
+        uazf(imc,j) = uazf(1,j)
+      enddo
+
+      ! y-component on v-points; no flux through the poles
+      vabm(:,1)   = vab(:,1)
+      vabm(:,jmc) = vab(:,jmc)
+      dphy(:,1)   = 0._wp
+      dphy(:,jmc) = 0._wp
+      vazf(:,1)   = 0._wp
+      vazf(:,jmc) = 0._wp
+      do j=2,jm
+        ab_mean = sum(vab(1:im,j))/real(im,wp)
+        do i=1,im
+          pzf = 0.5_wp*(pzsa(i,j)+pzsa(i,j-1))
+          dphy(i,j) = pzf*(1._wp-exp(-h_pbl_az/hatm))
+          vazf(i,j) = (vab(i,j)-ab_mean)*dphy(i,j)
+          vabm(i,j) = ab_mean
+        enddo
+        az_mean = sum(vazf(1:im,j))/real(im,wp)
+        do i=1,im
+          vazf(i,j) = vazf(i,j)-az_mean
+        enddo
+      enddo
+
+    endif
+
+
+    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,pst,ctv,c_damp_eq,c_damp_pol) &
+    !$omp private(ub,vb,pzf)
     do j=1,jm
       do i=1,im
 
@@ -219,10 +284,18 @@ contains
         imi = modulo(i - 2, im) + 1
         jmi = max(1,j-1)
 
+        if (i_pbl_az.eq.1) then
+          ub = uabm(i,j)
+          vb = vabm(i,j)
+        else
+          ub = uab(i,j)
+          vb = vab(i,j)
+        endif
+
         !-------------------------------------------------------
         ! Vertical profile of ageostrophic wind
 
-        ! x-component on u-points 
+        ! x-component on u-points
 
         ! velocity in the PBL
         if (i_pbl.eq.1) then
@@ -235,14 +308,14 @@ contains
           dp = (pl(k)-pbl_t)*rdpl(k)
           dp = min(1._wp,dp)
           dp = max(0._wp,dp)
-          ua(i,j,k) = uab(i,j) * dp
+          ua(i,j,k) = ub * dp
         enddo
 
         ! compensatory velocity in the upper troposphere
         if (i_pbl.eq.1) then
-          fxpbl = uab(i,j)*(1._wp-pblt(j))        
+          fxpbl = ub*(1._wp-pblt(j))
         else if (i_pbl.eq.2) then
-          fxpbl = uab(i,j)*max(0._wp,pzx-pblt(j))        
+          fxpbl = ub*max(0._wp,pzx-pblt(j))
         endif
         uabc = -fxpbl/dpc
         pc2 = ptrop(j)
@@ -252,9 +325,35 @@ contains
           pl2 = min(max(pl(k+1),pc2),pl(k))
           dp_l = pl1-pl2
           ua(i,j,k) = ua(i,j,k)+uabc*dp_l*rdpl(k)
-        enddo     
+        enddo
 
-        ! y-component on v-points 
+        ! azonal part in the diagnostic PBL and its return right above it; velocities are
+        ! referred to the face layer mass, so outflow and return balance exactly
+        if (i_pbl_az.eq.1) then
+        if (dphx(i,j).gt.0._wp) then
+          pzf = 0.5_wp*(pzsa(i,j)+pzsa(imi,j))
+          pc1 = pzf
+          pc2 = pzf-dphx(i,j)
+          do k=1,km
+            pl1 = max(min(pl(k),pc1),pl(k+1))
+            pl2 = min(max(pl(k+1),pc2),pl(k))
+            dp_l = pl1-pl2
+            if (dp_l.gt.0._wp .and. dplx(i,j,k).gt.0._wp) ua(i,j,k) = ua(i,j,k)+uazf(i,j)/dphx(i,j)*dp_l*amas/dplx(i,j,k)
+          enddo
+          pc1 = pzf-dphx(i,j)
+          pc2 = max(pc1-dp_pbl_az,ptrop(j))
+          if (pc1-pc2.gt.0._wp) then
+            do k=1,km
+              pl1 = max(min(pl(k),pc1),pl(k+1))
+              pl2 = min(max(pl(k+1),pc2),pl(k))
+              dp_l = pl1-pl2
+              if (dp_l.gt.0._wp .and. dplx(i,j,k).gt.0._wp) ua(i,j,k) = ua(i,j,k)-uazf(i,j)/(pc1-pc2)*dp_l*amas/dplx(i,j,k)
+            enddo
+          endif
+        endif
+        endif
+
+        ! y-component on v-points
 
         ! velocity in the PBL
         if (i_pbl.eq.1) then
@@ -267,24 +366,49 @@ contains
           dp = (pl(k)-pbl_u)*rdpl(k)
           dp = min(1._wp,dp)
           dp = max(0._wp,dp)
-          va(i,j,k) = vab(i,j) * dp
+          va(i,j,k) = vb * dp
         enddo
 
         ! compensatory velocity in the upper troposphere
         if (i_pbl.eq.1) then
-          fypbl = vab(i,j)*(1._wp-pblu(j))        
+          fypbl = vb*(1._wp-pblu(j))
         else if (i_pbl.eq.2) then
-          fypbl = vab(i,j)*max(0._wp,pzy-pblu(j))        
+          fypbl = vb*max(0._wp,pzy-pblu(j))
         endif
         vabc = -fypbl/dpc
-        pc2 = 0.5_wp*(ptrop(j)+ptrop(jmi))  
+        pc2 = 0.5_wp*(ptrop(j)+ptrop(jmi))
         pc1 = pc2+dpc
         do k=1,km
           pl1 = max(min(pl(k),pc1),pl(k+1))
           pl2 = min(max(pl(k+1),pc2),pl(k))
           dp_l = pl1-pl2
           va(i,j,k) = va(i,j,k)+vabc*dp_l*rdpl(k)
-        enddo  
+        enddo
+
+        ! azonal part in the diagnostic PBL and its return right above it
+        if (i_pbl_az.eq.1) then
+        if (dphy(i,j).gt.0._wp) then
+          pzf = 0.5_wp*(pzsa(i,j)+pzsa(i,jmi))
+          pc1 = pzf
+          pc2 = pzf-dphy(i,j)
+          do k=1,km
+            pl1 = max(min(pl(k),pc1),pl(k+1))
+            pl2 = min(max(pl(k+1),pc2),pl(k))
+            dp_l = pl1-pl2
+            if (dp_l.gt.0._wp .and. dply(i,j,k).gt.0._wp) va(i,j,k) = va(i,j,k)+vazf(i,j)/dphy(i,j)*dp_l*amas/dply(i,j,k)
+          enddo
+          pc1 = pzf-dphy(i,j)
+          pc2 = max(pc1-dp_pbl_az,0.5_wp*(ptrop(j)+ptrop(jmi)))
+          if (pc1-pc2.gt.0._wp) then
+            do k=1,km
+              pl1 = max(min(pl(k),pc1),pl(k+1))
+              pl2 = min(max(pl(k+1),pc2),pl(k))
+              dp_l = pl1-pl2
+              if (dp_l.gt.0._wp .and. dply(i,j,k).gt.0._wp) va(i,j,k) = va(i,j,k)-vazf(i,j)/(pc1-pc2)*dp_l*amas/dply(i,j,k)
+            enddo
+          endif
+        endif
+        endif
 
         !-------------------------------------------------------
         ! Thermal wind on T-points
@@ -416,13 +540,14 @@ contains
     ! i_mass_com selects the vertical placement of the correction:
     !   0  the whole residual in a slab of depth dp_com hanging below the tropopause, so the band follows the tropopause down at high latitudes.
     !   1  as 0, but the topographic term is separated from the rest and given its own potential, returned in a terrain following band from 
-    !      dps_com_topo above the local surface up to the tropopause. 
-    !   2  the whole residual, topographic part included, as one correction that is the same wind at every height between p_com_bot and ptopdyn, 
-    !      i.e. spread by layer mass across that band. Where the surface is above p_com_bot the band is the whole air column below ptopdyn. 
-    !      With p_com_bot=1 this is the smallest 3-D correction that closes every column: minimising
-    !      sum_k |dF_k|^2/dp_k subject to sum_k dF_k = grad(psi) gives dF_k ~ dp_k
+    !      dps_com_topo above the local surface, dp_com_topo thick and capped at the tropopause. 
+    !   2  the whole residual, topographic part included, as one correction in a terrain following band from dps_com above the local surface,
+    !      dp_com thick and capped at the tropopause, uniform in pressure across the band (the same wind at every height of the band).
+    !      With dps_com=0 and dp_com=1 the band is the whole column up to the tropopause, the smallest 3-D correction that closes every column:
+    !      minimising sum_k |dF_k|^2/dp_k subject to sum_k dF_k = grad(psi) gives dF_k ~ dp_k
     !      It is also what a prognostic surface pressure would do in the limit of fast barotropic adjustment: 
     !      a p_s anomaly exerts the same pressure gradient force at every height, so the flow that removes it is vertically uniform.
+    !   3  as 2 for the non-topographic part, with the topographic term split off and returned in its own terrain following band as in 1.
 
     ! column convergence before compensation, kg/s (also the diagnostic fac)
     !$omp parallel do collapse(2) private(i,j,k)
@@ -447,7 +572,7 @@ contains
     enddo
     fmean = fmean*aim/real(jm,wp)
 
-    if (i_mass_com.eq.1) then
+    if (i_mass_com.eq.1 .or. i_mass_com.eq.3) then
 
       !-------------------------------------------------------
       ! split off the topographic part of the column convergence
@@ -525,22 +650,19 @@ contains
     fay_psi_topo(:,:,:) = 0._wp
 
     ! zonal component of the corrective flux, on u-points
-    !$omp parallel do private(i,j,k,imi,fcx,fcxt,dfx,dp_c,pc1,pc2,pl1,pl2,dp_l,ptrx,pbot)
+    !$omp parallel do private(i,j,k,imi,fcx,fcxt,dfx,dp_c,pc1,pc2,pl1,pl2,dp_l,ptrx)
     do j=1,jm
       do i=1,im
         imi = modulo(i - 2, im) + 1
         fcx = dy/dxt(j)*(psi(imi,j)-psi(i,j))
-        if (i_mass_com.eq.1) then
+        if (i_mass_com.eq.1 .or. i_mass_com.eq.3) then
           fcxt = dy/dxt(j)*(psi_topo(imi,j)-psi_topo(i,j))
-          ! topographic part: terrain following band, from dps_com_topo above the
-          ! local surface up to the tropopause. The correction is uniform in
-          ! pressure across the band, so its centroid is the band midpoint: it
-          ! follows the barrier down only where the surface is high and the band is
-          ! correspondingly short (~0.34 for a Tibetan column), and sits in the mid
-          ! troposphere over the ocean (~0.52-0.56), well below the dp_com slab.
+          ! topographic part: terrain following band of thickness dp_com_topo, from
+          ! dps_com_topo above the local surface upwards, its top capped at the
+          ! tropopause (dp_com_topo>=1 gives the whole band up to the tropopause).
           ptrx = 0.5_wp*(pzsa(i,j)+pzsa(imi,j))
-          pc2 = ptrop(j)
-          pc1 = max(ptrx-dps_com_topo,pc2+0.05_wp)
+          pc1 = max(ptrx-dps_com_topo,ptrop(j)+0.05_wp)
+          pc2 = max(pc1-dp_com_topo,ptrop(j))
           dp_c = 0._wp
           do k=1,km
             pl1 = max(min(pl(k),pc1),pl(k+1))
@@ -565,19 +687,24 @@ contains
             enddo
           endif
         endif
-        if (i_mass_com.eq.2) then
-          ! the same wind at every height of the band ptopdyn..p_com_bot; the air
-          ! filled part of layer k is pl(k+1)..pl(k+1)+dplx/amas, and the band
-          ! reaches down to the surface where the surface is above p_com_bot
-          pbot = p_com_bot
-          if (plx(i,j)/amas+pl(kmc).le.p_com_bot) pbot = 1._wp
+        if (i_mass_com.eq.2 .or. i_mass_com.eq.3) then
+          ! terrain following band of thickness dp_com, from dps_com above the local
+          ! surface upwards, its top capped at the tropopause, as for the topographic part
+          ptrx = 0.5_wp*(pzsa(i,j)+pzsa(imi,j))
+          pc1 = max(ptrx-dps_com,ptrop(j)+0.05_wp)
+          pc2 = max(pc1-dp_com,ptrop(j))
           dp_c = 0._wp
           do k=1,km
-            dp_c = dp_c + max(0._wp, min(pl(k+1)+dplx(i,j,k)/amas,pbot)-max(pl(k+1),ptopdyn))
+            pl1 = max(min(pl(k),pc1),pl(k+1))
+            pl2 = min(max(pl(k+1),pc2),pl(k))
+            dp_c = dp_c + (pl1-pl2)*rdpl(k)*dplx(i,j,k)
           enddo
           if (dp_c.gt.0._wp) then
             do k=1,km
-              dfx = fcx*max(0._wp, min(pl(k+1)+dplx(i,j,k)/amas,pbot)-max(pl(k+1),ptopdyn))/dp_c
+              pl1 = max(min(pl(k),pc1),pl(k+1))
+              pl2 = min(max(pl(k+1),pc2),pl(k))
+              dp_l = pl1-pl2
+              dfx = fcx*dp_l*rdpl(k)*dplx(i,j,k)/dp_c
               fax(i,j,k) = fax(i,j,k) + dfx
               fax_psi(i,j,k) = fax_psi(i,j,k) + dfx
             enddo
@@ -620,15 +747,16 @@ contains
     !$omp end parallel do
 
     ! meridional component, on v-points; no flux through the poles
-    !$omp parallel do collapse(2) private(i,j,k,fcy,fcyt,dfy,dp_c,pc1,pc2,pl1,pl2,dp_l,ptry,pbot)
+    !$omp parallel do collapse(2) private(i,j,k,fcy,fcyt,dfy,dp_c,pc1,pc2,pl1,pl2,dp_l,ptry,ptrj)
     do j=2,jm
       do i=1,im
         fcy = dxu(j)/dy*(psi(i,j)-psi(i,j-1))
-        if (i_mass_com.eq.1) then
+        if (i_mass_com.eq.1 .or. i_mass_com.eq.3) then
           fcyt = dxu(j)/dy*(psi_topo(i,j)-psi_topo(i,j-1))
           ptry = 0.5_wp*(pzsa(i,j)+pzsa(i,j-1))
-          pc2 = 0.5_wp*(ptrop(j)+ptrop(j-1))
-          pc1 = max(ptry-dps_com_topo,pc2+0.05_wp)
+          ptrj = 0.5_wp*(ptrop(j)+ptrop(j-1))
+          pc1 = max(ptry-dps_com_topo,ptrj+0.05_wp)
+          pc2 = max(pc1-dp_com_topo,ptrj)
           dp_c = 0._wp
           do k=1,km
             pl1 = max(min(pl(k),pc1),pl(k+1))
@@ -652,16 +780,23 @@ contains
             enddo
           endif
         endif
-        if (i_mass_com.eq.2) then
-          pbot = p_com_bot
-          if (ply(i,j)/amas+pl(kmc).le.p_com_bot) pbot = 1._wp
+        if (i_mass_com.eq.2 .or. i_mass_com.eq.3) then
+          ptry = 0.5_wp*(pzsa(i,j)+pzsa(i,j-1))
+          ptrj = 0.5_wp*(ptrop(j)+ptrop(j-1))
+          pc1 = max(ptry-dps_com,ptrj+0.05_wp)
+          pc2 = max(pc1-dp_com,ptrj)
           dp_c = 0._wp
           do k=1,km
-            dp_c = dp_c + max(0._wp, min(pl(k+1)+dply(i,j,k)/amas,pbot)-max(pl(k+1),ptopdyn))
+            pl1 = max(min(pl(k),pc1),pl(k+1))
+            pl2 = min(max(pl(k+1),pc2),pl(k))
+            dp_c = dp_c + (pl1-pl2)*rdpl(k)*dply(i,j,k)
           enddo
           if (dp_c.gt.0._wp) then
             do k=1,km
-              dfy = fcy*max(0._wp, min(pl(k+1)+dply(i,j,k)/amas,pbot)-max(pl(k+1),ptopdyn))/dp_c
+              pl1 = max(min(pl(k),pc1),pl(k+1))
+              pl2 = min(max(pl(k+1),pc2),pl(k))
+              dp_l = pl1-pl2
+              dfy = fcy*dp_l*rdpl(k)*dply(i,j,k)/dp_c
               fay(i,j,k) = fay(i,j,k) + dfy
               fay_psi(i,j,k) = fay_psi(i,j,k) + dfy
             enddo

@@ -76,7 +76,7 @@
   p0 = 101100                   ! Pa, mean sea level pressure, used only if l_p0_var==F
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
-  c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
+  c_slp_3 = 12.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
   l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
@@ -93,19 +93,28 @@
   i_mass_com = 1                ! placement of the column mass correction F_c = grad(psi), laplacian(psi) = -(column convergence):
                                 ! 0 = the whole residual in a slab of depth dp_com below the tropopause
                                 ! 1 = as 0, but the topographic part V.grad(p_s) corrected separately, with its own flux potential, 
-                                !     in a terrain following band from dps_com_topo above the local surface up to the tropopause
-                                ! 2 = the whole residual as one correction that is the same wind at every height between p_com_bot and ptopdyn
-                                !     With p_com_bot=1 this is the smallest 3-D correction that closes every column, 
+                                !     in a terrain following band of depth dp_com_topo starting dps_com_topo above the local surface (top capped at the tropopause)
+                                ! 2 = the whole residual as one correction, the same wind at every height of a terrain following band
+                                !     of depth dp_com starting dps_com above the local surface (top capped at the tropopause)
+                                !     With dps_com=0, dp_com=1 this is the smallest 3-D correction that closes every column, 
                                 !     the fast-adjustment limit of a prognostic surface pressure, and neutral for the column heat and moisture budgets
-  dp_com = 0.1                  ! depth of the slab below the tropopause for the column mass correction (i_mass_com=0,1)
-  p_com_bot = 1.                ! bottom of the band for the column mass correction (i_mass_com=2, top is ptopdyn); 1 = whole column.
-  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1)
+                                ! 3 = as 2 for the non-topographic part, with the topographic part corrected separately as in 1
+  dp_com = 0.1                  ! depth of the slab below the tropopause (i_mass_com=0,1), or of the terrain following band (i_mass_com=2,3), for the column mass correction
+  dps_com = 0.                  ! depth above the local surface kept free of the column mass correction (i_mass_com=2,3)
+  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1,3)
+  dp_com_topo = 0.1             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1,3); 1 = up to the tropopause
   ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
-  i_pbl = 2                     ! PBL for ageostrophic wind:
+  i_pbl = 1                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
                                 ! 2 = PBL assumed to start from sea level
+  i_pbl_az = 1                  ! azonal part (deviation from the zonal mean) of the PBL Ekman mass flux:
+                                ! 0 = treated as the zonal mean part, returned below the tropopause
+                                ! 1 = carried by a PBL of constant height h_pbl_az and returned in a band of depth dp_pbl_az right above it;
+                                !     the zonal mean flux (mean meridional circulation) is unchanged
+  dp_pbl_az = 0.1               ! depth (relative pressure) of the band above the PBL top in which the azonal flux is returned, used only if i_pbl_az==1
+  h_pbl_az = 1000.              ! m, constant PBL height, used only if i_pbl_az==1
   i_kata_wind = 2               ! katabatic winds:
                                 ! 0 = no katabatic winds
                                 ! 1 = katabatic winds using u/v grid values
@@ -120,19 +129,20 @@
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
   ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
   ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
-  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime.
+  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime. A second
+  ! tanh centred at sh_gams_conv lifts the upper bound to gams_max_conv in very unstable layers.
   gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
   gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
   sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
+  gams_max_conv = 10.e-3        ! K/m, surface lapse rate in the very unstable limit (set = gams_max to switch off)
+  sh_gams_conv = 60.            ! W/m2, sensible heat flux at which the transition to gams_max_conv is centred
+  dsh_gams_conv = 15.           ! W/m2, flux width of the transition to gams_max_conv
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
   i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
                                 !   0 = tsksl = tsl, the air temperature profile reduced to sea level
-                                !   1 = built from the skin temperature (c_tsl_gam, c_tsl_gam_ice,
-                                !       tsl_gams_min_lnd, tsl_gams_min_ice below)
-  c_tsl_gam = 6.5e-3            ! lapse rate for reduction of skin temperature to sea level
-  c_tsl_gam_ice = 6.5e-3        ! lapse rate for reduction of skin temperature to sea level over ice sheets
-  tsl_gams_min_lnd = 6.5e-3     ! K/m
-  tsl_gams_min_ice = 6.5e-3     ! K/m
+                                !   1 = built from the skin temperature (c_tsl_gam, tsl_gams_min below)
+  c_tsl_gam = 5.e-3             ! lapse rate for reduction of skin temperature to sea level, all surface types
+  tsl_gams_min = 5.e-3          ! K/m, minimum surface layer lapse rate for the sea level temperature over land and ice sheets
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
@@ -200,8 +210,8 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.52                 !
-  c_cld_2 = 0.54                !
+  c_cld_1 = 0.56                !
+  c_cld_2 = 0.56                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
@@ -293,7 +303,7 @@
   sigma_so4 = 3.5e3             ! m2/kg, scattering efficiency for sulfate aerosols (Bauer et al., 2008)
   r_so4 = 0.17e-6               ! m, sulfate aerosol radius (0.1-0.15 microm in Bauer 2008)
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
-  N_so4_nat_lnd = 300e6         ! m^-3, natural cloud condensation nuclei concentration over land; = N_so4_nat is an exact no-op
+  N_so4_nat_lnd = 75e6          ! m^-3, natural cloud condensation nuclei concentration over land
 
   !-----------------------------------------------------------
   ! smoothing options

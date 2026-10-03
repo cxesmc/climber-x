@@ -47,7 +47,7 @@ module atm_model
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
-    use atm_grid, only : im, imc, jm, jmc, km, kmc, k700, nm, cost, pl, zl
+    use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
     use atm_grid, only : dxt, dy, fit, sqr, dplt
     use atm_params, only : tstep
@@ -348,7 +348,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k700), atm%v3(:,:,k700), atm%us, atm%vs, atm%tp, &    ! in
+        call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k500), atm%v3(:,:,k500), atm%us, atm%vs, atm%tp, &    ! in
           atm%zsa, atm%cda, atm%cd, atm%epsa, &    ! in
           atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 

@@ -137,7 +137,7 @@ contains
           aslp_temp(i,j) = 0._wp
         else
           ! as in CLIMBER-2, Petoukhov 2000, eq. (17)
-          aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
+          aslp_temp(i,j) = -c_slp_1*g*p0*12000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
         endif
       enddo
 
