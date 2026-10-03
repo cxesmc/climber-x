@@ -179,7 +179,10 @@
   c_syn_2 = 1.6e2               ! m2/s2, synoptic energy production parameter
   c_syn_3 = 8.e-7               ! 1/m, background synoptic energy dissipation rate
   c_syn_4 = 1.e-4               ! 1/m, synoptic energy dissipation parameter
-  c_syn_5 = 2.3e5               ! effective macrodiffusive coefficient parameter
+  i_diff_syn = 2                ! macro-diffusivity closure for the synoptic energy:
+                                ! 1 = c_syn_5*sqrt(EKE), K = c*V' (fixed mixing length)
+                                ! 2 = c_syn_5*EKE,       K = c*V'^2 (fixed eddy time scale, as i_diff=2);
+  c_syn_5 = 1.e4                ! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
   c_syn_6 = 0.6                 ! scaling from synoptic kinetic energy to synoptic wind
   c_syn_7 = 1.6e-3              ! scaling for synoptic vertical velocity at ~700 hPa, wsyn = c_syn_7*sqrt(sam)*S(lat).
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
@@ -201,7 +204,7 @@
   ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
   i_adv = 1                     ! advection scheme:
-                                ! 1 = first order upstream (donor cell)
+                                ! 1 = first order upstream 
                                 ! 2 = flux corrected transport (Zalesak 1979)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr/convdst) to suppress grid-scale checkerboard; 0 = off

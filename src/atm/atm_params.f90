@@ -151,7 +151,8 @@ module atm_params
   real(wp) :: c_syn_2
   real(wp) :: c_syn_3 
   real(wp) :: c_syn_4
-  real(wp) :: c_syn_5    
+  real(wp) :: c_syn_5      !! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
+  integer  :: i_diff_syn   !! macro-diffusivity closure for the synoptic energy: 1 = c_syn_5*sqrt(EKE), 2 = c_syn_5*EKE
   real(wp) :: c_syn_6
   real(wp) :: c_syn_7
   real(wp) :: windmin
@@ -406,6 +407,7 @@ contains
     call nml_read(filename,"atm_par","c_syn_3",c_syn_3)
     call nml_read(filename,"atm_par","c_syn_4",c_syn_4)
     call nml_read(filename,"atm_par","c_syn_5",c_syn_5)
+    call nml_read(filename,"atm_par","i_diff_syn",i_diff_syn)
     call nml_read(filename,"atm_par","c_syn_6",c_syn_6)
     call nml_read(filename,"atm_par","c_syn_7",c_syn_7)
     call nml_read(filename,"atm_par","windmin",windmin)

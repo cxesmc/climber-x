@@ -29,7 +29,7 @@ module synop_mod
   use constants, only : g, omega, pi
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost, fit 
   use atm_params, only : tstep, ra
-  use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin
+  use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin, i_diff_syn
   use atm_params, only : tau_fac
   use atm_params, only : i_diff, c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl
   use smooth_atm_mod, only : zofil
@@ -265,9 +265,14 @@ contains
         sqsam = sqrt(sam(i,j)) 
         sam_sqrt(i,j) = sqsam
 
-        ! effective macrodiffusive coefficient          
-
-        cdif(i,j) = c_syn_5*sqsam
+        ! macro-diffusivity of the synoptic energy itself
+        if (i_diff_syn.eq.1) then
+          ! proportional to sqrt(EKE), K = c*V' (fixed mixing length c)
+          cdif(i,j) = c_syn_5*sqsam
+        else if (i_diff_syn.eq.2) then
+          ! proportional to EKE, K = c*V'^2 (fixed eddy time scale c), as i_diff=2 for energy, water and dust
+          cdif(i,j) = c_syn_5*sam(i,j)
+        endif
 
         do n=1,nm
 
