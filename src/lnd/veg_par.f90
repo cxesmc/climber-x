@@ -43,7 +43,7 @@ contains
   !   Subroutine :  p h e n o l o g y
   !   Purpose    :  compute leaf area index, from LPJ
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine phenology(frac_surf,f_veg,t2m,t2m_min_mon,gdd5_temp,gdd5,gdd,phen_acc,phen,gamma_leaf, &
+  subroutine phenology(frac_surf,f_veg,t2m,t2m_min_mon,gdd5_temp,gdd5,gdd,phen_acc,phen,gamma_leaf,f_deciduous_pft, &
                       lai,lai_bal)
 
     implicit none
@@ -52,7 +52,7 @@ contains
     real(wp), dimension(:), intent(in) :: t2m, frac_surf
     real(wp), dimension(:), intent(in) :: lai_bal
     real(wp), intent(inout) :: gdd5_temp, gdd5
-    real(wp), dimension(:), intent(inout) :: gdd, phen_acc, phen, gamma_leaf
+    real(wp), dimension(:), intent(inout) :: gdd, phen_acc, phen, gamma_leaf, f_deciduous_pft
     real(wp), dimension(:), intent(inout) :: lai
 
     integer :: n
@@ -120,6 +120,9 @@ contains
         lai(n) = (f_deciduous*phen(n)+(1._wp-f_deciduous)) * lai_bal(n) 
 
         gamma_leaf(n) = f_deciduous*1._wp/sec_year + (1._wp-f_deciduous)*pft_par%gamma_leaf(n)
+
+        ! save deciduous fraction, used for the specific leaf area of trees
+        f_deciduous_pft(n) = f_deciduous
         
       enddo
 

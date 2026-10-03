@@ -178,9 +178,9 @@ contains
 
           ! update canopy snow
           if( t_skin(n) .lt. T0 ) then
-            tau_s = 10._wp*hydro_par%tau_s
+            tau_s = hydro_par%tau_s_dry
           else
-            tau_s = 1._wp*hydro_par%tau_s
+            tau_s = hydro_par%tau_s_wet
           endif
           s_can(n) = (fac_i_s*snow(n) + s_can(n)*rdt) / (1._wp*rdt + fac_e_s/s_can_max + 1._wp/tau_s)
           if( s_can(n) .lt. 1.e-20_wp ) s_can(n) = 0._wp

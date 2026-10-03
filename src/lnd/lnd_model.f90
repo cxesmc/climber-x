@@ -495,7 +495,7 @@ contains
 
       ! update phenological status of the vegetation 
       call phenology(lnd%frac_surf,lnd%f_veg, lnd%t2m, lnd%t2m_min_mon, lnd%gdd5_temp, lnd%gdd5, lnd%gdd, &
-                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%lai, lnd%lai_bal)
+                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%f_deciduous, lnd%lai, lnd%lai_bal)
 
       ! aerodynamic resistance
       call resist_aer(lnd%frac_surf,lnd%veg_h,lnd%lai,lnd%sai,lnd%h_snow,&
@@ -951,7 +951,7 @@ contains
                    lnd%f_lake,lnd%f_lake_old,lnd%f_shelf,lnd%f_shelf_old, lnd%f_crop, lnd%f_pasture, &
                    lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, lnd%gamma_fire, lnd%gamma_fire_cum, &
                    lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, &
-                   lnd%gamma_leaf, lnd%lambda, &
+                   lnd%gamma_leaf, lnd%f_deciduous, lnd%lambda, &
                    lnd%lai_bal,lnd%sai,lnd%root_frac,lnd%litter_in_frac, &
                    lnd%veg_c,lnd%veg_c13,lnd%veg_c14, &
                    lnd%leaf_c, &
@@ -1898,6 +1898,8 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%phen_acc        (npft))
         allocate(lnd%l2d(i,j)%gdd             (npft))
         allocate(lnd%l2d(i,j)%gamma_leaf      (npft))
+        allocate(lnd%l2d(i,j)%f_deciduous     (npft))
+        lnd%l2d(i,j)%f_deciduous = 0._wp
         allocate(lnd%l2d(i,j)%lambda          (npft))
         allocate(lnd%l2d(i,j)%lai_bal         (npft))
         allocate(lnd%l2d(i,j)%npp_cum         (npft))

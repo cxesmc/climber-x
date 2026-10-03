@@ -122,7 +122,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: cwd_mon
      real(wp), allocatable, dimension(:) :: ci, g_can, gpp, npp, npp13, npp14, aresp
      real(wp), allocatable, dimension(:) :: discrimination
-     real(wp), allocatable, dimension(:) :: lai, sai, phen, phen_acc, gdd, gamma_leaf, lambda, lai_bal
+     real(wp), allocatable, dimension(:) :: lai, sai, phen, phen_acc, gdd, gamma_leaf, f_deciduous, lambda, lai_bal
      real(wp), allocatable, dimension(:) :: npp_cum, npp13_cum, npp14_cum
      real(wp), allocatable, dimension(:) :: npp_ann, npp13_ann, npp14_ann
      real(wp), allocatable, dimension(:) :: veg_c, veg_h, pft_frac, seed_frac

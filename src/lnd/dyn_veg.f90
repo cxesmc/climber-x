@@ -53,7 +53,7 @@ contains
                     f_crop, f_pasture, gamma_luc, &
                     z_veg_std, gamma_ice, &
                     gamma_dist, gamma_dist_cum, gamma_fire, gamma_fire_cum, npp_ann, npp13_ann, npp14_ann, &
-                    gamma_leaf, lambda, lai_bal, sai, &
+                    gamma_leaf, f_deciduous, lambda, lai_bal, sai, &
                     root_frac, litter_in_frac, &
                     veg_c, veg_c13, veg_c14, leaf_c, stem_c, root_c, &
                     seed_frac, pft_frac, &
@@ -75,6 +75,7 @@ contains
     real(wp), dimension(:), intent(inout) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum, gamma_fire, gamma_fire_cum
     real(wp), dimension(:), intent(inout) :: npp_ann, npp13_ann, npp14_ann
     real(wp), dimension(:), intent(inout) :: gamma_leaf, lambda, lai_bal, sai
+    real(wp), dimension(:), intent(in) :: f_deciduous
     real(wp), dimension(:,:), intent(in) :: root_frac
     real(wp), dimension(:), intent(in) :: litter_in_frac
     real(wp), dimension(:), intent(inout) :: veg_c, veg_c13, veg_c14
@@ -119,6 +120,7 @@ contains
     real(wp), parameter :: log_2 = log(2._wp)
 
     real(wp) :: lai_n, lai_np1, f, fp
+    real(wp), dimension(npft) :: sla, sla_old
 
 
     f_z_std = exp(-z_veg_std/veg_par%z_veg_std_crit)
@@ -166,6 +168,20 @@ contains
       veg_c13_old  = veg_c13
       veg_c14_old  = veg_c14
 
+      ! specific leaf area
+      sla     = pft_par%sla
+      sla_old = pft_par%sla
+      if (veg_par%l_sla_dec) then
+        do n=1,npft
+          if (flag_tree(n).eq.1 .or. flag_shrub(n).eq.1) then
+            ! blend between evergreen and deciduous specific leaf area
+            sla(n) = pft_par%sla(n) * (1._wp + (veg_par%c_sla_dec-1._wp)*f_deciduous(n))
+          endif
+          ! specific leaf area the existing leaves were built with, for carbon conservation
+          if (leaf_c_old(n).gt.0._wp) sla_old(n) = lai_bal_old(n)/leaf_c_old(n)
+        enddo
+      endif
+
       do n=1,npft
 
         if( pft_par%i_c4(n) .eq. 0 ) then
@@ -193,11 +209,11 @@ contains
         n_iter = 0
         do 
           n_iter = n_iter + 1
-          f = 2._wp*lai_n/(pft_par%sla(n)*dt_v) + pft_par%awl(n)/dt_v*lai_n**pft_par%bwl &
-            + gamma_leaf(n)/pft_par%sla(n)*lai_n + pft_par%gamma_root(n)/pft_par%sla(n)*lai_n + pft_par%gamma_stem(n)*pft_par%awl(n)*lai_n**pft_par%bwl &
-            - (1._wp-lambda(n))*npp(n) - 2._wp*lai_bal(n)/(pft_par%sla(n)*dt_v) - pft_par%awl(n)/dt_v*lai_bal(n)**pft_par%bwl
-          fp = 2._wp/(pft_par%sla(n)*dt_v) + pft_par%awl(n)*pft_par%bwl/dt_v*lai_n**(pft_par%bwl-1._wp) &
-            + gamma_leaf(n)/pft_par%sla(n) + pft_par%gamma_root(n)/pft_par%sla(n) + pft_par%gamma_stem(n)*pft_par%awl(n)*pft_par%bwl*lai_n**(pft_par%bwl-1._wp) 
+          f = 2._wp*lai_n/(sla(n)*dt_v) + pft_par%awl(n)/dt_v*lai_n**pft_par%bwl &
+            + gamma_leaf(n)/sla(n)*lai_n + pft_par%gamma_root(n)/sla(n)*lai_n + pft_par%gamma_stem(n)*pft_par%awl(n)*lai_n**pft_par%bwl &
+            - (1._wp-lambda(n))*npp(n) - 2._wp*lai_bal(n)/(sla_old(n)*dt_v) - pft_par%awl(n)/dt_v*lai_bal(n)**pft_par%bwl
+          fp = 2._wp/(sla(n)*dt_v) + pft_par%awl(n)*pft_par%bwl/dt_v*lai_n**(pft_par%bwl-1._wp) &
+            + gamma_leaf(n)/sla(n) + pft_par%gamma_root(n)/sla(n) + pft_par%gamma_stem(n)*pft_par%awl(n)*pft_par%bwl*lai_n**(pft_par%bwl-1._wp) 
           lai_np1 = lai_n - f/fp
           if (abs(lai_np1-lai_n).lt.veg_par%delta_lai_conv .or. n_iter.ge.10) exit
           lai_n = lai_np1
@@ -224,7 +240,7 @@ contains
         endif
 
         ! update vegetation carbon pools based on new balanced LAI
-        leaf_c(n) = lai_bal(n)/pft_par%sla(n)
+        leaf_c(n) = lai_bal(n)/sla(n)
         root_c(n) = leaf_c(n)
         stem_c(n) = pft_par%awl(n)*lai_bal(n)**pft_par%bwl
         veg_c(n)  = leaf_c(n)+root_c(n)+stem_c(n) 

@@ -78,7 +78,8 @@
     l_dew       = F             ! allow dew deposition?
     l_prc_intercept = T         ! allow for precipitation interception by vegetation?
     tau_w = 1.                  ! days, removal time scale of water from canopy
-    tau_s = 1.                  ! days, removal time scale of snow from canopy
+    tau_s_dry = 3.              ! days, removal time scale of snow from canopy when T<0°C
+    tau_s_wet = 1.              ! days, removal time scale of snow from canopy when T>0°C
     alpha_int_w_tree = 0.2      ! interception factor for water, CLM, TUNABLE
     alpha_int_w_grass = 0.1     ! interception factor for water, CLM, TUNABLE
     alpha_int_s = 0.5           ! interception factor for snow
@@ -283,6 +284,8 @@
     sla_sh  = 8.5               ! m2/(kg dry leaf), specific leaf area of shrubs, TRY database
     z_veg_std_crit = 100.       ! m, critical sub-grid topography standard deviation for disturbance rate from ice sheets
     gamma_phen = 15.            ! days, leaf senescence time scale
+    l_sla_dec = T               ! blend specific leaf area of trees and shrubs between evergreen (sla_bl, sla_nl, sla_sh) and deciduous with the deciduous fraction?
+    c_sla_dec = 2.              ! ratio of deciduous to evergreen specific leaf area of trees and shrubs (only if l_sla_dec)
     t_base_phen = 5. 2. 0. 5. 2.! degC, base temperature for phenology
     gdd5_phen = 0. 600. 0. 0. 900.  ! K, growing degree above 5 degC threshold for decidous
     t_cmon_phen = 5. -30. 0. 0. -40. ! degC, threshold coldest month temperature for decidous
