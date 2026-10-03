@@ -51,7 +51,7 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3f, vt3f, u700, v700, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, uadv, vadv, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffx, diffy, wsyn)
 
     implicit none
@@ -60,8 +60,8 @@ contains
     real(wp), intent(in   ) :: zs(:,:,:)
     real(wp), intent(in   ) :: ut3f(:,:,:)
     real(wp), intent(in   ) :: vt3f(:,:,:)
-    real(wp), intent(in   ) :: u700(:,:)
-    real(wp), intent(in   ) :: v700(:,:)
+    real(wp), intent(in   ) :: uadv(:,:)
+    real(wp), intent(in   ) :: vadv(:,:)
     real(wp), intent(in   ) :: us(:,:,:)
     real(wp), intent(in   ) :: vs(:,:,:)
     real(wp), intent(in   ) :: tp(:,:,:)
@@ -156,9 +156,8 @@ contains
         ! synoptic energy advection         
 
         ! effective horizontal velocities
-        ! use steering wind at ~700 hPa for advection
-        uef = u700(i,j)   
-        vef = v700(i,j)
+        uef = uadv(i,j)   
+        vef = vadv(i,j)
         if (uef.gt.0._wp) then
           sxadv = uef*(sam(imi,j)-sam(i,j))/dxt(j)
         else 
@@ -197,7 +196,7 @@ contains
     !$omp parallel do private(i,j,uef,gx,a,b,c,r,sol)
     do j=2,jm-1
       do i=1,im
-        uef = u700(i,j)
+        uef = uadv(i,j)
         gx  = dt_atm*cdif(i,j)/dxt(j)**2
         ! diffusion + upwind advection (sxadv: imi donor for uef>0, ipl for uef<0)
         a(i) = -gx - dt_atm*max(uef,0._wp)/dxt(j)
@@ -217,7 +216,7 @@ contains
     !$omp parallel do private(i,j,vef,gy,aj,bj,cj,rj,solj)
     do i=1,im
       do j=2,jm-1
-        vef = v700(i,j)
+        vef = vadv(i,j)
         gy  = dt_atm*cdif(i,j)/dy**2
         ! diffusion + upwind advection (syadv: jpl donor for vef>0, jmi for vef<0)
         aj(j) = -gy + dt_atm*min(vef,0._wp)/dy
