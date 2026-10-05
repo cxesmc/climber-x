@@ -2261,7 +2261,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/atm.nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
     do k = 1, nmon_year
        call atm_nc_write(fnm,ncid,mon_a(k),k,nout)
@@ -2272,7 +2272,7 @@ contains
     if (l_daily_output) then
       ! write to file
       fnm = trim(out_dir)//"/atm_daily.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
       do k = 1, nday_year
         call atm_daily_nc_write(fnm,ncid,day_a(k),k,nout)
@@ -2324,7 +2324,7 @@ contains
     integer :: nout, y, ncid, i
 
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), &
     dim1=dim_time,start=[nout],count=[y],ncid=ncid)    
     call nc_write(fnm,"eccentricity", vars%eccentricity, dims=[dim_time],start=[nout],count=[y],long_name="eccentricity",units="1",ncid=ncid)
@@ -2448,7 +2448,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,"time", x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, "mon", x=1._wp, dx=1._wp, nx=13, units="months", &
@@ -2994,7 +2994,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,"time", x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,"doy", x=1._wp, dx=1._wp, nx=nday_year, axis="e", &

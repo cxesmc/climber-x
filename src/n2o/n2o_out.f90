@@ -150,7 +150,7 @@ contains
     character (len=*) :: fnm
     integer :: ndat, y, ncid, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time",  dble([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))]), dim1=dim_time,start=[ndat],count=[y],ncid=ncid)    
     call nc_write(fnm,"n2o       ",  vars%n2o       , dim1=dim_time,start=[ndat],count=[y],long_name="atmospheric n2o concentration",units="ppb",ncid=ncid) 
     call nc_write(fnm,"N2Oocn_dt  ",  vars%dn2oocn_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="ocean n2o flux to atmosphere",units="TgN2O-N/yr",ncid=ncid)  

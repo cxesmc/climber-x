@@ -82,7 +82,7 @@ contains
     fnm = trim(out_dir)//"/geo.nc"
 
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm, "nbr",x=[(i,i=1,n_coast_cells)], axis="e", ncid=ncid)
@@ -93,7 +93,7 @@ contains
     if (l_output_hires) then
       fnm = trim(out_dir)//"/geo_hires.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
       unlimited=.TRUE., ncid=ncid)
       call nc_write_dim(fnm, dim_lat, x=geo%hires%grid%G%y, axis="y", units="degrees_north", ncid=ncid)
@@ -159,7 +159,7 @@ contains
       if (time_out_ts_geo) then
         n1out = year_geo-y+1    
         fnm = trim(out_dir)//"/geo_ts.nc"
-        call nc_open(fnm,ncid)
+        call nc_open(fnm,ncid,writable=.TRUE.)
 
         call nc_write(fnm,"time", dble([(i,i=(year_now-(y-1)*n_year_geo),(year_now),n_year_geo)]), &
         dim1=dim_time,start=[n1out],count=[y],ncid=ncid)    
@@ -188,7 +188,7 @@ contains
       nout = nout +1 
 
       fnm = trim(out_dir)//"/geo.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       if (firstcall) then
         call nc_write(fnm,dim_time,dble(year_ini), dim1=dim_time, start=[nout], count=[1],ncid=ncid)
       else
@@ -240,7 +240,7 @@ contains
 
         ! write to file
         fnm = trim(out_dir)//"/geo_hires.nc"
-        call nc_open(fnm,ncid)
+        call nc_open(fnm,ncid,writable=.TRUE.)
         if (firstcall) then
           call nc_write(fnm,dim_time,dble(year_ini), dim1=dim_time, start=[nout], count=[1],ncid=ncid)
         else

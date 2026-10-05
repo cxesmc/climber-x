@@ -365,7 +365,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/ice_"//trim(ice%grid%grid1%name)//".nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,dble(year_now), dim1=dim_time, start=[ice%nout], count=[1],ncid=ncid)    
     call ice_nc_write(ice,fnm,ncid,ice%nout)
     call nc_close(ncid)
@@ -411,7 +411,7 @@ contains
     integer :: nout, ncid, i
 
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time",  dble([(i,i=(year_now-y_out_ts+1),(year_now))]), dim1=dim_time,start=[nout],count=[y_out_ts],ncid=ncid)    
     call nc_write(fnm,"V_tot", ts%V_tot,           dims=[dim_time],start=[nout],count=[y_out_ts],long_name="total ice volume",units="mln km3",ncid=ncid)
     call nc_write(fnm,"V_sle", ts%V_sle,           dims=[dim_time],start=[nout],count=[y_out_ts],long_name="ice volume in SLE",units="m sle",ncid=ncid)
@@ -531,7 +531,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,dim_kt,x=1,dx=1,nx=grd%KTMAX+1,axis="e", units="1",ncid=ncid)

@@ -673,7 +673,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/sic.nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
     do k = 1, nmon_year
        call sic_nc_write(fnm,ncid,mon_s(k),k,nout)
@@ -684,7 +684,7 @@ contains
     if (l_daily_output) then
       ! write to file
       fnm = trim(out_dir)//"/sic_daily.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
       do k = 1, nday_year
         call sic_daily_nc_write(fnm,ncid,day_s(k),k,nout)
@@ -736,7 +736,7 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, n, y, ncid, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), &
     dim1=dim_time,start=[nout],count=[y],ncid=ncid)    
     if (ndat.eq.13) then
@@ -844,7 +844,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -974,7 +974,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)

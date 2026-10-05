@@ -3617,7 +3617,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/ocn.nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)
     do k = 1, nmon_year
        call ocn_nc_write(fnm,ncid,mon_o(k),k,nout)
@@ -3628,7 +3628,7 @@ contains
     if (l_daily_output) then
       ! write to file
       fnm = trim(out_dir)//"/ocn_daily.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
       do k = 1, nday_year
         call ocn_daily_nc_write(fnm,ncid,day_o(k),k,nout)
@@ -3677,7 +3677,7 @@ contains
     integer :: ndat, y, ncid, n, i
 
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), &
   dim1=dim_time,start=[ndat],count=[y],ncid=ncid)    
     call nc_write(fnm,"sst",     vars%sst,    dim1=dim_time,start=[ndat],count=[y],long_name="sea surface temperature",units="C",ncid=ncid)
@@ -3994,7 +3994,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
@@ -4205,7 +4205,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)

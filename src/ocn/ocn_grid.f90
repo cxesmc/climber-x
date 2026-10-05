@@ -1081,14 +1081,14 @@ contains
     if (l_write_isl .or. year.eq.1) then
       fnm = trim(out_dir)//"/check_islands.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
       call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
       call nc_write_dim(fnm,dim_lat,x=lat,axis="y",ncid=ncid)
       call nc_write_dim(fnm,"nisles",x=[(i, i=1,maxisles)],axis="z",ncid=ncid)
       call nc_close(ncid)
 
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,    real(year,wp), dim1=dim_time,start=[year],count=[1],ncid=ncid)    
       call nc_write(fnm,"k1",     k1(1:maxi,1:maxj),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
       call nc_write(fnm,"mask_ocn",     real(mask_ocn,wp),dims=[dim_lon,dim_lat,dim_time],start=[1,1,year],count=[maxi,maxj,1],long_name="density",units="?",ncid=ncid)
