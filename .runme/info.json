@@ -5,8 +5,7 @@
     "par_path_as_argument" : false,
 
     "exe_aliases" : 
-        {   "climber" : "climber.x",
-            "mapping" : "mapping.x"
+        {   "climber" : "climber.x"
         },
     
     "grp_aliases" :
@@ -26,7 +25,7 @@
         },
 
     "par_paths" :
-        {   "climber"  : [ "nml/control.nml",
+        {   "all"      : [ "nml/control.nml",
                            "nml/atm_par.nml",
                            "nml/lnd_par.nml",
                            "nml/sic_par.nml",
