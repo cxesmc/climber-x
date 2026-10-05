@@ -232,7 +232,7 @@ module atm_out
 
     real(wp), allocatable, dimension(:,:) :: tskina     !! skin temperature (K)
     real(wp), allocatable, dimension(:,:) :: t2a        !! 2m surface air temperature (K)
-    real(wp), allocatable, dimension(:,:) :: t2a_dat    !! observed present-day 2m surface air temperature (K)
+    real(wp), allocatable, dimension(:,:) :: t2a_dat    !! reference 2m surface air temperature for the bias diagnostic (K): CMIP6 piControl multi-model median
     real(wp), allocatable, dimension(:,:) :: q2a        !! 2m surface specific humidity (kg/kg)
     real(wp), allocatable, dimension(:,:) :: thetae
     real(wp), allocatable, dimension(:,:) :: dq 
@@ -2227,8 +2227,13 @@ contains
       ann_a%frlnd       = atm%frlnd
       ann_a%frocn       = atm%frocn
 
+      ! reference 2m temperature for the bias diagnostic: CMIP6 piControl multi-model median
+      ! (benchmark/scripts/make_cmip6_t2m_median.jl), pre-industrial like the model's control
+      ! state; the present-day ERA5 climatology (input/ERA5_t2m_monclim_5x5.nc) is 0.4 K warmer
+      ann_a%t2a_dat = 0._wp
       do m=1,12
-        call nc_read('input/ERA5_t2m_monclim_5x5.nc',"t2m",mon_a(m)%t2a_dat(:,:),start=[1,1,m],count=[im,jm,1]) 
+        call nc_read('input/CMIP6_piControl_t2m_median_monclim_5x5.nc',"t2m",mon_a(m)%t2a_dat(:,:),start=[1,1,m],count=[im,jm,1]) 
+        ann_a%t2a_dat = ann_a%t2a_dat + mon_a(m)%t2a_dat/12._wp
       enddo
 
       call atm_diag_out
@@ -2644,10 +2649,8 @@ contains
     call nc_write(fnm,"q2a_qam  ", sngl(vars%q2a(:,jm:1:-1)-vars%qam(:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="2m - atmospheric specific humidity",units="1",ncid=ncid)
 
-    if (ndat.ne.13) then
-      call nc_write(fnm,"t2m_bias   ", sngl(vars%t2a(:,jm:1:-1)-vars%t2a_dat(:,1:jm) ), dims=["lon ","lat ","mon ","time"], &
-        start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean 2m temperature",units="K",ncid=ncid)
-    endif
+    call nc_write(fnm,"t2m_bias   ", sngl(vars%t2a(:,jm:1:-1)-vars%t2a_dat(:,1:jm) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean 2m temperature bias relative to the CMIP6 piControl median",units="K",ncid=ncid)
 
     call nc_write(fnm,"tskin_t2   ", sngl(vars%tskina(:,jm:1:-1)-vars%t2a(:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="skin temperature - 2m temperature",units="K",ncid=ncid)

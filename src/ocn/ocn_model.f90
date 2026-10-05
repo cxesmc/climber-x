@@ -470,7 +470,7 @@ contains
       !$ time1 = omp_get_wtime()
       call transport(ocn%l_tracers_trans,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
                     ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
-                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe, &
+                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe,ocn%fds,ocn%zds, &
                     ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
       !$ time2 = omp_get_wtime()
       !$ if(print_omp) print *,'transport',time2-time1
@@ -860,6 +860,8 @@ contains
         ocn%dven(i,j) = 0._wp
         ocn%z_brines(i,j) = 0._wp
         ocn%conv_pe(i,j) = 0._wp
+        ocn%fds(i,j) = 0._wp
+        ocn%zds(i,j) = 0._wp
       enddo
     enddo
 
@@ -1008,6 +1010,8 @@ contains
     allocate(ocn%dven(maxi,maxj))
     allocate(ocn%z_brines(maxi,maxj))
     allocate(ocn%conv_pe(maxi,maxj))
+    allocate(ocn%fds(maxi,maxj))
+    allocate(ocn%zds(maxi,maxj))
     allocate(ocn%ssh(maxi,maxj))
     allocate(ocn%q_geo(maxi,maxj))
 
@@ -1171,6 +1175,8 @@ contains
     deallocate(ocn%dven)
     deallocate(ocn%z_brines)
     deallocate(ocn%conv_pe)
+    deallocate(ocn%fds)
+    deallocate(ocn%zds)
     deallocate(ocn%ssh)
     deallocate(ocn%q_geo)
 

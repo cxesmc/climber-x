@@ -326,6 +326,23 @@ contains
        drag_bcl(2,maxi+1,j) = drag_bcl(2,1,j)
     enddo
 
+    ! on rows where the Coriolis parameter is set to zero (|f| < fcormin, see momentum_init) add drag instead,
+    ! r_eff = r + fcormin^2/r, so that r_eff/(0+r_eff^2) = r/(fcormin^2+r^2)
+    do j=1,maxj
+      if (abs(2._wp*omega*s(j)).lt.fcormin) then     ! u-grid rows (tracer latitudes)
+        do i=1,maxi
+          drag(1,i,j)     = drag(1,i,j)     + fcormin**2/drag(1,i,j)
+          drag_bcl(1,i,j) = drag_bcl(1,i,j) + fcormin**2/drag_bcl(1,i,j)
+        enddo
+      endif
+      if (abs(2._wp*omega*sv(j)).lt.fcormin) then    ! v-grid rows (e.g. the equator line)
+        do i=1,maxi+1
+          drag(2,i,j)     = drag(2,i,j)     + fcormin**2/drag(2,i,j)
+          drag_bcl(2,i,j) = drag_bcl(2,i,j) + fcormin**2/drag_bcl(2,i,j)
+        enddo
+      endif
+    enddo
+
 
     ! arrays for efficiency
     do j=1,maxj
@@ -440,11 +457,24 @@ contains
     drag_par%adrag = 1._wp/(drag_par%adrag*86400._wp) ! 1/s
 
     ! Coriolis parameter
+    ! Rows with |f| < fcormin (only the equator v-line on the 5 deg grid) get f = 0 and instead a larger drag,
+    ! r_eff = r + fcormin^2/r (see momentum_update_grid), which keeps the frictional-geostrophic mobility
+    ! r/(f^2+r^2) at the value a Coriolis floor of fcormin would give - the same numerical damping of the
+    ! cross-equatorial pressure gradient, which is needed for stability (fcormin must stay >~ the drag rate) -
+    ! but is symmetric about the equator instead of deflecting the equatorial flow like a NH row.
     do j=1,maxj
-      fcor(j) = sign(max(abs(2._wp*omega*s(j)),fcormin),s(j))
+      if (abs(2._wp*omega*s(j)).lt.fcormin) then
+        fcor(j) = 0._wp
+      else
+        fcor(j) = 2._wp*omega*s(j)
+      endif
     enddo
     do j=0,maxj
-      fcorv(j) = sign(max(abs(2._wp*omega*sv(j)),fcormin),sv(j))
+      if (abs(2._wp*omega*sv(j)).lt.fcormin) then
+        fcorv(j) = 0._wp
+      else
+        fcorv(j) = 2._wp*omega*sv(j)
+      endif
     enddo
 
     return

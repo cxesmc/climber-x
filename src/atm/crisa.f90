@@ -28,7 +28,7 @@ module crisa_mod
   use atm_params, only : wp
   use constants, only : pi, karman, omega
   use atm_params, only : cd0_ocn, cd0_sic, acbar_max, acbar_scale, nsmooth_acbar
-  use atm_params, only : i_acbar, c_acbar_0, c_acbar_f, c_acbar_wind
+  use atm_params, only : i_acbar, c_acbar_0, c_acbar_f, c_acbar_p, c_acbar_wind
   use atm_grid, only : im, jm, nm, fcorta_sqrt, fcorta, i_ocn, i_sic, i_lake
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
@@ -211,14 +211,9 @@ contains
   ! and differ only in R.  Since 1-sin(2a) = (cos(a)-sin(a))**2 the relation is
   ! tan(a) = R/(1+R) in closed form.
   !
-  ! i_acbar = 1  The original,  R = cd/sqrt(|f|),  solved by bisection on [0,pi/4].  The
-  !              bisection is therefore solving something that has a closed form; it is kept
-  !              exactly as it was, iteration included, so that earlier runs are reproduced bit
-  !              for bit.  R is NOT dimensionally homogeneous: cd is dimensionless while f is
-  !              1/s, so R carries s**(1/2) and a constant of 1 s**(-1/2) is hidden in the
-  !              calibration.
+  ! i_acbar = 1  The original,  R = cd/sqrt(|f|)
   !
-  ! i_acbar = 2  R = cd/(c_acbar_0 + c_acbar_f*phi**2),  phi = |f|/f_45,  in closed form.
+  ! i_acbar = 2  R = cd/(c_acbar_0 + c_acbar_f*phi**c_acbar_p),  phi = |f|/f_45,  in closed form.
   !
   !              Fitted to the angle IMPLIED by the relation the angle is actually used in.
   !              slp.f90 defines it through
@@ -229,35 +224,6 @@ contains
   !                             5 deg   10    15    20    30    35    40    45    60
   !                measured      15.5   14.4  12.5  11.5   7.1   6.6   5.4   4.8   4.6
   !                i_acbar=1     15.0   11.6   9.9   8.8   7.5   7.1   6.8   6.5   5.9
-  !              i.e. the real angle has considerably MORE latitudinal contrast than cd/sqrt(f)
-  !              carries.  This form reproduces it to 0.46 deg rms and 0.92 deg at worst,
-  !              against 1.86 and 2.85 for i_acbar=1, over the 16 rows where the inversion is
-  !              well conditioned.  The hemispheric asymmetry of the measurement itself, on a
-  !              symmetric aquaplanet, is 0.08 deg, so the residual is well above the noise but
-  !              the improvement is far larger than it.
-  !
-  !              A power law in f cannot do this: the log-log slope of R against |f| steepens
-  !              from -0.28 in the tropics to -1.45 in the subtropics, and the best power law
-  !              lands at 1.54 deg rms, barely better than the original.  What the measured R
-  !              does follow is 1/R linear in f**2, which is this form.
-  !
-  !              Two structural gains over i_acbar=1.  It is dimensionally homogeneous, both
-  !              constants carrying the units of cd, i.e. none.  And it is bounded at the
-  !              equator by construction, at cd/c_acbar_0, so the fcormin floor no longer has to
-  !              hold the angle up there - with the shipped constants the ocean angle runs from
-  !              15.9 deg at the equator (16.2 in the phi -> 0 limit, the floor costing 0.3) to
-  !              3.0 deg at the pole.
-  !
-  !              acbar_max still binds over rough orography, as it does for i_acbar=1: cd = 0.02
-  !              at 45 deg gives 28.7 deg here against 33.5 for the original, both on the cap.
-  !
-  !              The cd dependence is LINEAR, the same as i_acbar=1 carries.  That is not a free
-  !              choice made here: regressing the demanded R on ln(cd) and on the azonal SLP
-  !              amplitude over the PI and LGM ensembles gives an exponent of 0.89-0.96 with the
-  !              two predictors only 0.16 correlated.  It is, however, only that - an exponent
-  !              near one - and the PI/LGM data cannot pin the amplitude, because the northern
-  !              extratropical inversion is not a measurement of a turning angle there (see the
-  !              note on c_acbar_0 in atm_par.nml).
   !
   function acbar_cd(cd, j) result(alfa)
 
@@ -291,7 +257,7 @@ contains
 
       ! fcorta is the floored |f|, which is what the fit used; the floor changes phi**2 by less
       ! than 1 per cent of c_acbar_0 anyway, since this form does not need it
-      rhs = cd/(c_acbar_0 + c_acbar_f*(fcorta(j)/fcor45)**2)
+      rhs = cd/(c_acbar_0 + c_acbar_f*(fcorta(j)/fcor45)**c_acbar_p)
       alfa = atan(rhs/(1._wp+rhs))
 
     endif

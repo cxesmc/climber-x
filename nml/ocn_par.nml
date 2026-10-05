@@ -120,6 +120,24 @@
  l_mix_bgc_all = T            ! apply vertical mixing to ALL bgc tracers (convection+mixed layer)?
 
  !-------------------------------------------------------------------------------------------
+ ! downsloping flow of dense shelf water (Campin and Goosse 1999)
+ !-------------------------------------------------------------------------------------------
+ l_downslope = F              ! dense water in the bottom layer of a cell flows down the slope into a deeper
+                              ! neighbouring column, to the deepest level where it is still denser than the ambient
+                              ! water (compared at that level's pressure), entraining on the way; the return flow
+                              ! rises through the deep column back to the shelf. Without it the dense shelf water
+                              ! can only leave the shelf at the shelf-bottom depth and is then mixed into the whole
+                              ! neighbouring column by convective adjustment (maximum entrainment).
+ c_downslope = 0.01           ! coefficient of the plume speed, u = c*sqrt(g'H), flux Q = u*H*L over the shared
+                              ! face of length L; it also stands for the fraction of a 5 deg face occupied by the
+                              ! plume. 0.01 gives ~0.1-1 Sv per face for drho 0.1-0.3 kg/m3
+ ent_downslope = 0.5          ! entrainment of ambient water per km of descent, as a fraction of the plume volume;
+                              ! 0.5 doubles a plume over ~2 km (real AABW: 2-3 Sv shelf water -> 8-10 Sv, Orsi 1999)
+ drho_downslope_min = 0.01    ! kg/m3, minimum density excess of the shelf water over the ambient water at the
+                              ! shelf-bottom level for the flow to start
+ f_downslope_max = 0.5        ! maximum fraction of any involved cell volume exchanged per ocean time step
+
+ !-------------------------------------------------------------------------------------------
  ! mixed layer settings
  !-------------------------------------------------------------------------------------------
  pe_buoy_coeff = 0.1          ! mixed layer - efficiency of buoyancy-forced mixing (0.15 used in SEA model)

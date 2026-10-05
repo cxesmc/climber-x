@@ -160,6 +160,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: taux, tauy
      real(wp), dimension(:,:,:), allocatable :: cfc11, cfc12
      real(wp), dimension(:,:,:), allocatable :: diffdia, drho_dx, drho_dy, drho_dz, Ri
+     real(wp), dimension(:,:,:), allocatable :: bvf2
      real(wp), dimension(:,:), allocatable :: t_atl, t_pac, t_ind, t_so
      real(wp), dimension(:,:), allocatable :: s_atl, s_pac, s_ind, s_so
      real(wp), dimension(:,:), allocatable :: a_atl, a_pac, a_ind, a_so
@@ -179,7 +180,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: fwtz, fwpz, fwaz
      real(wp), dimension(:,:), allocatable :: fayti, fdyti
      real(wp), dimension(:,:), allocatable :: faysi, fdysi 
-     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldst, conv_pe, conv_pe_max, ke_tau
+     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldst, conv_pe, conv_pe_max, ke_tau, fds, zds
      real(wp), dimension(:,:), allocatable :: dconv, dven, nconv, kven
      real(wp), dimension(:,:), allocatable :: z_brines
      real(wp), dimension(:,:), allocatable :: ssh
@@ -277,6 +278,7 @@ contains
     allocate(ann_o%drho_dx(maxi,maxj,maxk))
     allocate(ann_o%drho_dy(maxi,maxj,maxk))
     allocate(ann_o%drho_dz(maxi,maxj,maxk))
+    allocate(ann_o%bvf2(maxi,maxj,maxk))
     allocate(ann_o%drho_0_1000(maxi,maxj))
     allocate(ann_o%drho_0_3000(maxi,maxj))
     allocate(ann_o%Ri(maxi,maxj,maxk))
@@ -354,6 +356,8 @@ contains
     allocate(ann_o%mldst(maxi,maxj))
     allocate(ann_o%ke_tau(maxi,maxj))
     allocate(ann_o%conv_pe(maxi,maxj))
+    allocate(ann_o%fds(maxi,maxj))
+    allocate(ann_o%zds(maxi,maxj))
     allocate(ann_o%conv_pe_max(maxi,maxj))
     allocate(ann_o%ssh(maxi,maxj))
     allocate(ann_o%q_geo(maxi,maxj))
@@ -383,6 +387,7 @@ contains
      allocate(mon_o(k)%drho_dx(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_dy(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_dz(maxi,maxj,maxk))
+     allocate(mon_o(k)%bvf2(maxi,maxj,maxk))
      allocate(mon_o(k)%drho_0_1000(maxi,maxj))
      allocate(mon_o(k)%drho_0_3000(maxi,maxj))
      allocate(mon_o(k)%Ri(maxi,maxj,maxk))
@@ -445,6 +450,8 @@ contains
      allocate(mon_o(k)%mld(maxi,maxj))
      allocate(mon_o(k)%mldst(maxi,maxj))
      allocate(mon_o(k)%conv_pe(maxi,maxj))
+     allocate(mon_o(k)%fds(maxi,maxj))
+     allocate(mon_o(k)%zds(maxi,maxj))
      allocate(mon_o(k)%ke_tau(maxi,maxj))
      allocate(mon_o(k)%ssh(maxi,maxj))
     enddo
@@ -2932,6 +2939,7 @@ contains
                    mon_o(m)%drho_dx(i,j,k) = 0._wp
                    mon_o(m)%drho_dy(i,j,k) = 0._wp
                    mon_o(m)%drho_dz(i,j,k) = 0._wp
+                   mon_o(m)%bvf2(i,j,k) = 0._wp
                    mon_o(m)%Ri(i,j,k) = 0._wp
                  else
                    mon_o(m)%t   (i,j,k)  = missing_value 
@@ -2946,6 +2954,7 @@ contains
                    mon_o(m)%drho_dx(i,j,k) = missing_value 
                    mon_o(m)%drho_dy(i,j,k) = missing_value 
                    mon_o(m)%drho_dz(i,j,k) = missing_value 
+                   mon_o(m)%bvf2(i,j,k) = missing_value 
                    mon_o(m)%Ri(i,j,k) = missing_value 
                  endif
               enddo
@@ -3025,6 +3034,8 @@ contains
             mon_o(m)%mldst = 0._wp
             mon_o(m)%ke_tau = 0._wp
             mon_o(m)%conv_pe = 0._wp
+            mon_o(m)%fds = 0._wp
+            mon_o(m)%zds = 0._wp
           elsewhere
             mon_o(m)%dt_dt_flxsur = missing_value 
             mon_o(m)%ds_dt_flxsur = missing_value 
@@ -3053,6 +3064,8 @@ contains
             mon_o(m)%mldst = missing_value
             mon_o(m)%ke_tau  = missing_value
             mon_o(m)%conv_pe = missing_value
+            mon_o(m)%fds = missing_value
+            mon_o(m)%zds = missing_value
           endwhere
           do n=1,n_isles
             mon_o(m)%ubisl(:,:,n) = 0._wp
@@ -3160,6 +3173,8 @@ contains
             mon_o(mon)%drho_dx(i,j,k) = mon_o(mon)%drho_dx(i,j,k)   + drho_dx (i,j,kr)   * mon_avg ! m2/s
             mon_o(mon)%drho_dy(i,j,k) = mon_o(mon)%drho_dy(i,j,k)   + drho_dy (i,j,kr)   * mon_avg ! m2/s
             mon_o(mon)%drho_dz(i,j,k) = mon_o(mon)%drho_dz(i,j,k)   + drho_dz (i,j,kr)   * mon_avg ! m2/s
+            ! squared Brunt-Vaisala frequency on the w-grid from the locally referenced potential density gradient
+            mon_o(mon)%bvf2(i,j,k)    = mon_o(mon)%bvf2(i,j,k)      - g/rho0*drho_dz(i,j,kr) * mon_avg ! 1/s2
             mon_o(mon)%Ri(i,j,k)      = mon_o(mon)%Ri(i,j,k)        + Ri      (i,j,kr)   * mon_avg 
             mon_o(mon)%rho    (i,j,k) = mon_o(mon)%rho    (i,j,k)   + rho     (i,j,kr)   * mon_avg ! kg/m3
             mon_o(mon)%rho2   (i,j,k) = mon_o(mon)%rho2   (i,j,k)   + ocn%rho (i,j,kr)   * mon_avg ! kg/m3
@@ -3372,6 +3387,8 @@ contains
       mon_o(mon)%mld   = mon_o(mon)%mld   + (-ocn%mld)                           * mon_avg
       mon_o(mon)%ke_tau = mon_o(mon)%ke_tau   + ocn%ke_tau/dt*1000._wp     * mon_avg ! mW/m2
       mon_o(mon)%conv_pe = mon_o(mon)%conv_pe + ocn%conv_pe                      * mon_avg ! J/m2
+      mon_o(mon)%fds = mon_o(mon)%fds + ocn%fds*1.e-6_wp                          * mon_avg ! Sv
+      mon_o(mon)%zds = mon_o(mon)%zds + ocn%zds                                  * mon_avg ! m
     elsewhere
       mon_o(mon)%sst         = missing_value 
       mon_o(mon)%sss         = missing_value 
@@ -3399,6 +3416,8 @@ contains
       mon_o(mon)%mld         = missing_value
       mon_o(mon)%ke_tau      = missing_value 
       mon_o(mon)%conv_pe     = missing_value 
+      mon_o(mon)%fds         = missing_value 
+      mon_o(mon)%zds         = missing_value 
     endwhere
     do n=1,n_isles
       mon_o(mon)%ubisl(:,:,n) = mon_o(mon)%ubisl(:,:,n) + ocn%ub_isl(1,1:maxi,1:maxj,n)         * mon_avg ! m/s
@@ -4147,7 +4166,10 @@ contains
     call nc_write(fnm,"mldst",     sngl(vars%mldst),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth from sigma-t criterion",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ke_tau",  sngl(vars%ke_tau),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="kinetic energy input into the ocean by wind stress",units="mW/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"conv_pe", sngl(vars%conv_pe),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"fds", sngl(vars%fds),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="downslope volume flux of dense shelf water out of the cell",units="Sv",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"zds", sngl(vars%zds),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="flux-weighted depth at which the downslope plume is deposited",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ssh",      sngl(vars%ssh),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="elevation of the free surface",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"obvfsq",       sngl(vars%bvf2),dims=[dim_lon,dim_lat,dim_levw,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="square of Brunt-Vaisala frequency, N2 = -g/rho0*drho_dz with locally referenced potential density (CMIP6 obvfsq)",units="1/s2",missing_value=missing_value,ncid=ncid)
 
     if (l_output_extended) then
     call nc_write(fnm,"fdx",        sngl(vars%fdx),  dims=[dim_lonu,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="zonal diffusive tracer volume flux",units="m3*K",missing_value=missing_value,ncid=ncid)
@@ -4274,6 +4296,7 @@ contains
     ave%drho_dx = 0._wp
     ave%drho_dy = 0._wp
     ave%drho_dz = 0._wp
+    ave%bvf2    = 0._wp
     ave%Ri = 0._wp
     ave%taux  = 0._wp
     ave%tauy  = 0._wp
@@ -4327,6 +4350,8 @@ contains
     ave%mldst = 0._wp
     ave%ke_tau   = 0._wp
     ave%conv_pe  = 0._wp
+    ave%fds  = 0._wp
+    ave%zds  = 0._wp
     ave%ssh = 0._wp
 
     ! Loop over the time indices to sum up and average (if necessary)
@@ -4355,6 +4380,7 @@ contains
        ave%drho_dx = ave%drho_dx  + d(k)%drho_dx  / div
        ave%drho_dy = ave%drho_dy  + d(k)%drho_dy  / div
        ave%drho_dz = ave%drho_dz  + d(k)%drho_dz  / div
+       ave%bvf2    = ave%bvf2     + d(k)%bvf2     / div
        ave%Ri      = ave%Ri       + d(k)%Ri       / div
        ave%rho     = ave%rho      + d(k)%rho      / div
        ave%drho_0_1000 = ave%drho_0_1000 + d(k)%drho_0_1000 / div
@@ -4416,6 +4442,8 @@ contains
        ave%mldst   = ave%mldst    + d(k)%mldst    / div
        ave%ke_tau= ave%ke_tau + d(k)%ke_tau / div
        ave%conv_pe = ave%conv_pe  + d(k)%conv_pe  / div
+       ave%fds = ave%fds  + d(k)%fds  / div
+       ave%zds = ave%zds  + d(k)%zds  / div
        ave%ssh = ave%ssh  + d(k)%ssh  / div
     end do
 

@@ -411,6 +411,8 @@ contains
         atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
         if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convwtr, sqr, c_filt_conv, nord_filt_conv)
       endif
+      ! dust: same treatment as convdse (the implicit diffusive increment is already in dam).
+      if (l_dust .and. c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdst, sqr, c_filt_conv, nord_filt_conv)
 
       !-------------------------------------------------
       ! time step, prognostic equations for temperature, humidity and dust

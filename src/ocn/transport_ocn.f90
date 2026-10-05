@@ -49,12 +49,14 @@ module transport_ocn_mod
   use ocn_params, only : slope_max, slope_crit
   use ocn_params, only : diffx_max, diffy_max
   use ocn_params, only : mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
+  use ocn_params, only : l_downslope
 
   use advection_mod, only : advection_upstream, advection_fct
   use diffusion_mod, only : diffusion
   use eos_mod
   use convection_mod, only : convection
   use krausturner_mod
+  use downslope_mod, only : downslope
 
   implicit none
 
@@ -73,7 +75,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine transport(l_tracers_trans,l_tracers_isodiff,l_large_vol_change, &
                       u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
-                      ts,rho,nconv,dconv,kven,dven,conv_pe, &
+                      ts,rho,nconv,dconv,kven,dven,conv_pe,fds,zds, &
                       mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
 
     !$ use omp_lib
@@ -96,6 +98,8 @@ contains
     integer, dimension(:,:), intent(inout) :: kven, nconv
     real(wp), dimension(:,:), intent(inout) :: dven, dconv
     real(wp), dimension(:,:), intent(inout) :: conv_pe
+    real(wp), dimension(:,:), intent(inout) :: fds
+    real(wp), dimension(:,:), intent(inout) :: zds
 
     real(wp), dimension(:,:), intent(out) :: mld
     real(wp), dimension(:,:,:,:), intent(out) :: fdx
@@ -378,6 +382,24 @@ contains
     !$omp end parallel do
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: mld ',time2-time1
+
+    ! downsloping flow of dense shelf water (after convection, so that the shelf column is already homogenised)
+    if (l_downslope) then
+      call downslope(l_tracers_trans,f_ocn,ts,fds,zds)
+      ! update density
+      do j=1,maxj
+        do i=1,maxi
+          if (mask_ocn(i,j).eq.1) then
+            do k=k1(i,j),maxk
+              rho(i,j,k) = eos(ts(i,j,k,1),ts(i,j,k,2),zro(k))
+            enddo
+          endif
+        enddo
+      enddo
+    else
+      fds = 0._wp
+      zds = 0._wp
+    endif
 
     deallocate(mldk)
     deallocate(pe_layer1)
