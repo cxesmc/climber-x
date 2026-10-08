@@ -3511,7 +3511,7 @@ contains
        ann_o%basin_mask  = int(missing_value)
        ann_o%basin_mask2 = int(missing_value)
      endwhere
-     ann_o%area = ocn%f_ocn*ocn%grid%ocn_area
+     ann_o%area = ocn%grid%ocn_area   ! ocn_area is already dx*dy*f_ocn
      ann_o%topo = topo
      ann_o%bathy = bathy
      ann_o%k1 = ocn%grid%k1
