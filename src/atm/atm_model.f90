@@ -61,7 +61,9 @@ module atm_model
     use clouds_mod, only : clouds
     use vesta_mod, only : hscales, vesta, tropoheight
     use crisa_mod, only : crisa
-    use slp_mod, only : azslp, zslp
+    use slp_mod, only : azslp, zslp, efe_diag, col_prev_unset
+    use atm_grid, only : cheat
+    use timer, only : dt_atm
     use u2d_mod, only : u2d, usur
     use u3d_mod, only : u3d
     use synop_mod, only : synop
@@ -232,9 +234,9 @@ contains
     !$ time1 = omp_get_wtime()
     ! fdydse and t3 are from the previous step: adifa and vesta run further down, see
     ! slp_mod::zslp.
-    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, atm%zsa, & ! in
-      atm%fdydse, atm%t3, atm%q3, atm%htrop, atm%ttrop, & ! in
-      atm%slp, atm%had_fi, atm%had_width)  ! out
+    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, & ! in
+      atm%fdydse, atm%t3, atm%q3, atm%htrop, atm%ttrop, atm%efe, & ! in
+      atm%ficz, atm%slp, atm%had_fi, atm%had_width)  ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'zslp',(time2-time1)
 
@@ -267,10 +269,11 @@ contains
       ! 3d velocity field
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, & ! in
+      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, atm%gams, atm%aslp, & ! in
         atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%w3_nt, atm%uz500, &  ! out   
         atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac, atm%fac_topo, atm%psi, atm%psi_topo, &  ! out
-        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo)  ! out
+        atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, atm%froude, &  ! out
+        atm%dp_ret_topo, atm%p_ret_topo, atm%dp_ret_ageo, atm%p_ret_ageo)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'u3d1',(time2-time1)*nstep_fast
       !$ if(l_write_timer .and. niter.eq.2) print *,'u3d2',(time2-time1)*nstep_fast
@@ -438,6 +441,13 @@ contains
         atm%diffx, atm%diffy)
 
     enddo
+
+    !-------------------------------------------------
+    ! diagnostic energy flux equator from boundary fluxes and column energy storage
+    !-------------------------------------------------
+    call efe_diag(atm%rb_atm, atm%sha, atm%lha, cheat, atm%tam, atm%dtcol, atm%wcon, sqr, dt_atm, &  ! in
+      atm%tcol_prev, atm%wcon_prev, &  ! inout
+      atm%aht_eq, atm%efe)   ! out
 
     ! mean precipitation over fast time steps
     atm%prc  = atm%prc/nstep_fast
@@ -710,6 +720,11 @@ contains
          atm%convdse(i,j) = 0._wp
          atm%psi(i,j) = 0._wp
          atm%psi_topo(i,j) = 0._wp
+         atm%froude(i,j) = 0._wp
+         atm%dp_ret_topo(i,j) = 0._wp
+         atm%p_ret_topo(i,j) = 0._wp
+         atm%dp_ret_ageo(i,j) = 0._wp
+         atm%p_ret_ageo(i,j) = 0._wp
          atm%convdse_psi(i,j) = 0._wp
          atm%convdse_psi_topo(i,j) = 0._wp
 
@@ -830,9 +845,17 @@ contains
      allocate(atm%W_strat(im,jm))
      allocate(atm%dtcol(im,jm))
      allocate(atm%dtcol_prev(im,jm))
-     ! sentinel: time_step seeds dtcol_prev from the first dtcol it sees, so no restart field
-     ! is needed and the first step carries no spurious correction
+     ! sentinel: time_step seeds dtcol_prev from the first dtcol it sees (cold start, or a restart file
+     ! without it), so the first step carries no spurious correction
      atm%dtcol_prev(:,:) = dtcol_prev_unset
+     allocate(atm%tcol_prev(im,jm))
+     allocate(atm%wcon_prev(im,jm))
+     ! sentinel: the energy flux equator diagnostic takes its storage term from the next call on
+     atm%tcol_prev(:,:) = col_prev_unset
+     atm%wcon_prev(:,:) = col_prev_unset
+     atm%aht_eq  = 0._wp
+     atm%efe     = 0._wp
+     atm%ficz    = 0._wp
      allocate(atm%cld_rh(im,jm)) 
      allocate(atm%cld_low(im,jm)) 
      allocate(atm%cld(im,jm)) 
@@ -951,6 +974,11 @@ contains
      allocate(atm%fac_topo(im,jm))
      allocate(atm%psi(im,jm))
      allocate(atm%psi_topo(im,jm))
+     allocate(atm%froude(im,jm))
+     allocate(atm%dp_ret_topo(im,jm))
+     allocate(atm%p_ret_topo(im,jm))
+     allocate(atm%dp_ret_ageo(im,jm))
+     allocate(atm%p_ret_ageo(im,jm))
      allocate(atm%fax_psi(imc,jm,km))
      allocate(atm%fay_psi(im,jmc,km))
      allocate(atm%fax_psi_topo(imc,jm,km))
@@ -1108,6 +1136,8 @@ contains
      deallocate(atm%W_strat)
      deallocate(atm%dtcol)
      deallocate(atm%dtcol_prev)
+     deallocate(atm%tcol_prev)
+     deallocate(atm%wcon_prev)
      deallocate(atm%cld_rh) 
      deallocate(atm%cld_low) 
      deallocate(atm%cld) 
@@ -1224,6 +1254,11 @@ contains
      deallocate(atm%fac_topo)
      deallocate(atm%psi)
      deallocate(atm%psi_topo)
+     deallocate(atm%froude)
+     deallocate(atm%dp_ret_topo)
+     deallocate(atm%p_ret_topo)
+     deallocate(atm%dp_ret_ageo)
+     deallocate(atm%p_ret_ageo)
      deallocate(atm%fax_psi)
      deallocate(atm%fay_psi)
      deallocate(atm%fax_psi_topo)
@@ -1389,6 +1424,10 @@ contains
     call nc_write(fnm,"f_ice_lake ",   atm%f_ice_lake,    dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"frst     ",     atm%frst     ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"Cde      ",     atm%Cde      ,     dims=["lon","lat","nm "],long_name="",units="")
+    call nc_write(fnm,"efe      ",     atm%efe      ,     dim1="x",  long_name="energy flux equator",units="deg")
+    call nc_write(fnm,"tcol_prev",     atm%tcol_prev,     dims=["lon","lat"],long_name="column temperature tam+dtcol at the previous step",units="K")
+    call nc_write(fnm,"wcon_prev",     atm%wcon_prev,     dims=["lon","lat"],long_name="column water at the previous step",units="kg/m2")
+    call nc_write(fnm,"dtcol_prev",    atm%dtcol_prev,    dims=["lon","lat"],long_name="dtcol at the previous step",units="K")
     call nc_write(fnm,"zsa      ",     atm%zsa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"psa      ",     atm%psa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"sigoro   ",     atm%sigoro   ,     dims=["lon","lat"],long_name="",units="")
@@ -1482,6 +1521,14 @@ contains
       call nc_read(fnm,"Cde",atm%Cde)
     else
       atm%Cde = 1.3e-3_wp
+    endif
+    if (nc_exists_var(fnm,"tcol_prev")) then
+      call nc_read(fnm,"efe",       atm%efe      )
+      call nc_read(fnm,"tcol_prev", atm%tcol_prev)
+      call nc_read(fnm,"wcon_prev", atm%wcon_prev)
+    endif
+    if (nc_exists_var(fnm,"dtcol_prev")) then
+      call nc_read(fnm,"dtcol_prev", atm%dtcol_prev)
     endif
     call nc_read(fnm,"zsa      ",     atm%zsa     ) 
     call nc_read(fnm,"psa      ",     atm%psa     ) 

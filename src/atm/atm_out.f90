@@ -151,6 +151,8 @@ module atm_out
     real(wp) :: itcz
     real(wp) :: itcz_min
     real(wp) :: itcz_max
+    real(wp) :: efe
+    real(wp) :: aht_eq
     real(wp) :: had_width
   end type
 
@@ -162,6 +164,9 @@ module atm_out
 
     real(wp) :: had_fi
     real(wp) :: had_width
+    real(wp) :: aht_eq
+    real(wp) :: efe
+    real(wp) :: ficz
 
     real(wp), allocatable, dimension(:) :: ptrop
     real(wp), allocatable, dimension(:) :: tslz
@@ -201,6 +206,11 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: prc_conv
     real(wp), allocatable, dimension(:,:) :: psi
     real(wp), allocatable, dimension(:,:) :: psi_topo
+    real(wp), allocatable, dimension(:,:) :: froude
+    real(wp), allocatable, dimension(:,:) :: dp_ret_topo
+    real(wp), allocatable, dimension(:,:) :: p_ret_topo
+    real(wp), allocatable, dimension(:,:) :: dp_ret_ageo
+    real(wp), allocatable, dimension(:,:) :: p_ret_ageo
     real(wp), allocatable, dimension(:,:) :: convdse_psi
     real(wp), allocatable, dimension(:,:) :: convdse_psi_topo
     real(wp), allocatable, dimension(:,:) :: prc_over
@@ -481,6 +491,11 @@ contains
      allocate(ann_a%prc_conv(im,jm))
      allocate(ann_a%psi(im,jm))
      allocate(ann_a%psi_topo(im,jm))
+     allocate(ann_a%froude(im,jm))
+     allocate(ann_a%dp_ret_topo(im,jm))
+     allocate(ann_a%p_ret_topo(im,jm))
+     allocate(ann_a%dp_ret_ageo(im,jm))
+     allocate(ann_a%p_ret_ageo(im,jm))
      allocate(ann_a%convdse_psi(im,jm))
      allocate(ann_a%convdse_psi_topo(im,jm))
      allocate(ann_a%prc_over(im,jm))
@@ -711,6 +726,11 @@ contains
      allocate(mon_a(k)%prc_conv(im,jm))
      allocate(mon_a(k)%psi(im,jm))
      allocate(mon_a(k)%psi_topo(im,jm))
+     allocate(mon_a(k)%froude(im,jm))
+     allocate(mon_a(k)%dp_ret_topo(im,jm))
+     allocate(mon_a(k)%p_ret_topo(im,jm))
+     allocate(mon_a(k)%dp_ret_ageo(im,jm))
+     allocate(mon_a(k)%p_ret_ageo(im,jm))
      allocate(mon_a(k)%convdse_psi(im,jm))
      allocate(mon_a(k)%convdse_psi_topo(im,jm))
      allocate(mon_a(k)%prc_over(im,jm))
@@ -1134,6 +1154,8 @@ contains
       ann_ts(y)%itcz =0
       ann_ts(y)%itcz_min =0
       ann_ts(y)%itcz_max =0
+      ann_ts(y)%efe =0
+      ann_ts(y)%aht_eq =0
       ann_ts(y)%had_width =0
     endif
 
@@ -1398,6 +1420,8 @@ contains
     ann_ts(y)%itcz          = ann_ts(y)%itcz          + atm%had_fi*180./pi * ann_avg
     ann_ts(y)%itcz_min      = min(ann_ts(y)%itcz_min, atm%had_fi*180./pi)
     ann_ts(y)%itcz_max      = max(ann_ts(y)%itcz_max, atm%had_fi*180./pi)
+    ann_ts(y)%efe           = ann_ts(y)%efe           + atm%efe * ann_avg
+    ann_ts(y)%aht_eq        = ann_ts(y)%aht_eq        + atm%aht_eq * ann_avg
     ann_ts(y)%had_width     = ann_ts(y)%had_width     + atm%had_width*180./pi * ann_avg
 
     if( time_eoy_atm ) then
@@ -1473,6 +1497,9 @@ contains
         do m=1,nmon_year
           mon_a(m)%had_fi      = 0. 
           mon_a(m)%had_width   = 0. 
+          mon_a(m)%aht_eq      = 0. 
+          mon_a(m)%efe         = 0. 
+          mon_a(m)%ficz        = 0. 
           mon_a(m)%ptrop       = 0. 
           mon_a(m)%tslz        = 0. 
           mon_a(m)%tskslz       = 0. 
@@ -1501,6 +1528,11 @@ contains
           mon_a(m)%prc_conv    = 0.
           mon_a(m)%psi         = 0.
           mon_a(m)%psi_topo    = 0.
+          mon_a(m)%froude      = 0.
+          mon_a(m)%dp_ret_topo = 0.
+          mon_a(m)%p_ret_topo = 0.
+          mon_a(m)%dp_ret_ageo = 0.
+          mon_a(m)%p_ret_ageo = 0.
           mon_a(m)%convdse_psi = 0.
           mon_a(m)%convdse_psi_topo = 0.
           mon_a(m)%prc_over    = 0.
@@ -1688,6 +1720,9 @@ contains
 
       mon_a(mon)%had_fi      = mon_a(mon)%had_fi      + mon_avg * atm%had_fi*180./pi    ! deg
       mon_a(mon)%had_width   = mon_a(mon)%had_width   + mon_avg * atm%had_width*180./pi ! deg
+      mon_a(mon)%aht_eq      = mon_a(mon)%aht_eq      + mon_avg * atm%aht_eq     ! PW
+      mon_a(mon)%efe         = mon_a(mon)%efe         + mon_avg * atm%efe        ! deg
+      mon_a(mon)%ficz        = mon_a(mon)%ficz        + mon_avg * atm%ficz*180./pi ! deg
       mon_a(mon)%ptrop       = mon_a(mon)%ptrop       + mon_avg * atm%ptrop
       mon_a(mon)%tslz        = mon_a(mon)%tslz        + mon_avg * sum(atm%tsl,1)/im
       mon_a(mon)%tskslz       = mon_a(mon)%tskslz       + mon_avg * sum(atm%tsksl,1)/im
@@ -1716,6 +1751,11 @@ contains
       mon_a(mon)%prc_conv    = mon_a(mon)%prc_conv    + mon_avg * atm%prc_conv*sec_day
       mon_a(mon)%psi         = mon_a(mon)%psi         + mon_avg * atm%psi
       mon_a(mon)%psi_topo    = mon_a(mon)%psi_topo    + mon_avg * atm%psi_topo
+      mon_a(mon)%froude      = mon_a(mon)%froude      + mon_avg * atm%froude
+      mon_a(mon)%dp_ret_topo = mon_a(mon)%dp_ret_topo + mon_avg * atm%dp_ret_topo
+      mon_a(mon)%p_ret_topo = mon_a(mon)%p_ret_topo + mon_avg * atm%p_ret_topo
+      mon_a(mon)%dp_ret_ageo = mon_a(mon)%dp_ret_ageo + mon_avg * atm%dp_ret_ageo
+      mon_a(mon)%p_ret_ageo = mon_a(mon)%p_ret_ageo + mon_avg * atm%p_ret_ageo
       mon_a(mon)%convdse_psi      = mon_a(mon)%convdse_psi      + mon_avg * atm%convdse_psi
       mon_a(mon)%convdse_psi_topo = mon_a(mon)%convdse_psi_topo + mon_avg * atm%convdse_psi_topo
       mon_a(mon)%prc_over    = mon_a(mon)%prc_over    + mon_avg * atm%prc_over*sec_day
@@ -2403,6 +2443,8 @@ contains
     call nc_write(fnm,"itcz", vars%itcz , dims=[dim_time],start=[nout],count=[y],long_name="Latitude of the ITCZ (annual average)",units="deg",ncid=ncid)
     call nc_write(fnm,"itcz_min", vars%itcz_min , dims=[dim_time],start=[nout],count=[y],long_name="Min latitude of the ITCZ",units="deg",ncid=ncid)
     call nc_write(fnm,"itcz_max", vars%itcz_max , dims=[dim_time],start=[nout],count=[y],long_name="Max latitude of the ITCZ",units="deg",ncid=ncid)
+    call nc_write(fnm,"efe", vars%efe , dims=[dim_time],start=[nout],count=[y],long_name="Energy flux equator (annual average)",units="deg",ncid=ncid)
+    call nc_write(fnm,"aht_eq", vars%aht_eq , dims=[dim_time],start=[nout],count=[y],long_name="Northward atmospheric energy transport across the equator from boundary fluxes (annual average)",units="PW",ncid=ncid)
     call nc_write(fnm,"had_width", vars%had_width , dims=[dim_time],start=[nout],count=[y],long_name="Width of the Hadley cells (annual average)",units="deg",ncid=ncid)
 
     call nc_write(fnm,"tg_l      ", vars%t2m_l     , dims=[dim_time],start=[nout],count=[y],long_name="temperature",units="degC",ncid=ncid)
@@ -2526,6 +2568,12 @@ contains
       start=[ndat,nout],count=[1,1],long_name="",units="deg",ncid=ncid)
     call nc_write(fnm,"had_width  ", sngl(vars%had_width  ), dims=["mon ","time"], &
       start=[ndat,nout],count=[1,1],long_name="",units="deg",ncid=ncid)
+    call nc_write(fnm,"aht_eq     ", sngl(vars%aht_eq     ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="northward atmospheric energy transport across the equator implied by the boundary fluxes",units="PW",ncid=ncid)
+    call nc_write(fnm,"efe        ", sngl(vars%efe        ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="energy flux equator (zero of the implied atmospheric energy transport)",units="deg",ncid=ncid)
+    call nc_write(fnm,"ficz       ", sngl(vars%ficz       ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="ITCZ latitude of the meridional cell geometry (boundary between the Hadley cells)",units="deg",ncid=ncid)
 
     call nc_write(fnm,"ptrop      ", sngl(vars%ptrop      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="relative pressure at tropopause",units="/",ncid=ncid)
@@ -2901,6 +2949,17 @@ contains
     call nc_write(fnm,"so4_ot      ", sngl(vars%so4_ot      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="SO4 optical thickness",units="1",ncid=ncid)
 
+    call nc_write(fnm,"froude     ", sngl(vars%froude    (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="Froude number U/(N*H) of the low-level flow against the highest surface of the 3x3 neighbourhood, H = crest height above the local surface, N from gams, U = geostrophic+thermal wind of the surface layer; capped at 10; blocked depth above the surface = H*max(0,1-Fr)",units="1",ncid=ncid)
+    call nc_write(fnm,"dp_ret_topo", sngl(vars%dp_ret_topo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="thickness of the band in which the topographic part of the column mass correction is returned",units="hPa",ncid=ncid)
+    call nc_write(fnm,"p_ret_topo ", sngl(vars%p_ret_topo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="mid pressure of the band in which the topographic part of the column mass correction is returned",units="hPa",ncid=ncid)
+    call nc_write(fnm,"dp_ret_ageo", sngl(vars%dp_ret_ageo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="thickness of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions",units="hPa",ncid=ncid)
+    call nc_write(fnm,"p_ret_ageo ", sngl(vars%p_ret_ageo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="mid pressure of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions",units="hPa",ncid=ncid)
+
     if (l_output_extended) then
     call nc_write(fnm,"psi        ", sngl(vars%psi       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the column mass correction, F_c = grad(psi)",units="kg/s",ncid=ncid)
@@ -3089,6 +3148,9 @@ contains
     ! Set all values to zero
     ave%had_fi      = 0._wp
     ave%had_width   = 0._wp
+    ave%aht_eq      = 0._wp
+    ave%efe         = 0._wp
+    ave%ficz        = 0._wp
     ave%ptrop       = 0._wp
     ave%tslz        = 0._wp
     ave%tskslz      = 0._wp
@@ -3117,6 +3179,11 @@ contains
     ave%prc_conv    = 0._wp
     ave%psi         = 0._wp
     ave%psi_topo    = 0._wp
+    ave%froude      = 0._wp
+    ave%dp_ret_topo = 0._wp
+    ave%p_ret_topo = 0._wp
+    ave%dp_ret_ageo = 0._wp
+    ave%p_ret_ageo = 0._wp
     ave%convdse_psi = 0._wp
     ave%convdse_psi_topo = 0._wp
     ave%prc_over    = 0._wp
@@ -3304,6 +3371,9 @@ contains
     do k = 1, n
        ave%had_fi      = ave%had_fi      + d(k)%had_fi      / div
        ave%had_width   = ave%had_width   + d(k)%had_width   / div
+       ave%aht_eq      = ave%aht_eq      + d(k)%aht_eq      / div
+       ave%efe         = ave%efe         + d(k)%efe         / div
+       ave%ficz        = ave%ficz        + d(k)%ficz        / div
        ave%ptrop       = ave%ptrop       + d(k)%ptrop       / div
        ave%tslz        = ave%tslz        + d(k)%tslz        / div
        ave%tskslz       = ave%tskslz       + d(k)%tskslz       / div
@@ -3332,6 +3402,11 @@ contains
        ave%prc_conv    = ave%prc_conv    + d(k)%prc_conv    / div
        ave%psi         = ave%psi         + d(k)%psi         / div
        ave%psi_topo    = ave%psi_topo    + d(k)%psi_topo    / div
+       ave%froude      = ave%froude      + d(k)%froude      / div
+       ave%dp_ret_topo = ave%dp_ret_topo + d(k)%dp_ret_topo / div
+       ave%p_ret_topo = ave%p_ret_topo + d(k)%p_ret_topo / div
+       ave%dp_ret_ageo = ave%dp_ret_ageo + d(k)%dp_ret_ageo / div
+       ave%p_ret_ageo = ave%p_ret_ageo + d(k)%p_ret_ageo / div
        ave%convdse_psi      = ave%convdse_psi      + d(k)%convdse_psi      / div
        ave%convdse_psi_topo = ave%convdse_psi_topo + d(k)%convdse_psi_topo / div
        ave%prc_over    = ave%prc_over    + d(k)%prc_over    / div

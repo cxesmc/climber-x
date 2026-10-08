@@ -26,17 +26,17 @@
 module slp_mod
 
   use atm_params, only : wp, dp
-  use constants, only : pi, r_earth, omega, g, Rd, T0
+  use constants, only : pi, r_earth, omega, g, Rd, T0, Le
   use atm_params, only : ra, p0, hatm
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
   use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
   use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
   use atm_params, only : cp
   use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2
+  use atm_params, only : i_mmc_itcz, c_mmc_efe
   use atm_params, only : i_mmc_fer
   use atm_params, only : i_mmc_had, c_mmc_q, q_mmc_ref
-  use atm_params, only : i_mmc_wid, c_mmc_dt2, hdv_mmc_ref
-  use atm_params, only : c_mmc_dt0, c_mmc_dt1, c_mmc_z
+  use atm_params, only : c_mmc_dt0, c_mmc_dt1, hdv_mmc_ref
   use atm_params, only : nsmooth_aslp, nsmooth_aslp_topo
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, i_ice
   use atm_grid, only : fcorua, sint, cost, fiu, fit
@@ -47,7 +47,9 @@ module slp_mod
   implicit none
 
   private
-  public :: zslp, azslp 
+  public :: zslp, azslp, efe_diag, col_prev_unset
+
+  real(wp), parameter :: col_prev_unset = -9.e9_wp   !! sentinel of tcol_prev/wcon_prev: no previous step (efe_diag)
 
 contains
 
@@ -137,7 +139,8 @@ contains
           aslp_temp(i,j) = 0._wp
         else
           ! as in CLIMBER-2, Petoukhov 2000, eq. (17)
-          aslp_temp(i,j) = -c_slp_1*g*p0*12000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
+          !aslp_temp(i,j) = -c_slp_1*g*p0*12000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
+          aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
         endif
       enddo
 
@@ -310,38 +313,36 @@ contains
   !   Subroutine :  zslp
   !   Purpose    :  compute zonally averaged sea level pressure component
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine zslp(sin_cos_acbar, tsl, aslp, zsa, fdydse, t3, q3, htrop, ttrop, &
-          slp, had_fi, had_width)
+  subroutine zslp(sin_cos_acbar, tsl, aslp, fdydse, t3, q3, htrop, ttrop, efe, &
+          ficz, slp, had_fi, had_width)
 
     implicit none
 
     real(wp), intent(in ) :: sin_cos_acbar(:,:)
     real(wp), intent(in ) :: tsl(:,:)
     real(wp), intent(in ) :: aslp(:,:)
-    real(wp), intent(in ) :: zsa(:,:)
     real(wp), intent(in ) :: fdydse(:,:)
     real(wp), intent(in ) :: t3(:,:,:)
     real(wp), intent(in ) :: q3(:,:,:)
     real(wp), intent(in ) :: htrop(:,:)
     real(wp), intent(in ) :: ttrop(:,:)
+    real(wp), intent(in ) :: efe          !! energy flux equator from the previous step (deg), see efe_diag
 
+    real(wp), intent(out) :: ficz         !! ITCZ latitude of the cell geometry (radians)
     real(wp), intent(out) :: slp(:,:)
     real(wp), intent(out) :: had_fi
     real(wp), intent(out) :: had_width
 
     real(wp), parameter :: p6=pi/6._wp
     real(wp), parameter :: dse_min=1.e3_wp   !! J/kg, floor on the branch DSE contrast
-    real(wp), parameter :: fi_dt_eq =10._wp*pi/180._wp  !! equatorial band, |fi| below this
-    real(wp), parameter :: fi_dt_s1 =25._wp*pi/180._wp  !! subtropical band, equatorward limit
-    real(wp), parameter :: fi_dt_s2 =35._wp*pi/180._wp  !! subtropical band, poleward limit
 
     integer :: i, j, k
     integer :: jc, jtn1, jtn2, jpn1, jpn2, jts1, jts2, jps1, jps2
     real(wp) :: wtn1, wtn2, wpn1, wpn2, wts1, wts2, wps1, wps2
     real(wp) :: tnh, tsh, scosh
-    real(wp) :: dtpn, dtps, dtfn, dtfs, ficz, ttrpmx, tbhn, tbhs, dthn, dths, cocfn, cocfs
+    real(wp) :: dtpn, dtps, dtfn, dtfs, ttrpmx, tbhn, tbhs, dthn, dths, cocfn, cocfs
     real(wp) :: hadwidsc
-    real(wp) :: dttrp, hadwid, teqsum, tsubsum, weqsum, wsubsum
+    real(wp) :: hadwid
     real(wp) :: ff, coc, psum, csum
     real(wp) :: dzdse, aferzn, aferzs
     real(wp) :: qtrp, wtrp, fqhad
@@ -349,32 +350,15 @@ contains
 
     real(wp) :: fisu(jmc), fist(jm), vsz(jmc), tslz(jm), psz(jmc), acbarz(jm)
     real(wp) :: dsez(jm), fedz(jmc), aferz(jm)
-    real(wp) :: zsaz(jm), fzsa(jm)
 
 
-    ! zonal mean sea level temperature and topography
+    ! zonal mean sea level temperature
     tslz(:) = 0._wp
-    zsaz(:) = 0._wp
     do j=1,jm 
       do i=1,im
         tslz(j) = tslz(j) + tsl(i,j)*aim 
-        zsaz(j) = zsaz(j) + zsa(i,j)*aim 
       enddo        
     enddo
-
-    ! Factor accounting for the zonal mean topography in the PBL.
-    ! The meridional cells below are driven by a sea level temperature contrast and close
-    ! through the planetary boundary layer, so where the zonal mean surface sits well above
-    ! sea level there is less atmosphere left to carry the return branch and the cell is
-    ! damped. c_mmc_z is the elevation at which the damping is complete; c_mmc_z<=0 switches
-    ! the damping off (fzsa=1 everywhere).
-    if (c_mmc_z.gt.0._wp) then
-      do j=1,jm 
-        fzsa(j) = 1._wp-min(1._wp,max(0._wp,0.5_wp*(zsaz(max(1,j-1))+zsaz(j))/c_mmc_z))
-      enddo
-    else
-      fzsa(:) = 1._wp
-    endif
 
     ! NH and SH mean sea level temperatures
     tnh = 0._wp
@@ -409,67 +393,58 @@ contains
 
     ! ITCZ position, depends on temperature difference between the two hemispheres 
 
-    ficz = c_mmc_2*(tnh-tsh)
-
-    ! Width of the Hadley cells
-
-    teqsum  = 0._wp; weqsum  = 0._wp
-    tsubsum = 0._wp; wsubsum = 0._wp
-    do j=1,jm
-      if (abs(fit(j)).lt.fi_dt_eq) then
-        teqsum  = teqsum  + tslz(j)*cost(j)
-        weqsum  = weqsum  + cost(j)
-      else if (abs(fit(j)).gt.fi_dt_s1 .and. abs(fit(j)).lt.fi_dt_s2) then
-        tsubsum = tsubsum + tslz(j)*cost(j)
-        wsubsum = wsubsum + cost(j)
-      endif
-    enddo
-    dttrp = teqsum/max(weqsum,1.e-20_wp) - tsubsum/max(wsubsum,1.e-20_wp)
-
-    ! total width in degrees, then hadwidsc from width = 180/(3*hadwidsc) deg
-    hadwid   = c_mmc_dt0 - c_mmc_dt1*dttrp
-
-    ! Thermodynamic scaling of the Hadley width, selected by i_mmc_wid
+    ! ITCZ latitude, selected by i_mmc_itcz.  The zero of the cell phase ff below, i.e. the boundary
+    ! between the two Hadley cells, sits exactly at fi = ficz.
     !
-    ! i_mmc_wid = 0  The width follows the tropical sea level temperature contrast alone.  That contrast
-    !                is almost invariant under greenhouse warming, so the cells do not expand, contrary
-    !                to CMIP.
+    ! i_mmc_itcz = 0  Proportional to the interhemispheric sea level temperature contrast,
+    !                   ficz = c_mmc_2*(T_NH - T_SH).
+    !                 One coefficient serves the seasonal cycle and forced changes alike, so the ITCZ moves
+    !                 4-10 times too far under LGM and 4xCO2 forcing, whose contrast sits at high latitudes.
     !
-    ! i_mmc_wid = 1  The same width, scaled by the Held (2000) supercriticality criterion.  The Hadley
-    !                cell ends where the angular momentum conserving flow first becomes baroclinically
-    !                unstable, at
-    !                  fi_H ~ [ g H Dv / (Omega**2 a**2) ]**(1/4),
-    !                with H the tropopause height and Dv = (theta(H)-theta(sfc))/theta_sfc the bulk dry
-    !                stability of the tropical troposphere.  Only H*Dv varies here, so
-    !                  hadwid -> hadwid * (H*Dv/hdv_mmc_ref)**c_mmc_dt2.
-    !                Both factors grow under warming - the tropopause rises and the troposphere gets
-    !                more stable - which is the accepted explanation of the observed expansion.  Note
-    !                that Dv is the DRY stability up to the tropopause and does rise here, unlike the
-    !                gross moist stability between fixed levels.
-    if (i_mmc_wid.eq.1) then
-      htrpz = 0._wp
-      stopz = 0._wp
-      sbotz = 0._wp
-      tsfcz = 0._wp
-      wwid  = 0._wp
-      do j=jtn,jts+1
-        do i=1,im
-          ! ttrop is t_prof evaluated at htrop: t_prof clamps its argument at the tropopause,
-          ! so vesta's profile loop leaves it holding exactly the tropopause temperature.
-          htrpz = htrpz + htrop(i,j)*cost(j)
-          stopz = stopz + (ttrop(i,j)+g*htrop(i,j)/cp)*cost(j)
-          sbotz = sbotz + (t3(i,j,1)+g*zc(1)/cp)*cost(j)
-          tsfcz = tsfcz + t3(i,j,1)*cost(j)
-          wwid  = wwid  + cost(j)
-        enddo
-      enddo
-      htrpz = htrpz/wwid
-      stopz = stopz/wwid
-      sbotz = sbotz/wwid
-      tsfcz = tsfcz/wwid
-      hdv   = htrpz*(stopz-sbotz)/tsfcz
-      hadwid = hadwid*(max(hdv,1.e-20_wp)/hdv_mmc_ref)**c_mmc_dt2
+    ! i_mmc_itcz = 1  Energy flux equator closure: ficz = c_mmc_efe*efe.  efe is the zero of the northward
+    !                 atmospheric energy transport implied by the boundary fluxes and the column storage
+    !                 (efe_diag), so it does not depend on the circulation this routine prescribes.  It is
+    !                 from the previous step (from the restart file on the first step; 0 after a cold start).
+    if (i_mmc_itcz.eq.1) then
+      ficz = c_mmc_efe*efe*pi/180._wp
+    else
+      ficz = c_mmc_2*(tnh-tsh)
     endif
+
+    ! Width of the Hadley cells: c_mmc_dt0 degrees in total, scaled by the Held (2000) supercriticality
+    ! criterion.  The Hadley cell ends where the angular momentum conserving flow first becomes
+    ! baroclinically unstable, at
+    !   fi_H ~ [ g H Dv / (Omega**2 a**2) ]**(1/4),
+    ! with H the tropopause height and Dv = (theta(H)-theta(sfc))/theta_sfc the bulk dry stability of the
+    ! tropical troposphere.  Only H*Dv varies here, so
+    !   hadwid = c_mmc_dt0 * (H*Dv/hdv_mmc_ref)**c_mmc_dt1,
+    ! and hadwidsc follows from width = 180/(3*hadwidsc) deg.
+    ! Both factors grow under warming - the tropopause rises and the troposphere gets more stable - which is
+    ! the accepted explanation of the observed expansion.  Note that Dv is the DRY stability up to the tropopause
+    ! and does rise here, unlike the gross moist stability between fixed levels.
+    htrpz = 0._wp
+    stopz = 0._wp
+    sbotz = 0._wp
+    tsfcz = 0._wp
+    wwid  = 0._wp
+    do j=jtn,jts+1
+      do i=1,im
+        ! ttrop is t_prof evaluated at htrop: t_prof clamps its argument at the tropopause,
+        ! so vesta's profile loop leaves it holding exactly the tropopause temperature.
+        htrpz = htrpz + htrop(i,j)*cost(j)
+        stopz = stopz + (ttrop(i,j)+g*htrop(i,j)/cp)*cost(j)
+        sbotz = sbotz + (t3(i,j,1)+g*zc(1)/cp)*cost(j)
+        tsfcz = tsfcz + t3(i,j,1)*cost(j)
+        wwid  = wwid  + cost(j)
+      enddo
+    enddo
+    htrpz = htrpz/wwid
+    stopz = stopz/wwid
+    sbotz = sbotz/wwid
+    tsfcz = tsfcz/wwid
+    hdv   = htrpz*(stopz-sbotz)/tsfcz
+    hadwid = c_mmc_dt0*(max(hdv,1.e-20_wp)/hdv_mmc_ref)**c_mmc_dt1
+
     hadwidsc = 60._wp/max(hadwid,1._wp)
 
     hadwidsc = max(hadwidsc,0.5_wp)
@@ -663,7 +638,7 @@ contains
       if (-ff.gt.pi .and. (-ff).le.2._wp*pi)       coc = cocfs
       if (-ff.gt.2._wp*pi .and. (-ff).le.3._wp*pi) coc = c_mmc_pol*dtps
 
-      vsz(j) = -coc*fzsa(j)*sin(ff) 
+      vsz(j) = -coc*sin(ff) 
 
     enddo
 
@@ -704,5 +679,102 @@ contains
     return
 
   end subroutine zslp
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  e f e _ d i a g
+  !   Purpose    :  diagnostic energy flux equator (EFE), from boundary fluxes only
+  !
+  !   The net energy input into the atmospheric column is NEI = rb_atm + sha + lha, the moist static
+  !   energy source of the column budget in time_step (latent heat enters through evaporation).
+  !   Its storage is dE/dt with E = cheat*(tam+dtcol) + Le*wcon, the column enthalpy plus latent
+  !   energy, differenced between successive calls.  The difference is taken in the column state,
+  !   cheat*d(tam+dtcol) + Le*d(wcon) with the current cheat, so that a change of the column mass
+  !   with the topography (atm_grid_update, or a restart into a new geometry) is not read as storage.  NEI - dE/dt, with its global mean removed so
+  !   that the implied transport closes at both poles, integrated from the south pole gives the
+  !   northward atmospheric energy transport F at every latitude boundary.  Nothing here uses the
+  !   model's own transports, so the EFE is independent of the circulation that the MMC
+  !   parameterisation prescribes.
+  !
+  !   aht_eq  : F across the equator (PW), positive northward
+  !   efe     : latitude (deg) of the zero crossing of F closest to the equator within +-25 deg,
+  !             linearly interpolated between v-points (the full EFE)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  subroutine efe_diag(rb_atm, sha, lha, cheat, tam, dtcol, wcon, sqr, dt, &
+      tcol_prev, wcon_prev, aht_eq, efe)
+
+    implicit none
+
+    real(wp), intent(in   ) :: rb_atm(:,:)
+    real(wp), intent(in   ) :: sha(:,:)
+    real(wp), intent(in   ) :: lha(:,:)
+    real(wp), intent(in   ) :: cheat(:,:)
+    real(wp), intent(in   ) :: tam(:,:)
+    real(wp), intent(in   ) :: dtcol(:,:)
+    real(wp), intent(in   ) :: wcon(:,:)
+    real(wp), intent(in   ) :: sqr(:,:)
+    real(wp), intent(in   ) :: dt
+    real(wp), intent(inout) :: tcol_prev(:,:)   !! tam+dtcol at the previous call (K), col_prev_unset before the first
+    real(wp), intent(inout) :: wcon_prev(:,:)   !! wcon at the previous call (kg m-2)
+    real(wp), intent(out  ) :: aht_eq
+    real(wp), intent(out  ) :: efe
+
+    integer :: i, j
+    real(wp), parameter :: fi_efe_max = 25._wp   !! deg, search window for the zero crossing
+    real(dp) :: atot, nglob
+    real(dp) :: nrow(jm), arow(jm), f(jmc)
+    real(wp) :: src(im,jm)
+    real(wp) :: la, lb, x
+
+    ! column energy storage since the previous call; zero storage on the first call (cold start, or a
+    ! restart file without tcol_prev)
+    where (tcol_prev.le.col_prev_unset)
+      src = rb_atm + sha + lha
+    elsewhere
+      src = rb_atm + sha + lha - (cheat*(tam+dtcol-tcol_prev) + Le*(wcon-wcon_prev))/dt
+    endwhere
+    tcol_prev = tam+dtcol
+    wcon_prev = wcon
+
+    ! zonal integrals per row (W) and the global mean (W/m2)
+    do j=1,jm
+      nrow(j) = 0._dp
+      arow(j) = 0._dp
+      do i=1,im
+        nrow(j) = nrow(j) + real(src(i,j),dp)*real(sqr(i,j),dp)
+        arow(j) = arow(j) + real(sqr(i,j),dp)
+      enddo
+    enddo
+    atot  = sum(arow)
+    nglob = sum(nrow)/atot
+
+    ! northward transport across the northern edge of each row, fiu(j), integrated from the south
+    ! pole (j=1 is the northern-most row); f(jmc) = 0 at the south pole
+    f(jmc) = 0._dp
+    do j=jm,1,-1
+      f(j) = f(j+1) + (nrow(j) - nglob*arow(j))
+    enddo
+
+    ! transport across the equator, fiu(jeq+1) = 0
+    aht_eq = real(f(jeq+1),wp)*1.e-15_wp
+
+    ! zero crossing of f closest to the equator
+    efe = -999._wp
+    do j=1,jm
+      la = fiu(j)*180._wp/pi
+      lb = fiu(j+1)*180._wp/pi
+      if (abs(la).gt.fi_efe_max .or. abs(lb).gt.fi_efe_max) cycle
+      if ((f(j).gt.0._dp .and. f(j+1).le.0._dp) .or. (f(j).lt.0._dp .and. f(j+1).ge.0._dp)) then
+        x = lb + (la-lb)*real(-f(j+1)/(f(j)-f(j+1)),wp)
+        if (efe.lt.-900._wp .or. abs(x).lt.abs(efe)) efe = x
+      endif
+    enddo
+    ! no crossing in the window: the EFE lies beyond it, on the side opposite to the transport
+    if (efe.lt.-900._wp) efe = -sign(fi_efe_max, aht_eq)
+
+    return
+
+  end subroutine efe_diag
 
 end module slp_mod

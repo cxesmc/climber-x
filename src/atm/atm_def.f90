@@ -55,6 +55,9 @@ module atm_def
 
       real(wp) :: had_fi   !! ITCZ position latitude (radians)
       real(wp) :: had_width   !! width of Hadley cell (radians)
+      real(wp) :: aht_eq   !! diagnostic: northward atmospheric energy transport across the equator from boundary fluxes (PW)
+      real(wp) :: efe      !! diagnostic: energy flux equator, zero crossing of the implied transport (deg)
+      real(wp) :: ficz     !! ITCZ latitude of the meridional cell geometry (radians)
 
       real(wp) :: eccentricity
       real(wp) :: precession
@@ -103,6 +106,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: W_strat    !! stratospheric column water intercept (kg m-2), from vesta
       real(wp), allocatable, dimension(:,:) :: dtcol      !! <t_prof>_mass - tam (K), the column shape offset, from vesta
       real(wp), allocatable, dimension(:,:) :: dtcol_prev !! dtcol at the previous thermodynamic update (K)
+      real(wp), allocatable, dimension(:,:) :: tcol_prev  !! column temperature tam+dtcol at the previous efe_diag call (K)
+      real(wp), allocatable, dimension(:,:) :: wcon_prev  !! column water wcon at the previous efe_diag call (kg m-2)
       real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
@@ -218,6 +223,11 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: fac_topo
       real(wp), allocatable, dimension(:,:) :: psi
       real(wp), allocatable, dimension(:,:) :: psi_topo
+      real(wp), allocatable, dimension(:,:) :: froude   !! Froude number U/(N*H) of the low-level flow against the local crest
+      real(wp), allocatable, dimension(:,:) :: dp_ret_topo   !! hPa, thickness of the band in which the topographic part of the column mass correction is returned
+      real(wp), allocatable, dimension(:,:) :: p_ret_topo   !! hPa, mid pressure of the band in which the topographic part of the column mass correction is returned
+      real(wp), allocatable, dimension(:,:) :: dp_ret_ageo   !! hPa, thickness of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions
+      real(wp), allocatable, dimension(:,:) :: p_ret_ageo   !! hPa, mid pressure of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions
       real(wp), allocatable, dimension(:,:,:) :: fax_psi
       real(wp), allocatable, dimension(:,:,:) :: fay_psi
       real(wp), allocatable, dimension(:,:,:) :: fax_psi_topo
