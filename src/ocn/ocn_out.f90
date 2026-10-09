@@ -185,7 +185,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: fwtz, fwpz, fwaz
      real(wp), dimension(:,:), allocatable :: fayti, fdyti
      real(wp), dimension(:,:), allocatable :: faysi, fdysi 
-     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldst, conv_pe, conv_pe_max, ke_tau, fds, zds
+     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldstmax, mldst, conv_pe, conv_pe_max, ke_tau, fds, zds
      real(wp), dimension(:,:), allocatable :: dconv, dven, nconv, kven
      real(wp), dimension(:,:), allocatable :: z_brines
      real(wp), dimension(:,:), allocatable :: ssh
@@ -368,6 +368,7 @@ contains
     allocate(ann_o%z_brines(maxi,maxj))
     allocate(ann_o%mld(maxi,maxj))
     allocate(ann_o%mldmax(maxi,maxj))
+    allocate(ann_o%mldstmax(maxi,maxj))
     allocate(ann_o%mldst(maxi,maxj))
     allocate(ann_o%ke_tau(maxi,maxj))
     allocate(ann_o%conv_pe(maxi,maxj))
@@ -3530,9 +3531,11 @@ contains
      do j=1,maxj
        do i=1,maxi
          ann_o%mldmax(i,j) = 0._wp
+         ann_o%mldstmax(i,j) = 0._wp
          ann_o%conv_pe_max(i,j) = 0._wp
          do m=1,nmon_year
            ann_o%mldmax(i,j) = max(ann_o%mldmax(i,j),mon_o(m)%mld(i,j))
+           ann_o%mldstmax(i,j) = max(ann_o%mldstmax(i,j),mon_o(m)%mldst(i,j))
            ann_o%conv_pe_max(i,j) = max(ann_o%conv_pe_max(i,j),mon_o(m)%conv_pe(i,j))
          enddo
        enddo
@@ -4055,6 +4058,7 @@ contains
     call nc_write(fnm,"map_isles",    vars%map_isles,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="island map",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"map_edge",    vars%map_edge,  dims=[dim_lon,dim_lat,dim_isles,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxisles,1],long_name="island edges",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"mldmax",    sngl(vars%mldmax),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth from mixed layer scheme",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"mldstmax",  sngl(vars%mldstmax),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth from sigma-t criterion",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"conv_pe_max", sngl(vars%conv_pe_max),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
     endif
     call nc_write(fnm,"t",        sngl(vars%t),  dims=[dim_lon,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="potential temperature",units="C",missing_value=missing_value,ncid=ncid)
