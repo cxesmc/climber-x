@@ -6,4 +6,5 @@ deps = [
     "vilma2",
     "bgc:dev",
     "vilma1:@machine",
+    "climber-x-input:dev",
 ]
