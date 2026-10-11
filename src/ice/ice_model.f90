@@ -336,11 +336,9 @@ contains
                 ! Assign current domain to ylmo pointer
                 ylmo => ylmo_doms(idx_dom)
 
-                ! First define the Yelmo grid information from cmn%grid 
-                ! Note: yelmo expects grid axes in [m], so use conversion factor.
-                call yelmo_init_grid(grd=ylmo%grd,grid_name=grid%name, &
-                        xc=real(grid%G%x*grid%cs%xy_conv,wp_yelmo),yc=real(grid%G%y*grid%cs%xy_conv,wp_yelmo), &
-                        lon=real(grid%lon,wp_yelmo),lat=real(grid%lat,wp_yelmo),area=real(grid%area,wp_yelmo))
+                ! First define the Yelmo grid from the ice grid
+                ! (same projection, axes converted to [m], area in [m^2])
+                call yelmo_init_grid(ylmo%grd,grid)
 
                 ! Define the parameter file we expect for this simulation
                 ! Note: currently the same parameters are used for all domains. 
