@@ -4,6 +4,6 @@ deps = [
     "fesm-utils:dev",
     "yelmo:dev",
     "vilma2",
-    "bgc",
+    "bgc:dev",
     "vilma1:@machine",
 ]
