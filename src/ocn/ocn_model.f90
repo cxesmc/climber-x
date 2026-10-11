@@ -1258,7 +1258,7 @@ contains
     call nc_read(fnm,"u",     ocn%u(:,0:maxi,0:maxj,1:maxk))
     call nc_read(fnm,"ub",    ocn%ub(:,0:maxi,0:maxj))
     ocn%ub(:,maxi+1,0:maxj) = ocn%ub(:,1,0:maxj)
-    call nc_read(fnm,"ts",    ocn%ts(:,:,:,1:2))    ! temperature and salinity
+    call nc_read(fnm,"ts",    ocn%ts(:,:,:,1:2),start=[1,1,1,1],count=[maxi,maxj,maxk,2])    ! temperature and salinity
 
     if (age_tracer) then
       if (nc_exists_var(fnm,"age")) then

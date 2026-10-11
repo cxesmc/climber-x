@@ -160,34 +160,34 @@ contains
   ! read constant climate forcing
   if (ifake_atm.eq.0) then
 
-    call nc_read(fake_atm_const_file,"tair",tair(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"qair",qair(:,:,1:12) )
+    call nc_read(fake_atm_const_file,"tair",tair(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"qair",qair(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     if (prc_forcing.eq.0) then
       ! read rain and snow separately
-      call nc_read(fake_atm_const_file,"rain",rain(:,:,1:12) )
-      call nc_read(fake_atm_const_file,"snow",snow(:,:,1:12) )
+      call nc_read(fake_atm_const_file,"rain",rain(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+      call nc_read(fake_atm_const_file,"snow",snow(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     else if (prc_forcing.eq.1) then
-      call nc_read(fake_atm_const_file,"prc",prc(:,:,1:12) )
+      call nc_read(fake_atm_const_file,"prc",prc(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     endif
-    call nc_read(fake_atm_const_file,"cld",cld(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"cld_day",cld_day(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"pressure",pressure(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"slp",slp(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"tsl",tsl(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"htrop",htrop(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"rbatm",rbatm(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"swdown",swdown(:,:,1:12) )
+    call nc_read(fake_atm_const_file,"cld",cld(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"cld_day",cld_day(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"pressure",pressure(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"slp",slp(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"tsl",tsl(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"htrop",htrop(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"rbatm",rbatm(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"swdown",swdown(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     if (flag_smb) then
-      call nc_read(fake_atm_const_file,"swdown_c",swdown_c(:,:,1:12) )
+      call nc_read(fake_atm_const_file,"swdown_c",swdown_c(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     else
       swdown_c(:,:,1:12) = swdown(:,:,1:12)
     endif
-    call nc_read(fake_atm_const_file,"lwdown",lwdown(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"u10",usur(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"v10",vsur(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"wind",wind(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"taux",taux(:,:,1:12) )
-    call nc_read(fake_atm_const_file,"tauy",tauy(:,:,1:12) )
+    call nc_read(fake_atm_const_file,"lwdown",lwdown(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"u10",usur(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"v10",vsur(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"wind",wind(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"taux",taux(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_const_file,"tauy",tauy(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
 
     tair_min_mon = minval(tair(:,:,1:12),3)
 

@@ -67,8 +67,8 @@ contains
   ! get weights for interpolation from monthly to daily
   call monthly2daily(m0,m1,wtm0,wtm1)
 
-  call nc_read(fake_lnd_const_file,"runoff",runoff(:,:,1:12) )
-  call nc_read(fake_lnd_const_file,"discharge",discharge(:,:,1:12) )
+  call nc_read(fake_lnd_const_file,"runoff",runoff(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+  call nc_read(fake_lnd_const_file,"discharge",discharge(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
 
   ! periodic boundary conditions
   runoff(:,:,0) = runoff(:,:,12)

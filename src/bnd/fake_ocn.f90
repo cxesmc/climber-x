@@ -147,8 +147,8 @@ contains
     call nc_read(fake_ocn_const_file,"t",t_shelf(:,:,1:12), start=[1,1,k_1l,1], count=[ni,nj,1,12] )
     call nc_read(fake_ocn_const_file,"t",t(:,:,:,1:12), start=[1,1,1,1], count=[ni,nj,nk,12] )
     call nc_read(fake_ocn_const_file,"s",s(:,:,:,1:12), start=[1,1,1,1], count=[ni,nj,nk,12] )
-    call nc_read(fake_ocn_const_file,"u_sic",uo1(:,:,1:12) )
-    call nc_read(fake_ocn_const_file,"v_sic",vo1(:,:,1:12) )
+    call nc_read(fake_ocn_const_file,"u_sic",uo1(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_ocn_const_file,"v_sic",vo1(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
 
   else if (ifake_ocn.eq.1) then
     ! time dependent ocean 
