@@ -32,7 +32,7 @@ module ice_model
     use constants, only : map_gen, constants_phys_const
     use phys_constants, only : phys_const_class, phys_const_compare
     use ice_def, only : ice_class
-    use yelmo, only : wp_yelmo, yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
+    use yelmo, only : yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
                       yelmo_write_step_model_metrics, yelmo_restart_write 
     use sicopolis, only : sico_class, sico_init, sico_update, sico_end, sico_write_restart
@@ -103,7 +103,7 @@ contains
                 call ice_to_yelmo(ylmo,ice) 
 
                 ! Call ice sheet model 
-                call yelmo_update(ylmo,real(time,wp_yelmo))
+                call yelmo_update(ylmo,time)
 
                 ! Update ice with new ice-sheet information 
                 call yelmo_to_ice(ice,ylmo)
@@ -134,7 +134,7 @@ contains
                     ! Write 1D output for each year in buffer
                     do k = 1, ylmo_reg_nt_tot
                         file1D = trim(out_dir)//"/ice_"//trim(ylmo%par%grid_name)//"_ts.nc"
-                        call yelmo_write_reg_step(ylmo,file1D,time=real(ylmo_reg_times(idx_dom,k),wp_yelmo), &
+                        call yelmo_write_reg_step(ylmo,file1D,time=ylmo_reg_times(idx_dom,k), &
                                                                             reg_now=ylmo_regs(idx_dom,k))
                     end do 
 
@@ -351,7 +351,7 @@ contains
 
                 ! Now initialize remaining Yelmo components
                 ! (set `grid_def="none"` to use the grid definition from above)
-                call yelmo_init(ylmo,par_path,grid_def="none",time=real(time,wp_yelmo), &
+                call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
                             load_topo=.FALSE.,domain=domain,grid_name=grid%name)
 
                 if (.not. ylmo%par%use_restart) then                          
@@ -389,7 +389,7 @@ contains
                                         label2="Yelmo "//trim(ylmo%bnd%cnst%label))
 
                 ! Finish state initialization of all Yelmo components
-                call yelmo_init_state(ylmo,real(time,wp_yelmo),thrm_method="robin-cold")
+                call yelmo_init_state(ylmo,time,thrm_method="robin-cold")
 
                 ! Done: yelmo domain is now ready to run. 
 
@@ -400,15 +400,15 @@ contains
                 ! Initialize 2D output file 
                 file2D = trim(out_dir)//"/ice_"//trim(ylmo%par%grid_name)//".nc"
 
-                call yelmo_write_init(ylmo,file2D,time_init=real(time,wp_yelmo),units="years")  
+                call yelmo_write_init(ylmo,file2D,time_init=time,units="years")  
                 call yelmo_write_step_2D(ylmo,file2D,time=real(time,sp))
                 
                 ! Initialize 1D output file 
                 file1D = trim(out_dir)//"/ice_"//trim(ylmo%par%grid_name)//"_ts.nc"
 
-                call yelmo_write_reg_init(ylmo,file1D,time_init=real(time,wp_yelmo),units="years", &
+                call yelmo_write_reg_init(ylmo,file1D,time_init=time,units="years", &
                                                             mask=ylmo%bnd%mask_ice.ne.0)
-                call yelmo_write_reg_step(ylmo,file1D,time=real(time,wp_yelmo))  
+                call yelmo_write_reg_step(ylmo,file1D,time=time)  
 
                 ! Disassociate the local pointer ylmo 
                 nullify(ylmo) 
@@ -470,7 +470,7 @@ contains
             case("yelmo")
                 ! Yelmo ice-sheet model interface 
 
-                call yelmo_end(ylmo_doms(idx_dom),time=real(time,wp_yelmo))
+                call yelmo_end(ylmo_doms(idx_dom),time=time)
 
             case("sico")
                 ! SICOPOLIS ice-sheet model interface 
@@ -748,7 +748,7 @@ contains
 
                 file_restart = trim(restart_out_dir)//"/ice_yelmo_"//trim(ice%grid%name)//"_restart.nc"
 
-                call yelmo_restart_write(ylmo_doms(idx_dom),file_restart,time=real(time,wp_yelmo))
+                call yelmo_restart_write(ylmo_doms(idx_dom),file_restart,time=time)
 
             case("sico")
                 ! SICOPOLIS ice-sheet model interface 
