@@ -171,7 +171,7 @@
     ! ---- bucket (bkt_) ----
     bkt_N_closure     = 3      ! 0=CONST 1=OVERBURDEN 2=MARINE 3=TILL 4=TWO_VALUE   (was yneff.method=3)
     bkt_till_rate     = 0.008  ! [m/a]  was ytherm.till_rate
-    bkt_floating_mode = 1      ! 0=ZERO 1=MARGIN_FILL (legacy saturate floating+margin ring)
+    bkt_floating_mode = 2      ! 0=ZERO 1=MARGIN_FILL (legacy saturate floating+margin ring) 2=SATURATED (saturate floating only)
 
     ! ---- closures (no prefix) ----
     const_N         = 1e7    ! [Pa] N_CLOSURE_CONST (was yneff.const)
