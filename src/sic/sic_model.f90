@@ -34,6 +34,7 @@ module sic_model
     use sic_grid, only: maxi, maxj, area, area_old, dx, dy
     use sic_grid, only : sic_grid_init, sic_grid_update
     use sic_params, only : sic_params_init
+    use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
     use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
@@ -996,6 +997,8 @@ contains
     call nc_write(fnm,"rough_h_sic", sic%rough_h_sic, dims=["lon","lat"],long_name="roughness length for heat/moisture over sea ice",units="m")
     call nc_write(fnm,"Cdh_ocn", sic%Cdh_ocn, dims=["lon","lat"],long_name="drag coefficient for heat/moisture over ocean",units="m")
     call nc_write(fnm,"Cdh_sic", sic%Cdh_sic, dims=["lon","lat"],long_name="drag coefficient for heat/moisture over sea ice",units="m")
+    call nc_write(fnm,"Cde_ocn", sic%Cde_ocn, dims=["lon","lat"],long_name="exchange coefficient for moisture over ocean",units="/")
+    call nc_write(fnm,"Cde_sic", sic%Cde_sic, dims=["lon","lat"],long_name="exchange coefficient for moisture over sea ice",units="/")
     call nc_write(fnm,"flx_sh",  sic%flx_sh,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
     call nc_write(fnm,"flx_sh_ocn",  sic%flx_sh_ocn,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
     call nc_write(fnm,"flx_sh_sic",  sic%flx_sh_sic,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
@@ -1058,6 +1061,16 @@ contains
     call nc_read(fnm,"rough_h_sic", sic%rough_h_sic)
     call nc_read(fnm,"Cdh_ocn", sic%Cdh_ocn)
     call nc_read(fnm,"Cdh_sic", sic%Cdh_sic)
+    ! Cde goes to the atmosphere through the coupler before the first sic step and sets the
+    ! ventilation of q2 there, so it has to be restarted too
+    if (nc_exists_var(fnm,"Cde_ocn")) then
+      call nc_read(fnm,"Cde_ocn", sic%Cde_ocn)
+      call nc_read(fnm,"Cde_sic", sic%Cde_sic)
+    else
+      ! older restart files: cdrag sets Cde_sic = Cdh_sic, and Cde_ocn/Cdh_ocn = Cde0/Cdh0 for i_cd_ocn=0,2
+      sic%Cde_ocn = sic%Cdh_ocn*Cde0/Cdh0
+      sic%Cde_sic = sic%Cdh_sic
+    endif
     call nc_read(fnm,"flx_sh",      sic%flx_sh)
     call nc_read(fnm,"flx_sh_ocn",  sic%flx_sh_ocn)
     call nc_read(fnm,"flx_sh_sic",  sic%flx_sh_sic)

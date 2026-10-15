@@ -107,6 +107,7 @@ module ocn_grid
   real(wp), dimension(:), allocatable :: dxv !! longitudinal grid-cell width at cell edges [m]
   real(wp), dimension(:), allocatable :: rdxv!! reverse of dxv
   real(wp), dimension(:), allocatable :: zro !! depth of layer center, zero at the surface, decreasing [m]
+  real(wp), dimension(:), allocatable :: dz_nom  !! NOMINAL (un-stretched) layer thickness, reference for the deep-layer volume stretch [m]
   real(wp), dimension(:), allocatable :: zro_nom !! NOMINAL (un-stretched) layer-centre depth, for truncating bathymetry to levels consistently in init and update [m]
   real(wp), dimension(:), allocatable :: zw  !! depth of layer edges, zero at the surface, decreasing [m]
   real(wp), dimension(:), allocatable :: dz  !! nominal thickness of layers [m]
@@ -213,6 +214,7 @@ contains
     allocate(rdxv(0:maxj))
     allocate(zro(maxk))
     allocate(zro_nom(maxk))
+    allocate(dz_nom(maxk))
     allocate(zw(0:maxk))
     allocate(dz(maxk))
     allocate(dza(maxk))
@@ -332,6 +334,7 @@ contains
     ! store the nominal (un-stretched) layer centres; bathymetry is always truncated to these,
     ! so init and the dynamic update produce consistent level indices regardless of the zfac depth stretch
     zro_nom = zro
+    dz_nom  = dz
 
     ! define fraction of layers in boundary layer
     do k=maxk,1,-1
@@ -579,6 +582,11 @@ contains
     enddo
     grid%ocn_area_tot = ocn_area_tot
     grid%ocn_area = ocn_area
+
+    ! start from the nominal layer thicknesses, so that the deep-layer stretch below depends only on
+    ! the current geometry: rescaling the previous year's dz accumulates round-off from year to year,
+    ! which a restart (dz rebuilt from the nominal levels) does not reproduce
+    dz = dz_nom
 
     ! compute total ocean volume for new surface area
     ocn_vol_tot = 0._wp

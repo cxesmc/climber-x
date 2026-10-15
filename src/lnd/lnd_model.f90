@@ -1529,23 +1529,26 @@ end subroutine lnd_update
 
     deallocate(f_veg)
 
+    ! state that is also in the restart file is set here only on a cold start, otherwise it would
+    ! overwrite what lnd_read_restart has just read
     ! initialize
     do i = 1,ni
       do j = 1,nj
         lnd%l2d(i,j)%f_wet_cum      = 0._wp
         lnd%l2d(i,j)%runoff_ann     = 0._wp
-        lnd%l2d(i,j)%w_table        = w_table_ini()
+        if (.not.lnd_restart) lnd%l2d(i,j)%w_table        = w_table_ini()
         lnd%l2d(i,j)%runoff_gw      = 0._wp
         lnd%l2d(i,j)%runoff_exc     = 0._wp
         lnd%l2d(i,j)%w_table_perch  = 0._wp
-        lnd%l2d(i,j)%w_table_eff    = 0._wp
-        lnd%l2d(i,j)%fz_eff         = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%w_table_eff    = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%fz_eff         = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%dust_emis      = 0._wp
 
         lnd%l2d(i,j)%coszm          = 0._wp 
         lnd%l2d(i,j)%daylength      = 0._wp 
         lnd%l2d(i,j)%f_wet_mon      = 0._wp 
         lnd%l2d(i,j)%w_table_mon    = 0._wp 
-        lnd%l2d(i,j)%f_wet_long     = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%f_wet_long     = 0._wp 
         lnd%l2d(i,j)%tatm           = T0
         lnd%l2d(i,j)%t2m            = T0
         lnd%l2d(i,j)%t_skin_amp      = 0._wp
@@ -1554,7 +1557,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%swnet          = 0._wp 
         lnd%l2d(i,j)%swnet_min      = 0._wp 
         lnd%l2d(i,j)%lwdown         = 0._wp 
-        lnd%l2d(i,j)%Ri             = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%Ri             = 0._wp 
         lnd%l2d(i,j)%r_a            = 0._wp 
         lnd%l2d(i,j)%r_s            = 0._wp 
         lnd%l2d(i,j)%beta_s         = 0._wp 
@@ -1565,7 +1568,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%w_can_old      = 0._wp 
         lnd%l2d(i,j)%s_can_old      = 0._wp 
         lnd%l2d(i,j)%f_wat_can      = 0._wp 
-        lnd%l2d(i,j)%f_snow_can     = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%f_snow_can     = 0._wp 
         lnd%l2d(i,j)%transpiration  = 0._wp 
         lnd%l2d(i,j)%evap_surface   = 0._wp
         lnd%l2d(i,j)%flx_g          = 0._wp 
@@ -1645,8 +1648,8 @@ end subroutine lnd_update
         lnd%l2d(i,j)%cap_sublake        = 0._wp 
         lnd%l2d(i,j)%t_soil_old      = T0
         lnd%l2d(i,j)%t_soil_max      = T0
-        lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
-        lnd%l2d(i,j)%thaw_timer      = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
+        if (.not.lnd_restart) lnd%l2d(i,j)%thaw_timer      = 0._wp
         lnd%l2d(i,j)%t_ice_old       = T0
         lnd%l2d(i,j)%t_shelf_old     = T0 
         lnd%l2d(i,j)%t_shelf_max     = T0 
@@ -2215,6 +2218,7 @@ end subroutine lnd_update
    if (l_wiso) then
      call nc_write_dim(fnm,"wiso",x=[(i,i=1,nwiso)],units="n/a")
    endif
+   call nc_write_dim(fnm,"nmonwet",x=[(i,i=1,nmonwet)],units="month")
 
 
    call nc_open(fnm,ncid)
@@ -2412,6 +2416,13 @@ end subroutine lnd_update
    enddo
    ! Ri is a prognostic state (relaxed over tau_Ri in resist_aer), not a diagnostic
    call nc_write(fnm,"Ri",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="Richardson number",units="1",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%f_snow_can(:)
+     enddo
+   enddo
+   ! surface_albedo uses the canopy snow fraction of the previous step
+   call nc_write(fnm,"f_snow_can", var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="snow covered fraction of the canopy",units="1",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%albedo(:)
@@ -2642,6 +2653,15 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"thaw_timer",         var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: priming years remaining",units="yr",ncid=ncid)
+   deallocate(var_n)
+
+   allocate(var_n(nmonwet,nx,ny))
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%f_wet_long(:)
+     enddo
+   enddo
+   call nc_write(fnm,"f_wet_long",      var_n,       dims=["nmonwet",dim_lon,dim_lat],start=[1,1,1],count=[nmonwet,ni,nj],long_name="monthly wetland fraction of the last nmonwet months",units="/",ncid=ncid)
    deallocate(var_n)
 
    allocate(var_n(nl_l,nx,ny))
@@ -2903,6 +2923,9 @@ end subroutine lnd_update
    call nc_write(fnm,"w_table",          lnd%w_table,         dims=[dim_lon,dim_lat],long_name="water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_min",      lnd%w_table_min,     dims=[dim_lon,dim_lat],long_name="minumum yearly water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_peat",     lnd%w_table_peat,    dims=[dim_lon,dim_lat],long_name="peatland water table depth",units="m",ncid=ncid)
+   call nc_write(fnm,"w_table_eff",      lnd%w_table_eff,     dims=[dim_lon,dim_lat],long_name="effective water table depth",units="m",ncid=ncid)
+   call nc_write(fnm,"fz_eff",           lnd%fz_eff,          dims=[dim_lon,dim_lat],long_name="TOPMODEL shift of cti_lim from the effective water table",units="1",ncid=ncid)
+   call nc_write(fnm,"dust_emis",        lnd%dust_emis,       dims=[dim_lon,dim_lat],long_name="dust emission",units="kg/m2/s",ncid=ncid)
 
    call nc_write(fnm,"f_carb",  lnd%f_carb, dims=[dim_lon,dim_lat],long_name="carbonate weathering rate",units="mol C/m2/yr",ncid=ncid)
    call nc_write(fnm,"weath_carb",  lnd%weath_carb, dims=[dim_lon,dim_lat],long_name="carbonate weathering rate",units="mol C/m2/yr",ncid=ncid)
@@ -3088,6 +3111,11 @@ end subroutine lnd_update
         else
           lnd(i,j)%Ri = 0._wp   ! restarts predating the relaxed Ri: start neutral, spins up over tau_Ri
         endif
+        if (nc_exists_var(fnm,"f_snow_can")) then
+          call nc_read(fnm,"f_snow_can",lnd(i,j)%f_snow_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+        else
+          lnd(i,j)%f_snow_can = 0._wp
+        endif
         call nc_read(fnm,"albedo",lnd(i,j)%albedo,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"w_can",lnd(i,j)%w_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
         call nc_read(fnm,"s_can",lnd(i,j)%s_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
@@ -3134,6 +3162,11 @@ end subroutine lnd_update
           call nc_read(fnm,"thaw_timer",lnd(i,j)%thaw_timer,start=[1,i,j],count=[nl,1,1],ncid=ncid)
         else
           lnd(i,j)%thaw_timer = 0._wp
+        endif
+        if (nc_exists_var(fnm,"f_wet_long")) then
+          call nc_read(fnm,"f_wet_long",lnd(i,j)%f_wet_long,start=[1,i,j],count=[nmonwet,1,1],ncid=ncid)
+        else
+          lnd(i,j)%f_wet_long = -1._wp ! sentinel: history unknown, soil_carbon_par fills it with the first year
         endif
         call nc_read(fnm,"f_i_lake",lnd(i,j)%f_i_lake,start=[1,i,j],count=[nl_l,1,1],ncid=ncid)
 
@@ -3200,6 +3233,22 @@ end subroutine lnd_update
     call nc_read(fnm,"w_table",          lnd%w_table,ncid=ncid)
     call nc_read(fnm,"w_table_min",      lnd%w_table_min,ncid=ncid)
     call nc_read(fnm,"w_table_peat",     lnd%w_table_peat,ncid=ncid)
+    ! surface_hydrology uses the effective water table of the previous step, before groundwater
+    ! and perched_water_table update it
+    if (nc_exists_var(fnm,"w_table_eff")) then
+      call nc_read(fnm,"w_table_eff",    lnd%w_table_eff,ncid=ncid)
+      call nc_read(fnm,"fz_eff",         lnd%fz_eff,ncid=ncid)
+    else
+      ! older restart files: aquifer table, as without a perched table
+      lnd%w_table_eff = lnd%w_table
+      lnd%fz_eff      = hydro_par%f_drain*lnd%w_table
+    endif
+    ! the atmosphere gets the dust emission of the previous land step
+    if (nc_exists_var(fnm,"dust_emis")) then
+      call nc_read(fnm,"dust_emis",      lnd%dust_emis,ncid=ncid)
+    else
+      lnd%dust_emis = 0._wp
+    endif
 
     call nc_read(fnm,"f_carb",  lnd%f_carb,ncid=ncid)
     call nc_read(fnm,"weath_carb",  lnd%weath_carb,ncid=ncid)

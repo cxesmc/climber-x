@@ -529,12 +529,12 @@ program climber
         if (l_debug_main_loop) print*, 'update lnd model'
         call cmn_to_lnd(cmn,lnd)
         call lnd_update_wrapper(lnd)
+        call lnd_diag(lnd%l2d,lnd%l0d)
+        call lnd_to_cmn(lnd,cmn)
         call runoff_merge(cmn)
         if (flag_lakes) then
           call lakes_update(cmn)
         endif
-        call lnd_diag(lnd%l2d,lnd%l0d)
-        call lnd_to_cmn(lnd,cmn)
         !$ time_end = omp_get_wtime()
         !$ time_lnd = time_lnd + (time_end-time_ini)
       endif
