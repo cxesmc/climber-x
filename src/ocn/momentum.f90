@@ -35,13 +35,15 @@ module momentum_mod
   use constants, only : omega
   use timer, only : time_soy_ocn, doy, year
   use control, only : out_dir
-  use climber_grid, only : lon, latv
+  use climber_grid, only : lon
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
+  use ocn_params, only : bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix, rho0
   use ocn_params, only : i_eos, i_cor_form, nbw, qcor
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
-  use ocn_grid, only : maxisles, n_isles, psiles
-  use ocn_grid, only : dx, dy, dz, zw, zro, s, sv, cv, rh, k1, h
+  use ocn_grid, only : maxisles, n_isles, psiles, map_isles
+  use ocn_grid, only : lm_eur, lm_ame, lm_ant, lm_aus, lm_grl, lm_name, i_lm, j_lm
+  use ocn_grid, only : dx, dy, dz, zro, s, sv, cv, rh, k1, h
 
   use eos_mod, only : eos_tb
   use invert_mod, only : invert
@@ -72,8 +74,21 @@ module momentum_mod
   real(wp), allocatable :: erisl(:,:)
   integer, allocatable :: erisl_ipiv(:)   ! row-pivot vector from matinv, replayed by matmult each step
   real(wp), allocatable :: psibc(:)
+  ! prescribed barotropic throughflows between landmasses (bering/drake/indo/davis_tf_fix):
+  ! psibc(isl) - psibc(isl_fix_ref(isl)) = psi_fix(isl), with psibc(0) = 0 for the mainland
+  integer, parameter :: n_strait = 4
+  character(len=10), parameter :: strait_name(n_strait) = ["Bering    ","Drake     ","Indonesian","Davis     "]
+  ! landmass on the positive side (target) and on the negative side (reference) of each strait,
+  ! so that the throughflow is (psi(target)-psi(reference))/rho0 in the sign convention of ocn_ts.nc:
+  ! Bering/Davis positive north (target to the east), Drake/Indonesian positive east (target to the south)
+  integer, parameter :: strait_lm_tgt(n_strait) = [lm_ame, lm_ant, lm_aus, lm_grl]
+  integer, parameter :: strait_lm_ref(n_strait) = [lm_eur, lm_ame, lm_eur, lm_ame]
+  integer :: strait_status(n_strait) = -1   ! 0 = off, 1 = active, 2 = reference cell not land, 3 = same landmass on both sides
+  integer :: strait_isl(n_strait) = 0       ! solver island index whose streamfunction is prescribed for each active strait
+  integer, allocatable :: isl_fix_ref(:)    ! solver index of the reference landmass (0 = mainland), -1 = island not prescribed
+  real(wp), allocatable :: psi_fix(:)       ! prescribed streamfunction difference to the reference landmass [kg/s]
   real(wp), allocatable :: tmpdrg(:,:)
-  real(wp), allocatable :: bump_cell(:,:)   ! bump measure of each tracer cell for i_drag_topo=1
+  real(wp), allocatable :: bump_cell(:,:)   ! capped bump drag factor of each tracer cell
   real(wp), allocatable :: rho_tb(:,:,:)
 
   private
@@ -167,6 +182,10 @@ contains
                    isl,1, &
                    erisl(isl,n_isles+1), psi)
     enddo
+    ! prescribed throughflows: the row of a prescribed island reads psibc(isl) - psibc(ref) = -rhs (momentum_update_grid)
+    do isl=1,n_isles
+      if (isl_fix_ref(isl).ge.0) erisl(isl,n_isles+1) = - psi_fix(isl)
+    enddo
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: islands',time2-time1
 
@@ -243,8 +262,8 @@ contains
     integer :: i, j, l, isl, isol
     integer :: i1, i1p, j1, ii, ip1
     integer :: n_band, nm_band, off
-    real(wp) :: tmp, min_dep, dep_fac, topo_fac, min_frac
-    real(wp) :: hsum, bmp
+    real(wp) :: tmp
+    real(wp) :: hsum, bmp, frac_wet, fac_frac
     integer :: nwet
 
 
@@ -256,49 +275,47 @@ contains
       enddo
     enddo
 
-    if (drag_par%i_drag_topo.eq.1) then
-      ! bump drag factor of each cell: a cell shallower than the mean depth of its wet 3x3 neighbours is a local
-      ! maximum of f/H with closed f/H contours (bank, plateau, drowned island) where JEBAR-driven flow recirculates.
-      ! Depth weight H/z_drag_bump below z_drag_bump (wall-like shallow slivers, drag/H already huge, do not count),
-      ! fading to 0 at z_drag_bump_deep (deep plateaus steer the real circulation). 
-      bump_cell = 0._wp
-      do j=1,maxj
-        do i=1,maxi
-          if (k1(i,j).le.maxk) then
-            hsum = 0._wp
-            nwet = 0
-            do j1=max(1,j-1),min(maxj,j+1)
-              do i1=i-1,i+1
-                if (i1.eq.i .and. j1.eq.j) cycle
-                i1p = 1 + mod(maxi+i1-1,maxi)
-                if (k1(i1p,j1).le.maxk) then
-                  hsum = hsum + h(3,i1p,j1)
-                  nwet = nwet + 1
-                endif
-              enddo
-            enddo
-            bmp = 0._wp
-            if (nwet.gt.0) then
-              ! depth weight: H/z_drag_bump below z_drag_bump, fading to 0 at z_drag_bump_deep
-              if (h(3,i,j).lt.drag_par%z_drag_bump) then
-                tmp = h(3,i,j)/drag_par%z_drag_bump
-              else
-                tmp = max(0._wp, (drag_par%z_drag_bump_deep-h(3,i,j))/(drag_par%z_drag_bump_deep-drag_par%z_drag_bump))
+    ! bump drag factor of each cell: a cell shallower than the mean depth of its wet 3x3 neighbours is a local
+    ! maximum of f/H with closed f/H contours (bank, plateau, drowned island) where JEBAR-driven flow recirculates.
+    ! Depth weight H/z_drag_bump below z_drag_bump (wall-like shallow slivers, drag/H already huge, do not count),
+    ! fading to 0 at z_drag_bump_deep (deep plateaus steer the real circulation). 
+    bump_cell = 0._wp
+    do j=1,maxj
+      do i=1,maxi
+        if (k1(i,j).le.maxk) then
+          hsum = 0._wp
+          nwet = 0
+          do j1=max(1,j-1),min(maxj,j+1)
+            do i1=i-1,i+1
+              if (i1.eq.i .and. j1.eq.j) cycle
+              i1p = 1 + mod(maxi+i1-1,maxi)
+              if (k1(i1p,j1).le.maxk) then
+                hsum = hsum + h(3,i1p,j1)
+                nwet = nwet + 1
               endif
-              bmp = max(0._wp, log(hsum/real(nwet,wp)/h(3,i,j))) * tmp
-            endif
-            ! adjacent to land (4 neighbours)?
-            if (k1(i-1,j).gt.maxk .or. k1(i+1,j).gt.maxk .or. k1(i,j-1).gt.maxk .or. k1(i,j+1).gt.maxk) then
-              bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max_coast)
+            enddo
+          enddo
+          bmp = 0._wp
+          if (nwet.gt.0) then
+            ! depth weight: H/z_drag_bump below z_drag_bump, fading to 0 at z_drag_bump_deep
+            if (h(3,i,j).lt.drag_par%z_drag_bump) then
+              tmp = h(3,i,j)/drag_par%z_drag_bump
             else
-              bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max)
+              tmp = max(0._wp, (drag_par%z_drag_bump_deep-h(3,i,j))/(drag_par%z_drag_bump_deep-drag_par%z_drag_bump))
             endif
+            bmp = max(0._wp, log(hsum/real(nwet,wp)/h(3,i,j))) * tmp
           endif
-        enddo
+          ! adjacent to land (4 neighbours)?
+          if (k1(i-1,j).gt.maxk .or. k1(i+1,j).gt.maxk .or. k1(i,j-1).gt.maxk .or. k1(i,j+1).gt.maxk) then
+            bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max_coast)
+          else
+            bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max)
+          endif
+        endif
       enddo
-      bump_cell(0,:) = bump_cell(maxi,:)
-      bump_cell(maxi+1,:) = bump_cell(1,:)
-    endif
+    enddo
+    bump_cell(0,:) = bump_cell(maxi,:)
+    bump_cell(maxi+1,:) = bump_cell(1,:)
 
     ! topographic drag enhancement at psi points
     do j=0,maxj
@@ -307,45 +324,32 @@ contains
         ii = i
         if (ii.eq.0) ii=maxi
         ip1 = modulo(i,maxi) + 1
-        min_frac = min(f_ocn(ii,max(1,j)),f_ocn(ip1,max(1,j)),f_ocn(ii,min(maxj,j+1)),f_ocn(ip1,min(maxj,j+1)))
+        ! bump drag: largest (capped) bump factor of the four cells around the psi point; land cells carry 0
+        bmp = max(1._wp,bump_cell(i,j),bump_cell(i+1,j),bump_cell(i,j+1),bump_cell(i+1,j+1))
+        tmp = drag_par%adrag*bmp
 
-        if (drag_par%i_drag_topo.eq.0) then
-
-          ! increase drag in shallow water regions depending on water depth
-          if (drag_par%drag_topo_n.eq.1) then
-            min_dep = min(-zw(min(maxk,k1(i,j))),-zw(min(maxk,k1(i+1,j))),-zw(min(maxk,k1(i,j+1))),-zw(min(maxk,k1(i+1,j+1))))
-          else if (drag_par%drag_topo_n.eq.2) then
-            min_dep = -zw(min(maxk,k1(i,j)))
-            do j1=max(0,j-1),min(maxj+1,j+2)
-              do i1=i-1,i+2
-                i1p = 1 + mod(maxi + i1-1,maxi)
-                min_dep = min(min_dep,-zw(min(maxk,k1(i1p,j1))))
-              enddo
-            enddo 
+        if (drag_par%drag_frac_max.gt.1._wp) then
+          ! partial-cell drag at the psi point from the wet cells around it; land cells (f_ocn=0) are skipped
+          frac_wet = 1._wp
+          fac_frac = 0._wp
+          nwet = 0
+          do j1=max(1,j),min(maxj,j+1)
+            do i1=ii,ii+1
+              i1p = 1 + mod(i1-1,maxi)
+              if (k1(i1p,j1).le.maxk) then
+                frac_wet = min(frac_wet,f_ocn(i1p,j1))
+                fac_frac = fac_frac + 1._wp/max(f_ocn(i1p,j1),1._wp/drag_par%drag_frac_max)
+                nwet = nwet + 1
+              endif
+            enddo
+          enddo
+          if (drag_par%i_drag_frac.eq.1) then
+            ! least-wet cell
+            tmp = max(tmp, drag_par%adrag/max(frac_wet,1._wp/drag_par%drag_frac_max))
+          else if (nwet.gt.0) then
+            ! mean of 1/f_ocn
+            tmp = max(tmp, drag_par%adrag*fac_frac/real(nwet,wp))
           endif
-          dep_fac = max(0._wp,(drag_par%z_drag_shallow-min_dep)/drag_par%z_drag_shallow)
-
-          !topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq*cv(j))
-          if (latv(j+1).ge.-20._wp .and. latv(j+1).le.20._wp) then
-            topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq)
-          else
-            topo_fac = drag_par%drag_topo_fac
-          endif
-
-          !tmp = drag_par%adrag*(1._wp + min(drag_par%drag_topo_fac,topo_fac*dep_fac) + drag_par%drag_frac_fac*(1._wp-min_frac))
-          tmp = drag_par%adrag*(1._wp + topo_fac*dep_fac + drag_par%drag_frac_fac*(1._wp-min_frac))
-
-        else if (drag_par%i_drag_topo.eq.1) then
-
-          ! bump drag: largest (capped) bump factor of the four cells around the psi point; land cells carry 0
-          bmp = max(1._wp,bump_cell(i,j),bump_cell(i+1,j),bump_cell(i,j+1),bump_cell(i+1,j+1))
-
-          tmp = drag_par%adrag*(bmp + drag_par%drag_frac_fac*(1._wp-min_frac))
-
-        else
-
-          stop 'momentum_update_grid: i_drag_topo must be 0 or 1'
-
         endif
 
         if (tmp.gt.tmpdrg(i,j)) then
@@ -476,6 +480,9 @@ contains
     !  enddo
     !enddo
 
+    ! prescribed throughflows: replace the path-integral equations of the prescribed islands
+    call strait_constraints
+
     ! partially invert inland integral error matrix for psi bc calc
     call matinv(n_isles,erisl,erisl_ipiv)  ! LU factors of island matrix (+ pivots)
 
@@ -490,6 +497,143 @@ contains
     return
 
   end subroutine momentum_update_grid
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s t r a i t _ c o n s t r a i n t s
+  !   Purpose    :  prescribe the barotropic throughflow through straits
+  !                 between two landmasses
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine strait_constraints
+
+    ! The net barotropic transport between two landmasses equals the difference of their streamfunction values
+    ! divided by rho0, whatever the path of the section. A throughflow is prescribed by replacing the path-integral
+    ! equation of one of the two landmasses (target) by psibc(target) - psibc(ref) = rho0*tf_fix, with psibc = 0 on
+    ! the mainland. The island whose equation is replaced is the designated target (America for Bering, Antarctica
+    ! for Drake, Australia for the Indonesian throughflow, Greenland for Davis), or the other side if the target is
+    ! the mainland or is already prescribed. The landmasses are identified by their reference cells (ocn_grid), so the
+    ! constraints follow the island configuration (i_isl, l_isl_*): a strait is ignored when both sides belong to the
+    ! same landmass. The constraints must not form a closed loop of landmasses, which would overdetermine the system.
+
+    implicit none
+
+    integer :: n, it, ir, rt, rr, isl, lm_fix
+    integer :: status(n_strait), isl_strait(n_strait)
+    integer :: lm_strait(n_strait)
+    integer :: uf(0:maxisles)     ! union-find parent of the landmass graph spanned by the constraints (0 = mainland)
+    real(wp) :: tf_fix(n_strait), sgn
+    logical :: l_print
+
+
+    tf_fix = [bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix]
+
+    isl_fix_ref(:) = -1
+    psi_fix(:) = 0._wp
+    status(:) = 0
+    isl_strait(:) = 0
+    lm_strait(:) = 0
+    do n=0,maxisles
+      uf(n) = n
+    enddo
+
+    do n=1,n_strait
+      if (tf_fix(n).lt.-900._wp) cycle
+
+      ! solver indices of the landmasses on both sides (landmass label - 1, mainland = 0, ocean < 0)
+      it = map_isles(i_lm(strait_lm_tgt(n)),j_lm(strait_lm_tgt(n))) - 1
+      ir = map_isles(i_lm(strait_lm_ref(n)),j_lm(strait_lm_ref(n))) - 1
+      if (it.lt.0 .or. ir.lt.0) then
+        status(n) = 2
+        cycle
+      endif
+      if (it.eq.ir) then
+        status(n) = 3
+        cycle
+      endif
+
+      ! a second constraint between landmasses that are already connected by constraints closes a loop
+      rt = uf_root(it)
+      rr = uf_root(ir)
+      if (rt.eq.rr) then
+        print *,'ERROR: prescribed ',trim(strait_name(n)),' throughflow closes a loop of prescribed throughflows'
+        print *,'between ',trim(lm_name(strait_lm_tgt(n))),' and ',trim(lm_name(strait_lm_ref(n))),': disable one of them'
+        stop 'ERROR in strait_constraints: overdetermined prescribed throughflows'
+      endif
+
+      ! island whose equation is replaced: designated target, else the reference side with reversed sign
+      sgn = 1._wp
+      lm_fix = strait_lm_tgt(n)
+      if (.not.is_free(it)) then
+        isl = it
+        it = ir
+        ir = isl
+        sgn = -1._wp
+        lm_fix = strait_lm_ref(n)
+      endif
+      if (.not.is_free(it)) then
+        print *,'ERROR: no free island left to prescribe the ',trim(strait_name(n)),' throughflow:'
+        print *,'both ',trim(lm_name(strait_lm_tgt(n))),' and ',trim(lm_name(strait_lm_ref(n))), &
+          ' are the mainland or already prescribed by another strait'
+        stop 'ERROR in strait_constraints: prescribed throughflows cannot be assigned to islands'
+      endif
+
+      isl_fix_ref(it) = ir
+      psi_fix(it) = sgn*rho0*tf_fix(n)*1.e6_wp  ! kg/s
+      uf(rt) = rr
+      status(n) = 1
+      isl_strait(n) = it
+      lm_strait(n) = lm_fix
+    enddo
+
+    ! replace the island rows
+    do isl=1,n_isles
+      if (isl_fix_ref(isl).ge.0) then
+        erisl(isl,1:n_isles) = 0._wp
+        erisl(isl,isl) = 1._wp
+        if (isl_fix_ref(isl).gt.0) erisl(isl,isl_fix_ref(isl)) = -1._wp
+      endif
+    enddo
+
+    ! report on the first call and whenever the configuration changes (e.g. a strait closing with the land-sea mask)
+    l_print = any(status.ne.strait_status) .or. any(isl_strait.ne.strait_isl)
+    if (l_print) then
+      do n=1,n_strait
+        select case (status(n))
+        case (1)
+          print '(a,a,a,f8.3,a,a,a,i0,a)','momentum: ',trim(strait_name(n)),' throughflow prescribed to ',tf_fix(n), &
+            ' Sv (streamfunction of ',trim(lm_name(lm_strait(n))),', island ',isl_strait(n),', fixed)'
+        case (2)
+          print *,'WARNING: ',trim(strait_name(n)),' throughflow prescribed, but the reference cell of ', &
+            trim(lm_name(strait_lm_tgt(n))),' or ',trim(lm_name(strait_lm_ref(n))),' is not land: ignored'
+        case (3)
+          print *,'WARNING: ',trim(strait_name(n)),' throughflow prescribed, but ',trim(lm_name(strait_lm_tgt(n))), &
+            ' and ',trim(lm_name(strait_lm_ref(n))),' belong to the same landmass (not an island or strait closed): ignored'
+        end select
+      enddo
+    endif
+    strait_status = status
+    strait_isl = isl_strait
+
+    return
+
+  contains
+
+    ! island (not the mainland) whose equation is not yet replaced by a constraint
+    logical function is_free(k)
+      integer, intent(in) :: k
+      is_free = .false.
+      if (k.gt.0) is_free = isl_fix_ref(k).lt.0
+    end function is_free
+
+    integer function uf_root(k)
+      integer, intent(in) :: k
+      uf_root = k
+      do while (uf(uf_root).ne.uf_root)
+        uf_root = uf(uf_root)
+      enddo
+    end function uf_root
+
+  end subroutine strait_constraints
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -523,6 +667,10 @@ contains
     allocate(erisl(maxisles,maxisles+1))
     allocate(erisl_ipiv(maxisles))
     allocate(psibc(maxisles))
+    allocate(isl_fix_ref(maxisles))
+    allocate(psi_fix(maxisles))
+    isl_fix_ref(:) = -1
+    psi_fix(:) = 0._wp
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))
     allocate(tmpdrg(0:maxi,0:maxj))

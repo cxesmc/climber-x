@@ -82,6 +82,20 @@ module ocn_grid
   integer, dimension(20) :: i_idx_isl       !! i-index of islands
   integer, dimension(20) :: j_idx_isl       !! j-index of islands
 
+  ! reference land cells of the present-day landmasses, used to select the islands for i_isl==1 and to
+  ! identify the landmasses on both sides of the straits with prescribed barotropic throughflow (momentum)
+  integer, parameter :: n_lm = 5
+  integer, parameter :: lm_eur = 1   !! Eurasia (+Africa), mainland for i_isl==1
+  integer, parameter :: lm_ame = 2   !! America
+  integer, parameter :: lm_ant = 3   !! Antarctica
+  integer, parameter :: lm_aus = 4   !! Australia
+  integer, parameter :: lm_grl = 5   !! Greenland
+  character(len=10), parameter :: lm_name(n_lm) = ["Eurasia   ","America   ","Antarctica","Australia ","Greenland "]
+  real(wp), parameter :: lon_lm(n_lm) = [  82.5_wp, -102.5_wp,  -2.5_wp, 132.5_wp, -42.5_wp]   !! degE
+  real(wp), parameter :: lat_lm(n_lm) = [  42.5_wp,   47.5_wp, -87.5_wp, -27.5_wp,  72.5_wp]   !! degN
+  integer, dimension(n_lm) :: i_lm   !! i-index of the landmass reference cells
+  integer, dimension(n_lm) :: j_lm   !! j-index of the landmass reference cells
+
   real(wp) :: depth  !! maximum ocean depth, updated during runtime! [m]
   real(wp) :: phi0   !! easternmost longitude [radians] 
   real(wp) :: dphi   !! longitudinal resolution [radians] 
@@ -169,7 +183,6 @@ contains
     real(wp) :: tv1
     real(wp) :: zfac
     real(dp) :: ocn_vol_tot_1000
-    real(wp) :: dist_isl
 
 
     maxi = ni   
@@ -488,28 +501,58 @@ contains
     ! find index of island grid cells
     if (i_isl.eq.2) then
       do n=1,n_isl
-        i_idx_isl(n) = 0
-        dist_isl = 999.
-        do i=1,maxi
-          if (modulo(abs(phi0+(i-0.5)*dphi-(pi*lon_isl(n)/180.0)),2.0*pi).lt.dist_isl) then
-            i_idx_isl(n) = i
-            dist_isl = modulo(abs(phi0+(i-0.5)*dphi-(pi*lon_isl(n)/180.0)),2.0*pi)
-          endif
-        enddo
-        j_idx_isl(n) = 0
-        dist_isl = 999.
-        do j=1,maxj
-          if (abs(s(j)-sin(pi*lat_isl(n)/180.0)).lt.dist_isl) then
-            j_idx_isl(n) = j
-            dist_isl = abs(s(j)-sin(pi*lat_isl(n)/180.0))
-          endif
-        enddo
+        call nearest_cell(lon_isl(n),lat_isl(n), i_idx_isl(n),j_idx_isl(n))
       enddo
     endif
+
+    ! find index of landmass reference cells
+    do n=1,n_lm
+      call nearest_cell(lon_lm(n),lat_lm(n), i_lm(n),j_lm(n))
+    enddo
 
     return
 
   end subroutine ocn_grid_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  n e a r e s t _ c e l l
+  !   Purpose    :  indices of the tracer cell closest to a given longitude/latitude
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine nearest_cell(lon_deg, lat_deg, inear, jnear)
+
+    implicit none
+
+    real(wp), intent(in) :: lon_deg, lat_deg
+    integer, intent(out) :: inear, jnear
+
+    integer :: i, j
+    real(wp) :: dist, dist_min
+
+
+    inear = 1
+    dist_min = huge(1._wp)
+    do i=1,maxi
+      ! longitude distance wrapped to [0,pi]
+      dist = abs(modulo(phi0+(i-0.5_wp)*dphi-pi*lon_deg/180._wp+pi,2._wp*pi)-pi)
+      if (dist.lt.dist_min) then
+        inear = i
+        dist_min = dist
+      endif
+    enddo
+    jnear = 1
+    dist_min = huge(1._wp)
+    do j=1,maxj
+      dist = abs(s(j)-sin(pi*lat_deg/180._wp))
+      if (dist.lt.dist_min) then
+        jnear = j
+        dist_min = dist
+      endif
+    enddo
+
+    return
+
+  end subroutine nearest_cell
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -833,25 +876,25 @@ contains
           if (i_isl.eq.1) then
             ! manual island determination
             if (ncells>10) then
-              if (islands(53,27).eq.1) then
+              if (islands(i_lm(lm_eur),j_lm(lm_eur)).eq.1) then
                 ! Eurasia, set to mainland, island 1
                 is_island = .true.
                 is_mainland = .true.
               endif
-              if (l_isl_ant .and. islands(36,1).eq.1) then
+              if (l_isl_ant .and. islands(i_lm(lm_ant),j_lm(lm_ant)).eq.1) then
                 ! Antarctica
                 is_island = .true.
               endif
-              if (l_isl_aus .and. islands(63,13).eq.1) then
+              if (l_isl_aus .and. islands(i_lm(lm_aus),j_lm(lm_aus)).eq.1) then
                 ! Australia
                 is_island = .true.
               endif
-              if (l_isl_grl .and. islands(28,33).eq.1) then
+              if (l_isl_grl .and. islands(i_lm(lm_grl),j_lm(lm_grl)).eq.1) then
                 ! Greenland
                 is_island = .true.
               endif
-              if (l_isl_ame .and. islands(16,28).eq.1) then
-                ! Greenland
+              if (l_isl_ame .and. islands(i_lm(lm_ame),j_lm(lm_ame)).eq.1) then
+                ! America
                 is_island = .true.
               endif
             endif

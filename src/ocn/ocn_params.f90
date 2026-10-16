@@ -71,6 +71,10 @@ module ocn_params
      logical :: l_isl_ame
      logical :: l_bering_flow
      real(wp) :: c_bering
+     real(wp) :: bering_tf_fix   !! Sv, prescribed barotropic Bering Strait throughflow (positive north), < -900 = off
+     real(wp) :: drake_tf_fix    !! Sv, prescribed barotropic Drake Passage throughflow (positive east), < -900 = off
+     real(wp) :: indo_tf_fix     !! Sv, prescribed barotropic Indonesian throughflow (positive east), < -900 = off
+     real(wp) :: davis_tf_fix    !! Sv, prescribed barotropic Davis Strait throughflow (positive north), < -900 = off
      integer :: n_isl
      real(wp) :: lon_isl(20)
      real(wp) :: lat_isl(20)
@@ -83,17 +87,14 @@ module ocn_params
 
      type drag_par_type
        real(wp) :: adrag
-       integer :: i_drag_topo      !! topographic drag enhancement: 0 = shallow-water depth criterion, 3 = bumps (closed f/H contours)
-       real(wp) :: c_drag_bump     !! bump drag coefficient, drag = adrag*(1+c_drag_bump*bump) (i_drag_topo=1)
-       real(wp) :: z_drag_bump     !! m, depth scale weighting the bump measure by H/z_drag_bump for H < z_drag_bump (i_drag_topo=1)
-       real(wp) :: z_drag_bump_deep !! m, bump weight fades linearly from 1 at z_drag_bump to 0 at z_drag_bump_deep (i_drag_topo=1)
-       real(wp) :: drag_topo_fac_max !! cap on the bump drag enhancement factor (i_drag_topo=1)
-       real(wp) :: drag_topo_fac_max_coast !! cap on the bump drag enhancement factor for cells adjacent to land (i_drag_topo=1)
-       integer :: drag_topo_n
-       real(wp) :: drag_topo_fac
-       real(wp) :: drag_frac_fac
-       real(wp) :: drag_topo_scale_eq
-       real(wp) :: z_drag_shallow
+       real(wp) :: c_drag_bump     !! bump drag coefficient, drag = adrag*(1+c_drag_bump*bump) 
+       real(wp) :: z_drag_bump     !! m, depth scale weighting the bump measure by H/z_drag_bump for H < z_drag_bump 
+       real(wp) :: z_drag_bump_deep !! m, bump weight fades linearly from 1 at z_drag_bump to 0 at z_drag_bump_deep 
+       real(wp) :: drag_topo_fac_max !! cap on the bump drag enhancement factor 
+       real(wp) :: drag_topo_fac_max_coast !! cap on the bump drag enhancement factor for cells adjacent to land 
+       integer  :: i_drag_frac     !! partial-cell drag: 1 = 1/min(f_ocn) of the wet cells around a psi point, 2 = mean 1/f_ocn of
+                                   !! the wet cells around a psi point
+       real(wp) :: drag_frac_max   !! cap on the partial-cell drag factor, 1 = off
      end type
      type(drag_par_type) :: drag_par
 
@@ -265,6 +266,14 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","l_isl_ame",l_isl_ame)
     call nml_read(filename,"ocn_par","l_bering_flow",l_bering_flow)
     call nml_read(filename,"ocn_par","c_bering",c_bering)
+    bering_tf_fix = -999._wp
+    call nml_read(filename,"ocn_par","bering_tf_fix",bering_tf_fix)
+    drake_tf_fix = -999._wp
+    call nml_read(filename,"ocn_par","drake_tf_fix",drake_tf_fix)
+    indo_tf_fix = -999._wp
+    call nml_read(filename,"ocn_par","indo_tf_fix",indo_tf_fix)
+    davis_tf_fix = -999._wp
+    call nml_read(filename,"ocn_par","davis_tf_fix",davis_tf_fix)
     call nml_read(filename,"ocn_par","n_isl",n_isl)
     call nml_read(filename,"ocn_par","lon_isl",lon_isl)
     call nml_read(filename,"ocn_par","lat_isl",lat_isl)
@@ -274,17 +283,13 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","urelax",urelax)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
-    call nml_read(filename,"ocn_par","i_drag_topo",drag_par%i_drag_topo)
     call nml_read(filename,"ocn_par","c_drag_bump",drag_par%c_drag_bump)
     call nml_read(filename,"ocn_par","z_drag_bump",drag_par%z_drag_bump)
     call nml_read(filename,"ocn_par","z_drag_bump_deep",drag_par%z_drag_bump_deep)
     call nml_read(filename,"ocn_par","drag_topo_fac_max",drag_par%drag_topo_fac_max)
     call nml_read(filename,"ocn_par","drag_topo_fac_max_coast",drag_par%drag_topo_fac_max_coast)
-    call nml_read(filename,"ocn_par","drag_topo_n",drag_par%drag_topo_n)
-    call nml_read(filename,"ocn_par","drag_topo_fac",drag_par%drag_topo_fac)
-    call nml_read(filename,"ocn_par","drag_topo_scale_eq",drag_par%drag_topo_scale_eq)
-    call nml_read(filename,"ocn_par","drag_frac_fac",drag_par%drag_frac_fac)
-    call nml_read(filename,"ocn_par","z_drag_shallow",drag_par%z_drag_shallow)
+    call nml_read(filename,"ocn_par","i_drag_frac",drag_par%i_drag_frac)
+    call nml_read(filename,"ocn_par","drag_frac_max",drag_par%drag_frac_max)
 
     call nml_read(filename,"ocn_par","i_eos",i_eos)
 

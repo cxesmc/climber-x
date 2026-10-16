@@ -43,6 +43,14 @@
  l_isl_ame = F                ! is America considered an island for barotropic flow? Only for i_isl==1
  l_bering_flow = F            ! enable parameterisation for Bering Strait throughflow, following Goosse 1997 ?
  c_bering = 0.2               ! factor to scale the Bering Strait throughflow, used only if l_bering_flow==T
+ bering_tf_fix = -999.        ! Sv, prescribed barotropic Bering Strait throughflow, positive north (America - Eurasia), < -900 = off
+ drake_tf_fix = -999.         ! Sv, prescribed barotropic Drake Passage throughflow, positive east (Antarctica - America), < -900 = off
+ indo_tf_fix = -999.          ! Sv, prescribed barotropic Indonesian throughflow, positive east (Australia - Eurasia), < -900 = off
+ davis_tf_fix = -999.         ! Sv, prescribed barotropic Davis Strait throughflow, positive north (Greenland - America), < -900 = off
+                              ! The streamfunction of the first landmass is fixed relative to the second one instead of being solved
+                              ! from its island path integral. Ignored (with a warning) when both sides belong to the same landmass,
+                              ! e.g. Australia with l_isl_aus=F is merged into the mainland (Eurasia).
+                              ! Sign conventions as for drake, bering, indo, davis in ocn_ts.nc
  n_isl = 3                    ! number of islands for barotropic flow, only for i_isl==2
  lon_isl = 90  60 140         ! longitude of grid cell on islands, only for i_isl==2. 
  lat_isl = 50 -85 -30         ! latitude of grid cell on islands, only for i_isl==2. 
@@ -73,23 +81,23 @@
  ! friction settings
  !-------------------------------------------------------------------------------------------
  adrag = 4.                   ! days, inverse minimum drag
- i_drag_topo = 1              ! topographic drag enhancement at psi points: 
-                              ! 0 = shallow water (drag_topo_n, drag_topo_fac, z_drag_shallow);
-                              ! 1 = adrag*(1 + c_drag_bump*bump), bump = ln(mean depth of the wet 3x3 neighbours / cell depth) (>0 only) * depth weight
- c_drag_bump = 20.            ! bump drag coefficient (i_drag_topo=3)
- z_drag_bump = 1000.          ! m, bump weight = H/z_drag_bump for H < z_drag_bump (wall-like slivers do not count) (i_drag_topo=3)
+ ! bump drag at psi points: adrag*(1 + c_drag_bump*bump), bump = ln(mean depth of the wet 3x3 neighbours / cell depth) (>0 only)
+ ! * depth weight, capped at drag_topo_fac_max (drag_topo_fac_max_coast next to land); 1/1 = off
+ c_drag_bump = 20.            ! bump drag coefficient
+ z_drag_bump = 1000.          ! m, bump weight = H/z_drag_bump for H < z_drag_bump (wall-like slivers do not count)
  z_drag_bump_deep = 3000.     ! m, bump weight fades from 1 at z_drag_bump to 0 at z_drag_bump_deep: deep plateaus (Kerguelen, Agulhas,
                               ! Lord Howe, 1-2 km in 4-5 km water) steer the real ACC/WBCs and are no trapped-mode hazard on smoothed
-                              ! topography; 2000 brings the Lord Howe mode back on raw topography (i_drag_topo=3)
- drag_topo_fac_max = 2.       ! cap on the bump drag enhancement factor (i_drag_topo=3)
- drag_topo_fac_max_coast = 2. ! cap for cells adjacent to land (i_drag_topo=3): a one-cell coastal shelf is flagged as a 'bump'
+                              ! topography; 2000 brings the Lord Howe mode back on raw topography
+ drag_topo_fac_max = 1.       ! cap on the bump drag enhancement factor
+ drag_topo_fac_max_coast = 1. ! cap for cells adjacent to land: a one-cell coastal shelf is flagged as a 'bump'
                               ! because land is excluded from the neighbour mean; with the offshore bumps damped the coasts need
                               ! no enhancement at all (1.), and the Gulf Stream gains 30% for it
- drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
- drag_topo_fac = 2.5          ! factor by which to increase drag in shallow water
- drag_topo_scale_eq = 0.
- z_drag_shallow = 1000.       ! m, depth of shallow water regions below which to increase adrag by factor drag_topo_fac
- drag_frac_fac = 0.           ! factor by which to increase drag where small ocean fraction
+ i_drag_frac = 1              ! partial-cell drag, adrag times a factor 1/f_ocn (capped at drag_frac_max) from the ocean fraction f_ocn
+                              ! of the wet cells; the flow through a cell that is only partly ocean is squeezed into a fraction f_ocn
+                              ! of its width. 1 = 1/min(f_ocn) of the wet cells around a psi point, then averaged to the faces
+                              !                 (a narrow cell raises the drag on all faces up to one cell away);
+                              !               2 = mean of 1/f_ocn of the wet cells around a psi point, then averaged to the faces (smooth)
+ drag_frac_max = 2.           ! cap on the partial-cell drag factor, 1 = off
 
  !-------------------------------------------------------------------------------------------
  ! Coriolis 

@@ -1227,7 +1227,7 @@ contains
     if (age_tracer) then
       call nc_write(fnm,"age",    ocn%ts(:,:,:,i_age),  dims=["lon ","lat ","zro "],long_name="age tracer fields",units="/")
     endif
-    if (age_tracer) then
+    if (dye_tracer) then
       call nc_write(fnm,"dye",    ocn%ts(:,:,:,i_dye),  dims=["lon ","lat ","zro "],long_name="dye tracer fields",units="/")
     endif
 
