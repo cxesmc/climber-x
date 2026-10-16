@@ -344,7 +344,7 @@ contains
             ! Kraus Turner mixed layer scheme. Static instability driven convection has already been done in convection, 
             ! and will differ from standard KT if l_conv_shuffle.eq.T. 
             ! krausturner uses PE released in convection and KE from the wind to deepen the mixed layer further.
-            call krausturner(l_tracers_trans,pe_buoy,ke_tau(i,j),k1(i,j), & 
+            call krausturner(pe_buoy,ke_tau(i,j),k1(i,j), & 
               ts(i,j,1:maxk,1:n_tracers_tot), &
               mld(i,j),mldk(i,j))
           else

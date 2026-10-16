@@ -40,7 +40,7 @@ module krausturner_mod
 
   use precision, only : wp
   use ocn_grid, only : maxk, zw, dz, dzg, rdzg, z2dzg
-  use ocn_params, only : mlddec, mlddecd, n_tracers_tot, l_mix_bgc_all
+  use ocn_params, only : mlddec, mlddecd, n_tracers_tot
   use constants, only : g
   use eos_mod
 
@@ -55,13 +55,12 @@ contains
   !   Subroutine :  k r a u s t u r n e r
   !   Purpose    :  Simplest Kraus-Turner mixed layer scheme
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine krausturner(l_trans_tracers,pebuoy,ketau,k1, &
+  subroutine krausturner(pebuoy,ketau,k1, &
                          ts, &
                          mld,mldk)
 
     implicit none
 
-    logical, dimension(:), intent(in) :: l_trans_tracers
     integer, intent(in) :: k1
     real(wp), intent(in) :: pebuoy      ! pe energy input
     real(wp), intent(in) :: ketau       ! ke energy input
@@ -87,9 +86,7 @@ contains
     tmix = ts(k,1)
     smix = ts(k,2)
     do l=1,n_tracers_tot
-      if(l_mix_bgc_all .or. l_trans_tracers(l)) then
-        qmix(l) = ts(k,l)
-      endif
+      qmix(l) = ts(k,l)
     enddo
     partmix = 1
 
@@ -101,9 +98,7 @@ contains
         qmix(1) = tmix
         qmix(2) = smix
         do l=3,n_tracers_tot
-          if(l_mix_bgc_all .or. l_trans_tracers(l)) then
-            qmix(l) = rdzg(maxk,k)*(qmix(l)*dzg(maxk,k+1) + ts(k,l)*dz(k))
-          endif
+          qmix(l) = rdzg(maxk,k)*(qmix(l)*dzg(maxk,k+1) + ts(k,l)*dz(k))
         enddo
       endif
 
@@ -116,11 +111,9 @@ contains
         em = -1.e-8_wp
         ! mix whole water column
         do l=1,n_tracers_tot
-          if(l_mix_bgc_all .or. l_trans_tracers(l)) then
-            do n=k,maxk
-              ts(n,l) = qmix(l)
-            enddo
-          endif
+          do n=k,maxk
+            ts(n,l) = qmix(l)
+          enddo
         enddo
 
       else  ! not bottom layer
@@ -156,13 +149,11 @@ contains
       mlda = dzg(maxk,k+1)*rdzg(maxk,k)*em/eneed
       mldb = (dzg(maxk,k)*rdzg(maxk,k+1)-1._wp)*mlda
       do l=1,n_tracers_tot
-        if(l_mix_bgc_all .or. l_trans_tracers(l)) then
-          ts(maxk,l) = (1._wp-mldb)*qmix(l)+mldb*ts(k,l)
-          do n=k+1,maxk-1
-            ts(n,l) = ts(maxk,l)
-          enddo
-          ts(k,l) = mlda*qmix(l)+(1._wp-mlda)*ts(k,l)
-        endif
+        ts(maxk,l) = (1._wp-mldb)*qmix(l)+mldb*ts(k,l)
+        do n=k+1,maxk-1
+          ts(n,l) = ts(maxk,l)
+        enddo
+        ts(k,l) = mlda*qmix(l)+(1._wp-mlda)*ts(k,l)
       enddo
       ! Actual mixed layer depth. The key equation is (26), but 
       ! again the eqn is wrong (see above ref). It should read

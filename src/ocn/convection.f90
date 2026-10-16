@@ -35,7 +35,7 @@ module convection_mod
 
   use precision, only : wp
   use ocn_grid
-  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, l_mix_bgc_all, n_tracers_tot, n_tracers_ocn
+  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, n_tracers_tot, n_tracers_ocn
   use eos_mod
 
   implicit none
@@ -174,27 +174,16 @@ contains
           ts(kk,2) = tmx(2)
           rho(kk) = eos(tmx(1),tmx(2),zro(kk))   ! update density of mixed layers
         enddo
-        ! mix tracers other than temperature and salinity
+        ! mix tracers other than temperature and salinity (all tracers, including non-transported bgc tracers)
         do l=3,n_tracers_tot
-          if (l_mix_bgc_all) then
-            tsm(3) = 0.0
-            do kk=kb,kt
-              tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
-            enddo
-            tmx(3) = tsm(3)/zsm 
-            do kk=kb,kt
-              ts(kk,l) = tmx(3)
-            enddo
-          else if (l_trans_tracers(l)) then
-            tsm(3) = 0.0
-            do kk=kb,kt
-              tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
-            enddo
-            tmx(3) = tsm(3)/zsm 
-            do kk=kb,kt
-              ts(kk,l) = tmx(3)
-            enddo
-          endif
+          tsm(3) = 0.0
+          do kk=kb,kt
+            tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
+          enddo
+          tmx(3) = tsm(3)/zsm 
+          do kk=kb,kt
+            ts(kk,l) = tmx(3)
+          enddo
         enddo
 
         ! convection diagnostics

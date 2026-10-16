@@ -106,7 +106,6 @@ module ocn_params
      real(wp) :: ent_downslope       !! entrainment of ambient water by the plume, fraction of its volume per km of descent []
      real(wp) :: drho_downslope_min  !! minimum shelf-minus-ambient density contrast for a downslope flow [kg/m3]
      real(wp) :: f_downslope_max     !! maximum fraction of a cell volume exchanged per time step []
-     logical :: l_mix_bgc_all
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
      real(wp) :: drhcor_max
@@ -321,7 +320,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","ent_downslope",ent_downslope)
     call nml_read(filename,"ocn_par","drho_downslope_min",drho_downslope_min)
     call nml_read(filename,"ocn_par","f_downslope_max",f_downslope_max)
-    call nml_read(filename,"ocn_par","l_mix_bgc_all",l_mix_bgc_all)
 
     call nml_read(filename,"ocn_par","pe_buoy_coeff",pe_buoy_coeff)
     call nml_read(filename,"ocn_par","ke_tau_coeff",ke_tau_coeff)
