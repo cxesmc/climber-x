@@ -178,20 +178,20 @@ contains
         do l=3,n_tracers_tot
           if (l_mix_bgc_all) then
             tsm(3) = 0.0
-            do kk=kt,kb
+            do kk=kb,kt
               tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
             enddo
             tmx(3) = tsm(3)/zsm 
-            do kk=kt,kb
+            do kk=kb,kt
               ts(kk,l) = tmx(3)
             enddo
           else if (l_trans_tracers(l)) then
             tsm(3) = 0.0
-            do kk=kt,kb
+            do kk=kb,kt
               tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
             enddo
             tmx(3) = tsm(3)/zsm 
-            do kk=kt,kb
+            do kk=kb,kt
               ts(kk,l) = tmx(3)
             enddo
           endif
