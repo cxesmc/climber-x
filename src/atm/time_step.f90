@@ -395,6 +395,16 @@ contains
             - max((frst(i,j,i_lnd)+frst(i,j,i_ice))*tsl_gams_min,gams(i,j))*hgams
         else if (i_tsl.eq.3) then
           tsksl(i,j) = tam(i,j) + c_tsl_gam*zsa(i,j)
+        else if (i_tsl.eq.4) then
+          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
+          tsksl(i,j) = tskina(i,j) &
+            - max((frst(i,j,i_lnd)+frst(i,j,i_ice)+frst(i,j,i_sic))*tsl_gams_min,gams(i,j))*hgams &
+            + c_tsl_gam*zsa(i,j)
+        else if (i_tsl.eq.5) then
+          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
+          tsksl(i,j) = tskina(i,j) &
+            - max(tsl_gams_min,gams(i,j))*hgams &
+            + c_tsl_gam*zsa(i,j)
         endif
 
         !-------------------------------------

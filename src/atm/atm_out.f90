@@ -173,9 +173,11 @@ module atm_out
     real(wp), allocatable, dimension(:) :: tskslz
     real(wp), allocatable, dimension(:) :: ekez
     real(wp), allocatable, dimension(:) :: slpz
+    real(wp), allocatable, dimension(:) :: mtz
     real(wp), allocatable, dimension(:) :: vabz
     real(wp), allocatable, dimension(:) :: acbarz
     real(wp), allocatable, dimension(:) :: uz850
+    real(wp), allocatable, dimension(:,:) :: u3fz
     real(wp), allocatable, dimension(:) :: uz500
 
     real(wp), allocatable, dimension(:,:,:) :: zs
@@ -289,6 +291,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: aslp
     real(wp), allocatable, dimension(:,:) :: aslp_temp
     real(wp), allocatable, dimension(:,:) :: aslp_topo
+    real(wp), allocatable, dimension(:,:) :: aslp_eddy
+    real(wp), allocatable, dimension(:,:) :: aslp_gill
     real(wp), allocatable, dimension(:,:) :: dz500
     real(wp), allocatable, dimension(:,:) :: us
     real(wp), allocatable, dimension(:,:) :: vs
@@ -458,9 +462,11 @@ contains
      allocate(ann_a%tskslz(jm))
      allocate(ann_a%ekez(jm))
      allocate(ann_a%slpz(jm))
+     allocate(ann_a%mtz(jm))
      allocate(ann_a%vabz(jmc))
      allocate(ann_a%acbarz(jm))
      allocate(ann_a%uz850(jm))
+     allocate(ann_a%u3fz(jm,km))
      allocate(ann_a%uz500(jm))
 
      allocate(ann_a%zs(im,jm,nm))
@@ -571,6 +577,8 @@ contains
      allocate(ann_a%aslp(im,jm))
      allocate(ann_a%aslp_temp(im,jm))
      allocate(ann_a%aslp_topo(im,jm))
+     allocate(ann_a%aslp_eddy(im,jm))
+     allocate(ann_a%aslp_gill(im,jm))
      allocate(ann_a%dz500(im,jm))
      allocate(ann_a%slp(im,jm))
      allocate(ann_a%slp1(im,jm))
@@ -703,9 +711,11 @@ contains
      allocate(mon_a(k)%tskslz(jm))
      allocate(mon_a(k)%ekez(jm))
      allocate(mon_a(k)%slpz(jm))
+     allocate(mon_a(k)%mtz(jm))
      allocate(mon_a(k)%vabz(jmc))
      allocate(mon_a(k)%acbarz(jm))
      allocate(mon_a(k)%uz850(jm))
+     allocate(mon_a(k)%u3fz(jm,km))
      allocate(mon_a(k)%uz500(jm))
      allocate(mon_a(k)%tam(im,jm))  
      allocate(mon_a(k)%qam(im,jm))  
@@ -806,6 +816,8 @@ contains
      allocate(mon_a(k)%aslp(im,jm))
      allocate(mon_a(k)%aslp_temp(im,jm))
      allocate(mon_a(k)%aslp_topo(im,jm))
+     allocate(mon_a(k)%aslp_eddy(im,jm))
+     allocate(mon_a(k)%aslp_gill(im,jm))
      allocate(mon_a(k)%dz500(im,jm))
      allocate(mon_a(k)%slp(im,jm))
      allocate(mon_a(k)%slp1(im,jm))
@@ -1505,9 +1517,11 @@ contains
           mon_a(m)%tskslz       = 0. 
           mon_a(m)%ekez        = 0. 
           mon_a(m)%slpz        = 0. 
+          mon_a(m)%mtz         = 0. 
           mon_a(m)%vabz        = 0. 
           mon_a(m)%acbarz      = 0. 
           mon_a(m)%uz850       = 0. 
+          mon_a(m)%u3fz        = 0. 
           mon_a(m)%uz500       = 0. 
           mon_a(m)%tam         = 0. 
           mon_a(m)%qam         = 0. 
@@ -1589,6 +1603,8 @@ contains
           mon_a(m)%aslp        = 0. 
           mon_a(m)%aslp_temp   = 0. 
           mon_a(m)%aslp_topo   = 0. 
+          mon_a(m)%aslp_eddy   = 0. 
+          mon_a(m)%aslp_gill   = 0. 
           mon_a(m)%dz500       = 0. 
           mon_a(m)%slp         = 0. 
           mon_a(m)%slp1        = 0. 
@@ -1728,9 +1744,11 @@ contains
       mon_a(mon)%tskslz       = mon_a(mon)%tskslz       + mon_avg * sum(atm%tsksl,1)/im
       mon_a(mon)%ekez        = mon_a(mon)%ekez        + mon_avg * sum(atm%sam,1)/im
       mon_a(mon)%slpz        = mon_a(mon)%slpz        + mon_avg * sum(atm%slp,1)/im
+      mon_a(mon)%mtz         = mon_a(mon)%mtz         + mon_avg * atm%mtz
       mon_a(mon)%vabz        = mon_a(mon)%vabz        + mon_avg * sum(atm%vab,1)/im
       mon_a(mon)%acbarz      = mon_a(mon)%acbarz      + mon_avg * sum(atm%acbar,1)/im
       mon_a(mon)%uz850       = mon_a(mon)%uz850       + mon_avg * sum(atm%u3(:,:,k850),1)/im
+      mon_a(mon)%u3fz        = mon_a(mon)%u3fz        + mon_avg * sum(atm%u3f,1)/im
       mon_a(mon)%uz500       = mon_a(mon)%uz500       + mon_avg * sum(atm%u3(:,:,k500),1)/im
       mon_a(mon)%tam         = mon_a(mon)%tam         + mon_avg * atm%tam
       mon_a(mon)%qam         = mon_a(mon)%qam         + mon_avg * atm%qam
@@ -1813,6 +1831,8 @@ contains
       mon_a(mon)%aslp        = mon_a(mon)%aslp        + mon_avg * atm%aslp
       mon_a(mon)%aslp_temp   = mon_a(mon)%aslp_temp   + mon_avg * atm%aslp_temp
       mon_a(mon)%aslp_topo   = mon_a(mon)%aslp_topo   + mon_avg * atm%aslp_topo
+      mon_a(mon)%aslp_eddy   = mon_a(mon)%aslp_eddy   + mon_avg * atm%aslp_eddy
+      mon_a(mon)%aslp_gill   = mon_a(mon)%aslp_gill   + mon_avg * atm%aslp_gill
       mon_a(mon)%dz500       = mon_a(mon)%dz500       + mon_avg * atm%dz500 
       mon_a(mon)%slp         = mon_a(mon)%slp         + mon_avg * atm%slp
       mon_a(mon)%us         = mon_a(mon)%us         + mon_avg * sum(atm%us*atm%frst,3)
@@ -2585,12 +2605,16 @@ contains
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean eddy kinetic energy",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"slpz       ", sngl(vars%slpz       (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean sea level pressure",units="Pa",ncid=ncid)
+    call nc_write(fnm,"mtz        ", sngl(vars%mtz        (jm:1:-1)), dims=["lat ","mon ","time"], &
+      start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean mountain torque [p_s dz_s/dx] (form drag of the orography, eastward on the ground)",units="N/m2",ncid=ncid)
     call nc_write(fnm,"vabz       ", sngl(vars%vabz       (jmc:1:-1)), dims=["latv","mon ","time"], &
       start=[1,ndat,nout],count=[jmc,1,1],long_name="zonal mean meridional ageostrophic wind in PBL",units="m/s",ncid=ncid)
     call nc_write(fnm,"acbarz     ", sngl(vars%acbarz     (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean cross-isobar angle",units="rad",ncid=ncid)
     call nc_write(fnm,"uz850      ", sngl(vars%uz850      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 850 hPa zonal wind",units="m/s",ncid=ncid)
+    call nc_write(fnm,"u3fz       ", sngl(vars%u3fz       (jm:1:-1,:)), dims=["lat ","zlev","mon ","time"], &
+      start=[1,1,ndat,nout],count=[jm,km,1,1],long_name="zonal mean zonal wind with undamped thermal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"uz500      ", sngl(vars%uz500      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 500 hPa zonal wind",units="m/s",ncid=ncid)
 
@@ -2763,6 +2787,10 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal sea level pressure from azonal temperature",units="Pa",ncid=ncid)
     call nc_write(fnm,"aslp_topo  ", sngl(vars%aslp_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal sea level pressure from topographic stationary waves",units="Pa",ncid=ncid)
+    call nc_write(fnm,"aslp_eddy  ", sngl(vars%aslp_eddy  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="transient-eddy part of the stationary-wave azonal sea level pressure (included in aslp_topo)",units="Pa",ncid=ncid)
+    call nc_write(fnm,"aslp_gill  ", sngl(vars%aslp_gill  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="Gill-type baroclinic response to the azonal latent heating",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp        ", sngl(vars%slp        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp1       ", sngl(vars%slp1       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -3156,9 +3184,11 @@ contains
     ave%tskslz      = 0._wp
     ave%ekez        = 0._wp
     ave%slpz        = 0._wp
+    ave%mtz         = 0._wp
     ave%vabz        = 0._wp
     ave%acbarz      = 0._wp
     ave%uz850       = 0._wp
+    ave%u3fz        = 0._wp
     ave%uz500       = 0._wp
     ave%tam         = 0._wp
     ave%qam         = 0._wp
@@ -3240,6 +3270,8 @@ contains
     ave%aslp        = 0._wp
     ave%aslp_temp   = 0._wp
     ave%aslp_topo   = 0._wp
+    ave%aslp_eddy   = 0._wp
+    ave%aslp_gill   = 0._wp
     ave%dz500       = 0._wp
     ave%slp         = 0._wp
     ave%slp1        = 0._wp
@@ -3379,9 +3411,11 @@ contains
        ave%tskslz       = ave%tskslz       + d(k)%tskslz       / div
        ave%ekez        = ave%ekez        + d(k)%ekez        / div
        ave%slpz        = ave%slpz        + d(k)%slpz        / div
+       ave%mtz         = ave%mtz         + d(k)%mtz         / div
        ave%vabz        = ave%vabz        + d(k)%vabz        / div
        ave%acbarz      = ave%acbarz      + d(k)%acbarz      / div
        ave%uz850       = ave%uz850       + d(k)%uz850       / div
+       ave%u3fz        = ave%u3fz        + d(k)%u3fz        / div
        ave%uz500       = ave%uz500       + d(k)%uz500       / div
        ave%tam         = ave%tam         + d(k)%tam         / div
        ave%qam         = ave%qam         + d(k)%qam         / div
@@ -3465,6 +3499,8 @@ contains
        ave%aslp        = ave%aslp        + d(k)%aslp        / div
        ave%aslp_temp   = ave%aslp_temp   + d(k)%aslp_temp   / div
        ave%aslp_topo   = ave%aslp_topo   + d(k)%aslp_topo   / div
+       ave%aslp_eddy   = ave%aslp_eddy   + d(k)%aslp_eddy   / div
+       ave%aslp_gill   = ave%aslp_gill   + d(k)%aslp_gill   / div
        ave%dz500       = ave%dz500       + d(k)%dz500       / div
        ave%us         = ave%us         + d(k)%us         / div
        ave%vs         = ave%vs         + d(k)%vs         / div

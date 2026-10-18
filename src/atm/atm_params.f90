@@ -66,17 +66,22 @@ module atm_params
   real(wp) :: c_mmc_fer
   real(wp) :: c_mmc_pol
   real(wp) :: c_mmc_1
+  integer  :: i_mmc_geo
+  real(wp) :: c_mmc_edge
   real(wp) :: c_mmc_2
   integer  :: i_mmc_itcz
   real(wp) :: c_mmc_efe
   real(wp) :: c_mmc_dt0
   real(wp) :: c_mmc_dt1
   real(wp) :: hdv_mmc_ref
+  real(wp) :: c_mmc_mt        !! weight of the mountain torque in the lower-branch momentum budget of zslp (0 = off)
   real(wp) :: pblp 
   real(wp) :: pble
 
   real(wp) :: c_uter_pol
   real(wp) :: c_uter_eq
+  real(wp) :: c_uter_eq_f
+  real(wp) :: c_uter_pol_f
   integer :: i_mass_com
   real(wp) :: dps_com_topo
   real(wp) :: dp_com_topo
@@ -90,12 +95,28 @@ module atm_params
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
   logical :: l_aslp_temp_adv
+  logical :: l_aslp_temp_lows
   real(wp) :: c_aslp_temp_tau
   logical :: l_aslp_topo
-  real(wp) :: c_aslp_topo_1
-  real(wp) :: c_aslp_topo_2
-  real(wp) :: c_aslp_topo_3
-  real(wp) :: c_aslp_topo_4
+  real(wp) :: c_aslp_sw_amp
+  real(wp) :: c_aslp_sw_tau
+  real(wp) :: c_aslp_sw_h
+  real(wp) :: c_aslp_sw_umin
+  real(wp) :: c_aslp_sw_fr
+  real(wp) :: c_aslp_sw_nbv
+  real(wp) :: c_aslp_sw_lateq
+  real(wp) :: c_aslp_sw_eddy
+  integer :: i_aslp_sw_eddy
+  integer :: n_aslp_sw
+  integer :: n_aslp_sw_eddy
+  logical :: l_aslp_gill
+  real(wp) :: c_aslp_gill
+  real(wp) :: c_aslp_gill_tau
+  real(wp) :: c_aslp_gill_c
+  real(wp) :: c_aslp_gill_lat0
+  real(wp) :: c_aslp_gill_lat1
+  integer :: n_aslp_gill
+  integer :: i_aslp_gill_lat
 
   real(wp) :: zmax
   real(wp) :: dpc
@@ -153,6 +174,8 @@ module atm_params
   real(wp) :: c_syn_2
   real(wp) :: c_syn_3 
   real(wp) :: c_syn_4
+  integer  :: i_syn_diss   !! synoptic energy dissipation: 1 = (c_syn_3+c_syn_4*cda)*EKE^1.5, 2 = linear, (c_syn_3+c_syn_4*cda)*sqrt(syn_e0)*EKE
+  real(wp) :: syn_e0       !! m2/s2, reference synoptic energy of the linear dissipation (i_syn_diss=2)
   real(wp) :: c_syn_5      !! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
   integer  :: i_diff_syn   !! macro-diffusivity closure for the synoptic energy: 1 = c_syn_5*sqrt(EKE), 2 = c_syn_5*EKE
   real(wp) :: c_syn_6
@@ -160,6 +183,10 @@ module atm_params
   real(wp) :: windmin
   real(wp) :: synsurmin
   real(wp) :: tau_fac
+  real(wp) :: c_tau_syn
+  logical  :: l_tau_stab
+  real(wp) :: f_tau_Ri_unstab
+  real(wp) :: f_tau_Ri_stab
   integer  :: i_diff       !! macro-diffusivity closure: 1 = c_diff*sqrt(EKE), 2 = c_diff*EKE
   real(wp) :: c_diff       !! macro-diffusivity factor: m for i_diff=1, s for i_diff=2
   real(wp) :: h_diff       !! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983); <=0 = vertically uniform
@@ -184,6 +211,8 @@ module atm_params
   real(wp) :: c_acbar_f
   real(wp) :: c_acbar_p
   real(wp) :: c_acbar_wind
+  integer  :: i_usur_eps
+  real(wp) :: h_usur_eps
 
   real(wp) :: c_cld_1
   real(wp) :: c_cld_2
@@ -251,7 +280,7 @@ module atm_params
   integer :: nsmooth_cda
   integer :: nsmooth_weff
   integer :: nsmooth_aslp
-  integer :: nsmooth_aslp_topo
+  integer :: i_aslp_smooth
   integer :: nsmooth_acbar
 
   logical :: l_write_timer
@@ -331,14 +360,19 @@ contains
     call nml_read(filename,"atm_par","c_mmc_fer",c_mmc_fer)
     call nml_read(filename,"atm_par","c_mmc_pol",c_mmc_pol)
     call nml_read(filename,"atm_par","c_mmc_1",c_mmc_1)
+    call nml_read(filename,"atm_par","i_mmc_geo",i_mmc_geo)
+    call nml_read(filename,"atm_par","c_mmc_edge",c_mmc_edge)
     call nml_read(filename,"atm_par","c_mmc_2",c_mmc_2)
     call nml_read(filename,"atm_par","i_mmc_itcz",i_mmc_itcz)
     call nml_read(filename,"atm_par","c_mmc_efe",c_mmc_efe)
     call nml_read(filename,"atm_par","c_mmc_dt0",c_mmc_dt0)
     call nml_read(filename,"atm_par","c_mmc_dt1",c_mmc_dt1)
     call nml_read(filename,"atm_par","hdv_mmc_ref",hdv_mmc_ref)
+    call nml_read(filename,"atm_par","c_mmc_mt",c_mmc_mt)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
+    call nml_read(filename,"atm_par","c_uter_eq_f",c_uter_eq_f)
+    call nml_read(filename,"atm_par","c_uter_pol_f",c_uter_pol_f)
     call nml_read(filename,"atm_par","i_mass_com",i_mass_com)
     call nml_read(filename,"atm_par","dps_com_topo",dps_com_topo)
     call nml_read(filename,"atm_par","dp_com_topo",dp_com_topo)
@@ -353,13 +387,30 @@ contains
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
     call nml_read(filename,"atm_par","l_aslp_temp_adv",l_aslp_temp_adv)
+    call nml_read(filename,"atm_par","l_aslp_temp_lows",l_aslp_temp_lows)
     call nml_read(filename,"atm_par","c_aslp_temp_tau",c_aslp_temp_tau)
     c_aslp_temp_tau = c_aslp_temp_tau * sec_day
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
-    call nml_read(filename,"atm_par","c_aslp_topo_1",c_aslp_topo_1)
-    call nml_read(filename,"atm_par","c_aslp_topo_2",c_aslp_topo_2)
-    call nml_read(filename,"atm_par","c_aslp_topo_3",c_aslp_topo_3)
-    call nml_read(filename,"atm_par","c_aslp_topo_4",c_aslp_topo_4)
+    call nml_read(filename,"atm_par","c_aslp_sw_amp",c_aslp_sw_amp)
+    call nml_read(filename,"atm_par","c_aslp_sw_tau",c_aslp_sw_tau)
+    c_aslp_sw_tau = c_aslp_sw_tau * sec_day
+    call nml_read(filename,"atm_par","c_aslp_sw_h",c_aslp_sw_h)
+    call nml_read(filename,"atm_par","c_aslp_sw_umin",c_aslp_sw_umin)
+    call nml_read(filename,"atm_par","c_aslp_sw_fr",c_aslp_sw_fr)
+    call nml_read(filename,"atm_par","c_aslp_sw_nbv",c_aslp_sw_nbv)
+    call nml_read(filename,"atm_par","c_aslp_sw_lateq",c_aslp_sw_lateq)
+    call nml_read(filename,"atm_par","c_aslp_sw_eddy",c_aslp_sw_eddy)
+    call nml_read(filename,"atm_par","i_aslp_sw_eddy",i_aslp_sw_eddy)
+    call nml_read(filename,"atm_par","n_aslp_sw",n_aslp_sw)
+    call nml_read(filename,"atm_par","n_aslp_sw_eddy",n_aslp_sw_eddy)
+    call nml_read(filename,"atm_par","l_aslp_gill",l_aslp_gill)
+    call nml_read(filename,"atm_par","c_aslp_gill",c_aslp_gill)
+    call nml_read(filename,"atm_par","c_aslp_gill_tau",c_aslp_gill_tau)
+    call nml_read(filename,"atm_par","c_aslp_gill_c",c_aslp_gill_c)
+    call nml_read(filename,"atm_par","c_aslp_gill_lat0",c_aslp_gill_lat0)
+    call nml_read(filename,"atm_par","c_aslp_gill_lat1",c_aslp_gill_lat1)
+    call nml_read(filename,"atm_par","n_aslp_gill",n_aslp_gill)
+    call nml_read(filename,"atm_par","i_aslp_gill_lat",i_aslp_gill_lat)
     call nml_read(filename,"atm_par","zmax",zmax)
     call nml_read(filename,"atm_par","dpc",dpc)
     call nml_read(filename,"atm_par","dp_com",dp_com)
@@ -413,6 +464,8 @@ contains
     call nml_read(filename,"atm_par","c_syn_2",c_syn_2)
     call nml_read(filename,"atm_par","c_syn_3",c_syn_3)
     call nml_read(filename,"atm_par","c_syn_4",c_syn_4)
+    call nml_read(filename,"atm_par","i_syn_diss",i_syn_diss)
+    call nml_read(filename,"atm_par","syn_e0",syn_e0)
     call nml_read(filename,"atm_par","c_syn_5",c_syn_5)
     call nml_read(filename,"atm_par","i_diff_syn",i_diff_syn)
     call nml_read(filename,"atm_par","c_syn_6",c_syn_6)
@@ -420,6 +473,10 @@ contains
     call nml_read(filename,"atm_par","windmin",windmin)
     call nml_read(filename,"atm_par","synsurmin",synsurmin)
     call nml_read(filename,"atm_par","tau_fac",tau_fac)
+    call nml_read(filename,"atm_par","c_tau_syn",c_tau_syn)
+    call nml_read(filename,"atm_par","l_tau_stab",l_tau_stab)
+    call nml_read(filename,"atm_par","f_tau_Ri_unstab",f_tau_Ri_unstab)
+    call nml_read(filename,"atm_par","f_tau_Ri_stab",f_tau_Ri_stab)
     call nml_read(filename,"atm_par","i_diff",i_diff)
     call nml_read(filename,"atm_par","c_diff",c_diff)
     call nml_read(filename,"atm_par","h_diff",h_diff)
@@ -442,6 +499,8 @@ contains
     call nml_read(filename,"atm_par","c_acbar_f",c_acbar_f)
     call nml_read(filename,"atm_par","c_acbar_p",c_acbar_p)
     call nml_read(filename,"atm_par","c_acbar_wind",c_acbar_wind)
+    call nml_read(filename,"atm_par","i_usur_eps",i_usur_eps)
+    call nml_read(filename,"atm_par","h_usur_eps",h_usur_eps)
     call nml_read(filename,"atm_par","c_cld_1",c_cld_1)
     call nml_read(filename,"atm_par","c_cld_2",c_cld_2)
     call nml_read(filename,"atm_par","c_cld_3",c_cld_3)
@@ -509,7 +568,7 @@ contains
     call nml_read(filename,"atm_par","nsmooth_cda",nsmooth_cda)
     call nml_read(filename,"atm_par","nsmooth_weff",nsmooth_weff)
     call nml_read(filename,"atm_par","nsmooth_aslp",nsmooth_aslp)
-    call nml_read(filename,"atm_par","nsmooth_aslp_topo",nsmooth_aslp_topo)
+    call nml_read(filename,"atm_par","i_aslp_smooth",i_aslp_smooth)
     call nml_read(filename,"atm_par","nsmooth_acbar",nsmooth_acbar)
 
     call nml_read(filename,"atm_par","l_write_timer",l_write_timer)

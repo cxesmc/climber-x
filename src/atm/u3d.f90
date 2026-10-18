@@ -33,7 +33,7 @@ module u3d_mod
   use atm_params, only : aslp_pbl_az_1, aslp_pbl_az_2
   use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com, gad
   use atm_params, only : i_dp_com_topo, aslp_com_topo_1, aslp_com_topo_2, p0
-  use atm_params, only : c_uter_pol, c_uter_eq
+  use atm_params, only : c_uter_pol, c_uter_eq, c_uter_eq_f, c_uter_pol_f
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
   use atm_grid, only : fcort, cost, sint
   use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
@@ -152,7 +152,7 @@ contains
   !   Purpose    :  computation of 3D wind field and advective mass fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine u3d(niter, pzsa, ptrop, ugb, vgb, uab, vab, t3, gams, aslp, &
-        ua, va, uter, vter, uterf, vterf, u3, v3, w3, w3_nt, uz500, &
+        ua, va, uter, vter, uterf, vterf, u3, u3f, v3, w3, w3_nt, uz500, &
         fax, faxo, fay, fayo, fac, fac_topo, psi, psi_topo, &
         fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, froude, &
         dp_ret_topo, p_ret_topo, dp_ret_ageo, p_ret_ageo)
@@ -177,6 +177,7 @@ contains
     real(wp), intent(out  ) :: uterf(:,:,:)
     real(wp), intent(out  ) :: vterf(:,:,:)
     real(wp), intent(inout) :: u3(:,:,:)
+    real(wp), intent(inout) :: u3f(:,:,:)   !! as u3, but with its own damping of the thermal wind towards the poles (c_uter_pol_f) and the equator (c_uter_eq_f)
     real(wp), intent(inout) :: v3(:,:,:)
     real(wp), intent(inout) :: w3(:,:,:)
     real(wp), intent(inout) :: w3_nt(:,:,:)
@@ -218,6 +219,7 @@ contains
     real(wp) :: u3k, u3kp1, v3k, v3kp1
     real(wp) :: dplxdy, dplydxu
     real(wp) :: c_damp_eq, c_damp_pol
+    real(wp), dimension(im,jm,km) :: uteru   ! thermal wind in layers with its own (weaker) polar and equatorial damping, for u3f
 
     real(wp), dimension(kmc) :: uteri
     real(wp), dimension(kmc) :: vteri
@@ -487,6 +489,7 @@ contains
           vter(i,j,:) = 0._wp
           uterf(i,j,:) = 0._wp
           vterf(i,j,:) = 0._wp
+          uteru(i,j,:) = 0._wp
 
         else
 
@@ -527,6 +530,10 @@ contains
             ! thermal wind without polar damping needed for EKE production
             uterf(i,j,k) = 0.5_wp*(uterif(k)+uterif(k+1)) * c_damp_eq 
             vterf(i,j,k) = 0.5_wp*(vterif(k)+vterif(k+1)) * c_damp_eq
+            ! thermal wind for u3f: separate polar (c_uter_pol_f) and equatorial (c_uter_eq_f) damping; the
+            ! weak equatorial damping keeps the subtropical jet but removes the fcormin-limited thermal wind
+            ! of the deep tropics
+            uteru(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * min(1._wp, c_uter_eq_f*sint(j)**2) * min(1._wp, c_uter_pol_f*cost(j)**2)
           enddo
 
         endif
@@ -1029,6 +1036,7 @@ contains
           ug_b = ugb(i,j)    
           vg_b = vgb(i,j)
           u3(i,j,1) = 0.5_wp*(ua(i,j,1)+ua(ipl,j,1)) + ug_b
+          u3f(i,j,1) = u3(i,j,1)
           v3(i,j,1) = 0.5_wp*(va(i,j,1)+va(i,min(j+1,jm),1)) + vg_b
           do k=1,km-1     
             u3k   = 0.5_wp*(ua(i,j,k)+ua(ipl,j,k)) + ug_b + uter(i,j,k)
@@ -1036,6 +1044,8 @@ contains
             u3kp1 = 0.5_wp*(ua(i,j,k+1)+ua(ipl,j,k+1)) + ug_b + uter(i,j,k+1)
             v3kp1 = 0.5_wp*(va(i,j,k+1)+va(i,min(j+1,jm),k+1)) + vg_b + vter(i,j,k+1)
             u3(i,j,k+1) = 0.5_wp*(u3k+u3kp1)
+            ! the same with the undamped thermal wind
+            u3f(i,j,k+1) = u3(i,j,k+1) + 0.5_wp*(uteru(i,j,k)-uter(i,j,k) + uteru(i,j,k+1)-uter(i,j,k+1))
             v3(i,j,k+1) = 0.5_wp*(v3k+v3kp1) 
           enddo
 

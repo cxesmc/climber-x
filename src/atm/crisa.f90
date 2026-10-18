@@ -29,6 +29,7 @@ module crisa_mod
   use constants, only : pi, karman, omega
   use atm_params, only : cd0_ocn, cd0_sic, acbar_max, acbar_scale, nsmooth_acbar
   use atm_params, only : i_acbar, c_acbar_0, c_acbar_f, c_acbar_p, c_acbar_wind
+  use atm_params, only : i_usur_eps, h_usur_eps
   use atm_grid, only : im, jm, nm, fcorta_sqrt, fcorta, i_ocn, i_sic, i_lake
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
@@ -69,8 +70,10 @@ contains
 
     integer :: i, j, n
     real(wp) :: alfa, acbarn, acbarw
+    real(wp), dimension(nm) :: z0_cd0
 
     real(wp), parameter :: z_ref = 100._wp      ! m, reference height
+    real(wp), parameter :: z_10 = 10._wp        ! m, height of the surface wind and of cd0_ocn and cd0_sic
 
     !
     ! TWO ANGLES, because the one angle has two jobs and the data says they want different
@@ -116,7 +119,7 @@ contains
 
     if (i_acbar.ne.1 .and. i_acbar.ne.2) stop 'i_acbar'
 
-    !$omp parallel do collapse(2) private(i, j, n, alfa, acbarn, acbarw)
+    !$omp parallel do collapse(2) private(i, j, n, alfa, acbarn, acbarw, z0_cd0)
     do j=1,jm
       do  i=1,im
 
@@ -134,18 +137,21 @@ contains
 
             cd(i,j,n) = cd0_ocn
             cd0(i,j,n) = cd(i,j,n)
+            z0_cd0(n) = z_10*exp(-karman/sqrt(cd0(i,j,n)))
 
           else if (n.eq.i_sic) then
             ! sea ice
 
             cd(i,j,n) = cd0_sic
             cd0(i,j,n) = cd(i,j,n)
+            z0_cd0(n) = z_10*exp(-karman/sqrt(cd0(i,j,n)))
 
           else if (n.eq.i_lake) then
             ! lake
 
             cd(i,j,n) = cd0_ocn
             cd0(i,j,n) = cd(i,j,n)
+            z0_cd0(n) = z_10*exp(-karman/sqrt(cd0(i,j,n)))
 
           else
             ! land or ice sheet
@@ -153,9 +159,11 @@ contains
             if (frst(i,j,n).gt.0._wp) then
               cd(i,j,n) = (karman/log(z_ref/(z0m(i,j,n)+zoro(i,j))))**2
               cd0(i,j,n)   = (karman/log(z_ref/z0m(i,j,n)))**2
+              z0_cd0(n) = z_ref*exp(-karman/sqrt(cd0(i,j,n)))
             else
               cd(i,j,n) = 0.01_wp
               cd0(i,j,n) = 0.01_wp
+              z0_cd0(n) = z_ref*exp(-karman/sqrt(cd0(i,j,n)))
             endif
 
           endif
@@ -180,7 +188,19 @@ contains
         ! Solving of the equation for cross-isobar angle for each surface type
         do n=1,nm
           acbarn = acbar_cd(cd(i,j,n), j)
-          epsa(i,j,n) = sqrt(1._wp-sin(2._wp*acbarn))
+          if (i_usur_eps.eq.0) then
+            ! partner of the angle closure, see the pairing note above
+            epsa(i,j,n) = sqrt(1._wp-sin(2._wp*acbarn))
+          else if (i_usur_eps.eq.1) then
+            ! The pairing amplitude falls with the angle, so it rises poleward (0.70 in the trades, 0.88 at 50S over
+            ! ocean), while ERA-Interim and CMIP6 have an ocean |u10|/|ug| of 0.70-0.75 at all latitudes although
+            ! their turning still halves from the trades to the midlatitudes. The speed loss is not the Ekman turning
+            ! but the shear between the PBL wind and 10 m, i.e. the log profile, which depends on the roughness only.
+            ! z0 is the roughness implied by the neutral cd0 (no subgrid orography).
+            epsa(i,j,n) = log(z_10/min(z0_cd0(n),1._wp))/log(h_usur_eps/min(z0_cd0(n),1._wp))
+          else
+            stop 'i_usur_eps'
+          endif
           ! the angle usur rotates the geostrophic wind by, see c_acbar_wind below
           acbarw = c_acbar_wind*acbarn
           cos_acbar(i,j,n) = cos(acbarw)

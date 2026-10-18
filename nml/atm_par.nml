@@ -42,6 +42,10 @@
   c_acbar_f = 1.08e-2           ! Coriolis term of the same denominator (i_acbar=2). Sets how fast the angle falls with latitude.
   c_acbar_p = 1.7               ! exponent on phi in the same denominator (i_acbar=2). The aquaplanet fit is 3.1713e-3 / 1.0132e-2 / 2 
   c_acbar_wind = 1.6            ! factor on the cross-isobar angle used to ROTATE the surface wind in usur.
+  i_usur_eps = 1                ! amplitude of the surface (10 m) wind relative to the geostrophic wind, epsa (also scales synsur)
+                                !   0 = cos(a)-sin(a), the partner of the cross-isobar angle closure (falls with the angle, i.e. rises poleward)
+                                !   1 = log profile from 10 m to h_usur_eps, ln(10/z0)/ln(h_usur_eps/z0), z0 from the neutral cd0 (no orography)
+  h_usur_eps = 500.             ! m, top of the log profile for i_usur_eps=1. 750 m gives 0.72 over ocean (ERA/CMIP u10/ug 0.70-0.75)
 
   !-----------------------------------------------------------
   ! zonal mean overturning circulation parameters
@@ -53,9 +57,12 @@
   c_mmc_had = 0.3               ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
-  c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
+  c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
-  c_mmc_1 = 5.                  ! shape factor 
+  c_mmc_1 = 5.                  ! shape factor of the ITCZ displacement of the cell pattern, used only if i_mmc_geo=0
+  i_mmc_geo = 1                 ! meridional cell geometry: 0 = whole pattern displaced towards the ITCZ, decaying as 1/(1+c_mmc_1*(fi-ficz)**2),
+                                !                           1 = Hadley edges at +-width/2 + c_mmc_edge*ficz, phase linear within each Hadley cell
+  c_mmc_edge = 0.25             ! displacement of both Hadley edges per degree of ITCZ displacement, used only if i_mmc_geo=1
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
   i_mmc_itcz = 1                ! ITCZ position: 0 = c_mmc_2 x interhemispheric sea level temperature contrast,
                                 !                1 = c_mmc_efe x energy flux equator (efe output)
@@ -63,6 +70,8 @@
   c_mmc_dt0 = 62.               ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
   c_mmc_dt1 = 0.25              ! exponent of the Held (2000) supercriticality scaling of the Hadley width (tropopause height x bulk dry stability)
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity
+  c_mmc_mt = 1.                 ! weight of the mountain torque [p_s dz_s/dx] in the lower-branch momentum budget: only f*M - MT is
+                                ! balanced by friction and builds the zonal mean SLP; 0 = all of f*M by friction
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
   dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
@@ -74,16 +83,35 @@
   p0 = 101100                   ! Pa, mean sea level pressure, used only if l_p0_var==F
   c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
-  c_slp_3 = 12.                 ! parameter for polar damping of azonal sea level pressure 
+  c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
-  l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
-  c_aslp_temp_tau = 0.5         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
-  l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure?
-  c_aslp_topo_1 = 2.3e-6        ! 1/s, damping time scale due to Ekman pumping
-  c_aslp_topo_2 = 3.5e6         ! parameter to control meridional wavenumber of topographic stationary waves 
-  c_aslp_topo_3 = 1.            ! scaling factor of 500 hPa wind for topographic stationary waves 
-  c_aslp_topo_4 = 0.4           ! scaling factor of topography for topographic stationary waves, to mimic difference between 500 hPa and surface wind 
+  l_aslp_temp_adv = T           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  c_aslp_temp_tau = 1.0         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
+  l_aslp_temp_lows = F          ! scale the thermal lows (aslp_temp<0) by the air fraction of the sea level-500 hPa layer over elevated terrain (summer plateau heat lows)?
+  l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure? Linear barotropic vorticity equation
+                                ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by
+                                ! the ~850 hPa zonal mean flow over zsa; both winds from u3f, i.e. with the thermal wind damped by c_uter_pol_f
+                                ! and c_uter_eq_f instead of c_uter_pol/eq (c_aslp_sw_*); replaces the role of the upstream shift, use with l_aslp_temp_adv=F
+  c_aslp_sw_amp = 1.5           ! scaling of the sea level pressure response to the ~300 hPa height anomaly (x ra*g), used only if l_aslp_topo==T
+  c_aslp_sw_tau = 4.            ! days, Rayleigh damping time scale of the stationary waves, used only if l_aslp_topo==T
+  c_aslp_sw_h = 8000.           ! m, scale height of the topographic vortex stretching, used only if l_aslp_topo==T
+  c_aslp_sw_umin = 2.           ! m/s, minimum zonal mean wind for the wave propagation (critical lines), used only if l_aslp_topo==T
+  c_aslp_sw_fr = 2.             ! Froude blocking of the topographic forcing, h_eff = h0 tanh(h/h0), h0 = c_aslp_sw_fr*max(|U_850|,c_aslp_sw_umin)/c_aslp_sw_nbv (0 = off, linear in h), used only if l_aslp_topo==T
+  c_aslp_sw_nbv = 0.01          ! 1/s, Brunt-Vaisala frequency of the low-level flow for the Froude blocking, used only if c_aslp_sw_fr>0
+  c_aslp_sw_lateq = 20.         ! deg, no stationary wave sea level pressure equatorward of this latitude, used only if l_aslp_topo==T
+  c_aslp_sw_eddy = 0.           ! scaling of the transient-eddy vorticity forcing of the stationary waves (0 = off), see i_aslp_sw_eddy, used only if l_aslp_topo==T
+  i_aslp_sw_eddy = 1            ! eddy kinetic energy driving the transient-eddy closure: 1 = model sam, 2 = ERA-Interim 2-6 day eke_2_6_int climatology (atm%eke)
+  n_aslp_sw = 12                ! maximum zonal wavenumber of the stationary waves, used only if l_aslp_topo==T
+  n_aslp_sw_eddy = 6            ! maximum zonal wavenumber of the transient-eddy forced stationary waves (<= n_aslp_sw), used only if c_aslp_sw_eddy>0
+  l_aslp_gill = T               ! add the Gill-type (first baroclinic mode) sea level pressure response to the azonal latent heating?
+  c_aslp_gill = 1.              ! scaling of the Gill response, used only if l_aslp_gill==T
+  c_aslp_gill_tau = 5.          ! days, Rayleigh friction and Newtonian cooling time scale of the Gill response, used only if l_aslp_gill==T
+  c_aslp_gill_c = 50.           ! m/s, gravity wave speed of the first baroclinic mode, used only if l_aslp_gill==T
+  i_aslp_gill_lat = 2           ! latitude window of the heating forcing: 1 = distance from the equator, 2 = distance from the ITCZ (ficz), used only if l_aslp_gill==T
+  c_aslp_gill_lat0 = 25.        ! deg, the heating forcing is tapered (cosine) from 1 at c_aslp_gill_lat0 ...
+  c_aslp_gill_lat1 = 35.        ! deg, ... to 0 at c_aslp_gill_lat1 (distance as set by i_aslp_gill_lat), used only if l_aslp_gill==T
+  n_aslp_gill = 18              ! maximum zonal wavenumber of the Gill response, used only if l_aslp_gill==T
 
   !-----------------------------------------------------------
   ! additional dynamics parameters 
@@ -112,6 +140,8 @@
   ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
+  c_uter_eq_f = 3.              ! parameter for equatorial damping of the thermal wind in u3f, used for the stationary waves (l_aslp_topo==T)
+  c_uter_pol_f = 1000.          ! parameter for polar damping of the thermal wind in u3f, min(1,c*cos(lat)**2); 1000 = effectively none, 3 = as u3
   i_pbl = 1                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
                                 ! 2 = PBL assumed to start from sea level
@@ -147,15 +177,17 @@
   gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
   gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
   sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
-  gams_max_conv = 10.e-3        ! K/m, surface lapse rate in the very unstable limit (set = gams_max to switch off)
+  gams_max_conv = 7.5e-3        ! K/m, surface lapse rate in the very unstable limit (set = gams_max to switch off)
   sh_gams_conv = 60.            ! W/m2, sensible heat flux at which the transition to gams_max_conv is centred
   dsh_gams_conv = 15.           ! W/m2, flux width of the transition to gams_max_conv
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
   i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
                                 !   0 = tsksl = tsl, the air temperature profile reduced to sea level
                                 !   1 = built from the skin temperature (c_tsl_gam, tsl_gams_min below)
+                                !   2 = skin temperature reduced with the model lapse rate profile, tsl_gams_min floor as in 1
+                                !   3 = tam + c_tsl_gam*zsa, no skin temperature and no surface types
   c_tsl_gam = 5.e-3             ! lapse rate for reduction of skin temperature to sea level, all surface types
-  tsl_gams_min = 6.5e-3          ! K/m, minimum surface layer lapse rate for the sea level temperature over land and ice sheets
+  tsl_gams_min = 6.5e-3         ! K/m, minimum surface layer lapse rate for the sea level temperature over land and ice sheets
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
@@ -188,19 +220,26 @@
   !-----------------------------------------------------------
   ! synoptic kinetic energy parameteres
   !-----------------------------------------------------------
-  c_syn_1 = 1e-4                ! m2/s2/s, background synoptic energy production rate
-  c_syn_2 = 1.6e2               ! m2/s2, synoptic energy production parameter
+  c_syn_1 = 3e-4                ! m2/s2/s, background synoptic energy production rate
+  c_syn_2 = 1.3e2               ! m2/s2, synoptic energy production parameter
   c_syn_3 = 8.e-7               ! 1/m, background synoptic energy dissipation rate
   c_syn_4 = 1.e-4               ! 1/m, synoptic energy dissipation parameter
+  i_syn_diss = 2                ! synoptic energy dissipation: 1 = (c_syn_3+c_syn_4*cda)*sam^1.5 (steady state sam ~ prod^(2/3)),
+                                ! 2 = linear, (c_syn_3+c_syn_4*cda)*sqrt(syn_e0)*sam, ~1 day damping time (steady state sam ~ prod)
+  syn_e0 = 140.                 ! m2/s2, reference synoptic energy of the linear dissipation, used only if i_syn_diss==2
   i_diff_syn = 2                ! macro-diffusivity closure for the synoptic energy:
                                 ! 1 = c_syn_5*sqrt(EKE), K = c*V' (fixed mixing length)
                                 ! 2 = c_syn_5*EKE,       K = c*V'^2 (fixed eddy time scale, as i_diff=2);
   c_syn_5 = 1.e4                ! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
-  c_syn_6 = 0.6                 ! scaling from synoptic kinetic energy to synoptic wind
+  c_syn_6 = 0.75                ! scaling from synoptic kinetic energy to synoptic wind
   c_syn_7 = 1.6e-3              ! scaling for synoptic vertical velocity at ~700 hPa, wsyn = c_syn_7*sqrt(sam)*S(lat).
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
   synsurmin = 1.                ! m/s, minimum synoptic wind speed 
-  tau_fac = 1.2                 ! scaling factor on the surface wind stress taux/tauy
+  tau_fac = 1.0                 ! scaling factor on the surface wind stress taux/tauy
+  c_tau_syn = 2.5               ! weight of the synoptic wind in the effective speed of the wind stress, wtau = sqrt(us^2+vs^2+c_tau_syn*synsur^2)
+  l_tau_stab = T                ! stability dependence of the momentum drag in the wind stress, BATS bulk Richardson factor as for the ocean heat/moisture exchange (sic i_cd_ocn=2)
+  f_tau_Ri_unstab = 10.         ! Richardson number factor for unstable stratification, cd*(1-f*Ri), used only if l_tau_stab
+  f_tau_Ri_stab = 0.            ! Richardson number factor for stable stratification, cd/(1+f*Ri), used only if l_tau_stab
   i_diff = 2                    ! macro-diffusivity closure (energy, water, dust):
                                 ! 1 = c_diff*sqrt(EKE), K = c*V'
                                 ! 2 = c_diff*EKE,       K = c*V'^2 (Caballero & Hanley 2012)
@@ -330,7 +369,10 @@
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
   nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  nsmooth_aslp_topo = 4         ! spatial smoothing of azonal sea level pressure from topographic waves
+  i_aslp_smooth = 1             ! where the azonal sea level pressure is smoothed and damped (polar/equatorial):
+                                ! 1 = the time-relaxed state, every call (accumulates: equilibrium c S X/(1-(1-c)S), ~40% weaker, flatter)
+                                ! 2 = the forcing before the time relaxation (equilibrium = smoothed forcing; the damping keeps the
+                                !     effective latitude profile of 1, c fd/(1-(1-c) fd))
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle
   nsmooth_gam = 2               ! spatial smoothing of lapse rate 
   nsmooth_cld = 1 !0

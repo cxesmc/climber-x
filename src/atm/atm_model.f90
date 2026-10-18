@@ -223,9 +223,9 @@ contains
     !-------------------------------------------------
     ! azonal sea level pressure
     !$ time1 = omp_get_wtime()
-    call azslp(atm%tsksl, atm%htrop, atm%zsa, atm%uz500, &  ! in
+    call azslp(atm%tsksl, atm%htrop, atm%zsa, atm%uz500, atm%u3f, atm%sam, atm%eke, atm%prc, atm%ficz, &  ! in
       atm%aslp, &   ! inout
-      atm%aslp_temp, atm%aslp_topo, atm%dz500, atm%atsl) ! out
+      atm%aslp_temp, atm%aslp_topo, atm%aslp_eddy, atm%aslp_gill, atm%dz500, atm%atsl) ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'azslp',(time2-time1)
 
@@ -234,9 +234,9 @@ contains
     !$ time1 = omp_get_wtime()
     ! fdydse and t3 are from the previous step: adifa and vesta run further down, see
     ! slp_mod::zslp.
-    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, & ! in
+    call zslp(atm%sin_cos_acbar, atm%tsl, atm%aslp, atm%pzsa, & ! in
       atm%fdydse, atm%t3, atm%q3, atm%htrop, atm%ttrop, atm%efe, & ! in
-      atm%ficz, atm%slp, atm%had_fi, atm%had_width)  ! out
+      atm%ficz, atm%mtz, atm%slp, atm%had_fi, atm%had_width)  ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'zslp',(time2-time1)
 
@@ -270,7 +270,7 @@ contains
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
       call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, atm%gams, atm%aslp, & ! in
-        atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%v3, atm%w3, atm%w3_nt, atm%uz500, &  ! out   
+        atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%u3f, atm%v3, atm%w3, atm%w3_nt, atm%uz500, &  ! out   
         atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac, atm%fac_topo, atm%psi, atm%psi_topo, &  ! out
         atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, atm%froude, &  ! out
         atm%dp_ret_topo, atm%p_ret_topo, atm%dp_ret_ageo, atm%p_ret_ageo)  ! out
@@ -352,7 +352,7 @@ contains
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
         call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k500), atm%v3(:,:,k500), atm%us, atm%vs, atm%tp, &    ! in
-          atm%zsa, atm%cda, atm%cd, atm%epsa, &    ! in
+          atm%zsa, atm%cda, atm%cd, atm%epsa, atm%tskin, atm%t2, &    ! in
           atm%sam, atm%cdif, &    ! inout
           atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
           atm%diffx, atm%diffy, atm%wsyn)    ! out
@@ -696,6 +696,8 @@ contains
          atm%slp(i,j) = p0
          atm%aslp(i,j) = 0._wp      
          atm%aslp_topo(i,j) = 0._wp      
+         atm%aslp_eddy(i,j) = 0._wp
+         atm%aslp_gill(i,j) = 0._wp
          atm%dz500(i,j) = 0._wp      
 
          atm%winda(i,j) = 1._wp
@@ -749,6 +751,7 @@ contains
        enddo        
 
          atm%u3 = 0._wp  
+         atm%u3f = 0._wp
          atm%v3 = 0._wp
          atm%w3 = 0._wp
          atm%w3_nt = 0._wp
@@ -856,6 +859,8 @@ contains
      atm%aht_eq  = 0._wp
      atm%efe     = 0._wp
      atm%ficz    = 0._wp
+     allocate(atm%mtz(jm))
+     atm%mtz     = 0._wp
      allocate(atm%cld_rh(im,jm)) 
      allocate(atm%cld_low(im,jm)) 
      allocate(atm%cld(im,jm)) 
@@ -940,6 +945,8 @@ contains
      allocate(atm%aslp(im,jm))
      allocate(atm%aslp_temp(im,jm))
      allocate(atm%aslp_topo(im,jm))
+     allocate(atm%aslp_eddy(im,jm))
+     allocate(atm%aslp_gill(im,jm))
      allocate(atm%dz500(im,jm))
      allocate(atm%us(im,jm,nm))
      allocate(atm%vs(im,jm,nm))
@@ -961,6 +968,7 @@ contains
      allocate(atm%ua(im,jm,km))
      allocate(atm%va(im,jm,km))
      allocate(atm%u3(im,jm,km))
+     allocate(atm%u3f(im,jm,km))
      allocate(atm%v3(im,jm,km))
      allocate(atm%uter(im,jm,km))
      allocate(atm%vter(im,jm,km))
@@ -1137,6 +1145,7 @@ contains
      deallocate(atm%dtcol)
      deallocate(atm%dtcol_prev)
      deallocate(atm%tcol_prev)
+     deallocate(atm%mtz)
      deallocate(atm%wcon_prev)
      deallocate(atm%cld_rh) 
      deallocate(atm%cld_low) 
@@ -1218,6 +1227,8 @@ contains
      deallocate(atm%aslp)
      deallocate(atm%aslp_temp)
      deallocate(atm%aslp_topo)
+     deallocate(atm%aslp_eddy)
+     deallocate(atm%aslp_gill)
      deallocate(atm%dz500)
      deallocate(atm%us)
      deallocate(atm%vs)
@@ -1239,6 +1250,7 @@ contains
      deallocate(atm%ua)
      deallocate(atm%va)
      deallocate(atm%u3)
+     deallocate(atm%u3f)
      deallocate(atm%v3)
      deallocate(atm%w3)
      deallocate(atm%w3_nt)
@@ -1361,6 +1373,7 @@ contains
     call nc_write_dim(fnm,"nm",x=1,dx=1,nx=nm)
     call nc_write_dim(fnm,"plev",x=pl(1:km),axis="z")
     call nc_write_dim(fnm,"plevc",x=pl(1:kmc),axis="z")
+    call nc_write_dim(fnm,"latc",x=1,dx=1,nx=jmc)
     call nc_write_dim(fnm,"x",x=[1])
 
     call nc_write(fnm,"had_fi   ",     atm%had_fi   ,     dim1="x",  long_name="",units="")
@@ -1425,6 +1438,8 @@ contains
     call nc_write(fnm,"frst     ",     atm%frst     ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"Cde      ",     atm%Cde      ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"efe      ",     atm%efe      ,     dim1="x",  long_name="energy flux equator",units="deg")
+    call nc_write(fnm,"ficz     ",     atm%ficz     ,     dim1="x",  long_name="ITCZ latitude of the meridional cell geometry",units="rad")
+    call nc_write(fnm,"fdydse   ",     atm%fdydse   ,     dims=["lon ","latc"],long_name="meridional diffusive DSE flux, read by zslp before adifa",units="kg/s*K")
     call nc_write(fnm,"tcol_prev",     atm%tcol_prev,     dims=["lon","lat"],long_name="column temperature tam+dtcol at the previous step",units="K")
     call nc_write(fnm,"wcon_prev",     atm%wcon_prev,     dims=["lon","lat"],long_name="column water at the previous step",units="kg/m2")
     call nc_write(fnm,"dtcol_prev",    atm%dtcol_prev,    dims=["lon","lat"],long_name="dtcol at the previous step",units="K")
@@ -1432,6 +1447,7 @@ contains
     call nc_write(fnm,"psa      ",     atm%psa      ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"sigoro   ",     atm%sigoro   ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"u3      ",     atm%u3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    call nc_write(fnm,"u3f     ",     atm%u3f     ,     dims=["lon ","lat ","plev"],long_name="",units="")
     call nc_write(fnm,"v3      ",     atm%v3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
     call nc_write(fnm,"w3      ",     atm%w3      ,     dims=["lon  ","lat  ","plevc"],long_name="",units="")
     call nc_write(fnm,"t3      ",     atm%t3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
@@ -1530,10 +1546,22 @@ contains
     if (nc_exists_var(fnm,"dtcol_prev")) then
       call nc_read(fnm,"dtcol_prev", atm%dtcol_prev)
     endif
+    ! used by azslp/zslp on the first step, before zslp/adifa set them
+    if (nc_exists_var(fnm,"ficz")) then
+      call nc_read(fnm,"ficz",   atm%ficz  )
+    endif
+    if (nc_exists_var(fnm,"fdydse")) then
+      call nc_read(fnm,"fdydse", atm%fdydse)
+    endif
     call nc_read(fnm,"zsa      ",     atm%zsa     ) 
     call nc_read(fnm,"psa      ",     atm%psa     ) 
     call nc_read(fnm,"sigoro   ",     atm%sigoro  ) 
     call nc_read(fnm,"u3       ",     atm%u3      ) 
+    if (nc_exists_var(fnm,"u3f")) then
+      call nc_read(fnm,"u3f",       atm%u3f     )
+    else
+      atm%u3f = atm%u3
+    endif
     call nc_read(fnm,"v3       ",     atm%v3      ) 
     call nc_read(fnm,"w3       ",     atm%w3      ) 
     call nc_read(fnm,"t3       ",     atm%t3      ) 

@@ -58,6 +58,7 @@ module atm_def
       real(wp) :: aht_eq   !! diagnostic: northward atmospheric energy transport across the equator from boundary fluxes (PW)
       real(wp) :: efe      !! diagnostic: energy flux equator, zero crossing of the implied transport (deg)
       real(wp) :: ficz     !! ITCZ latitude of the meridional cell geometry (radians)
+      real(wp), allocatable, dimension(:) :: mtz  !! zonal mean mountain torque [p_s dz_s/dx] (N/m2), from zslp
 
       real(wp) :: eccentricity
       real(wp) :: precession
@@ -184,6 +185,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: aslp
       real(wp), allocatable, dimension(:,:) :: aslp_temp
       real(wp), allocatable, dimension(:,:) :: aslp_topo
+      real(wp), allocatable, dimension(:,:) :: aslp_eddy
+      real(wp), allocatable, dimension(:,:) :: aslp_gill
       real(wp), allocatable, dimension(:,:) :: dz500
       real(wp), allocatable, dimension(:,:) :: slp
       real(wp), allocatable, dimension(:,:) :: slp_dat
@@ -210,6 +213,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: ua
       real(wp), allocatable, dimension(:,:,:) :: va
       real(wp), allocatable, dimension(:,:,:) :: u3
+      real(wp), allocatable, dimension(:,:,:) :: u3f    !! as u3, thermal wind with its own polar/equatorial damping (c_uter_pol_f, c_uter_eq_f), for the stationary waves
       real(wp), allocatable, dimension(:,:,:) :: v3
       real(wp), allocatable, dimension(:,:,:) :: uter
       real(wp), allocatable, dimension(:,:,:) :: vter

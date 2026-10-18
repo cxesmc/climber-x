@@ -26,11 +26,12 @@
 module synop_mod
 
   use atm_params, only : wp
-  use constants, only : g, omega, pi
+  use constants, only : g, omega, pi, z_sfl
   use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost, fit 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin, i_diff_syn
-  use atm_params, only : tau_fac
+  use atm_params, only : i_syn_diss, syn_e0
+  use atm_params, only : tau_fac, c_tau_syn, l_tau_stab, f_tau_Ri_unstab, f_tau_Ri_stab
   use atm_params, only : i_diff, c_diff, c_diff_dse_eq, fi_diff_dse_eq, l_diff_impl
   use smooth_atm_mod, only : zofil
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
@@ -51,7 +52,7 @@ contains
   !                 3) compute synoptic vertical velocity on cloudiness level
   !                 4) compute zonal surface wind stress over the ocean
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine synop(frst, zs, ut3f, vt3f, uadv, vadv, us, vs, tp, zsa, cda, cd, epsa, sam, cdif, &
+  subroutine synop(frst, zs, ut3f, vt3f, uadv, vadv, us, vs, tp, zsa, cda, cd, epsa, tskin, t2, sam, cdif, &
       synprod, syndiss, synadv, syndif, synsur, winda, wind, taux, tauy, diffx, diffy, wsyn)
 
     implicit none
@@ -69,6 +70,8 @@ contains
     real(wp), intent(in   ) :: cda(:,:)
     real(wp), intent(in   ) :: cd(:,:,:)
     real(wp), intent(in   ) :: epsa(:,:,:)
+    real(wp), intent(in   ) :: tskin(:,:,:)
+    real(wp), intent(in   ) :: t2(:,:,:)
 
     real(wp), intent(inout) :: sam(:,:)
     real(wp), intent(inout) :: cdif(:,:)
@@ -87,7 +90,7 @@ contains
     real(wp), intent(out  ) :: wsyn(:,:)
 
     integer :: i, j, k, n, imi, ipl, jmi, jpl
-    real(wp) :: dsdt, sqsam
+    real(wp) :: dsdt, sqsam, wtau, richardson, f_stab
 
     real(wp), parameter :: sin45 = 0.7071067811865476_wp
     real(wp) :: sxadv, syadv, sxdif, sydif
@@ -150,7 +153,14 @@ contains
         !-----------------------------------------------
         ! synoptic energy dissipation  
 
-        syndiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sam(i,j)*sqrt(sam(i,j))
+        if (i_syn_diss.eq.1) then
+          ! quadratic (cascade/drag) dissipation, local balance gives sam ~ synprod^(2/3)
+          syndiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sam(i,j)*sqrt(sam(i,j))
+        else if (i_syn_diss.eq.2) then
+          ! linear damping on a fixed ~1 day time scale, local balance gives sam ~ synprod, which
+          ! matches the ERA-Interim seasonal and meridional scaling of EKE with the Eady growth rate
+          syndiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sqrt(syn_e0)*sam(i,j)
+        endif
 
         !-----------------------------------------------
         ! synoptic energy advection         
@@ -188,7 +198,11 @@ contains
 
     do j=2,jm-1
       do i=1,im
-        kdiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sqrt(sam(i,j))
+        if (i_syn_diss.eq.1) then
+          kdiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sqrt(sam(i,j))
+        else if (i_syn_diss.eq.2) then
+          kdiss(i,j) = (c_syn_3+c_syn_4*cda(i,j))*sqrt(syn_e0)
+        endif
       enddo
     enddo
 
@@ -258,7 +272,7 @@ contains
     ! Products: macro diffusion, wind, wind stress
     !-----------------------------------------------
 
-    !$omp parallel do collapse(2) private(i,j,n,sqsam)
+    !$omp parallel do collapse(2) private(i,j,n,sqsam,wtau,richardson,f_stab)
     do i=1,im
       do j=1,jm
 
@@ -286,9 +300,31 @@ contains
             wind(i,j,n) = max(wind(i,j,n),windmin)
           endif
 
-          ! wind stress 
-          taux(i,j,n) = tau_fac*cd(i,j,n)*ra*us(i,j,n)*wind(i,j,n)
-          tauy(i,j,n) = tau_fac*cd(i,j,n)*ra*vs(i,j,n)*wind(i,j,n)
+          ! wind stress
+          ! The mean stress is rho*cd*<|V| V>, not rho*cd*V_mean*<|V|>: the strong winds blow preferentially along the
+          ! mean direction, so the speed and direction fluctuations covary. For isotropic Gaussian fluctuations of
+          ! per-component variance s^2 about the mean wind U,
+          !   <|V| u> -> 1.5*U*<|V'|>   (U << s) ,     <|V| u> -> U*(U^2 + 1.5 s^2)/U   (U >> s) ,
+          ! while wind (the mean speed used for the scalar fluxes) carries synsur ~ <|V'|> (U << s) or synsur^2 ~ s^2 (U >> s).
+          ! Both limits are reproduced by an effective speed for the stress
+          !   wtau = sqrt(us^2 + vs^2 + c_tau_syn*synsur^2) ,   c_tau_syn = 2.25 (U << s) .. 3 (U >> s) .
+          wtau = sqrt(us(i,j,n)**2+vs(i,j,n)**2+c_tau_syn*synsur(i,j,n)**2)
+          if (n.eq.i_ocn) then
+            wtau = max(wtau,windmin)
+          endif
+          ! Stability dependence of the momentum drag. 
+          ! Same BATS bulk Richardson factor as for the ocean heat and moisture exchange in surface_par_sic.
+          f_stab = 1._wp
+          if (l_tau_stab .and. frst(i,j,n).gt.0._wp .and. t2(i,j,n).gt.0._wp) then
+            richardson = g*z_sfl*(1._wp-tskin(i,j,n)/t2(i,j,n))/max(wind(i,j,n),1._wp)**2
+            if (richardson.lt.0._wp) then
+              f_stab = 1._wp - f_tau_Ri_unstab*richardson
+            else
+              f_stab = 1._wp/(1._wp + f_tau_Ri_stab*richardson)
+            endif
+          endif
+          taux(i,j,n) = tau_fac*f_stab*cd(i,j,n)*ra*us(i,j,n)*wtau
+          tauy(i,j,n) = tau_fac*f_stab*cd(i,j,n)*ra*vs(i,j,n)*wtau
 
         enddo
 
