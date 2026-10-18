@@ -29,9 +29,9 @@
 module island_mod
 
   use precision, only : wp
-  use ocn_grid, only : maxi, maxj, maxk, c, dphi, rcv, dsv, dz, rh, R_earth, ku
+  use ocn_grid, only : maxi, maxj, maxk, c, dphi, rdphi, rds, rcv, dsv, dz, rh, R_earth, ku
   use ocn_grid, only : npi, lpisl, ipisl, jpisl
-  use ocn_params, only : fcor, fcorv, drag, rho0, i_cor_form, qcor
+  use ocn_params, only : fcor, fcorv, drag, rho0, i_cor_form, qcor, drag_par
   !$use om_lib
 
   implicit none
@@ -62,7 +62,7 @@ contains
     real(wp), dimension(0:,0:), intent(in), optional :: psiloc
 
     integer :: i, k, lpi, ipi, jpi, im1
-    real(wp) :: cor, tv1, tv2
+    real(wp) :: cor, tv1, tv2, fcb
 
 
     erisl1 = 0._wp
@@ -90,15 +90,19 @@ contains
           cor = 0._wp
        endif
 
+       ! checkerboard friction on this face (see stencil_coef in invert.f90), from the streamfunction
+       fcb = 0._wp
+       if (drag_par%drag_cb.gt.0._wp) fcb = face_cb(psiloc, abs(lpi), ipi, jpi)
+
        if (jpi.lt.maxj) then ! to avoid acessing rcv(maxj) and dsv(maxj), out of bound!
           erisl1 = erisl1 + sign(1,lpi)*(drag(abs(lpi),ipi,jpi) &  ! m/s2
-              * ubloc(abs(lpi),ipi,jpi) + cor &
+              * ubloc(abs(lpi),ipi,jpi) + cor + fcb &
               - indj*tau(abs(lpi),ipi,jpi)/rho0*rh(abs(lpi),ipi,jpi)) &
               * (c(jpi)*dphi*(2._wp - abs(lpi)) &
               + rcv(jpi)*dsv(jpi)*(abs(lpi) - 1._wp))  
        else
           erisl1 = erisl1 + sign(1,lpi)*(drag(abs(lpi),ipi,jpi) &  ! m/s2
-              * ubloc(abs(lpi),ipi,jpi) + cor &
+              * ubloc(abs(lpi),ipi,jpi) + cor + fcb &
               - indj*tau(abs(lpi),ipi,jpi)/rho0*rh(abs(lpi),ipi,jpi)) &
               * (c(jpi)*dphi*(2._wp - abs(lpi)))
        endif
@@ -154,5 +158,45 @@ contains
    return
 
   end subroutine island
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function   :  f a c e _ c b
+  !   Purpose    :  checkerboard friction on face (l,i,j), m/s2: drag_cb*rh*(-1/4)*(second difference along the face of
+  !                 the face transport), with the transports from psi and the metric of face (l,i,j) (as in stencil_coef)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function face_cb(psi, l, i, j) result(fcb)
+
+    implicit none
+
+    real(wp), dimension(0:,0:), intent(in) :: psi
+    integer, intent(in) :: l, i, j
+    real(wp) :: fcb
+
+    integer :: n, a, b
+    real(wp) :: tr(-1:1)
+
+
+    if (l.eq.1) then
+      ! u-face: u-transports of the faces (1,i-1..i+1,j)
+      do n=-1,1
+        a = modulo(i+n-1,maxi) + 1
+        tr(n) = -c(j)*(psi(a,j) - psi(a,j-1))*rds(j)/(rho0*R_earth)
+      enddo
+    else
+      ! v-face: v-transports of the faces (2,i,j-1..j+1), zero beyond the N/S boundaries
+      do n=-1,1
+        b = j+n
+        a = modulo(i-1,maxi) + 1
+        if (b.lt.0 .or. b.gt.maxj) then
+          tr(n) = 0._wp
+        else
+          tr(n) = (psi(a,b) - psi(modulo(a-2,maxi)+1,b))*rcv(j)*rdphi/(rho0*R_earth)
+        endif
+      enddo
+    endif
+    fcb = drag_par%drag_cb*rh(l,i,j)*(-0.25_wp)*(tr(1) - 2._wp*tr(0) + tr(-1))
+
+  end function face_cb
 
 end module island_mod

@@ -30,7 +30,7 @@ module invert_mod
 
   use precision, only : wp
   use ocn_grid, only : maxi, maxj, maxk, k1, c, cv, ds, dsv, dphi, rh, R_earth
-  use ocn_params, only : fcor, fcorv, drag, drhcor_max, i_cor_form, nbw, qcor
+  use ocn_params, only : fcor, fcorv, drag, drhcor_max, i_cor_form, nbw, qcor, drag_par
 
   implicit none
 
@@ -53,6 +53,7 @@ contains
   !                      a discrete divergence, so the matching path integral in island.f90 is path-independent.
   !                      Only psi averaging, and only the 4 cells of the psi point are used
   !   Both are 5-point stencils. Valid for 1 <= j <= maxj-1.
+  !   With drag_cb > 0 a checkerboard friction is added (9-point stencil), see below.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine stencil_coef(i,j,cf)
 
@@ -63,6 +64,8 @@ contains
 
     real(wp) :: tv, tv1, rh1, rh2, drh
     real(wp) :: dsq_e, dsq_w, dpq_n, dpq_s, fac_p, fac_s
+    real(wp) :: fac, w
+    integer :: di, dj
 
 
     cf(:,:) = 0._wp
@@ -76,6 +79,30 @@ contains
                /(dsv(j)*R_earth**2)
     cf( 1, 0) = drag(2,i+1,j)*rh(2,i+1,j)/(cv(j)*dphi*R_earth)**2
     cf( 0, 1) = drag(1,i,j+1)*c(j+1)**2*rh(1,i,j+1)/(ds(j+1)*dsv(j)*R_earth**2)
+
+    ! checkerboard friction: on each face an extra friction drag_cb*(-1/4)*(second difference of the face transport
+    ! along the face), i.e. of the u-transports in i on u-faces and of the v-transports in j on v-faces. It vanishes for
+    ! transports linear along the face and equals an extra drag drag_cb on the checkerboard psi = (-1)**(i+j), whose
+    ! face-averaged psi is zero, so that the J3 Coriolis term cannot see it and only the drag damps it.
+    ! Its curl is the 9-point mixed difference ~ d_phi^2 d_s^2 psi; the same face term is in the island path integral
+    if (drag_par%drag_cb.gt.0._wp) then
+      do dj=0,1      ! u-faces (1,i,j+dj): psi(i+di,j+dj) - psi(i+di,j+dj-1), di=-1..1
+        fac = real(2*dj-1,wp)*drag_par%drag_cb*c(j+dj)**2*rh(1,i,j+dj)/(ds(j+dj)*dsv(j)*R_earth**2)
+        do di=-1,1
+          w = merge(0.5_wp, -0.25_wp, di.eq.0)
+          cf(di,dj)   = cf(di,dj)   + fac*w
+          cf(di,dj-1) = cf(di,dj-1) - fac*w
+        enddo
+      enddo
+      do di=0,1      ! v-faces (2,i+di,j): psi(i+di,j+dj) - psi(i+di-1,j+dj), dj=-1..1
+        fac = real(2*di-1,wp)*drag_par%drag_cb*rh(2,i+di,j)/(cv(j)*dphi*R_earth)**2
+        do dj=-1,1
+          w = merge(0.5_wp, -0.25_wp, dj.eq.0)
+          cf(di,dj)   = cf(di,dj)   + fac*w
+          cf(di-1,dj) = cf(di-1,dj) - fac*w
+        enddo
+      enddo
+    endif
 
     if (i_cor_form.eq.0) then
 
@@ -137,7 +164,7 @@ contains
   !   Purpose    :  invert matrix for barotropic streamfunction
   !
   !   Band storage: gap(k, nbw+1+off) holds the coefficient of psi at row index k+off, with the half band width
-  !   nbw = maxi+1 of the 5-point stencil (set in momentum_init).
+  !   nbw = maxi+1 of the 5-point stencil, 2*maxi with the 9-point checkerboard friction (set in momentum_init).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine invert(gap,ratm)
 

@@ -32,7 +32,7 @@ module transport_ocn_mod
   use dim_name, only: dim_lon, dim_lat, dim_depth, dim_time, dim_depth1, dim_lon1, dim_lat1
   use ncio
 
-  use timer, only : year, doy, time_soy_ocn, sec_day
+  use timer, only : year, doy, time_soy_ocn
   use control, only: out_dir
   use climber_grid, only : lon, lat
   use constants, only : g, pi
@@ -46,13 +46,13 @@ module transport_ocn_mod
   use ocn_params, only : diff_iso, diff_gm
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
-  use ocn_params, only : slope_max, slope_crit
+  use ocn_params, only : slope_max, slope_crit, i_a33
   use ocn_params, only : diffx_max, diffy_max
   use ocn_params, only : mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
   use ocn_params, only : l_downslope
 
   use advection_mod, only : advection_upstream, advection_fct
-  use diffusion_mod, only : diffusion
+  use diffusion_mod, only : diffusion, slope_taper
   use eos_mod
   use convection_mod, only : convection
   use krausturner_mod
@@ -101,7 +101,7 @@ contains
     real(wp), dimension(:,:), intent(inout) :: fds
     real(wp), dimension(:,:), intent(inout) :: zds
 
-    real(wp), dimension(:,:), intent(out) :: mld
+    real(wp), dimension(:,:), intent(inout) :: mld   ! in: previous step (boundary layer for the diffusion), out: new
     real(wp), dimension(:,:,:,:), intent(out) :: fdx
     real(wp), dimension(:,:,:,:), intent(out) :: fdy
     real(wp), dimension(:,:,:,:), intent(out) :: fdz
@@ -263,7 +263,7 @@ contains
        endif
 
        ! diffusion
-       call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
+       call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit,mld, &
          fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
 
        ! apply advection and diffusion to tracer field
@@ -443,7 +443,7 @@ contains
             do n=0,1
               if (mask_w(i,j+n,k).eq.1) then
                 slope_y = drhody/min(-eps,drho_dz(i,j+n,k))
-                taper = min(1._wp,slope_crit(j+n,k)**2/(slope_y**2+eps))   ! safe for slope_y=0
+                taper = slope_taper(slope_y**2,slope_crit(j+n,k))
                 psi(k) = psi(k) + 0.5_wp*diff_gm*taper*slope_y   ! m2/s
               endif
             enddo
@@ -583,15 +583,20 @@ contains
     ! stability criterion for isoneutral diffusion, eq. A.2 in Gerdes 1991 (eq. C2 in Griffies 1998?)
     do j=1,maxj
       do k=1,maxk
-        slope_crit(j,k) = min( dz(k)/sqrt(4._wp*diff_iso*dt), dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
+        if (i_a33.eq.1) then
+          ! implicit A33: only the limits of the explicit off-diagonal terms remain
+          slope_crit(j,k) = min( dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
+        else
+          slope_crit(j,k) = min( dz(k)/sqrt(4._wp*diff_iso*dt), dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
+        endif
         slope_crit(j,k) = min(slope_max,slope_crit(j,k))
       enddo
     enddo
 
     ! maximum horizontal diffusivity (theoretical limit is 0.125*dx^2/dt). 
     do j=1,maxj
-      diffx_max(j) = 0.1_wp*dx(j)**2/sec_day
-      diffy_max(j) = 0.1_wp*dy**2/sec_day
+      diffx_max(j) = 0.1_wp*dx(j)**2/dt
+      diffy_max(j) = 0.1_wp*dy**2/dt
     enddo
 
     

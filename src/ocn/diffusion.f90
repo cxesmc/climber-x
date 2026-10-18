@@ -31,15 +31,15 @@ module diffusion_mod
   use precision, only : wp
   use constants, only : r_earth
   use tridiag, only : tridiag_solve
-  use ocn_params, only : dt, diff_gm, diffx_max, diffy_max
-  use ocn_grid, only : k1, maxi, maxj, maxk, mask_ocn, mask_c, mask_u, mask_v, mask_w, dx, dxv, dy, dz, dza, rdx, rdy, rdza, zw, ocn_area
+  use ocn_params, only : dt, diff_gm, diffx_max, diffy_max, i_a33, l_hdiff_bl, i_taper, slope_width, slope_max
+  use ocn_grid, only : k1, maxi, maxj, maxk, mask_ocn, mask_c, mask_u, mask_v, mask_w, dx, dxv, dy, dz, dza, rdx, rdy, rdza, zw, zro, ocn_area
 
   implicit none
 
   real(wp), parameter :: eps = 1.e-15_wp
 
   private
-  public :: diffusion
+  public :: diffusion, slope_taper
 
 contains
 
@@ -47,7 +47,7 @@ contains
   !   Subroutine :  d i f f u s i o n
   !   Purpose    :  
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine diffusion(i_diff, f_ocn,tracer,diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit, &
+  subroutine diffusion(i_diff, f_ocn,tracer,diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit,mld, &
                       fdx, fdy, fdz, tracer_tendency)
 
     implicit none
@@ -59,6 +59,7 @@ contains
     real(wp), dimension(:,:,:), intent(in) :: diff_dia
     real(wp), dimension(:,:,:), intent(in) :: drho_dx, drho_dy, drho_dz
     real(wp), dimension(:,:), intent(in) :: slope_crit
+    real(wp), dimension(:,:), intent(in) :: mld   ! mixed layer depth of the previous time step (negative) [m]
 
     real(wp), dimension(0:,0:,0:), intent(out) :: fdx
     real(wp), dimension(0:,0:,0:), intent(out) :: fdy
@@ -70,8 +71,16 @@ contains
     real(wp) :: dts_dx, dts_dy, dts_dz, tv
     real(wp) :: slope2, slope_x, slope_y, slope_x_avg, slope_y_avg, drhodx, drhody, drhodz, tracer_ijk
     real(wp) :: taper, mc_x, yfac
+    real(wp) :: taper_h, tap_sum, tap_n   ! face-mean slope taper of the horizontal diagonal terms (A11, A22)
+    real(wp) :: a33                      ! A33 coefficient on the w-face, K*S^2 averaged over the 4 corners [m2/s]
+    real(wp), allocatable, dimension(:,:,:) :: k33
+    real(wp), dimension(maxk) :: ta, tb, tc, tr, tx   ! tridiagonal system of the implicit A33 solve
+    integer :: kb, n, kk
     real(wp) :: dx_dz, dy_dz
     real(wp), parameter :: f_min = 1.e-30_wp   ! floor for f_ocn in branchless denominator (land f_ocn=0)
+
+
+    if (i_diff.eq.1 .and. i_a33.eq.1) allocate(k33(maxi,maxj,maxk), source=0._wp)
 
 
     do k=1,maxk
@@ -84,7 +93,28 @@ contains
           if (mask_u(I,j,k).eq.1) then  
             ip1 = modulo(i,maxi) + 1
             dy_dz = dy*dz(k)
-            fdx(I,j,k) = - rdx(j) * min(diffx_max(j),diff_iso) * (tracer(ip1,j,k)-tracer_ijk) *dy_dz*dt  ! volume flux
+            taper_h = 1._wp
+            if (i_diff.eq.1) then
+              tap_sum = 0._wp
+              tap_n = 0._wp
+              do knp=0,1
+                do nnp=0,1
+                  i0 = modulo(i+nnp-1, maxi) + 1
+                  k1 = max(1, k+knp-1)
+                  if (mask_w(i0,j,k1).eq.1) then
+                    slope_x = drho_dx(I,j,k)/min(-eps,drho_dz(i0,j,k1))
+                    tap_sum = tap_sum + slope_taper(slope_x**2,slope_crit(j,k))
+                    tap_n = tap_n + 1._wp
+                  endif
+                enddo
+              enddo
+              if (tap_n.gt.0._wp) taper_h = tap_sum/tap_n
+              ! boundary layer: no taper inside the mixed layer of both columns
+              if (l_hdiff_bl) then
+                if (zro(k).ge.max(mld(i,j),mld(ip1,j))) taper_h = 1._wp
+              endif
+            endif
+            fdx(I,j,k) = - rdx(j) * taper_h * min(diffx_max(j),diff_iso) * (tracer(ip1,j,k)-tracer_ijk) *dy_dz*dt  ! volume flux
             if (i_diff.eq.1 .and. diff_iso.ne.diff_gm) then
               drhodx = drho_dx(I,j,k)
               tv = 0._wp
@@ -95,9 +125,9 @@ contains
                   k2 = k+knp
                   dts_dz = (tracer(i0,j,k2)-tracer(i0,j,k1)) * rdza(k1)  ! K/m or psu/m
                   slope_x = drhodx/min(-eps,drho_dz(i0,j,k1))
-                  taper = min(1._wp,(slope_crit(j,k)/slope_x)**2)
+                  taper = slope_taper(slope_x**2,slope_crit(j,k))
                   ! mask_w as a multiply (0 on closed face)
-                  tv = tv + real(mask_w(i0,j,k1),wp) * taper * min(diffx_max(j),(diff_iso-diff_gm))*slope_x*dts_dz
+                  tv = tv + real(mask_w(i0,j,k1),wp) * taper*(min(diffx_max(j),diff_iso)-min(diffx_max(j),diff_gm))*slope_x*dts_dz
                 enddo
               enddo
               tv = 0.25_wp*tv *dy_dz*dt  ! m/s*K *m2*s = m3 * K
@@ -110,7 +140,29 @@ contains
           ! flux to north
           if (j.lt.maxj .and. mask_v(i,J,k).eq.1) then 
             dx_dz = dxv(J)*dz(k)
-            fdy(i,J,k) = - rdy * min(diffy_max(J),diff_iso) * (tracer(i,j+1,k)-tracer_ijk) *dx_dz*dt
+            ! tapered horizontal diagonal term (A22), see above
+            taper_h = 1._wp
+            if (i_diff.eq.1) then
+              tap_sum = 0._wp
+              tap_n = 0._wp
+              do knp=0,1
+                do nnp=0,1
+                  j0 = j+nnp
+                  k1 = max(1, k+knp-1)
+                  if (mask_w(i,j0,k1).eq.1) then
+                    slope_y = drho_dy(i,J,k)/min(-eps,drho_dz(i,j0,k1))
+                    tap_sum = tap_sum + slope_taper(slope_y**2,slope_crit(j0,k))
+                    tap_n = tap_n + 1._wp
+                  endif
+                enddo
+              enddo
+              if (tap_n.gt.0._wp) taper_h = tap_sum/tap_n
+              ! boundary layer: no taper inside the mixed layer of both columns
+              if (l_hdiff_bl) then
+                if (zro(k).ge.max(mld(i,j),mld(i,j+1))) taper_h = 1._wp
+              endif
+            endif
+            fdy(i,J,k) = - rdy * taper_h * min(diffy_max(J),diff_iso) * (tracer(i,j+1,k)-tracer_ijk) *dx_dz*dt
             if (i_diff.eq.1 .and. diff_iso.ne.diff_gm) then
               ! add isoneutral diffusion
               drhody = drho_dy(i,J,k)
@@ -122,9 +174,9 @@ contains
                   k2 = k+knp
                   dts_dz = (tracer(i,j0,k2)-tracer(i,j0,k1)) * rdza(k1)  ! K/m or psu/m
                   slope_y = drhody/min(-eps,drho_dz(i,j0,k1))
-                  taper = min(1._wp,(slope_crit(j0,k)/slope_y)**2)
+                  taper = slope_taper(slope_y**2,slope_crit(j0,k))
                   ! mask_w as a multiply (0 on closed face)
-                  tv = tv + real(mask_w(i,j0,k1),wp) * taper * min(diffy_max(j),(diff_iso-diff_gm))*slope_y*dts_dz
+                  tv = tv + real(mask_w(i,j0,k1),wp) * taper*(min(diffy_max(j),diff_iso)-min(diffy_max(j),diff_gm))*slope_y*dts_dz
                 enddo
               enddo
               tv = 0.25_wp*tv *dx_dz*dt  ! m/s*K *m2*s = m3 * K
@@ -144,6 +196,7 @@ contains
               drhodz = min(-eps,drho_dz(i,j,K)) ! negative
               ! compute horizontal derivatives of tracer
               tv = 0._wp
+              a33 = 0._wp
               slope_x_avg = 0._wp
               slope_y_avg = 0._wp
               do knp=0,1
@@ -165,16 +218,21 @@ contains
                   slope_y = yfac * drho_dy(i,jm,k+knp)/drhodz
                   ! sum up over 4 corners
                   slope2 = slope_x**2+slope_y**2+eps
-                  taper = min(1._wp,slope_crit(j,K)**2/slope2)
-                  tv = tv + (diff_iso+diff_gm) *taper* (slope_x*dts_dx + slope_y*dts_dy)
-                  ! A33 term (explicit)
-                  tv = tv - diff_iso*taper*slope2*dts_dz
+                  taper = slope_taper(slope2,slope_crit(j,K))
+                  tv = tv + (diff_iso+diff_gm)*taper * (slope_x*dts_dx + slope_y*dts_dy)
+                  ! A33 term, explicit or (i_a33==1) solved implicitly below
+                  if (i_a33.eq.1) then
+                    a33 = a33 + diff_iso*taper*slope2
+                  else
+                    tv = tv - diff_iso*taper*slope2*dts_dz
+                  endif
                   ! average slopes
                   slope_x_avg = slope_x_avg + slope_x
                   slope_y_avg = slope_y_avg + slope_y
                 enddo
               enddo
               fdz(i,j,K) = fdz(i,j,K) + 0.25_wp*tv *ocn_area(i,j)*dt  ! m/s*K *m2*s = m3 * K
+              if (i_a33.eq.1) k33(i,j,K) = 0.25_wp*a33
             endif
           else
             fdz(i,j,K) = 0._wp
@@ -206,8 +264,65 @@ contains
       enddo
     enddo
 
+    ! implicit A33 (backward Euler, per column): dz dT/dt = d/dz(K33 dT/dz), no flux at surface and bottom;
+    ! the change is added to the tendency, so it is booked as diffusion like the explicit terms
+    if (i_diff.eq.1 .and. i_a33.eq.1) then
+      do j=1,maxj
+        do i=1,maxi
+          if (mask_c(i,j,maxk).eq.1) then
+            kb = maxk
+            do kk=maxk,1,-1
+              if (mask_c(i,j,kk).eq.1) kb = kk
+              if (mask_c(i,j,kk).eq.0) exit
+            enddo
+            n = maxk-kb+1
+            if (n.ge.2) then
+              do kk=kb,maxk
+                k = kk-kb+1
+                ta(k) = 0._wp
+                tc(k) = 0._wp
+                if (kk.gt.kb) ta(k) = -dt*k33(i,j,kk-1)/(dz(kk)*dza(kk-1))   ! face below cell kk
+                if (kk.lt.maxk) tc(k) = -dt*k33(i,j,kk)/(dz(kk)*dza(kk))     ! face above cell kk
+                tb(k) = 1._wp - ta(k) - tc(k)
+                tr(k) = tracer(i,j,kk)
+              enddo
+              call tridiag_solve(ta(1:n),tb(1:n),tc(1:n),tr(1:n),tx(1:n),n)
+              do kk=kb,maxk
+                tracer_tendency(i,j,kk) = tracer_tendency(i,j,kk) + (tx(kk-kb+1)-tracer(i,j,kk))/dt
+              enddo
+            endif
+          endif
+        enddo
+      enddo
+      deallocate(k33)
+    endif
+
    return
 
   end subroutine diffusion
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function :  s l o p e _ t a p e r
+  !   Purpose  :  taper of the isoneutral diffusion and GM tensor for the squared slope slope2
+  !               and the critical slope slope_c.
+  !               i_taper==1: (Sc/S)^2 for S>Sc (Gerdes et al 1991); A33 = K*taper*S^2 stays at K*Sc^2
+  !                           however steep the slope, i.e. a vertical diffusivity K*Sc^2 in near-neutral columns
+  !               i_taper==2: 0.5*(1+tanh((Sc-S)/Sw)) (Danabasoglu and McWilliams 1995); all terms vanish for S >> Sc
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  elemental function slope_taper(slope2, slope_c) result(taper)
+
+    implicit none
+
+    real(wp), intent(in) :: slope2, slope_c
+    real(wp) :: taper
+
+    if (i_taper.eq.2) then
+      taper = 0.5_wp*(1._wp+tanh((slope_c-sqrt(slope2))/slope_width))
+    else
+      taper = min(1._wp,slope_c**2/(slope2+eps))
+    endif
+
+  end function slope_taper
 
 end module diffusion_mod

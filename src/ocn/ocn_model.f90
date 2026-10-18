@@ -1003,7 +1003,7 @@ contains
     allocate(ocn%flx_noise(maxi,maxj))
     allocate(ocn%psi(0:maxi,0:maxj))
     allocate(ocn%ke_tau(maxi,maxj))
-    allocate(ocn%mld(maxi,maxj))
+    allocate(ocn%mld(maxi,maxj), source=0._wp)
     allocate(ocn%nconv(maxi,maxj))
     allocate(ocn%kven(maxi,maxj))
     allocate(ocn%dconv(maxi,maxj))
@@ -1232,6 +1232,7 @@ contains
     endif
 
     call nc_write(fnm,"fw_glob", ocn%fw_glob,   dims=["c"],long_name="net ocean freshwater flux",units="kg/m2/s")
+    call nc_write(fnm,"mld", ocn%mld,   dims=["lon  ","lat  "],long_name="mixed layer depth from the mixed layer scheme (boundary layer of the diffusion at the next step)",units="m")
 
    return
 
@@ -1277,6 +1278,12 @@ contains
     endif
 
     call nc_read(fnm,"fw_glob",   ocn%fw_glob)
+
+    if (nc_exists_var(fnm,"mld")) then
+      call nc_read(fnm,"mld",   ocn%mld)
+    else
+      ocn%mld = 0._wp   ! older restart files: no boundary layer at the first step
+    endif
 
     print *,'read restart file ',fnm
 

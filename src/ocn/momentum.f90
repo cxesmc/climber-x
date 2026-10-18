@@ -39,13 +39,12 @@ module momentum_mod
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
   use ocn_params, only : bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix, rho0
-  use ocn_params, only : i_eos, i_cor_form, nbw, qcor
+  use ocn_params, only : i_cor_form, nbw, qcor
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
   use ocn_grid, only : maxisles, n_isles, psiles, map_isles
   use ocn_grid, only : lm_eur, lm_ame, lm_ant, lm_aus, lm_grl, lm_name, i_lm, j_lm
   use ocn_grid, only : dx, dy, dz, zro, s, sv, cv, rh, k1, h
 
-  use eos_mod, only : eos_tb
   use invert_mod, only : invert
   use ubarsolv_mod, only : ubarsolv
   use jbar_mod, only : jbar
@@ -88,8 +87,6 @@ module momentum_mod
   integer, allocatable :: isl_fix_ref(:)    ! solver index of the reference landmass (0 = mainland), -1 = island not prescribed
   real(wp), allocatable :: psi_fix(:)       ! prescribed streamfunction difference to the reference landmass [kg/s]
   real(wp), allocatable :: tmpdrg(:,:)
-  real(wp), allocatable :: bump_cell(:,:)   ! capped bump drag factor of each tracer cell
-  real(wp), allocatable :: rho_tb(:,:,:)
 
   private
   public :: momentum_init, momentum
@@ -128,18 +125,6 @@ contains
       call momentum_update_grid(f_ocn,tau)
     endif
 
-    if (i_eos.eq.5) then
-      ! compute thermobaric density (Ma 2020, Dukowicz 2001)
-      do j=1,maxj
-        do i=1,maxi
-          do k=k1(i,j),maxk
-            call eos_tb(rho(i,j,k),zro(k), &
-                        rho_tb(i,j,k))
-          enddo
-        enddo
-      enddo
-    endif
-
     ! wind stress term for barotropic streamfunction
     !$ time1 = omp_get_wtime()
     call wind(tau, &    ! in 
@@ -149,13 +134,8 @@ contains
 
     ! jbar term for barotropic streamfunction
     !$ time1 = omp_get_wtime()
-    if (i_eos.ne.5) then
-      call jbar(rho, &    ! in
-                bp, ubar_jbar)     ! out
-    else if (i_eos.eq.5) then
-      call jbar(rho_tb, &    ! in
-                bp, ubar_jbar)     ! out
-    endif
+    call jbar(rho, &    ! in
+              bp, ubar_jbar)     ! out
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: jbar',time2-time1
 
@@ -232,13 +212,8 @@ contains
 
     ! update velocities
     !$ time1 = omp_get_wtime()
-    if (i_eos.ne.5) then
-      call velc(rho,dtau_dz2,dtav_dz2,ub, &
-                u)
-    else if (i_eos.eq.5) then
-      call velc(rho_tb,dtau_dz2,dtav_dz2,ub, &
-                u)
-    endif
+    call velc(rho,dtau_dz2,dtav_dz2,ub, &
+              u)
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: velc',time2-time1
 
@@ -260,102 +235,33 @@ contains
     real(wp), dimension(:,:,:), intent(in) :: tau
 
     integer :: i, j, l, isl, isol
-    integer :: i1, i1p, j1, ii, ip1
+    integer :: i1, i1p, j1, ii
     integer :: n_band, nm_band, off
-    real(wp) :: tmp
-    real(wp) :: hsum, bmp, frac_wet, fac_frac
-    integer :: nwet
+    real(wp) :: f_wet, h_wet
 
 
-    ! calculate drag at psi points (grid cell corners!)   
-
+    ! barotropic drag at psi points (grid cell corners!): background adrag plus two independent enhancements
+    ! from the wet cells around the psi point,
+    !  - partial-cell drag drag_frac*(min(1/f_ocn,drag_frac_max)-1) of the least-wet cell: the flow through a cell
+    !    that is only partly ocean is squeezed into a fraction f_ocn of its width
+    !  - linearised bottom friction cd_bot*u_bot/H of the shallowest cell: damps shallow cells, negligible in the deep ocean
     do j=0,maxj
       do i=0,maxi
-        tmpdrg(i,j) = drag_par%adrag
-      enddo
-    enddo
-
-    ! bump drag factor of each cell: a cell shallower than the mean depth of its wet 3x3 neighbours is a local
-    ! maximum of f/H with closed f/H contours (bank, plateau, drowned island) where JEBAR-driven flow recirculates.
-    ! Depth weight H/z_drag_bump below z_drag_bump (wall-like shallow slivers, drag/H already huge, do not count),
-    ! fading to 0 at z_drag_bump_deep (deep plateaus steer the real circulation). 
-    bump_cell = 0._wp
-    do j=1,maxj
-      do i=1,maxi
-        if (k1(i,j).le.maxk) then
-          hsum = 0._wp
-          nwet = 0
-          do j1=max(1,j-1),min(maxj,j+1)
-            do i1=i-1,i+1
-              if (i1.eq.i .and. j1.eq.j) cycle
-              i1p = 1 + mod(maxi+i1-1,maxi)
-              if (k1(i1p,j1).le.maxk) then
-                hsum = hsum + h(3,i1p,j1)
-                nwet = nwet + 1
-              endif
-            enddo
-          enddo
-          bmp = 0._wp
-          if (nwet.gt.0) then
-            ! depth weight: H/z_drag_bump below z_drag_bump, fading to 0 at z_drag_bump_deep
-            if (h(3,i,j).lt.drag_par%z_drag_bump) then
-              tmp = h(3,i,j)/drag_par%z_drag_bump
-            else
-              tmp = max(0._wp, (drag_par%z_drag_bump_deep-h(3,i,j))/(drag_par%z_drag_bump_deep-drag_par%z_drag_bump))
-            endif
-            bmp = max(0._wp, log(hsum/real(nwet,wp)/h(3,i,j))) * tmp
-          endif
-          ! adjacent to land (4 neighbours)?
-          if (k1(i-1,j).gt.maxk .or. k1(i+1,j).gt.maxk .or. k1(i,j-1).gt.maxk .or. k1(i,j+1).gt.maxk) then
-            bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max_coast)
-          else
-            bump_cell(i,j) = min(1._wp + drag_par%c_drag_bump*bmp, drag_par%drag_topo_fac_max)
-          endif
-        endif
-      enddo
-    enddo
-    bump_cell(0,:) = bump_cell(maxi,:)
-    bump_cell(maxi+1,:) = bump_cell(1,:)
-
-    ! topographic drag enhancement at psi points
-    do j=0,maxj
-      do i=0,maxi
-
         ii = i
         if (ii.eq.0) ii=maxi
-        ip1 = modulo(i,maxi) + 1
-        ! bump drag: largest (capped) bump factor of the four cells around the psi point; land cells carry 0
-        bmp = max(1._wp,bump_cell(i,j),bump_cell(i+1,j),bump_cell(i,j+1),bump_cell(i+1,j+1))
-        tmp = drag_par%adrag*bmp
-
-        if (drag_par%drag_frac_max.gt.1._wp) then
-          ! partial-cell drag at the psi point from the wet cells around it; land cells (f_ocn=0) are skipped
-          frac_wet = 1._wp
-          fac_frac = 0._wp
-          nwet = 0
-          do j1=max(1,j),min(maxj,j+1)
-            do i1=ii,ii+1
-              i1p = 1 + mod(i1-1,maxi)
-              if (k1(i1p,j1).le.maxk) then
-                frac_wet = min(frac_wet,f_ocn(i1p,j1))
-                fac_frac = fac_frac + 1._wp/max(f_ocn(i1p,j1),1._wp/drag_par%drag_frac_max)
-                nwet = nwet + 1
-              endif
-            enddo
+        f_wet = 1._wp
+        h_wet = -1._wp
+        do j1=max(1,j),min(maxj,j+1)
+          do i1=ii,ii+1
+            i1p = 1 + mod(i1-1,maxi)
+            if (k1(i1p,j1).le.maxk) then
+              f_wet = min(f_wet,f_ocn(i1p,j1))
+              if (h_wet.lt.0._wp .or. h(3,i1p,j1).lt.h_wet) h_wet = h(3,i1p,j1)
+            endif
           enddo
-          if (drag_par%i_drag_frac.eq.1) then
-            ! least-wet cell
-            tmp = max(tmp, drag_par%adrag/max(frac_wet,1._wp/drag_par%drag_frac_max))
-          else if (nwet.gt.0) then
-            ! mean of 1/f_ocn
-            tmp = max(tmp, drag_par%adrag*fac_frac/real(nwet,wp))
-          endif
-        endif
-
-        if (tmp.gt.tmpdrg(i,j)) then
-          tmpdrg(i,j) = tmp
-        endif
-
+        enddo
+        tmpdrg(i,j) = drag_par%adrag + drag_par%drag_frac*(min(1._wp/max(f_wet,1.e-3_wp),drag_par%drag_frac_max)-1._wp)
+        if (h_wet.gt.0._wp) tmpdrg(i,j) = tmpdrg(i,j) + drag_par%cd_bot*drag_par%u_bot/h_wet
       enddo
     enddo
 
@@ -372,27 +278,8 @@ contains
        drag(2,maxi+1,j) = drag(2,1,j)
     enddo
 
-
-    ! for baroclinic velocity
-
-    do j=0,maxj
-      do i=0,maxi
-        tmpdrg(i,j) = drag_par%adrag
-      enddo
-    enddo
-
-    ! interpolate to velocity points
-    do j=1,maxj
-       do i=1,maxi
-          drag_bcl(1,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i,j-1))    ! u-grid
-          drag_bcl(2,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i-1,j))    ! v-grid
-       enddo
-    enddo
-
-    ! boundary conditions, assuming no flow out of N or S bdy
-    do j=1,maxj
-       drag_bcl(2,maxi+1,j) = drag_bcl(2,1,j)
-    enddo
+    ! baroclinic velocities: background drag only
+    drag_bcl(:,:,:) = drag_par%adrag
 
     ! on rows where the Coriolis parameter is set to zero (|f| < fcormin, see momentum_init) add drag instead,
     ! r_eff = r + fcormin^2/r, so that r_eff/(0+r_eff^2) = r/(fcormin^2+r^2)
@@ -649,12 +536,16 @@ contains
 
     ! allocate variables
     allocate(ubar_wind(maxi,maxj))
-    allocate(bump_cell(0:maxi+1,0:maxj+1))
     allocate(ubar_jbar(maxi,maxj))
     allocate(qcor(0:maxi+1,0:maxj+1))
     qcor(:,:) = 0._wp
-    ! half band width of the streamfunction matrix (5-point stencil for both i_cor_form)
-    nbw = mpxi+1
+    ! half band width of the streamfunction matrix: 5-point stencil for both i_cor_form, 9-point with the
+    ! checkerboard friction, whose diagonal neighbours across the periodic boundary are 2*maxi-1 rows away
+    if (drag_par%drag_cb.gt.0._wp) then
+      nbw = 2*mpxi
+    else
+      nbw = mpxi+1
+    endif
     allocate(ratm(mpxi*mpxj,nbw))
     allocate(gb(mpxi*mpxj))
     allocate(gap(mpxi*mpxj,2*nbw+1))
@@ -678,10 +569,11 @@ contains
     allocate(fcorv(0:maxj+1))
     allocate(rtv(maxi,maxj))
     allocate(rtv3(maxi,maxj))
-    allocate(rho_tb(maxi,maxj,maxk))
 
 
     drag_par%adrag = 1._wp/(drag_par%adrag*86400._wp) ! 1/s
+    if (drag_par%drag_frac.gt.0._wp) drag_par%drag_frac = 1._wp/(drag_par%drag_frac*86400._wp) ! 1/s
+    if (drag_par%drag_cb.gt.0._wp) drag_par%drag_cb = 1._wp/(drag_par%drag_cb*86400._wp) ! 1/s
 
     ! Coriolis parameter
     ! Rows with |f| < fcormin (only the equator v-line on the 5 deg grid) get f = 0 and instead a larger drag,

@@ -185,7 +185,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: fwtz, fwpz, fwaz
      real(wp), dimension(:,:), allocatable :: fayti, fdyti
      real(wp), dimension(:,:), allocatable :: faysi, fdysi 
-     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldstmax, mldst, conv_pe, conv_pe_max, ke_tau, fds, zds
+     real(wp), dimension(:,:), allocatable :: mld, mldmax, mldstmax, mldstmax03, mldst, mldst03, conv_pe, conv_pe_max, ke_tau, fds, zds
      real(wp), dimension(:,:), allocatable :: dconv, dven, nconv, kven
      real(wp), dimension(:,:), allocatable :: z_brines
      real(wp), dimension(:,:), allocatable :: ssh
@@ -369,7 +369,9 @@ contains
     allocate(ann_o%mld(maxi,maxj))
     allocate(ann_o%mldmax(maxi,maxj))
     allocate(ann_o%mldstmax(maxi,maxj))
+    allocate(ann_o%mldstmax03(maxi,maxj))
     allocate(ann_o%mldst(maxi,maxj))
+    allocate(ann_o%mldst03(maxi,maxj))
     allocate(ann_o%ke_tau(maxi,maxj))
     allocate(ann_o%conv_pe(maxi,maxj))
     allocate(ann_o%fds(maxi,maxj))
@@ -465,6 +467,7 @@ contains
      allocate(mon_o(k)%z_brines(maxi,maxj))
      allocate(mon_o(k)%mld(maxi,maxj))
      allocate(mon_o(k)%mldst(maxi,maxj))
+     allocate(mon_o(k)%mldst03(maxi,maxj))
      allocate(mon_o(k)%conv_pe(maxi,maxj))
      allocate(mon_o(k)%fds(maxi,maxj))
      allocate(mon_o(k)%zds(maxi,maxj))
@@ -1111,6 +1114,8 @@ contains
     real(wp) :: fw_bering, fw_davis, fw_fram, fw_denmark
     real(wp) :: area_atlN50, area_lab, area_irm, area_gin, area_bkn, area_wedd, area_ross, area_so, area_pacN, area_pacN30
     real(wp) :: mldst, rho_k, rho_maxk
+    real(wp) :: mldst03, rho10, z_ml, rho_ml
+    integer :: k10
     real(wp) :: mld_atlN50, mld_lab, mld_irm, mld_gin, mld_bkn, mld_wedd, mld_ross, mld_so, mld_pacN, mld_pacN30
     real(wp) :: mldst_atlN50, mldst_lab, mldst_irm, mldst_gin, mldst_bkn, mldst_wedd, mldst_ross, mldst_so, mldst_pacN, mldst_pacN30
     real(wp) :: pe_atlN, pe_atlN50, pe_lab, pe_irm, pe_gin, pe_bkn, pe_wedd, pe_ross, pe_so, pe_pacN, pe_pacN30
@@ -3034,6 +3039,7 @@ contains
             mon_o(m)%z_brines = 0._wp
             mon_o(m)%mld   = 0._wp
             mon_o(m)%mldst = 0._wp
+            mon_o(m)%mldst03 = 0._wp
             mon_o(m)%ke_tau = 0._wp
             mon_o(m)%conv_pe = 0._wp
             mon_o(m)%fds = 0._wp
@@ -3064,6 +3070,7 @@ contains
             mon_o(m)%z_brines = missing_value
             mon_o(m)%mld   = missing_value
             mon_o(m)%mldst = missing_value
+            mon_o(m)%mldst03 = missing_value
             mon_o(m)%ke_tau  = missing_value
             mon_o(m)%conv_pe = missing_value
             mon_o(m)%fds = missing_value
@@ -3081,7 +3088,7 @@ contains
         enddo
       endif
 
-       ! compute in-situ density
+       ! compute potential density referenced to the surface (eos at p=0)
        allocate(rho(maxi,maxj,maxk))
        do i=1,maxi
          do j=1,maxj
@@ -3480,6 +3487,34 @@ contains
             endif
           enddo
           mon_o(mon)%mldst(i,j) = mon_o(mon)%mldst(i,j) + mldst * mon_avg
+          ! mixed layer depth with the de Boyer Montegut et al. (2004) / CMIP6 mlotst definition: potential density
+          ! 0.03 kg/m3 above its value at 10 m depth, linear interpolation between layer centres, minimum 10 m.
+          ! Potential density (rho is eos at p=0 here): with in-situ density compressibility alone (~0.0045 kg/m3 per m)
+          ! would exceed the threshold within a few metres.
+          mldst03 = -zw(k1(i,j)-1)   ! mixed to the bottom
+          if (k1(i,j).lt.maxk) then
+            k10 = maxk-1
+            do while (zro(k10).gt.-10._wp .and. k10.gt.k1(i,j))
+              k10 = k10-1
+            enddo
+            if (zro(k10).gt.-10._wp) then
+              rho10 = rho(i,j,k10)
+            else
+              rho10 = rho(i,j,k10+1) + (rho(i,j,k10)-rho(i,j,k10+1))*(-10._wp-zro(k10+1))/(zro(k10)-zro(k10+1))
+            endif
+            z_ml = -10._wp
+            rho_ml = rho10
+            do k=k10,k1(i,j),-1
+              if (rho(i,j,k)-rho10.ge.0.03_wp) then
+                mldst03 = -(z_ml + (zro(k)-z_ml)*(rho10+0.03_wp-rho_ml)/(rho(i,j,k)-rho_ml))
+                exit
+              endif
+              z_ml = zro(k)
+              rho_ml = rho(i,j,k)
+            enddo
+            mldst03 = max(mldst03,10._wp)
+          endif
+          mon_o(mon)%mldst03(i,j) = mon_o(mon)%mldst03(i,j) + mldst03 * mon_avg
         endif
       enddo
     enddo
@@ -3532,10 +3567,12 @@ contains
        do i=1,maxi
          ann_o%mldmax(i,j) = 0._wp
          ann_o%mldstmax(i,j) = 0._wp
+         ann_o%mldstmax03(i,j) = 0._wp
          ann_o%conv_pe_max(i,j) = 0._wp
          do m=1,nmon_year
            ann_o%mldmax(i,j) = max(ann_o%mldmax(i,j),mon_o(m)%mld(i,j))
            ann_o%mldstmax(i,j) = max(ann_o%mldstmax(i,j),mon_o(m)%mldst(i,j))
+           ann_o%mldstmax03(i,j) = max(ann_o%mldstmax03(i,j),mon_o(m)%mldst03(i,j))
            ann_o%conv_pe_max(i,j) = max(ann_o%conv_pe_max(i,j),mon_o(m)%conv_pe(i,j))
          enddo
        enddo
@@ -4059,6 +4096,7 @@ contains
     call nc_write(fnm,"map_edge",    vars%map_edge,  dims=[dim_lon,dim_lat,dim_isles,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxisles,1],long_name="island edges",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"mldmax",    sngl(vars%mldmax),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth from mixed layer scheme",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"mldstmax",  sngl(vars%mldstmax),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth from sigma-t criterion",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"mldstmax03",sngl(vars%mldstmax03),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum mixed layer depth, potential density 0.03 kg/m3 above its 10 m value (de Boyer Montegut 2004, CMIP6 mlotst)",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"conv_pe_max", sngl(vars%conv_pe_max),dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="maximum potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
     endif
     call nc_write(fnm,"t",        sngl(vars%t),  dims=[dim_lon,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="potential temperature",units="C",missing_value=missing_value,ncid=ncid)
@@ -4104,7 +4142,7 @@ contains
     call nc_write(fnm,"cfc11", sngl(vars%cfc11),dims=[dim_lon,dim_lat,dim_lev,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxk,1],long_name="CFC11",units="pmol/l",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"cfc12", sngl(vars%cfc12),dims=[dim_lon,dim_lat,dim_lev,dim_time],start=[1,1,1,nout],count=[maxi,maxj,maxk,1],long_name="CFC12",units="pmol/l",missing_value=missing_value,ncid=ncid)
     endif
-    call nc_write(fnm,"rho",      sngl(vars%rho),dims=[dim_lon,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="in-situ density",units="kg/m3",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"rho",      sngl(vars%rho),dims=[dim_lon,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="potential density referenced to the surface",units="kg/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"drho_0_1000", sngl(vars%drho_0_1000),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="density difference between the surface and 1000 m depth",units="kg/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"drho_0_3000", sngl(vars%drho_0_3000),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="density difference between the surface and 3000 m depth",units="kg/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"rho2",      sngl(vars%rho2),dims=[dim_lon,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="density",units="kg/m3",missing_value=missing_value,ncid=ncid)
@@ -4179,6 +4217,7 @@ contains
     call nc_write(fnm,"z_brines",  sngl(vars%z_brines),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="brine neutral-buoyancy penetration depth",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"mld",       sngl(vars%mld),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth from mixed layer scheme",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"mldst",     sngl(vars%mldst),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth from sigma-t criterion",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"mldst03",   sngl(vars%mldst03),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="mixed layer depth, potential density 0.03 kg/m3 above its 10 m value (de Boyer Montegut 2004, CMIP6 mlotst)",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"ke_tau",  sngl(vars%ke_tau),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="kinetic energy input into the ocean by wind stress",units="mW/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"conv_pe", sngl(vars%conv_pe),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fds", sngl(vars%fds),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="downslope volume flux of dense shelf water out of the cell",units="Sv",missing_value=missing_value,ncid=ncid)
@@ -4219,7 +4258,7 @@ contains
     real(wp) :: empty_time(0)
 
     ! Create the netcdf file and the dimension variables
-    call nc_create(fnm)
+    call nc_create(fnm, netcdf4=.false.)
     call nc_open(fnm,ncid)
     call nc_write_dim(fnm,dim_time, x=empty_time, units="years BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,dim_lon,x=lon,axis="x",ncid=ncid)
@@ -4363,6 +4402,7 @@ contains
     ave%z_brines = 0._wp
     ave%mld   = 0._wp
     ave%mldst = 0._wp
+    ave%mldst03 = 0._wp
     ave%ke_tau   = 0._wp
     ave%conv_pe  = 0._wp
     ave%fds  = 0._wp
@@ -4455,6 +4495,7 @@ contains
        ave%z_brines = ave%z_brines + d(k)%z_brines / div
        ave%mld     = ave%mld      + d(k)%mld      / div
        ave%mldst   = ave%mldst    + d(k)%mldst    / div
+       ave%mldst03 = ave%mldst03  + d(k)%mldst03  / div
        ave%ke_tau= ave%ke_tau + d(k)%ke_tau / div
        ave%conv_pe = ave%conv_pe  + d(k)%conv_pe  / div
        ave%fds = ave%fds  + d(k)%fds  / div

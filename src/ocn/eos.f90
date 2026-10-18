@@ -49,7 +49,7 @@ module eos_mod
   real(wp), dimension(26) :: a2 = [1.965933e4_wp,1.444304e2_wp,-1.706103_wp,9.648704e-3_wp,-4.190254e-5_wp,52.84855_wp,-0.3101089_wp,6.283263e-3_wp,-5.084188e-5_wp,3.886640e-1_wp,9.085835e-3_wp,-4.619924e-4_wp,3.186519_wp,2.212276e-2_wp,-2.984642e-4_wp,1.956415e-6_wp,6.704388e-3_wp,-1.847318e-4_wp,2.059331e-7_wp,1.480266e-4_wp,2.102898e-4_wp,-1.202016e-5_wp,1.394680e-7_wp,-2.040237e-6_wp,6.128773e-8_wp,6.207323e-10_wp]
 
   private
-  public :: eos, eos_tb
+  public :: eos
 
 contains
 
@@ -82,7 +82,7 @@ contains
     elseif (i_eos.eq.2) then
 
       ! EOS80 equation of state, Millero and Poisson 1981, but only limited number of terms! As in CLIMBER-2
-      p = 0.1_wp*(-z)  ! pressure in bar
+      p = pressure(z)  ! pressure in bar
       ! is this term a correction from potential to in-situ temperature?
       tc = (t+ai(1)*p+ai(2)*p**2)/(1._wp-ai(3)*p)
       ! potential density 
@@ -99,7 +99,7 @@ contains
       ! EOS80 equation of state, Millero and Poisson 1981, but only limited number of terms!
       ! parameters for potential instead of in-situ temperature (after Jackett and McDougall, 1995)
 
-      p = 0.1_wp*(-z)  ! pressure in bar
+      p = pressure(z)  ! pressure in bar
 
       t2 = t**2
       t3 = t**3
@@ -123,7 +123,7 @@ contains
       ! EOS80 equation of state, Millero and Poisson 1981, with all terms in the bulk secant modulus!
       ! parameters for potential instead of in-situ temperature (after Jackett and McDougall, 1995)
 
-      p = 0.1_wp*(-z)  ! pressure in bar
+      p = pressure(z)  ! pressure in bar
 
       t2 = t**2
       t3 = t**3
@@ -150,32 +150,6 @@ contains
 
       rho = r0/(1._wp-p/pk)
 
-    elseif (i_eos.eq.5) then
-
-      ! “stiffened” EOS derived from the compressibility of sea water and the UNESCO EOS80, following Ma 2020
-      ! but only limited number of terms!
-      ! parameters for theta instead of in-situ temperature (after Jackett and McDougall, 1995)
-
-      p = 0.059808*(exp(-0.025*(-z)) - 1) + 0.100766*(-z) + 2.28405e-7*(-z)**2 !  pressure in bar
-
-      t2 = t**2
-      t3 = t**3
-      t4 = t**4
-
-      ! potential density
-      r00 = a0(1) + a0(2)*t + a0(3)*t2 + a0(4)*t3 + a0(5)*t4 + a0(6)*t**5
-      A = a1(1) + a1(2)*t + a1(3)*t2 + a1(4)*t3 + a1(5)*t4 
-      B = b1(1) + b1(2)*t + b1(3)*t2
-      C = c1
-      r0 = r00 + A*s + B*s*sqrt(s) + C*s**2
-
-      ! bulk secant modulus
-      pk = c2(1)+c2(2)*t+s*(c2(3)-c2(4)*t)+p*(c2(5)+c2(6)*t) &
-        + p*s*c2(7)
-
-      rho = r0/(1._wp-p/pk)
-
-
     endif
 
    return
@@ -184,28 +158,22 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  e o s _ t b
-  !   Purpose    :  calculates thermobaric density from in-situ density
+  !   Function :  p r e s s u r e
+  !   Purpose  :  sea pressure (bar) from depth z (m, negative downward),
+  !               (within ~1.5 bar of TEOS-10 down to 4 km at all latitudes,
+  !               vs 6-8 bar too low for p = 0.1*(-z))
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine eos_tb(rho,z, &
-                 rho_tb)
+  pure function pressure(z) result (p)
 
     implicit none
 
-    real(wp), intent(in) :: rho, z
-    real(wp), intent(out) :: rho_tb
-
-    real(wp) :: p, rp
+    real(wp), intent(in) :: z
+    real(wp) :: p
 
 
-    p = 0.059808*(exp(-0.025*(-z)) - 1) + 0.100766*(-z) + 2.28405e-7*(-z)**2 !  pressure in bar
-    rp = 1.02819 - 2.93161e-4*exp(-0.05*p) + 4.4004e-5*p 
+    p = 0.059808_wp*(exp(-0.025_wp*(-z)) - 1._wp) + 0.100766_wp*(-z) + 2.28405e-7_wp*(-z)**2
 
-    ! thermobaric density
-    rho_tb = rho/rp
-
-
-  end subroutine eos_tb
+  end function pressure
 
 end module eos_mod
 

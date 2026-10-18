@@ -80,24 +80,20 @@
  !-------------------------------------------------------------------------------------------
  ! friction settings
  !-------------------------------------------------------------------------------------------
- adrag = 4.                   ! days, inverse minimum drag
- ! bump drag at psi points: adrag*(1 + c_drag_bump*bump), bump = ln(mean depth of the wet 3x3 neighbours / cell depth) (>0 only)
- ! * depth weight, capped at drag_topo_fac_max (drag_topo_fac_max_coast next to land); 1/1 = off
- c_drag_bump = 20.            ! bump drag coefficient
- z_drag_bump = 1000.          ! m, bump weight = H/z_drag_bump for H < z_drag_bump (wall-like slivers do not count)
- z_drag_bump_deep = 3000.     ! m, bump weight fades from 1 at z_drag_bump to 0 at z_drag_bump_deep: deep plateaus (Kerguelen, Agulhas,
-                              ! Lord Howe, 1-2 km in 4-5 km water) steer the real ACC/WBCs and are no trapped-mode hazard on smoothed
-                              ! topography; 2000 brings the Lord Howe mode back on raw topography
- drag_topo_fac_max = 1.       ! cap on the bump drag enhancement factor
- drag_topo_fac_max_coast = 1. ! cap for cells adjacent to land: a one-cell coastal shelf is flagged as a 'bump'
-                              ! because land is excluded from the neighbour mean; with the offshore bumps damped the coasts need
-                              ! no enhancement at all (1.), and the Gulf Stream gains 30% for it
- i_drag_frac = 1              ! partial-cell drag, adrag times a factor 1/f_ocn (capped at drag_frac_max) from the ocean fraction f_ocn
-                              ! of the wet cells; the flow through a cell that is only partly ocean is squeezed into a fraction f_ocn
-                              ! of its width. 1 = 1/min(f_ocn) of the wet cells around a psi point, then averaged to the faces
-                              !                 (a narrow cell raises the drag on all faces up to one cell away);
-                              !               2 = mean of 1/f_ocn of the wet cells around a psi point, then averaged to the faces (smooth)
- drag_frac_max = 2.           ! cap on the partial-cell drag factor, 1 = off
+ ! barotropic drag = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag
+ adrag = 4.                   ! days, inverse background drag of the barotropic and baroclinic velocities
+ drag_frac = 4.               ! days, 0 = off. Partial-cell drag, added: (1/drag_frac)*(min(1/f_ocn,drag_frac_max)-1) with f_ocn
+                              ! the ocean fraction of the least-wet cell around a psi point; the flow through a cell that is
+                              ! only partly ocean is squeezed into a fraction f_ocn of its width
+ drag_frac_max = 2.           ! cap on the partial-cell factor 1/f_ocn
+ cd_bot = 2.5e-3              ! bottom drag coefficient (2.5e-3), 0 = off. Linearised bottom friction on the depth-mean flow, added:
+                              ! cd_bot*u_bot/H with H of the shallowest cell around a psi point. Damps shallow cells
+                              ! (50 m: 1/(2.3 d) with 2.5e-3/0.1) and is negligible in the deep ocean (4 km: 1/(185 d))
+ u_bot = 0.1                  ! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic drag
+ drag_cb = 0.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
+                              ! (-1/4)*(second difference of the face transport along the face). Equal to an extra drag 1/drag_cb
+                              ! on the 2-grid-point checkerboard of psi (invisible to the J3 Coriolis term), zero for flow linear
+                              ! along the face. Makes the psi matrix 9-point (band width 2*maxi)
 
  !-------------------------------------------------------------------------------------------
  ! Coriolis 
@@ -132,7 +128,16 @@
  l_diff_dia_strat = F         ! use stratification dependent vertical diffusivity? Added on top of the reference profile set by i_diff_dia
  alpha_strat = 1.0            ! exponent of Brunt-Vaisala frequency dependence for stratification dependent vertical diffusivity
  brunt_vaisala_ref = 7.e-3    ! 1/s, reference Brunt-Vaisala frequency for stratification dependent vertical diffusivity.  (~drho/dz=-5e-3 kg/m3 /m)
- slope_max = 1e-3             ! maximum slope of isoentropic surface for isoneutral diffusion
+ slope_max = 5e-3             ! maximum slope of isoentropic surface for isoneutral diffusion
+ i_taper = 2                  ! taper of the isoneutral diffusion and GM tensor for slopes above slope_max:
+                              ! 1 = (slope_max/S)^2 (Gerdes et al 1991); A33 stays at diff_iso*slope_max^2 however steep the
+                              !     slope, i.e. a vertical diffusivity in all near-neutral columns
+                              ! 2 = 0.5*(1+tanh((slope_max-S)/slope_width)) (Danabasoglu and McWilliams 1995), all terms -> 0 for S >> slope_max
+ slope_width = 1e-3           ! width of the tanh taper, used only if i_taper==2
+ i_a33 = 1                    ! vertical isoneutral diffusion term A33 = diff_iso*S^2:
+                              ! 0 = explicit; the taper slope is also limited by the explicit stability limit dz/sqrt(4*diff_iso*dt)
+                              ! 1 = implicit (tridiagonal solve per column); the taper slope is set by slope_max only
+ l_hdiff_bl = T               ! keep full horizontal diffusion (no slope taper of A11, A22) inside the mixed layer?
 
  !-------------------------------------------------------------------------------------------
  ! convection settings
@@ -178,7 +183,6 @@
                               ! 2 = as in CLIMBER-2
                               ! 3 = EOS80 equation of state, Millero and Poisson 1981, but only limited number of terms
                               ! 4 = EOS80 equation of state, Millero and Poisson 1981, with all terms in the bulk secant modulus
-                              ! 5 = “stiffened” EOS derived from the compressibility of sea water and the UNESCO EOS80, following Ma 2020 
 
  !-------------------------------------------------------------------------------------------
  ! reference ocean water density 

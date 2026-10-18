@@ -86,15 +86,12 @@ module ocn_params
      real(wp) :: tau_scale
 
      type drag_par_type
-       real(wp) :: adrag
-       real(wp) :: c_drag_bump     !! bump drag coefficient, drag = adrag*(1+c_drag_bump*bump) 
-       real(wp) :: z_drag_bump     !! m, depth scale weighting the bump measure by H/z_drag_bump for H < z_drag_bump 
-       real(wp) :: z_drag_bump_deep !! m, bump weight fades linearly from 1 at z_drag_bump to 0 at z_drag_bump_deep 
-       real(wp) :: drag_topo_fac_max !! cap on the bump drag enhancement factor 
-       real(wp) :: drag_topo_fac_max_coast !! cap on the bump drag enhancement factor for cells adjacent to land 
-       integer  :: i_drag_frac     !! partial-cell drag: 1 = 1/min(f_ocn) of the wet cells around a psi point, 2 = mean 1/f_ocn of
-                                   !! the wet cells around a psi point
-       real(wp) :: drag_frac_max   !! cap on the partial-cell drag factor, 1 = off
+       real(wp) :: adrag           !! background drag of the barotropic and baroclinic velocities (namelist in days)
+       real(wp) :: drag_frac       !! partial-cell drag rate (namelist in days, 0 = off), times min(1/f_ocn,drag_frac_max)-1
+       real(wp) :: drag_frac_max   !! cap on the partial-cell factor 1/f_ocn
+       real(wp) :: cd_bot          !! bottom drag coefficient, 0 = no bottom friction
+       real(wp) :: u_bot           !! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic bottom drag
+       real(wp) :: drag_cb         !! checkerboard friction rate (namelist in days, 0 = off), see stencil_coef in invert.f90
      end type
      type(drag_par_type) :: drag_par
 
@@ -110,7 +107,7 @@ module ocn_params
      integer :: i_eos
      real(wp) :: drhcor_max
      integer :: i_cor_form      
-     integer :: nbw             !! half band width of the streamfunction matrix (maxi+1, 5-point stencil)
+     integer :: nbw             !! half band width of the streamfunction matrix (maxi+1 for the 5-point stencil, 2*maxi with drag_cb > 0)
      real(wp), allocatable :: qcor(:,:)  !! f/H at tracer points, used by the J3 Coriolis term (i_cor_form=1)
      integer :: i_diff
      integer :: i_diff_dia
@@ -120,6 +117,10 @@ module ocn_params
      real(wp) :: alpha_strat
      real(wp) :: brunt_vaisala_ref
      real(wp) :: slope_max 
+     integer :: i_taper         !! isoneutral slope taper: 1 = (Sc/S)^2 (Gerdes 1991), 2 = tanh (Danabasoglu and McWilliams 1995)
+     real(wp) :: slope_width    !! width of the tanh taper, used only if i_taper==2 []
+     integer :: i_a33           !! vertical isoneutral diffusion term A33 = K*S^2: 0 = explicit, 1 = implicit
+     logical :: l_hdiff_bl      !! no slope taper of the horizontal diffusion (A11, A22) inside the mixed layer
      real(wp) :: diff_gm
      real(wp) :: tau_sst, tau_sss
      integer :: n_cells_dist_runoff
@@ -282,15 +283,17 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","urelax",urelax)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
-    call nml_read(filename,"ocn_par","c_drag_bump",drag_par%c_drag_bump)
-    call nml_read(filename,"ocn_par","z_drag_bump",drag_par%z_drag_bump)
-    call nml_read(filename,"ocn_par","z_drag_bump_deep",drag_par%z_drag_bump_deep)
-    call nml_read(filename,"ocn_par","drag_topo_fac_max",drag_par%drag_topo_fac_max)
-    call nml_read(filename,"ocn_par","drag_topo_fac_max_coast",drag_par%drag_topo_fac_max_coast)
-    call nml_read(filename,"ocn_par","i_drag_frac",drag_par%i_drag_frac)
+    call nml_read(filename,"ocn_par","drag_frac",drag_par%drag_frac)
     call nml_read(filename,"ocn_par","drag_frac_max",drag_par%drag_frac_max)
+    call nml_read(filename,"ocn_par","cd_bot",drag_par%cd_bot)
+    call nml_read(filename,"ocn_par","u_bot",drag_par%u_bot)
+    call nml_read(filename,"ocn_par","drag_cb",drag_par%drag_cb)
 
     call nml_read(filename,"ocn_par","i_eos",i_eos)
+    if (i_eos<0 .or. i_eos>4) then
+      print *,'ERROR: i_eos must be 0-4, i_eos =',i_eos
+      stop
+    endif
 
     call nml_read(filename,"ocn_par","drhcor_max",drhcor_max)
     call nml_read(filename,"ocn_par","i_cor_form",i_cor_form)
@@ -311,6 +314,10 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","alpha_strat",alpha_strat)
     call nml_read(filename,"ocn_par","brunt_vaisala_ref",brunt_vaisala_ref)
     call nml_read(filename,"ocn_par","slope_max",slope_max)
+    call nml_read(filename,"ocn_par","i_taper",i_taper)
+    call nml_read(filename,"ocn_par","slope_width",slope_width)
+    call nml_read(filename,"ocn_par","i_a33",i_a33)
+    call nml_read(filename,"ocn_par","l_hdiff_bl",l_hdiff_bl)
     call nml_read(filename,"ocn_par","diff_gm",diff_gm)
 
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)
