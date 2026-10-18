@@ -36,7 +36,7 @@ module sic_model
     use sic_params, only : sic_params_init
     use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
-    use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, rho_sic, rho_snow, dt
+    use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, c_lead_h, c_lead_melt, h_sic_min, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
 
     use ebal_sic_mod, only : ebal_sic
@@ -196,7 +196,7 @@ contains
         sic%fw_ocn(i,j)  = (sic%f_sic(i,j)*sic%fw_ocn_sic(i,j)  + (1._wp-sic%f_sic(i,j))*sic%fw_ocn_ocn(i,j))   ! kg/m2/s
 
         ! update sea ice fraction, thermodynamic contribution only
-        if (i_fsic.eq.2 .or. i_fsic.eq.3) then
+        if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
           ! prognostic sea ice fraction following Fichefet et al, 1997, and MPIOMv1.1 manual
           if (sic%f_ocn(i,j).gt.0._wp) then
             if (sic%dh_sic_ocn(i,j).gt.0._wp) then
@@ -205,12 +205,20 @@ contains
                 sic%f_sic(i,j) = sic%f_sic(i,j) + sqrt(1._wp-sic%f_sic(i,j)**2)*(1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j)/h0
               else if (i_fsic.eq.3) then
                 sic%f_sic(i,j) = sic%f_sic(i,j) + (1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j)/h0
+              else if (i_fsic.eq.4) then
+                ! MPI-ESM1.2 (MPIOM growth.f90): lead closing thickness h0 for thin ice, (h0+c_lead_h*h_sic)/(1+c_lead_h) for h_sic>h0
+                sic%f_sic(i,j) = sic%f_sic(i,j) + (1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j) &
+                  * (1._wp+c_lead_h)/(h0+c_lead_h*max(h0,sic%h_sic(i,j)))
               endif
             endif
             if (sic%h_sic(i,j).gt.0._wp .and. sic%dh_sic_sic(i,j).lt.0._wp) then
               ! melting sea ice, fraction reduction assuming that ice thickness is
               ! distributed (linearly) between 0 and 2*h_sic
-              sic%f_sic(i,j) = sic%f_sic(i,j) + sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/(2._wp*sic%h_sic(i,j))
+              if (i_fsic.eq.4) then
+                sic%f_sic(i,j) = sic%f_sic(i,j) + c_lead_melt*sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/max(sic%h_sic(i,j),h_sic_min)
+              else
+                sic%f_sic(i,j) = sic%f_sic(i,j) + sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/(2._wp*sic%h_sic(i,j))
+              endif
             endif
             sic%f_sic(i,j) = max(0._wp,sic%f_sic(i,j))
             sic%f_sic(i,j) = min(f_sic_max,sic%f_sic(i,j))
@@ -243,7 +251,7 @@ contains
       sic%h_snow_mean,sic%dh_snow_dt_dyn, &
       sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
     !$omp section
-    if (i_fsic.eq.2 .or. i_fsic.eq.3) then
+    if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
       ! transport sea ice concentration
       call transport(sic%u,sic%v,sic%f_ocn, &
         sic%f_sic)

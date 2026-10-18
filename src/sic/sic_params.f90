@@ -48,6 +48,8 @@ module sic_params
   real(wp) :: f_sic_max
   real(wp) :: f_sic_pow
   real(wp) :: h0
+  real(wp) :: c_lead_h      !! thickness dependence of lead closing (MPIOM rleadclose(3)), used only if i_fsic==4
+  real(wp) :: c_lead_melt   !! lateral melt factor (MPIOM rleadclose(1), 0.5 = Hibler 1979), used only if i_fsic==4
   real(wp) :: u_star
   integer :: i_cd_ocn
   logical :: l_neutral_ocn
@@ -158,6 +160,8 @@ contains
     call nml_read(filename,"sic_par","f_sic_max",f_sic_max)
     call nml_read(filename,"sic_par","f_sic_pow",f_sic_pow)
     call nml_read(filename,"sic_par","h0",h0)
+    call nml_read(filename,"sic_par","c_lead_h",c_lead_h)
+    call nml_read(filename,"sic_par","c_lead_melt",c_lead_melt)
     call nml_read(filename,"sic_par","lambda_snow",lambda_snow)
     call nml_read(filename,"sic_par","lambda_sic",lambda_sic)
     call nml_read(filename,"sic_par","h_k_crit",h_k_crit)
