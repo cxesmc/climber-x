@@ -86,7 +86,6 @@ module momentum_mod
   integer :: strait_isl(n_strait) = 0       ! solver island index whose streamfunction is prescribed for each active strait
   integer, allocatable :: isl_fix_ref(:)    ! solver index of the reference landmass (0 = mainland), -1 = island not prescribed
   real(wp), allocatable :: psi_fix(:)       ! prescribed streamfunction difference to the reference landmass [kg/s]
-  real(wp), allocatable :: tmpdrg(:,:)
 
   private
   public :: momentum_init, momentum
@@ -235,42 +234,35 @@ contains
     real(wp), dimension(:,:,:), intent(in) :: tau
 
     integer :: i, j, l, isl, isol
-    integer :: i1, i1p, j1, ii
+    integer :: ip1
     integer :: n_band, nm_band, off
-    real(wp) :: f_wet, h_wet
+    real(wp) :: f_face
 
 
-    ! barotropic drag at psi points (grid cell corners!): background adrag plus two independent enhancements
-    ! from the wet cells around the psi point,
-    !  - partial-cell drag drag_frac*(min(1/f_ocn,drag_frac_max)-1) of the least-wet cell: the flow through a cell
-    !    that is only partly ocean is squeezed into a fraction f_ocn of its width
-    !  - linearised bottom friction cd_bot*u_bot/H of the shallowest cell: damps shallow cells, negligible in the deep ocean
-    do j=0,maxj
-      do i=0,maxi
-        ii = i
-        if (ii.eq.0) ii=maxi
-        f_wet = 1._wp
-        h_wet = -1._wp
-        do j1=max(1,j),min(maxj,j+1)
-          do i1=ii,ii+1
-            i1p = 1 + mod(i1-1,maxi)
-            if (k1(i1p,j1).le.maxk) then
-              f_wet = min(f_wet,f_ocn(i1p,j1))
-              if (h_wet.lt.0._wp .or. h(3,i1p,j1).lt.h_wet) h_wet = h(3,i1p,j1)
-            endif
-          enddo
-        enddo
-        tmpdrg(i,j) = drag_par%adrag + drag_par%drag_frac*(min(1._wp/max(f_wet,1.e-3_wp),drag_par%drag_frac_max)-1._wp)
-        if (h_wet.gt.0._wp) tmpdrg(i,j) = tmpdrg(i,j) + drag_par%cd_bot*drag_par%u_bot/h_wet
-      enddo
-    enddo
-
-    ! interpolate to velocity points
+    ! barotropic drag on the velocity faces: background adrag plus two independent enhancements on open faces,
+    ! from the two cells the face connects,
+    !  - partial-cell drag drag_frac*max(0,1-f_face/f_frac_crit), f_face = smaller ocean fraction of the two cells:
+    !    the flow through a face that is mostly land is squeezed into a narrow passage
+    !  - linearised bottom friction cd_bot*u_bot/H, H = face depth (smaller depth of the two cells):
+    !    damps shallow cells, negligible in the deep ocean
     do j=1,maxj
-       do i=1,maxi
-          drag(1,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i,j-1))    ! u-grid
-          drag(2,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i-1,j))    ! v-grid
-       enddo
+      do i=1,maxi
+        ip1 = modulo(i,maxi) + 1
+        ! u-grid, east face of cell (i,j)
+        drag(1,i,j) = drag_par%adrag
+        if (rh(1,i,j).gt.0._wp) then
+          f_face = min(f_ocn(i,j),f_ocn(ip1,j))
+          drag(1,i,j) = drag(1,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(1,i,j)
+        endif
+        ! v-grid, north face of cell (i,j)
+        drag(2,i,j) = drag_par%adrag
+        if (j.lt.maxj .and. rh(2,i,j).gt.0._wp) then
+          f_face = min(f_ocn(i,j),f_ocn(i,j+1))
+          drag(2,i,j) = drag(2,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(2,i,j)
+        endif
+      enddo
     enddo
 
     ! periodic boundary conditions
@@ -564,7 +556,6 @@ contains
     psi_fix(:) = 0._wp
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))
-    allocate(tmpdrg(0:maxi,0:maxj))
     allocate(fcor(0:maxj+1))
     allocate(fcorv(0:maxj+1))
     allocate(rtv(maxi,maxj))
@@ -573,6 +564,11 @@ contains
 
     drag_par%adrag = 1._wp/(drag_par%adrag*86400._wp) ! 1/s
     if (drag_par%drag_frac.gt.0._wp) drag_par%drag_frac = 1._wp/(drag_par%drag_frac*86400._wp) ! 1/s
+    if (drag_par%f_frac_crit.le.0._wp) then
+      ! no partial-cell drag, avoid the division by f_frac_crit
+      drag_par%drag_frac = 0._wp
+      drag_par%f_frac_crit = 1._wp
+    endif
     if (drag_par%drag_cb.gt.0._wp) drag_par%drag_cb = 1._wp/(drag_par%drag_cb*86400._wp) ! 1/s
 
     ! Coriolis parameter

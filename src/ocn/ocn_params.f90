@@ -87,8 +87,8 @@ module ocn_params
 
      type drag_par_type
        real(wp) :: adrag           !! background drag of the barotropic and baroclinic velocities (namelist in days)
-       real(wp) :: drag_frac       !! partial-cell drag rate (namelist in days, 0 = off), times min(1/f_ocn,drag_frac_max)-1
-       real(wp) :: drag_frac_max   !! cap on the partial-cell factor 1/f_ocn
+       real(wp) :: drag_frac       !! partial-cell drag rate at f_ocn=0 (namelist in days, 0 = off), times max(0,1-f_face/f_frac_crit)
+       real(wp) :: f_frac_crit     !! ocean fraction of a face above which there is no partial-cell drag
        real(wp) :: cd_bot          !! bottom drag coefficient, 0 = no bottom friction
        real(wp) :: u_bot           !! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic bottom drag
        real(wp) :: drag_cb         !! checkerboard friction rate (namelist in days, 0 = off), see stencil_coef in invert.f90
@@ -284,7 +284,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
     call nml_read(filename,"ocn_par","drag_frac",drag_par%drag_frac)
-    call nml_read(filename,"ocn_par","drag_frac_max",drag_par%drag_frac_max)
+    call nml_read(filename,"ocn_par","f_frac_crit",drag_par%f_frac_crit)
     call nml_read(filename,"ocn_par","cd_bot",drag_par%cd_bot)
     call nml_read(filename,"ocn_par","u_bot",drag_par%u_bot)
     call nml_read(filename,"ocn_par","drag_cb",drag_par%drag_cb)

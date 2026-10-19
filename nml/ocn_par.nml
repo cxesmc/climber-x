@@ -80,14 +80,14 @@
  !-------------------------------------------------------------------------------------------
  ! friction settings
  !-------------------------------------------------------------------------------------------
- ! barotropic drag = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag
+ ! barotropic drag on each face = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag
  adrag = 4.                   ! days, inverse background drag of the barotropic and baroclinic velocities
- drag_frac = 4.               ! days, 0 = off. Partial-cell drag, added: (1/drag_frac)*(min(1/f_ocn,drag_frac_max)-1) with f_ocn
-                              ! the ocean fraction of the least-wet cell around a psi point; the flow through a cell that is
-                              ! only partly ocean is squeezed into a fraction f_ocn of its width
- drag_frac_max = 2.           ! cap on the partial-cell factor 1/f_ocn
+ drag_frac = 2.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
+                              ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
+                              ! is mostly land is squeezed into a narrow passage. 1/drag_frac is the extra drag of a closing face
+ f_frac_crit = 0.5            ! ocean fraction of a face above which there is no partial-cell drag
  cd_bot = 2.5e-3              ! bottom drag coefficient (2.5e-3), 0 = off. Linearised bottom friction on the depth-mean flow, added:
-                              ! cd_bot*u_bot/H with H of the shallowest cell around a psi point. Damps shallow cells
+                              ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells
                               ! (50 m: 1/(2.3 d) with 2.5e-3/0.1) and is negligible in the deep ocean (4 km: 1/(185 d))
  u_bot = 0.1                  ! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic drag
  drag_cb = 0.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
