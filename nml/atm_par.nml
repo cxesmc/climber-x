@@ -128,8 +128,8 @@
   dp_com = 0.1                  ! depth of the slab below the tropopause (i_mass_com=0,1), or of the terrain following band (i_mass_com=2,3), for the column mass correction
   dps_com = 0.                  ! depth above the local surface kept free of the column mass correction (i_mass_com=2,3)
   dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1,3)
-  dp_com_topo = 0.1             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1,3); 1 = up to the tropopause
-  i_dp_com_topo = 1             ! depth of the topographic correction band (i_mass_com=1,3):
+  dp_com_topo = 1.0             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1,3); 1 = up to the tropopause
+  i_dp_com_topo = 0             ! depth of the topographic correction band (i_mass_com=1,3):
                                 ! 0 = dp_com_topo everywhere
                                 ! 1 = dp_com_topo where the azonal sea level pressure is above aslp_com_topo_1 (highs, shallow),
                                 !     up to the tropopause where it is below aslp_com_topo_2 (lows, deep), linear in between; faces take the mean of their two cells
@@ -145,7 +145,7 @@
   i_pbl = 1                     ! PBL for ageostrophic wind:
                                 ! 1 = PBL follows topography
                                 ! 2 = PBL assumed to start from sea level
-  i_pbl_az = 2                  ! azonal part (deviation from the zonal mean) of the PBL Ekman mass flux:
+  i_pbl_az = 0                  ! azonal part (deviation from the zonal mean) of the PBL Ekman mass flux:
                                 ! 0 = treated as the zonal mean part, returned below the tropopause
                                 ! 1 = carried by a PBL of constant height h_pbl_az and returned in a band of depth dp_pbl_az right above it;
                                 !     the zonal mean flux (mean meridional circulation) is unchanged
