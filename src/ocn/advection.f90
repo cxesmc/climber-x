@@ -293,9 +293,9 @@ contains
           tracer_tmp(i,j,k) = real(mask_c(i,j,k),wp) &
             * (tracer_ijk-(fxl(i,j,k)-fxl(i-1,j,k)+fyl(i,j,k)-fyl(i,j-1,k)+fzl(i,j,k)-fzl(i,j,k-1)) &
               / (dx(j)*dy*dz(k)*max(f_ocn(i,j),f_min)))
-          ! for fluxes limits
-          xa(i,j,k)=max(tracer_ijk,tracer_tmp(i,j,k))
-          xb(i,j,k)=min(tracer_ijk,tracer_tmp(i,j,k))
+          ! for fluxes limits; land and sub-bottom cells must not bound the neighbouring ocean cells
+          xa(i,j,k)=merge(max(tracer_ijk,tracer_tmp(i,j,k)), -1.e30_wp, mask_c(i,j,k).eq.1)
+          xb(i,j,k)=merge(min(tracer_ijk,tracer_tmp(i,j,k)),  1.e30_wp, mask_c(i,j,k).eq.1)
         enddo
       enddo
     enddo

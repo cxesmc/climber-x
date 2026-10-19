@@ -268,8 +268,9 @@ contains
             xa(i,j)=max(his(i,j),his_tmp(i,j))
             xb(i,j)=min(his(i,j),his_tmp(i,j))
           else
-            xa(i,j)=0._wp
-            xb(i,j)=0._wp
+            ! land cells must not bound the neighbouring ocean cells
+            xa(i,j)=-1.e30_wp
+            xb(i,j)=1.e30_wp
           endif
         enddo
       enddo
