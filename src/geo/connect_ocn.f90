@@ -26,8 +26,7 @@
 module connect_ocn_mod
 
   use precision, only : wp
-  use constants, only : pi
-  use geo_params, only : f_crit, f_crit_eq
+  use geo_params, only : f_crit
   use geo_params, only : l_close_panama, l_close_bering, l_close_iberia 
   use geo_params, only : l_f_crit_shallow, f_crit_shallow, z_crit_shallow
   use geo_params, only : l_ocn_below_shelf
@@ -87,7 +86,7 @@ contains
       if (j==1 .or. j.eq.nj) then
         fcrit = f_crit*2._wp  ! fixme?!
       else
-        fcrit = f_crit + max(0._wp,(f_crit_eq-f_crit))*cos(lat(j)*pi/180._wp)**30
+        fcrit = f_crit
       endif
       if (f_ocn(i,j).lt.fcrit) then
         f_ocn(i,j) = 0._wp

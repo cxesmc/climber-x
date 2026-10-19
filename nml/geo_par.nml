@@ -14,7 +14,6 @@
  ! land-sea mask and Straits settings  
  !-------------------------------------------------------
  f_crit           = 0.15        ! minimum ocean fraction for grid cell to be ocean on the coarse grid
- f_crit_eq        = 0.15        ! minimum ocean fraction for grid cell to be ocean on the coarse grid around the equator
  l_ocn_below_shelf = F          ! allow ocean below floating ice?
  l_connect_ocn    = T           ! enforce connectivity of the ocean on the coarse ocean model grid?
  l_close_panama   = T           ! enforce closed Panama strait?

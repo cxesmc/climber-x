@@ -56,7 +56,6 @@ module geo_params
   character (len=256) :: z_bed_rel_file
 
   real(wp) :: f_crit
-  real(wp) :: f_crit_eq
   logical :: l_ocn_below_shelf
   logical :: l_connect_ocn
   logical :: l_close_panama
@@ -135,7 +134,6 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","visc_log10_min",visc_log10_min)
     call nml_read(filename,"geo_par","visc_log10_max",visc_log10_max)
     call nml_read(filename,"geo_par","f_crit",f_crit)
-    call nml_read(filename,"geo_par","f_crit_eq",f_crit_eq)
     call nml_read(filename,"geo_par","l_ocn_below_shelf",l_ocn_below_shelf)
     call nml_read(filename,"geo_par","l_connect_ocn",l_connect_ocn)
     call nml_read(filename,"geo_par","l_close_panama",l_close_panama)
