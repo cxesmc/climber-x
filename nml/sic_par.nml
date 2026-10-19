@@ -8,6 +8,8 @@
  h_snow_min = 0.001        ! m, minimum snow thickness
  h_sic_max = 50.0          ! m, maximum sea ice thickness
  h_snow_max = 1.0          ! m, maximum snow thickness, excess snow is converted to sea ice
+ rho_snow = 330.           ! kg/m3, density of snow on sea ice (CICE, SI3, MPIOM: 330)
+ l_snow_ice = T            ! snow-ice formation: convert snow to ice when the snow load pushes the ice surface below the waterline
 
  !-----------------------------------------------------------------------------------------
  ! sea ice concentration parameters

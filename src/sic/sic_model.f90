@@ -36,7 +36,7 @@ module sic_model
     use sic_params, only : sic_params_init
     use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
-    use sic_params, only : l_adv_on_area
+    use sic_params, only : l_adv_on_area, l_snow_ice, dyn_par
     use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, c_lead_h, c_lead_melt, h_sic_min, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
 
@@ -71,6 +71,7 @@ contains
     real(wp) :: t_freeze
     real(wp), dimension(maxi,maxj) :: flx_sic_cut, fw_sic_cut
     real(wp), dimension(maxi,maxj) :: f_sic_old
+    real(wp) :: dm_snow_ice
     real(wp), dimension(0:maxi,maxj) :: fax_f, fdx_f
     real(wp), dimension(maxi,0:maxj) :: fay_f, fdy_f
 
@@ -285,7 +286,7 @@ contains
 
     endif
 
-    !$omp parallel do collapse(2) private(i,j) 
+    !$omp parallel do collapse(2) private(i,j,dm_snow_ice) 
     do j=1,maxj
       do i=1,maxi
 
@@ -305,6 +306,18 @@ contains
           sic%h_sic_mean(i,j)  = sic%h_sic_mean(i,j) &
             + (sic%h_snow_mean(i,j) - sic%f_sic(i,j)*h_snow_max)*rho_snow/rho_sic
           sic%h_snow_mean(i,j) = sic%f_sic(i,j)*h_snow_max
+        endif
+
+        ! snow-ice formation: when the snow load pushes the ice surface below the waterline,
+        ! convert snow into ice until the freeboard is zero (mass-conserving, no seawater added)
+        if (l_snow_ice .and. sic%f_sic(i,j).gt.0._wp .and. sic%h_snow_mean(i,j).gt.0._wp) then
+          dm_snow_ice = rho_sic/dyn_par%Rho_ocean &
+            * (rho_snow*sic%h_snow_mean(i,j) - (dyn_par%Rho_ocean-rho_sic)*sic%h_sic_mean(i,j))  ! kg/m2
+          if (dm_snow_ice.gt.0._wp) then
+            dm_snow_ice = min(dm_snow_ice, rho_snow*sic%h_snow_mean(i,j))
+            sic%h_sic_mean(i,j)  = sic%h_sic_mean(i,j)  + dm_snow_ice/rho_sic
+            sic%h_snow_mean(i,j) = sic%h_snow_mean(i,j) - dm_snow_ice/rho_snow
+          endif
         endif
 
         ! warn for unphysically large negative grid-mean thicknesses

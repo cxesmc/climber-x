@@ -104,7 +104,8 @@ module sic_params
   type(snow_par_type) :: snow_par
 
   real(wp), parameter :: rho_sic  = 910._wp      ! kg/m3, Density of sea ice
-  real(wp), parameter :: rho_snow = 250._wp      ! kg/m3, Density of snow on sea ice
+  real(wp) :: rho_snow      !! kg/m3, density of snow on sea ice
+  logical :: l_snow_ice     !! snow-ice formation when the snow load pushes the ice surface below the waterline
   real(wp), parameter :: emis_sic = 0.99_wp
   real(wp) :: lambda_sic
   real(wp) :: lambda_snow
@@ -152,6 +153,8 @@ contains
     call nml_read(filename,"sic_par","h_snow_min",h_snow_min)
     call nml_read(filename,"sic_par","h_sic_max",h_sic_max)
     call nml_read(filename,"sic_par","h_snow_max",h_snow_max)
+    call nml_read(filename,"sic_par","rho_snow",rho_snow)
+    call nml_read(filename,"sic_par","l_snow_ice",l_snow_ice)
     call nml_read(filename,"sic_par","i_ice_albedo",i_ice_albedo)
     call nml_read(filename,"sic_par","alb_sic_vis",alb_sic_vis)
     call nml_read(filename,"sic_par","alb_sic_nir",alb_sic_nir)
