@@ -55,7 +55,7 @@ contains
 !> sic_dyn takes a single dynamics timestep with EVP subcycles
 subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh, &
     ui, vi, str_d, str_t, str_s, &
-    tauxo, tauyo, PFu, PFv, Cor_u, Cor_v, fxic, fxic_d, fxic_t, fxic_s, fyic, fyic_d, fyic_t, fyic_s)
+    tauxo, tauyo, PFu, PFv, Cor_u, Cor_v, fxic, fxic_d, fxic_t, fxic_s, fyic, fyic_d, fyic_t, fyic_s, r_open)
 
   real(wp),                 intent(in   ) :: dt ! The amount of time over which the ice dynamics are to be advanced [s].
   real(wp), dimension(:,:), intent(in   ) :: f_sic ! Sea ice concentration [nondim]
@@ -88,6 +88,7 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   real(wp), dimension(:,:) :: fyic_s ! Meridional force due to shearing internal stress [Pa].
   real(wp), dimension(:,:) :: Cor_v  ! Meridional Coriolis acceleration [m s-2].
   real(wp), dimension(:,:) :: PFv    ! Meridional hydrostatic pressure driven acceleration [m s-2].
+  real(wp), dimension(:,:), intent(  out) :: r_open ! Opening rate by shear deformation 0.5*(del_sh-|div|) of the last EVP subcycle [s-1].
 
   real(wp), dimension(maxi,maxj) :: mis   ! Mass per unit ocean area of sea ice, snow and melt pond water [kg m-2]
   real(wp), dimension(maxi,maxj) :: mice  ! Mass per unit ocean area of sea ice [kg m-2]
@@ -736,6 +737,12 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   I_sub_steps = 1._wp/dyn_par%evp_sub_steps
   do j=1,maxj
     do i=1,maxi
+      ! opening rate by shear deformation (Flato & Hibler 1995, CICE), from the strain rates of the last subcycle
+      if (mask_dyn(i,j).eq.1) then
+        r_open(i,j) = 0.5_wp*max(0._wp, del_sh(i,j)-abs(sh_Dd(i,j)))
+      else
+        r_open(i,j) = 0._wp
+      endif
       tauxo(I,j) = tauxo(I,j) * (mask_u(I,j) * I_sub_steps)
       tauyo(i,J) = tauyo(i,J) * (mask_v(i,J) * I_sub_steps)
       if (l_diag_dyn) then

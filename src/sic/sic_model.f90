@@ -36,7 +36,7 @@ module sic_model
     use sic_params, only : sic_params_init
     use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
-    use sic_params, only : l_adv_on_area, l_snow_ice, dyn_par
+    use sic_params, only : l_adv_on_area, l_snow_ice, dyn_par, l_lead_shear, c_lead_shear, g_star_lead
     use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, c_lead_h, c_lead_melt, h_sic_min, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
 
@@ -71,7 +71,7 @@ contains
     real(wp) :: t_freeze
     real(wp), dimension(maxi,maxj) :: flx_sic_cut, fw_sic_cut
     real(wp), dimension(maxi,maxj) :: f_sic_old
-    real(wp) :: dm_snow_ice
+    real(wp) :: dm_snow_ice, g_ow
     real(wp), dimension(0:maxi,maxj) :: fax_f, fdx_f
     real(wp), dimension(maxi,0:maxj) :: fay_f, fdy_f
 
@@ -240,7 +240,8 @@ contains
     call sic_dyn(dt, sic%f_sic, sic%h_sic_mean, sic%h_snow_mean, sic%uo, sic%vo, sic%tauxa, sic%tauya, sic%ssh, &   ! in
       sic%u, sic%v, sic%str_d, sic%str_t, sic%str_s, &        ! inout
       sic%tauxo, sic%tauyo, sic%PFu, sic%PFv, sic%Cor_u, sic%Cor_v, & ! out
-      sic%fxic, sic%fxic_d, sic%fxic_t, sic%fxic_s, sic%fyic, sic%fyic_d, sic%fyic_t, sic%fyic_s) ! out
+      sic%fxic, sic%fxic_d, sic%fxic_t, sic%fxic_s, sic%fyic, sic%fyic_d, sic%fyic_t, sic%fyic_s, & ! out
+      sic%r_open_shear) ! out
 
     ! integrate advection-diffusion equation for sea ice thickness, snow thickness and sea ice concentration
 
@@ -286,12 +287,22 @@ contains
 
     endif
 
-    !$omp parallel do collapse(2) private(i,j,dm_snow_ice) 
+    !$omp parallel do collapse(2) private(i,j,dm_snow_ice,g_ow) 
     do j=1,maxj
       do i=1,maxi
 
         flx_sic_cut(i,j) = 0._wp
         fw_sic_cut(i,j) = 0._wp
+
+        ! open leads by shear deformation: ridging removes ice area at constant ice volume (Flato & Hibler 1995, CICE),
+        ! reduced by the participation of open water in ridging (linear participation function, Thorndike et al. 1975)
+        sic%df_sic_shear(i,j) = 0._wp
+        if (l_lead_shear .and. (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) .and. sic%f_sic(i,j).gt.0._wp) then
+          g_ow = min(1._wp, max(0._wp,1._wp-sic%f_sic(i,j))/g_star_lead)
+          sic%df_sic_shear(i,j) = -min(sic%f_sic(i,j)/dt, &
+            c_lead_shear*sic%r_open_shear(i,j)*(1._wp-g_ow*(2._wp-g_ow)))
+          sic%f_sic(i,j) = sic%f_sic(i,j) + sic%df_sic_shear(i,j)*dt
+        endif
 
         ! limit sea ice concentration
         sic%f_sic(i,j) = max(0._wp,sic%f_sic(i,j))
@@ -690,6 +701,8 @@ contains
 
     ! other initialisations
     sic%dh_sic_dt_dyn = 0._wp
+    sic%r_open_shear = 0._wp
+    sic%df_sic_shear = 0._wp
     sic%dh_sic_dt_therm = 0._wp
     sic%dh_sic_sic = 0._wp
     sic%dh_sic_ocn = 0._wp
@@ -778,6 +791,8 @@ contains
     allocate(sic%h_sic(maxi,maxj))
     allocate(sic%f_sic(maxi,maxj))
     allocate(sic%dh_sic_dt_dyn(maxi,maxj))
+    allocate(sic%r_open_shear(maxi,maxj))
+    allocate(sic%df_sic_shear(maxi,maxj))
     allocate(sic%dh_sic_dt_therm(maxi,maxj))
     allocate(sic%dh_sic_sic(maxi,maxj))
     allocate(sic%dh_sic_ocn(maxi,maxj))
@@ -908,6 +923,8 @@ contains
     deallocate(sic%h_sic)
     deallocate(sic%f_sic)
     deallocate(sic%dh_sic_dt_dyn)
+    deallocate(sic%r_open_shear)
+    deallocate(sic%df_sic_shear)
     deallocate(sic%dh_sic_dt_therm)
     deallocate(sic%dh_sic_sic)
     deallocate(sic%dh_sic_ocn)

@@ -65,6 +65,7 @@ module sic_out
   type s_out
      real(wp), dimension(:,:), allocatable :: hsic, hsnow, focn, fsic, tsic, tocn
      real(wp), dimension(:,:), allocatable :: dh_sic_dt_therm, dh_sic_dt_dyn, dh_sic_dt_therm_ocn, dh_sic_dt_therm_sic
+     real(wp), dimension(:,:), allocatable :: df_sic_shear
      real(wp), dimension(:,:), allocatable :: lh, sh, lw, fx, fw, fw_brines, e, p_e
      real(wp), dimension(:,:), allocatable :: lh_sic, sh_sic, lw_sic, fx_sic, fw_sic
      real(wp), dimension(:,:), allocatable :: lh_ocn, sh_ocn, lw_ocn, fx_ocn, fw_ocn
@@ -196,6 +197,7 @@ contains
     allocate(ann_s%dh_sic_dt_therm_sic(maxi,maxj))
     allocate(ann_s%dh_sic_dt_therm_ocn(maxi,maxj))
     allocate(ann_s%dh_sic_dt_dyn(maxi,maxj))
+    allocate(ann_s%df_sic_shear(maxi,maxj))
     allocate(ann_s%flx_melt_top(maxi,maxj))
     allocate(ann_s%flx_melt_bot(maxi,maxj))
     allocate(ann_s%tocn(maxi,maxj))
@@ -264,6 +266,7 @@ contains
      allocate(mon_s(k)%dh_sic_dt_therm_sic(maxi,maxj))
      allocate(mon_s(k)%dh_sic_dt_therm_ocn(maxi,maxj))
      allocate(mon_s(k)%dh_sic_dt_dyn(maxi,maxj))
+     allocate(mon_s(k)%df_sic_shear(maxi,maxj))
      allocate(mon_s(k)%flx_melt_top(maxi,maxj))
      allocate(mon_s(k)%flx_melt_bot(maxi,maxj))
      allocate(mon_s(k)%lh(maxi,maxj))
@@ -481,6 +484,7 @@ contains
        mon_s(m)%dh_sic_dt_therm_sic = 0._wp
        mon_s(m)%dh_sic_dt_therm_ocn = 0._wp
        mon_s(m)%dh_sic_dt_dyn   = 0._wp
+       mon_s(m)%df_sic_shear    = 0._wp
        mon_s(m)%flx_melt_top = 0._wp
        mon_s(m)%flx_melt_bot = 0._wp
        mon_s(m)%lh    = 0._wp
@@ -558,6 +562,7 @@ contains
        mon_s(mon)%dh_sic_dt_therm_sic= mon_s(mon)%dh_sic_dt_therm_sic   + sic%dh_sic_sic/dt*sec_day    * mon_avg
        mon_s(mon)%dh_sic_dt_therm_ocn= mon_s(mon)%dh_sic_dt_therm_ocn   + sic%dh_sic_ocn/dt*sec_day    * mon_avg
        mon_s(mon)%dh_sic_dt_dyn  = mon_s(mon)%dh_sic_dt_dyn     + sic%dh_sic_dt_dyn*sec_day      * mon_avg
+       mon_s(mon)%df_sic_shear   = mon_s(mon)%df_sic_shear      + sic%df_sic_shear*sec_day       * mon_avg
        mon_s(mon)%flx_melt_top = mon_s(mon)%flx_melt_top  + sic%flx_melt_top   * mon_avg
        mon_s(mon)%flx_melt_bot = mon_s(mon)%flx_melt_bot  + sic%flx_melt_bot   * mon_avg
        mon_s(mon)%lh    = mon_s(mon)%lh     + (sic%f_sic*sic%flx_lh_sic + (1._wp-sic%f_sic)*sic%flx_lh_ocn)     * mon_avg
@@ -888,6 +893,7 @@ contains
     call nc_write(fnm,"dh_sic_dt_therm_sic",  sngl(vars%dh_sic_dt_therm_sic),  dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sea ice thickness change from thermodynamics over sea ice area",units="m/day",ncid=ncid)
     call nc_write(fnm,"dh_sic_dt_therm_ocn",  sngl(vars%dh_sic_dt_therm_ocn),  dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sea ice thickness change from thermodynamics in leads",units="m/day",ncid=ncid)
     call nc_write(fnm,"dh_sic_dt_dyn",  sngl(vars%dh_sic_dt_dyn),  dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sea ice thickness change from transport",units="m/day",ncid=ncid)
+    call nc_write(fnm,"df_sic_shear",  sngl(vars%df_sic_shear),  dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sea ice fraction change from shear opening",units="1/day",ncid=ncid)
     call nc_write(fnm,"flx_melt_top", sngl(vars%flx_melt_top), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="snow/ice melt flux from top",units="W/m2",ncid=ncid)
     call nc_write(fnm,"flx_melt_bot", sngl(vars%flx_melt_bot), dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="snow/ice melt flux from bottom",units="W/m2",ncid=ncid)
     call nc_write(fnm,"lh",    sngl(vars%lh),    dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="latent heat flux",units="W/m2",ncid=ncid)
@@ -1039,6 +1045,7 @@ contains
     ave%dh_sic_dt_therm_sic= 0._wp
     ave%dh_sic_dt_therm_ocn= 0._wp
     ave%dh_sic_dt_dyn  = 0._wp
+    ave%df_sic_shear   = 0._wp
     ave%flx_melt_top = 0._wp
     ave%flx_melt_bot = 0._wp
     ave%lh    = 0._wp
@@ -1107,6 +1114,7 @@ contains
        ave%dh_sic_dt_therm_sic= ave%dh_sic_dt_therm_sic   + d(k)%dh_sic_dt_therm_sic   / div
        ave%dh_sic_dt_therm_ocn= ave%dh_sic_dt_therm_ocn   + d(k)%dh_sic_dt_therm_ocn   / div
        ave%dh_sic_dt_dyn  = ave%dh_sic_dt_dyn     + d(k)%dh_sic_dt_dyn     / div
+       ave%df_sic_shear   = ave%df_sic_shear      + d(k)%df_sic_shear      / div
        ave%flx_melt_top = ave%flx_melt_top + d(k)%flx_melt_top  / div
        ave%flx_melt_bot = ave%flx_melt_bot + d(k)%flx_melt_bot  / div
        ave%lh    = ave%lh     + d(k)%lh     / div

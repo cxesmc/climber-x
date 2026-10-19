@@ -24,6 +24,9 @@
  h0 = 0.3                  ! m, thickness of newly formed sea ice, used only if i_fsic>1 (MPI-ESM1.2 LR: 0.3)
  c_lead_h = 4.             ! thickness dependence of lead closing, closing thickness (h0+c_lead_h*h_sic)/(1+c_lead_h) for h_sic>h0, used only if i_fsic==4
  c_lead_melt = 0.5         ! lateral melt factor, df = c_lead_melt*f*dh/h (0.5 = Hibler 1979), used only if i_fsic==4
+ l_lead_shear = F          ! open leads by shear deformation (ridging consumes ice area, CICE/Flato-Hibler), used only if i_fsic>1
+ c_lead_shear = 0.5        ! shear opening coefficient, df = -c_lead_shear*0.5*(del-|div|)*(1-a_P(0))*dt (CICE Cs = 0.5), used only if l_lead_shear
+ g_star_lead = 0.15        ! open water fraction above which ridging consumes only open water (CICE Gstar), used only if l_lead_shear
 
  !-----------------------------------------------------------------------------------------
  ! sea ice thermodynamics parameters

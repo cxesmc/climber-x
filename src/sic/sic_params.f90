@@ -51,6 +51,9 @@ module sic_params
   real(wp) :: h0
   real(wp) :: c_lead_h      !! thickness dependence of lead closing (MPIOM rleadclose(3)), used only if i_fsic==4
   real(wp) :: c_lead_melt   !! lateral melt factor (MPIOM rleadclose(1), 0.5 = Hibler 1979), used only if i_fsic==4
+  logical :: l_lead_shear   !! open leads by shear deformation (ridging, Flato & Hibler 1995 / CICE), used only if i_fsic>1
+  real(wp) :: c_lead_shear  !! shear opening coefficient, df = -c_lead_shear*0.5*(del-|div|)*(1-a_P(0))*dt (CICE Cs = 0.5)
+  real(wp) :: g_star_lead   !! open water fraction above which ridging consumes only open water (CICE Gstar = 0.15)
   real(wp) :: u_star
   integer :: i_cd_ocn
   logical :: l_neutral_ocn
@@ -167,6 +170,9 @@ contains
     call nml_read(filename,"sic_par","h0",h0)
     call nml_read(filename,"sic_par","c_lead_h",c_lead_h)
     call nml_read(filename,"sic_par","c_lead_melt",c_lead_melt)
+    call nml_read(filename,"sic_par","l_lead_shear",l_lead_shear)
+    call nml_read(filename,"sic_par","c_lead_shear",c_lead_shear)
+    call nml_read(filename,"sic_par","g_star_lead",g_star_lead)
     call nml_read(filename,"sic_par","lambda_snow",lambda_snow)
     call nml_read(filename,"sic_par","lambda_sic",lambda_sic)
     call nml_read(filename,"sic_par","h_k_crit",h_k_crit)
