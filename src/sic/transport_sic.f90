@@ -33,7 +33,7 @@ module transport_sic_mod
    implicit none
 
    private
-   public :: transport
+   public :: transport, transport_on_area
 
 contains
 
@@ -150,7 +150,7 @@ contains
         enddo
       enddo
 
-      if (is_sic_snow) then
+      if (present(fax)) then
         fax(0:,:) = fxl(0:,:)
         fay(:,0:) = fyl(:,0:)
       endif
@@ -355,7 +355,7 @@ contains
         enddo
       enddo
     
-      if (is_sic_snow) then
+      if (present(fax)) then
         fax(0:,:) = fxl(0:,:) + afx(0:,:)
         fay(:,0:) = fyl(:,0:) + afy(:,0:)
       endif
@@ -434,6 +434,9 @@ contains
       elsewhere
         dh_dt_dyn = 0._wp
       endwhere
+    endif
+
+    if (present(fdx)) then
       ! fluxes for output
       fdx(0:,:) = fdx1(0:,:)
       fdy(:,0:) = fdy1(:,0:)
@@ -443,5 +446,117 @@ contains
   return
 
   end subroutine transport
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t r a n s p o r t _ o n _ a r e a
+  !   Purpose    :  sea ice or snow volume transport as a tracer on sea ice area:
+  !                 the volume flux through each face is the sea ice area flux 
+  !                 times the thickness per ice area of the donor cell, 
+  !                 so that thickness per ice area stays bounded by the donor values
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine transport_on_area(f_ocn, f_sic_old, fax_f, fay_f, fdx_f, fdy_f, &
+                      his, dh_dt_dyn, fax, fay, fdx, fdy)
+
+    implicit none
+
+    real(wp), dimension(:,:), intent(in) :: f_ocn   !! ocean fraction []
+    real(wp), dimension(:,:), intent(in) :: f_sic_old   !! sea ice concentration before transport []
+    real(wp), dimension(0:,:), intent(in) :: fax_f    !! zonal sea ice area flux from advection [m2]
+    real(wp), dimension(:,0:), intent(in) :: fay_f    !! meridional sea ice area flux from advection [m2]
+    real(wp), dimension(0:,:), intent(in) :: fdx_f    !! zonal sea ice area flux from diffusion [m2]
+    real(wp), dimension(:,0:), intent(in) :: fdy_f    !! meridional sea ice area flux from diffusion [m2]
+    real(wp), dimension(:,:), intent(inout) :: his  !! grid-mean sea ice or snow thickness [m]
+    real(wp), dimension(:,:), intent(out) :: dh_dt_dyn    !! sea ice or snow thickness change due to transport [m/s]
+    real(wp), dimension(0:,:), intent(out) :: fax    !! zonal volume flux from advection [m3]
+    real(wp), dimension(:,0:), intent(out) :: fay    !! meridional volume flux from advection [m3]
+    real(wp), dimension(0:,:), intent(out) :: fdx    !! zonal volume flux from diffusion [m3]
+    real(wp), dimension(:,0:), intent(out) :: fdy    !! meridional volume flux from diffusion [m3]
+
+    real(wp), dimension(maxi,maxj) :: his_old, r, f_out, s
+    integer :: i, j, ip1
+
+
+    his_old = his
+
+    ! thickness per ice area
+    where (f_ocn.gt.0._wp .and. f_sic_old.gt.0._wp)
+      r = his/f_sic_old
+    elsewhere
+      r = 0._wp
+    endwhere
+
+    ! gross outgoing sea ice area from each cell
+    f_out = 0._wp
+    do j=1,maxj
+      do i=1,maxi
+        ip1 = i+1
+        if (ip1.eq.maxi+1) ip1=1
+        f_out(i,j)   = f_out(i,j)   + max(0._wp,fax_f(i,j)) + max(0._wp,fdx_f(i,j))
+        f_out(ip1,j) = f_out(ip1,j) - min(0._wp,fax_f(i,j)) - min(0._wp,fdx_f(i,j))
+      enddo
+    enddo
+    do j=1,maxj-1
+      do i=1,maxi
+        f_out(i,j)   = f_out(i,j)   + max(0._wp,fay_f(i,j)) + max(0._wp,fdy_f(i,j))
+        f_out(i,j+1) = f_out(i,j+1) - min(0._wp,fay_f(i,j)) - min(0._wp,fdy_f(i,j))
+      enddo
+    enddo
+
+    ! scale outgoing volume fluxes where the area outflow exceeds the ice area in the cell
+    ! (possible with the antidiffusive FCT fluxes), so that the volume stays positive
+    do j=1,maxj
+      do i=1,maxi
+        if (f_out(i,j).gt.f_sic_old(i,j)*dx(j)*dy*f_ocn(i,j)) then
+          s(i,j) = f_sic_old(i,j)*dx(j)*dy*f_ocn(i,j)/f_out(i,j)
+        else
+          s(i,j) = 1._wp
+        endif
+      enddo
+    enddo
+
+    ! volume fluxes = area fluxes * donor thickness per ice area
+    fax = 0._wp
+    fdx = 0._wp
+    do j=1,maxj
+      do i=1,maxi
+        ip1 = i+1
+        if (ip1.eq.maxi+1) ip1=1
+        fax(i,j) = fax_f(i,j)*merge(r(i,j)*s(i,j), r(ip1,j)*s(ip1,j), fax_f(i,j).gt.0._wp)
+        fdx(i,j) = fdx_f(i,j)*merge(r(i,j)*s(i,j), r(ip1,j)*s(ip1,j), fdx_f(i,j).gt.0._wp)
+      enddo
+    enddo
+    fax(0,:) = fax(maxi,:)
+    fdx(0,:) = fdx(maxi,:)
+    fay = 0._wp
+    fdy = 0._wp
+    do j=1,maxj-1
+      do i=1,maxi
+        fay(i,j) = fay_f(i,j)*merge(r(i,j)*s(i,j), r(i,j+1)*s(i,j+1), fay_f(i,j).gt.0._wp)
+        fdy(i,j) = fdy_f(i,j)*merge(r(i,j)*s(i,j), r(i,j+1)*s(i,j+1), fdy_f(i,j).gt.0._wp)
+      enddo
+    enddo
+
+    ! time step
+    do j=1,maxj
+      do i=1,maxi
+        if (f_ocn(i,j).gt.0._wp) then
+          his(i,j) = his(i,j) - (fax(i,j)-fax(i-1,j) + fay(i,j)-fay(i,j-1) &
+                               + fdx(i,j)-fdx(i-1,j) + fdy(i,j)-fdy(i,j-1)) &
+                                / (dx(j)*dy*f_ocn(i,j))  ! ocean area in grid cell
+        endif
+      enddo
+    enddo
+
+    ! calculate dynamical component, purely diagnostic
+    where (f_ocn.gt.0._wp)
+      dh_dt_dyn = (his - his_old)/dt 
+    elsewhere
+      dh_dt_dyn = 0._wp
+    endwhere
+
+
+  return
+
+  end subroutine transport_on_area
 
 end module transport_sic_mod

@@ -36,6 +36,7 @@ module sic_model
     use sic_params, only : sic_params_init
     use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
+    use sic_params, only : l_adv_on_area
     use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, c_lead_h, c_lead_melt, h_sic_min, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
 
@@ -43,7 +44,7 @@ module sic_model
     use ebal_ocn_mod, only : ebal_ocn
     use surface_par_sic
     use sic_dyn_mod, only : sic_dyn
-    use transport_sic_mod, only : transport
+    use transport_sic_mod, only : transport, transport_on_area
     use ncio
 
     !$use omp_lib
@@ -69,6 +70,9 @@ contains
     integer :: i, j
     real(wp) :: t_freeze
     real(wp), dimension(maxi,maxj) :: flx_sic_cut, fw_sic_cut
+    real(wp), dimension(maxi,maxj) :: f_sic_old
+    real(wp), dimension(0:maxi,maxj) :: fax_f, fdx_f
+    real(wp), dimension(maxi,0:maxj) :: fay_f, fdy_f
 
     ! per-cell + global water-budget check (only used when check_water is on)
     real(wp), dimension(maxi,maxj) :: water_mass_old, fw_ocn_pre_redist
@@ -239,24 +243,47 @@ contains
 
     ! integrate advection-diffusion equation for sea ice thickness, snow thickness and sea ice concentration
 
-    !$omp parallel sections
-    !$omp section
-    ! transport sea ice thickness
-    call transport(sic%u,sic%v,sic%f_ocn, &
-      sic%h_sic_mean,sic%dh_sic_dt_dyn, &
-      sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
-    !$omp section
-    ! transport snow thickness
-    call transport(sic%u,sic%v,sic%f_ocn, &
-      sic%h_snow_mean,sic%dh_snow_dt_dyn, &
-      sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
-    !$omp section
-    if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
-      ! transport sea ice concentration
+    if (l_adv_on_area .and. (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4)) then
+
+      ! transport sea ice concentration, keeping the sea ice area fluxes
+      f_sic_old = sic%f_sic
       call transport(sic%u,sic%v,sic%f_ocn, &
-        sic%f_sic)
+        sic%f_sic, fax=fax_f, fay=fay_f, fdx=fdx_f, fdy=fdy_f)
+
+      ! transport sea ice and snow volume as tracers on sea ice area
+      !$omp parallel sections
+      !$omp section
+      call transport_on_area(sic%f_ocn, f_sic_old, fax_f, fay_f, fdx_f, fdy_f, &
+        sic%h_sic_mean,sic%dh_sic_dt_dyn, &
+        sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
+      !$omp section
+      call transport_on_area(sic%f_ocn, f_sic_old, fax_f, fay_f, fdx_f, fdy_f, &
+        sic%h_snow_mean,sic%dh_snow_dt_dyn, &
+        sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
+      !$omp end parallel sections
+
+    else
+
+      !$omp parallel sections
+      !$omp section
+      ! transport sea ice thickness
+      call transport(sic%u,sic%v,sic%f_ocn, &
+        sic%h_sic_mean,sic%dh_sic_dt_dyn, &
+        sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
+      !$omp section
+      ! transport snow thickness
+      call transport(sic%u,sic%v,sic%f_ocn, &
+        sic%h_snow_mean,sic%dh_snow_dt_dyn, &
+        sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
+      !$omp section
+      if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
+        ! transport sea ice concentration
+        call transport(sic%u,sic%v,sic%f_ocn, &
+          sic%f_sic)
+      endif
+      !$omp end parallel sections
+
     endif
-    !$omp end parallel sections
 
     !$omp parallel do collapse(2) private(i,j) 
     do j=1,maxj

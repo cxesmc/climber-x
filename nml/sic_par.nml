@@ -59,6 +59,7 @@
  ! sea ice dynamics parameters, partly from SIS2
  !-----------------------------------------------------------------------------------------
  i_adv = 2                 ! advection scheme: 1 = upstream , 2 = FCT
+ l_adv_on_area = T         ! transport sea ice and snow volume as tracers on ice area (flux = sea ice area flux * donor thickness), used only if i_fsic>1
  diffsic = 0.              ! m2/s, sea ice horizontal diffusivity
  p0 = 2.e4                 ! A constant in the expression for the ice strength, P* in Hunke and Dukowicz 1997.[Pa], default=2.75e4
  c0 = 20.                  ! A constant in the exponent of the expression for the ice strength, c* in Hunke and Dukowicz 1997.

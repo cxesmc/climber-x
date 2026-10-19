@@ -44,6 +44,7 @@ module sic_params
   real(wp) :: alb_sic_nir
   real(wp) :: c_alb_sic
   integer :: i_adv
+  logical :: l_adv_on_area  !! transport sea ice and snow volume as tracers on ice area, used only if i_fsic>1
   integer :: i_fsic
   real(wp) :: f_sic_max
   real(wp) :: f_sic_pow
@@ -157,6 +158,7 @@ contains
     call nml_read(filename,"sic_par","c_alb_sic",c_alb_sic)
     call nml_read(filename,"sic_par","i_fsic",i_fsic)
     call nml_read(filename,"sic_par","i_adv",i_adv)
+    call nml_read(filename,"sic_par","l_adv_on_area",l_adv_on_area)
     call nml_read(filename,"sic_par","f_sic_max",f_sic_max)
     call nml_read(filename,"sic_par","f_sic_pow",f_sic_pow)
     call nml_read(filename,"sic_par","h0",h0)
