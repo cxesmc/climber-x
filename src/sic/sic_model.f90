@@ -297,8 +297,6 @@ contains
         sic%f_sic(i,j) = max(0._wp,sic%f_sic(i,j))
         sic%f_sic(i,j) = min(f_sic_max,sic%f_sic(i,j))
 
-        ! set sea ice concentration to 1 when threshold thickness crossed
-        if (sic%h_sic_mean(i,j)>h_sic_max/2._wp) sic%f_sic(i,j) = 1._wp 
 
         ! snow to ice conversion: when snow on ice exceeds h_snow_max, convert
         ! the excess (per ice area) into sea ice. 
