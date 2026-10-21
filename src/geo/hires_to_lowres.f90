@@ -28,10 +28,7 @@ module hires_to_lowres_mod
   use precision, only : wp
   use control, only : flag_lakes
   use climber_grid, only : lat
-  use geo_params, only : f_crit
-  use geo_params, only : l_ocn_below_shelf
-  use geo_params, only : l_close_panama, l_close_bering, l_close_iberia
-  use geo_params, only : l_f_crit_shallow, f_crit_shallow, z_crit_shallow
+  use ocn_mask_mod, only : f_crit_cell
   use geo_params, only : i_z_min_max, z_ocn_max_quant, z_ocn_min_quant
   use geo_params, only : l_use_z_bed_std_lowres
   use geo_grid, only : ni, nj, n_topo_sur, i_topo_sur, j_topo_sur, i0_topo, i1_topo, j0_topo, j1_topo
@@ -43,9 +40,9 @@ module hires_to_lowres_mod
 
 contains
 
-  subroutine hires_to_lowres(n_lakes, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, hires_z_bed_std, &
+  subroutine hires_to_lowres(n_lakes, mask_ocn, hires_mask, hires_mask_lake, hires_z_topo, hires_z_topo_fil, hires_z_bed, hires_z_sur, hires_z_bed_std, &
     hires_map_runoff, hires_i_runoff, hires_j_runoff, &  ! in
-    f_ocn, f_ocn2, f_lnd, f_ice, f_ice_grd, f_ice_flt, f_lake, f_lake_n, &   ! out
+    f_ocn, f_lnd, f_ice, f_ice_grd, f_lake, f_lake_n, &   ! out
     z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ocn_min_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, &   ! out
     z_sur_std, z_sur_smooth_std, z_veg_std, &    ! out
     f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice)   ! out
@@ -53,6 +50,7 @@ contains
   implicit none
 
   integer, intent(in) :: n_lakes
+  integer, intent(in) :: mask_ocn(:,:)          !! coarse ocean mask from ocn_mask (1 = ocean, 0 = land)
   integer, intent(in) :: hires_mask(:,:)
   integer, intent(in) :: hires_mask_lake(:,:)
   real(wp), intent(in) :: hires_z_topo(:,:)
@@ -65,11 +63,9 @@ contains
   integer, intent(in) :: hires_j_runoff(:,:)
 
   real(wp), intent(out) :: f_ocn(:,:)
-  real(wp), intent(out) :: f_ocn2(:,:)
   real(wp), intent(out) :: f_lnd(:,:)
   real(wp), intent(out) :: f_ice(:,:)
   real(wp), intent(out) :: f_ice_grd(:,:)
-  real(wp), intent(out) :: f_ice_flt(:,:)
   real(wp), intent(out) :: f_lake(:,:)
   real(wp), intent(out) :: f_lake_n(:,:,:)
   real(wp), intent(out) :: z_sur(:,:)
@@ -97,7 +93,7 @@ contains
   integer, intent(out) :: j_runoff_ice(:,:)
 
   integer :: i, j, ii, jj, n, nocn, nice, nice_grd, nice_flt, nveg, nlake, nlaken, ncells, nrun_veg, nrun_ice, dir_loc, dir_loc_save, nrun_tot
-  real(wp) :: fcrit
+  real(wp) :: df_ocn
   real(wp) :: variance_subgrid, variance_mean
 
   logical, dimension(:), allocatable :: mask_ndir
@@ -133,7 +129,7 @@ contains
   allocate( z_ocn_tmp2(n_topo_sur) )
   z_ocn_tmp2 = 0._wp
 
-  !$omp parallel do private(i,j,ii,jj,n,fcrit,nocn,nice,nice_grd,nice_flt,nveg,nlake,nlaken,ncells,nrun_veg,nrun_ice) &
+  !$omp parallel do private(i,j,ii,jj,n,df_ocn,nocn,nice,nice_grd,nice_flt,nveg,nlake,nlaken,ncells,nrun_veg,nrun_ice) &
   !$omp private(mask_ndir,i_runoff_cell,j_runoff_cell,dir_count,dir_loc,dir_loc_save,nrun_tot) &
   !$omp private(mask_cell,z_topo_cell,z_topo_fil_cell,z_sur_cell,z_bed_cell,z_bed_std_cell,z_ocn_tmp,map_runoff_cell,mask_cell_roff) &
   !$omp private(variance_subgrid,variance_mean)
@@ -149,90 +145,30 @@ contains
       if (.not.l_use_z_bed_std_lowres) z_bed_std_cell(:) = 0._wp
       map_runoff_cell = pack(hires_map_runoff(i0_topo(i):i1_topo(i),j0_topo(j):j1_topo(j)),.true.)
 
-      ! ocean fraction
-      if (l_ocn_below_shelf) then
-        ! count number of ocean points and floating ice in grid cell
-        nocn = count(mask_cell.eq.2 .or. mask_cell.eq.3) 
-      else
-        ! count number of ocean points in grid cell
-        nocn = count(mask_cell.eq.2) 
-      endif
+      ! ocean fraction: count number of ocean points in grid cell
+      nocn = count(mask_cell.eq.2)
       f_ocn(i,j) = real(nocn,wp)/real(n_topo_sur,wp)
 
-      ! apply critical threshold for ocean/land
-      if (j==1 .or. j.eq.nj) then
-        fcrit = f_crit*2._wp  ! fixme?!
-      else
-        fcrit = f_crit
-      endif
-      if (f_ocn(i,j).lt.fcrit) then
+      ! land/ocean decision (threshold, strait closures, connectivity) is made in ocn_mask
+      df_ocn = 0._wp
+      if (mask_ocn(i,j).eq.0) then
         f_ocn(i,j) = 0._wp
-      endif
-      ! option to treat shallow coastal slivers as land: a cell with a small ocean fraction whose ocean part
-      ! is shallow (shelf) gets f_ocn=0, so that the coastline follows the shelf break; deep slivers (fjords,
-      ! marginal seas, straits) are kept. Removes e.g. the Hatteras/New England/Nova Scotia/Gulf of Thailand
-      ! slivers, which misplace the western boundary currents and are 1/H cliffs for the barotropic solve.
-      if (l_f_crit_shallow .and. nocn.gt.0 .and. f_ocn(i,j).gt.0._wp .and. f_ocn(i,j).lt.f_crit_shallow) then
-        if (sum(z_bed_cell, mask_cell.eq.2)/real(nocn,wp) .gt. -z_crit_shallow) then
-          f_ocn(i,j) = 0._wp
-        endif
-      endif
-
-      ! fix for Panama
-      if (l_close_panama) then
-        ! close Panama, ocean fraction=0
-        f_ocn(16,23) = 0._wp
-        f_ocn(17:18,22) = 0._wp
-        f_ocn(19:20,21) = 0._wp
-        f_ocn(21,20) = 0._wp
-      endif
-      ! option to close Bering 
-      if (l_close_bering) then
-        ! close Bering, ocean fraction=0
-        f_ocn(1:4,32) = 0._wp
-      endif
-      ! option to close the spurious strait through Iberia: the Alboran cell (-2.5E,37.5N) and the Biscay cell
-      ! (-2.5E,42.5N) are both fractional ocean cells, so their common v-face is open and ~4 Sv circulate
-      ! Atlantic -> Gibraltar -> Alboran -> Biscay -> Atlantic; removing the Biscay cell closes both this face
-      ! and the u-face to the Gulf of Lion cell (2.5E,42.5N)
-      if (l_close_iberia) then
-        f_ocn(36,27) = 0._wp
+      else if (f_ocn(i,j).lt.f_crit_cell(j)) then
+        ! strait cell re-opened by the topology repair below the threshold: widen it to the critical fraction at the
+        ! expense of the land fraction (the ocean depth is still derived from the actual ocean points)
+        df_ocn = f_crit_cell(j) - f_ocn(i,j)
+        f_ocn(i,j) = f_crit_cell(j)
       endif
 
       ! land fraction
       f_lnd(i,j) = 1._wp - f_ocn(i,j)
 
-      ! ocean fraction excluding floating ice
-      nocn = count(mask_cell.eq.2) 
-      f_ocn2(i,j) = real(nocn,wp)/real(n_topo_sur,wp)
-      if (f_ocn2(i,j).gt.f_ocn(i,j)) f_ocn2(i,j)=f_ocn(i,j)     ! make sure it is not larger than total ocean fraction
-
-      ! ice fraction
-      ! count number of grounded ice sheet points in grid cell
+      ! ice fraction: grounded and floating ice sheet points, all ice is treated as grounded (no ocean below ice shelves)
       nice_grd = count(mask_cell.eq.0)
-      f_ice_grd(i,j) = real(nice_grd,wp)/real(n_topo_sur,wp)
-      ! count number of floating ice sheet points in grid cell
       nice_flt = count(mask_cell.eq.3)
-      f_ice_flt(i,j) = real(nice_flt,wp)/real(n_topo_sur,wp)
-      ! count number of ice sheet points (grounded and floating) in grid cell
       nice = nice_grd + nice_flt 
-      if (f_ice_flt(i,j).gt.f_ocn(i,j)) then
-        ! if floating ice fraction larger than ocean fraction add floating ice excess to grounded ice
-        f_ice_grd(i,j) = f_ice_grd(i,j) + (f_ice_flt(i,j)-f_ocn(i,j))
-        f_ice_flt(i,j) = f_ocn(i,j) 
-      endif
-      if (.not.l_ocn_below_shelf) then
-        ! all ice is assumed grounded
-        f_ice_grd(i,j) = f_ice_grd(i,j) + f_ice_flt(i,j)
-        f_ice_flt(i,j) = 0._wp
-      endif
-      if (f_ocn2(i,j).gt.0._wp .and. f_ocn2(i,j).lt.fcrit) then
-        ! ocean fraction below critical value, remove ocean and expand floating ice instead
-        f_ice_flt(i,j) = f_ice_flt(i,j) + f_ocn2(i,j)
-        f_ocn2(i,j) = 0._wp
-      endif
-      ! total ice fraction in grid cell
-      f_ice(i,j) = f_ice_grd(i,j) + f_ice_flt(i,j)
+      f_ice_grd(i,j) = real(nice,wp)/real(n_topo_sur,wp)
+      f_ice(i,j) = f_ice_grd(i,j)
 
       ! count number of ice-free and lake-free land points in grid cell
       nveg = count(mask_cell.eq.1) 
@@ -288,6 +224,14 @@ contains
           f_drain_ice(0,i,j) = 0._wp 
         endif
 
+      endif
+
+      ! widened strait cell: the extra ocean is taken from the ice-free land first, then from the lakes
+      if (df_ocn.gt.0._wp .and. f_lake(i,j).gt.0._wp) then
+        if (f_ice_grd(i,j)+f_lake(i,j).gt.f_lnd(i,j)) then
+          if (flag_lakes) f_lake_n(:,i,j) = f_lake_n(:,i,j) * max(0._wp,f_lnd(i,j)-f_ice_grd(i,j))/f_lake(i,j)
+          f_lake(i,j) = max(0._wp,f_lnd(i,j)-f_ice_grd(i,j))
+        endif
       endif
 
       ! drainage fractions to most frequent ocean destination cell

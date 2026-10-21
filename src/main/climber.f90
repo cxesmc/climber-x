@@ -281,9 +281,9 @@ program climber
     ! Initialise sea ice model
     if (flag_sic) then
        if (allocated(ocn%grid%dz)) then
-         call sic_init(sic,geo%f_ocn2,ocn%grid%dz(ocn%grid%nk))
+         call sic_init(sic,geo%f_ocn,ocn%grid%dz(ocn%grid%nk))
        else
-         call sic_init(sic,geo%f_ocn2,10._wp)
+         call sic_init(sic,geo%f_ocn,10._wp)
        endif
        call sic_diag_init
     endif

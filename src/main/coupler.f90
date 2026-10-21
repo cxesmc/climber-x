@@ -177,14 +177,12 @@ module coupler
       integer, dimension(:,:),   allocatable :: mask_ice   !! mask of coupler grid points covered by ice sheet domain(s) []
       integer, dimension(:,:),   allocatable :: mask_coast   !! mask of coastal cells []
       integer, dimension(:,:),   allocatable :: mask_coast2   !! mask of coastal cells []
-      real(wp), dimension(:,:),   allocatable :: f_ocn  !! ocean fraction of grid cell, including floating ice []
-      real(wp), dimension(:,:),   allocatable :: f_ocn2  !! ocean fraction of grid cell, excluding floating ice []
-      real(wp), dimension(:,:),   allocatable :: f_sic  !! sea ice fraction of ocean fraction (f_ocn2) []
+      real(wp), dimension(:,:),   allocatable :: f_ocn  !! ocean fraction of grid cell []
+      real(wp), dimension(:,:),   allocatable :: f_sic  !! sea ice fraction of ocean fraction (f_ocn) []
       real(wp), dimension(:,:),   allocatable :: f_lnd0 !! land fraction of grid cell for present day sea level []
       real(wp), dimension(:,:),   allocatable :: f_lnd  !! land fraction of grid cell []
       real(wp), dimension(:,:),   allocatable :: f_ice  !! ice sheet/glacier fraction of grid cell []
       real(wp), dimension(:,:),   allocatable :: f_ice_grd  !! grounded ice sheet/glacier fraction of grid cell []
-      real(wp), dimension(:,:),   allocatable :: f_ice_flt  !! flating ice fraction of grid cell []
       real(wp), dimension(:,:),   allocatable :: f_lake !! lake fraction of grid cell []
       real(wp), dimension(:,:,:), allocatable :: f_lake_n !! individual lake fraction in each grid cell []
       real(wp), dimension(:,:),   allocatable :: f_crop !! crop fraction of land fraction []
@@ -428,7 +426,7 @@ contains
         if (time_soy_atm) then
 
           atm%frlnd(i,j) = cmn%f_lnd(i,ja) 
-          atm%frocn(i,j) = cmn%f_ocn2(i,ja)
+          atm%frocn(i,j) = cmn%f_ocn(i,ja)
           atm%sigoro(i,j) = cmn%z_sur_smooth_std(i,ja)
 
           atm%idivide_pac_atl(j) = cmn%idivide_pac_atl(ja)
@@ -469,8 +467,8 @@ contains
           print *
           print *,'sum(f_stp).ne.1!!!',sum(cmn%f_stp(i,ja,:))
           print *,i,ja
-          print *,'f_ocn2,f_lnd,f_ocn',cmn%f_ocn2(i,ja), cmn%f_lnd(i,ja), cmn%f_ocn(i,ja)
-          print *,'f_ice,f_ice_flt,f_ice_grd',cmn%f_ice(i,ja),cmn%f_ice_flt(i,ja),cmn%f_ice_grd(i,ja)
+          print *,'f_lnd,f_ocn',cmn%f_lnd(i,ja), cmn%f_ocn(i,ja)
+          print *,'f_ice,f_ice_grd',cmn%f_ice(i,ja),cmn%f_ice_grd(i,ja)
           print *,'f_stp',cmn%f_stp(i,ja,:)
         endif
 
@@ -779,7 +777,6 @@ contains
       ocn%z_ocn_max = cmn%z_ocn_max
       ocn%z_ocn     = cmn%z_ocn
       ocn%f_ocn     = cmn%f_ocn
-      ocn%f_ocn2    = cmn%f_ocn2
       ocn%mask_coast= cmn%mask_coast2
       ocn%grid%mask_ocn = cmn%mask_ocn
       ocn%cfc11_atm = cmn%cfc11
@@ -797,8 +794,8 @@ contains
       do j=1,nj
         do i=1,ni
           if (cmn%f_ocn(i,j).gt.0._wp) then
-            taux(i,j) = cmn%f_ocn2(i,j)/cmn%f_ocn(i,j) * (cmn%f_sic(i,j)*(cmn%tauxo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%taux(i,j,i_surf_macro_ocn))
-            tauy(i,j) = cmn%f_ocn2(i,j)/cmn%f_ocn(i,j) * (cmn%f_sic(i,j)*(cmn%tauyo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%tauy(i,j,i_surf_macro_ocn))
+            taux(i,j) = (cmn%f_sic(i,j)*(cmn%tauxo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%taux(i,j,i_surf_macro_ocn))
+            tauy(i,j) = (cmn%f_sic(i,j)*(cmn%tauyo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%tauy(i,j,i_surf_macro_ocn))
           else
             taux(i,j) = 0._wp
             tauy(i,j) = 0._wp
@@ -825,9 +822,8 @@ contains
           ocn%f_sic(i,j) = cmn%f_sic(i,j)
           ocn%slp(i,j)   = cmn%slp(i,j)
           ! pass P-E, runoff and calving separately
-          ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
-          ocn%p_e_sic(i,j)   = cmn%p_e_sic_ocn(i,j) * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) 
-          ocn%fw_brines(i,j) = cmn%fw_brines(i,j)   * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) 
+          ocn%p_e_sic(i,j)   = cmn%p_e_sic_ocn(i,j)
+          ocn%fw_brines(i,j) = cmn%fw_brines(i,j)
           ocn%runoff(i,j)    = cmn%runoff_o(i,j)
           ocn%runoff_veg(i,j)    = cmn%runoff_veg_o(i,j)
           ocn%runoff_ice(i,j)    = cmn%runoff_ice_o(i,j)
@@ -839,7 +835,7 @@ contains
           ocn%bmelt(i,j)     = ocn%bmelt_grd(i,j)+ocn%bmelt_flt(i,j)
           ocn%fw_dhdt_ice(i,j) = cmn%fw_dhdt_ice_o(i,j)
           ! net heat flux into the ocean
-          ocn%flx(i,j) = cmn%flx_ocn(i,j) * ocn%f_ocn2(i,j)/ocn%f_ocn(i,j) ! scale from f_ocn2 (for which surface fluxes are computed) to f_ocn (for which the fluxes are applied)
+          ocn%flx(i,j) = cmn%flx_ocn(i,j)
         else
           ocn%p_e_sic(i,j)     = 0._wp 
           ocn%fw_brines(i,j)   = 0._wp 
@@ -1071,7 +1067,7 @@ contains
 
     ! update ocean fraction at beginning of year
     if (time_soy_sic) then
-      sic%f_ocn = cmn%f_ocn2
+      sic%f_ocn = cmn%f_ocn
       sic%coszm = cmn%coszm
     endif
 
@@ -1143,8 +1139,8 @@ contains
     !$omp parallel do collapse(2) private(i,j,im1)
     do j=1,nj
       do i=1,ni
-        cmn%f_stp(i,j,i_surf_macro_sic)       = sic%f_sic(i,j) * cmn%f_ocn2(i,j)
-        cmn%f_stp(i,j,i_surf_macro_ocn)       = (1._wp-sic%f_sic(i,j)) * cmn%f_ocn2(i,j)
+        cmn%f_stp(i,j,i_surf_macro_sic)       = sic%f_sic(i,j) * cmn%f_ocn(i,j)
+        cmn%f_stp(i,j,i_surf_macro_ocn)       = (1._wp-sic%f_sic(i,j)) * cmn%f_ocn(i,j)
         if (cmn%mask_ocn(i,j).eq.1) then
           ! if atmosphere model active
           if (flag_atm) then
@@ -1755,7 +1751,7 @@ contains
           albedo = (1._wp-cmn%cld(i,j))*(frac_vu*cmn%alb_vis_dir(i,j,i_surf_macro_ocn)+(1._wp-frac_vu)*cmn%alb_nir_dir(i,j,i_surf_macro_ocn)) &
                  + cmn%cld(i,j)*(frac_vu*cmn%alb_vis_dif(i,j,i_surf_macro_ocn)+(1._wp-frac_vu)*cmn%alb_nir_dif(i,j,i_surf_macro_ocn))
           bgc%clim%swr_sur_dw(i,j) = cmn%swnet(i,j,i_surf_macro_ocn)/(1._wp-albedo)  ! SW down radiation flux at the surface
-          bgc%clim%ice_frac(i,j)  = (cmn%f_sic(i,j)*cmn%f_ocn2(i,j) + cmn%f_ice_flt(i,j)) / cmn%f_ocn(i,j) ! ice fraction (sea ice + floating shelf ice)
+          bgc%clim%ice_frac(i,j)  = cmn%f_sic(i,j) ! sea ice fraction
           !if (cmn%grid%lat(1,j)<-45._wp) then
           !  bgc%clim%ice_frac(i,j) = 1._wp
           !endif
@@ -3236,10 +3232,8 @@ contains
     ! flooded shelf area with a water depth between 0 and 100 m 
     cmn%A_shelf = geo%A_shelf
 
-    ! ocean fraction of grid cell, including floating ice
+    ! ocean fraction of grid cell
     cmn%f_ocn   = geo%f_ocn
-    ! ocean fraction of grid cell, excluding floating ice
-    cmn%f_ocn2  = geo%f_ocn2
     ! update ocean mask
     where (cmn%f_ocn.gt.0._wp)
       cmn%mask_ocn = 1
@@ -3260,13 +3254,12 @@ contains
     ! ice sheet fraction of grid cell
     cmn%f_ice     = geo%f_ice
     cmn%f_ice_grd = geo%f_ice_grd
-    cmn%f_ice_flt = geo%f_ice_flt
 
     ! lake fraction
     cmn%f_lake = geo%f_lake
 
     ! update land mask
-    where (cmn%f_lnd+geo%f_ice_flt.gt.0._wp)
+    where (cmn%f_lnd.gt.0._wp)
       cmn%mask_lnd = 1
     elsewhere
       cmn%mask_lnd = 0
@@ -4285,7 +4278,6 @@ contains
     cmn%f_lnd = 0._wp
     cmn%f_ice = 0._wp
     cmn%f_ice_grd = 0._wp
-    cmn%f_ice_flt = 0._wp
     cmn%f_lake= 0._wp
     cmn%z_sur = 0._wp
     cmn%z_sur_n = 0._wp
@@ -4463,13 +4455,11 @@ contains
     allocate(cmn%mask_coast(ni,nj))
     allocate(cmn%mask_coast2(ni,nj))
     allocate(cmn%f_ocn(ni,nj))
-    allocate(cmn%f_ocn2(ni,nj))
     allocate(cmn%f_sic(ni,nj))
     allocate(cmn%f_lnd0(ni,nj))
     allocate(cmn%f_lnd(ni,nj))
     allocate(cmn%f_ice(ni,nj))    
     allocate(cmn%f_ice_grd(ni,nj))    
-    allocate(cmn%f_ice_flt(ni,nj))    
     allocate(cmn%f_lake(ni,nj))    
     allocate(cmn%f_crop(ni,nj))    
     allocate(cmn%f_pasture(ni,nj))    

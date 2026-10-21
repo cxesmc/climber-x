@@ -198,7 +198,7 @@ contains
           ! compute wind stress from magnitude of surface wind: tau = Cd*rho_a*V^2
           tau = 1.3e-3_wp*1.3_wp*ocn%wind(i,j)**2
           ! kinetic energy input into the ocean by wind stress, proportional to tau^(3/2), only over ice-free fraction
-          ocn%ke_tau(i,j) = ocn%f_ocn2(i,j)/ocn%f_ocn(i,j)*(1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
+          ocn%ke_tau(i,j) = (1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
         else
           ocn%tau(1,i,j) = 0._wp
           ocn%tau(2,i,j) = 0._wp
@@ -573,7 +573,7 @@ contains
     implicit none
 
     type(ocn_class), intent(out) :: ocn
-    real(wp), dimension(:,:), intent(in) :: f_ocn   !! ocean fraction including floating ice
+    real(wp), dimension(:,:), intent(in) :: f_ocn   !! ocean fraction
     real(wp), dimension(:,:), intent(in) :: z_ocn   !! 'real' ocean bathymetry [m]
     real(wp), dimension(:,:), intent(in) :: z_ocn_max   !! 'real' ocean bathymetry [m]
     integer, dimension(:,:), intent(in) :: mask_coast   !! 'real' ocean bathymetry [m]
@@ -951,7 +951,6 @@ contains
     allocate(ocn%z_ocn_max(maxi,maxj))
     allocate(ocn%z_ocn(maxi,maxj))
     allocate(ocn%f_ocn(maxi,maxj))
-    allocate(ocn%f_ocn2(maxi,maxj))
     allocate(ocn%f_sic(maxi,maxj))
     allocate(ocn%mask_coast(maxi,maxj))
 
@@ -1128,7 +1127,6 @@ contains
     deallocate(ocn%z_ocn_max)
     deallocate(ocn%z_ocn)
     deallocate(ocn%f_ocn)
-    deallocate(ocn%f_ocn2)
     deallocate(ocn%f_sic)
     deallocate(ocn%mask_coast)
 

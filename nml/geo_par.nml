@@ -14,14 +14,15 @@
  ! land-sea mask and Straits settings  
  !-------------------------------------------------------
  f_crit           = 0.15        ! minimum ocean fraction for grid cell to be ocean on the coarse grid
- l_ocn_below_shelf = F          ! allow ocean below floating ice?
- l_connect_ocn    = T           ! enforce connectivity of the ocean on the coarse ocean model grid?
- l_close_panama   = T           ! enforce closed Panama strait?
+ l_ocn_topo       = T           ! topology-preserving coarse ocean mask: close coarse shortcuts across high resolution land/ice
+                                ! explicit l_close_* closures set below are respected
+ z_sill_ocn_topo  = 0.          ! m, high resolution ocean connects across a coarse cell face only where deeper than this, used only if l_ocn_topo=T
+ f_sub_ocn_topo   = 0.02        ! minimum fraction of a coarse cell for an ocean body within it to be checked, used only if l_ocn_topo=T
+ k_ocn_topo       = 2           ! locality radius of the connectivity check (cells), used only if l_ocn_topo=T
+ n_excess_ocn_topo = 6          ! tolerated excess path length (cells) between coarse and high resolution connectivity, used only if l_ocn_topo=T
+ l_close_panama   = F           ! enforce closed Panama strait?
  l_close_bering   = F           ! enforce closed Bering strait?
  l_close_iberia   = F           ! close the strait through Iberia (Alboran-Biscay v-face at 40N) by removing the Biscay cell (-2.5E,42.5N)?
- l_f_crit_shallow = F           ! treat shallow coastal areas as land: coarse cells with ocean fraction < f_crit_shallow AND ocean-only mean depth shallower than z_crit_shallow 
- f_crit_shallow   = 0.3         ! ocean-fraction threshold for l_f_crit_shallow
- z_crit_shallow   = 200.        ! m, depth threshold for l_f_crit_shallow
  l_close_hudson   = F           ! enforce closed Hudson strait?
  l_close_baltic   = F           ! enforce disconnected Baltic Sea?
  i_fix_cell_grl   = 0

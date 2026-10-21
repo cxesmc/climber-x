@@ -194,12 +194,10 @@ contains
       else
         call nc_write(fnm,dim_time,dble(year_now), dim1=dim_time, start=[nout], count=[1],ncid=ncid)
       endif
-      call nc_write(fnm,"f_ocn", geo%f_ocn,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="ocean fraction, including floating ice",units="/",ncid=ncid)
-      call nc_write(fnm,"f_ocn2", geo%f_ocn2,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="ocean fraction, excluding floating ice",units="/",ncid=ncid)
+      call nc_write(fnm,"f_ocn", geo%f_ocn,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="ocean fraction",units="/",ncid=ncid)
       call nc_write(fnm,"f_lnd", geo%f_lnd,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="land fraction",units="/",ncid=ncid)
       call nc_write(fnm,"f_ice", geo%f_ice,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="ice fraction",units="/",ncid=ncid)
       call nc_write(fnm,"f_ice_grd", geo%f_ice_grd,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="grounded ice fraction",units="/",ncid=ncid)
-      call nc_write(fnm,"f_ice_flt", geo%f_ice_flt,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="floating ice fraction",units="/",ncid=ncid)
       call nc_write(fnm,"f_lake", geo%f_lake,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="lake fraction",units="/",ncid=ncid)
       call nc_write(fnm,"z_bed", geo%z_bed,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="mean bedrock elevation",units="m",ncid=ncid)
       call nc_write(fnm,"z_sur", geo%z_sur,dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[geo%grid%G%nx,geo%grid%G%ny,1],long_name="grid cell mean surface elevation",units="m",ncid=ncid)

@@ -76,9 +76,8 @@ module ocn_def
      logical, allocatable :: l_tracers_isodiff(:)    !! flags for isopycnal diffusion of tracers
      real(wp), allocatable :: z_ocn_max(:,:)    !! ocean floor elevation [m]
      real(wp), allocatable :: z_ocn(:,:)    !! ocean-model bathymetry (= grid-cell bedrock elevation geo%z_bed), relative to sea level [m]
-     real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell, including floating ice [1]
+     real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell [1]
      real(wp), allocatable :: f_ocn_old(:,:)    !! old ocean fraction in grid cell [1]
-     real(wp), allocatable :: f_ocn2(:,:)    !! ocean fraction in grid cell, excluding floating ice [1]
      integer, allocatable :: mask_coast(:,:)    !! mask of coastal cells []
 
      real(wp), allocatable :: f_sic(:,:)    !! sea ice fraction (of ocean fraction) [1]
