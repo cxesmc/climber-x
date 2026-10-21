@@ -80,14 +80,9 @@ module atm_params
 
   real(wp) :: c_uter_pol
   real(wp) :: c_uter_eq
-  real(wp) :: c_uter_eq_f
-  real(wp) :: c_uter_pol_f
   integer :: i_mass_com
   real(wp) :: dps_com_topo
   real(wp) :: dp_com_topo
-  integer  :: i_dp_com_topo   !! depth of the topographic correction band: 0 = dp_com_topo everywhere, 1 = from dp_com_topo in cold air to the tropopause in warm air
-  real(wp) :: aslp_com_topo_1 !! Pa, azonal sea level pressure above which the band has depth dp_com_topo (i_dp_com_topo=1,2)
-  real(wp) :: aslp_com_topo_2 !! Pa, azonal sea level pressure below which the band reaches the tropopause (i_dp_com_topo=1,2)
 
   real(wp) :: c_slp_1
   real(wp) :: c_slp_2
@@ -95,7 +90,6 @@ module atm_params
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
   logical :: l_aslp_temp_adv
-  logical :: l_aslp_temp_lows
   real(wp) :: c_aslp_temp_tau
   logical :: l_aslp_topo
   real(wp) :: c_aslp_sw_amp
@@ -120,6 +114,7 @@ module atm_params
 
   real(wp) :: zmax
   real(wp) :: dpc
+  integer  :: i_dpc
   real(wp) :: dp_com
   real(wp) :: dps_com
   real(wp) :: ptopdyn
@@ -247,13 +242,6 @@ module atm_params
   real(wp) :: c_trop_2
   real(wp) :: c_trop_3
 
-  integer :: i_pbl
-  integer  :: i_pbl_az        !! azonal part of the PBL Ekman mass flux: 0 = as the zonal mean, 1 = carried by a shallow PBL and returned right above it,
-                              !! 2 = as 1 where the air is colder than the zonal mean (cold highs), as the zonal mean where it is warmer
-  real(wp) :: dp_pbl_az       !! depth (relative pressure) of the band right above the PBL where the azonal flux is returned (i_pbl_az=1,2)
-  real(wp) :: h_pbl_az        !! m, height of the PBL carrying the azonal flux (i_pbl_az=1,2)
-  real(wp) :: aslp_pbl_az_1   !! Pa, azonal sea level pressure above which the return band has depth dp_pbl_az (i_pbl_az=2,3)
-  real(wp) :: aslp_pbl_az_2   !! Pa, azonal sea level pressure below which the return band reaches the tropopause (i_pbl_az=2,3)
 
   real(wp) :: hpbl
 
@@ -371,14 +359,9 @@ contains
     call nml_read(filename,"atm_par","c_mmc_mt",c_mmc_mt)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
-    call nml_read(filename,"atm_par","c_uter_eq_f",c_uter_eq_f)
-    call nml_read(filename,"atm_par","c_uter_pol_f",c_uter_pol_f)
     call nml_read(filename,"atm_par","i_mass_com",i_mass_com)
     call nml_read(filename,"atm_par","dps_com_topo",dps_com_topo)
     call nml_read(filename,"atm_par","dp_com_topo",dp_com_topo)
-    call nml_read(filename,"atm_par","i_dp_com_topo",i_dp_com_topo)
-    call nml_read(filename,"atm_par","aslp_com_topo_1",aslp_com_topo_1)
-    call nml_read(filename,"atm_par","aslp_com_topo_2",aslp_com_topo_2)
     call nml_read(filename,"atm_par","l_p0_var",l_p0_var)
     call nml_read(filename,"atm_par","p0",p0)
     call nml_read(filename,"atm_par","c_slp_1",c_slp_1)
@@ -387,7 +370,6 @@ contains
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
     call nml_read(filename,"atm_par","l_aslp_temp_adv",l_aslp_temp_adv)
-    call nml_read(filename,"atm_par","l_aslp_temp_lows",l_aslp_temp_lows)
     call nml_read(filename,"atm_par","c_aslp_temp_tau",c_aslp_temp_tau)
     c_aslp_temp_tau = c_aslp_temp_tau * sec_day
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
@@ -413,6 +395,7 @@ contains
     call nml_read(filename,"atm_par","i_aslp_gill_lat",i_aslp_gill_lat)
     call nml_read(filename,"atm_par","zmax",zmax)
     call nml_read(filename,"atm_par","dpc",dpc)
+    call nml_read(filename,"atm_par","i_dpc",i_dpc)
     call nml_read(filename,"atm_par","dp_com",dp_com)
     call nml_read(filename,"atm_par","dps_com",dps_com)
     call nml_read(filename,"atm_par","ptopdyn",ptopdyn)
@@ -526,12 +509,6 @@ contains
     call nml_read(filename,"atm_par","c_woro",c_woro)
     call nml_read(filename,"atm_par","c_weff",c_weff)
     call nml_read(filename,"atm_par","i_rbstr",i_rbstr)
-    call nml_read(filename,"atm_par","i_pbl",i_pbl)
-    call nml_read(filename,"atm_par","i_pbl_az",i_pbl_az)
-    call nml_read(filename,"atm_par","dp_pbl_az",dp_pbl_az)
-    call nml_read(filename,"atm_par","h_pbl_az",h_pbl_az)
-    call nml_read(filename,"atm_par","aslp_pbl_az_1",aslp_pbl_az_1)
-    call nml_read(filename,"atm_par","aslp_pbl_az_2",aslp_pbl_az_2)
     call nml_read(filename,"atm_par","hpbl",hpbl)
     call nml_read(filename,"atm_par","rh_max_ocn",rh_max_ocn)
     call nml_read(filename,"atm_par","rh_max_lnd",rh_max_lnd)

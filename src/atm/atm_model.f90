@@ -269,7 +269,7 @@ contains
       ! 3d velocity field
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, atm%gams, atm%aslp, & ! in
+      call u3d(niter, atm%pzsa, atm%ptrop, atm%ugb, atm%vgb, atm%uab, atm%vab, atm%t3, atm%gams, & ! in
         atm%ua, atm%va, atm%uter, atm%vter, atm%uterf, atm%vterf, atm%u3, atm%u3f, atm%v3, atm%w3, atm%w3_nt, atm%uz500, &  ! out   
         atm%fax, atm%faxo, atm%fay, atm%fayo, atm%fac, atm%fac_topo, atm%psi, atm%psi_topo, &  ! out
         atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, atm%froude, &  ! out

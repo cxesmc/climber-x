@@ -29,7 +29,7 @@ module slp_mod
   use constants, only : pi, r_earth, omega, g, Rd, T0, Le
   use atm_params, only : ra, p0, hatm
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
-  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau, l_aslp_temp_lows
+  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
   use atm_params, only : l_aslp_topo, c_aslp_sw_amp, c_aslp_sw_tau, c_aslp_sw_h, c_aslp_sw_umin, c_aslp_sw_lateq, n_aslp_sw
   use atm_params, only : c_aslp_sw_fr, c_aslp_sw_nbv
   use atm_params, only : c_aslp_sw_eddy, i_aslp_sw_eddy, n_aslp_sw_eddy
@@ -202,31 +202,6 @@ contains
       call fftw_destroy_plan(plan_c2r_temp)
 
     endif
-
-    !------------------------------------------------
-    ! taper of the thermal lows over elevated terrain
-    !------------------------------------------------
-
-    ! tsksl carries the surface anomaly down to sea level through a column that does not exist, which over
-    ! elevated terrain makes the summer heat lows far too deep. Measured as the pressure where the air is
-    ! (slp reduced with the model's own t3, against ERA-Interim/CMIP5 pressure interpolated from geopotential,
-    ! analysis/aslp_topo/pz_compare2.jl), the JJA surface pressure over Tibet/the Rockies is 5-6 hPa too low,
-    ! while the cold highs (Greenland, LGM ice sheets, winter plateaus) are right or too weak. The thermal
-    ! lows are therefore scaled by the air fraction of the sea level-500 hPa layer,
-    !   f_air = min(1, max(0, (exp(-zsa/hatm)-0.5)/0.5)) ,
-    ! and the highs are left unchanged. Offline this reduces the PI JJA high-terrain error from 4.8 to 2.6 hPa
-    ! (Tibet -5.5 -> -0.5) with DJF, LGM and the lowlands unchanged.
-    if (l_aslp_temp_lows) then
-      do j=2,jm-1
-        do i=1,im
-          if (aslp_temp(i,j).lt.0._wp) then
-            aslp_temp(i,j) = aslp_temp(i,j) * min(1._wp, max(0._wp, (exp(-zsa(i,j)/hatm)-0.5_wp)/0.5_wp))
-          endif
-        enddo
-        aslp_temp(:,j) = aslp_temp(:,j) - sum(aslp_temp(:,j))*aim
-      enddo
-    endif
-
 
     !------------------------------------------------
     ! topographic stationary planetary waves

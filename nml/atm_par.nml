@@ -54,7 +54,7 @@
   i_mmc_had = 1                 ! Hadley cell amplitude: 0 = sea level temperature contrast across the cell only,
                                 !                        1 = the same, additionally scaled by the inverse of the tropical
                                 !                            boundary layer humidity (moisture mass budget of the cell)
-  c_mmc_had = 0.3               ! parameter for strength of Hadley cells
+  c_mmc_had = 0.25              ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
   c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
@@ -74,7 +74,10 @@
                                 ! balanced by friction and builds the zonal mean SLP; 0 = all of f*M by friction
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
-  dpc = 0.2                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
+  i_dpc = 1                     ! layer below the tropopause in which the PBL ageostrophic wind is compensated:
+                                ! 0 = slab of relative pressure depth dpc
+                                ! 1 = fraction dpc of the troposphere in pressure, from sea level to the zonal mean tropopause
+  dpc = 0.5                     ! pressure difference over which PBL ageostropic wind is compensated at the top of troposphere
 
   !-----------------------------------------------------------
   ! sea level pressure parameters
@@ -86,13 +89,12 @@
   c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
-  l_aslp_temp_adv = T           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
   c_aslp_temp_tau = 1.0         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
-  l_aslp_temp_lows = F          ! scale the thermal lows (aslp_temp<0) by the air fraction of the sea level-500 hPa layer over elevated terrain (summer plateau heat lows)?
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure? Linear barotropic vorticity equation
                                 ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by
-                                ! the ~850 hPa zonal mean flow over zsa; both winds from u3f, i.e. with the thermal wind damped by c_uter_pol_f
-                                ! and c_uter_eq_f instead of c_uter_pol/eq (c_aslp_sw_*); replaces the role of the upstream shift, use with l_aslp_temp_adv=F
+                                ! the ~850 hPa zonal mean flow over zsa; both winds from u3f, i.e. without the polar damping of the
+                                ! thermal wind (c_aslp_sw_*); replaces the role of the upstream shift, use with l_aslp_temp_adv=F
   c_aslp_sw_amp = 1.5           ! scaling of the sea level pressure response to the ~300 hPa height anomaly (x ra*g), used only if l_aslp_topo==T
   c_aslp_sw_tau = 4.            ! days, Rayleigh damping time scale of the stationary waves, used only if l_aslp_topo==T
   c_aslp_sw_h = 8000.           ! m, scale height of the topographic vortex stretching, used only if l_aslp_topo==T
@@ -124,40 +126,13 @@
                                 !     of depth dp_com starting dps_com above the local surface (top capped at the tropopause)
                                 !     With dps_com=0, dp_com=1 this is the smallest 3-D correction that closes every column, 
                                 !     the fast-adjustment limit of a prognostic surface pressure, and neutral for the column heat and moisture budgets
-                                ! 3 = as 2 for the non-topographic part, with the topographic part corrected separately as in 1
-  dp_com = 0.1                  ! depth of the slab below the tropopause (i_mass_com=0,1), or of the terrain following band (i_mass_com=2,3), for the column mass correction
-  dps_com = 0.                  ! depth above the local surface kept free of the column mass correction (i_mass_com=2,3)
-  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1,3)
-  dp_com_topo = 1.0             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1,3); 1 = up to the tropopause
-  i_dp_com_topo = 0             ! depth of the topographic correction band (i_mass_com=1,3):
-                                ! 0 = dp_com_topo everywhere
-                                ! 1 = dp_com_topo where the azonal sea level pressure is above aslp_com_topo_1 (highs, shallow),
-                                !     up to the tropopause where it is below aslp_com_topo_2 (lows, deep), linear in between; faces take the mean of their two cells
-                                ! 2 = depth dp_com_topo everywhere, but the band is lifted with the azonal sea level pressure: from dps_com_topo above the
-                                !     surface under highs (aslp above aslp_com_topo_1) to its top at the tropopause under lows (aslp below aslp_com_topo_2)
-  aslp_com_topo_1 = 200.        ! Pa, azonal sea level pressure above which the band has depth dp_com_topo, used only if i_dp_com_topo>=1
-  aslp_com_topo_2 = -200.       ! Pa, azonal sea level pressure below which the band reaches the tropopause, used only if i_dp_com_topo>=1
+  dps_com = 0.                  ! depth above the local surface kept free of the column mass correction (i_mass_com=2)
+  dp_com = 0.1                  ! depth of the slab below the tropopause (i_mass_com=0,1), or of the terrain following band (i_mass_com=2), for the column mass correction
+  dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1)
+  dp_com_topo = 1.0             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1); 1 = up to the tropopause
   ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
-  c_uter_eq_f = 3.              ! parameter for equatorial damping of the thermal wind in u3f, used for the stationary waves (l_aslp_topo==T)
-  c_uter_pol_f = 1000.          ! parameter for polar damping of the thermal wind in u3f, min(1,c*cos(lat)**2); 1000 = effectively none, 3 = as u3
-  i_pbl = 1                     ! PBL for ageostrophic wind:
-                                ! 1 = PBL follows topography
-                                ! 2 = PBL assumed to start from sea level
-  i_pbl_az = 0                  ! azonal part (deviation from the zonal mean) of the PBL Ekman mass flux:
-                                ! 0 = treated as the zonal mean part, returned below the tropopause
-                                ! 1 = carried by a PBL of constant height h_pbl_az and returned in a band of depth dp_pbl_az right above it;
-                                !     the zonal mean flux (mean meridional circulation) is unchanged
-                                ! 2 = as 1, but the depth of the return band follows the azonal sea level pressure: dp_pbl_az where aslp is above
-                                !     aslp_pbl_az_1 (highs), up to the tropopause where it is below aslp_pbl_az_2 (lows), linear in between;
-                                !     faces take the mean of their two cells
-                                ! 3 = as 1, the return band keeps the depth dp_pbl_az but is lifted with the azonal sea level pressure: right above the PBL
-                                !     under highs (aslp above aslp_pbl_az_1), its top at the tropopause under lows (aslp below aslp_pbl_az_2)
-  dp_pbl_az = 0.1               ! depth (relative pressure) of the band above the PBL top in which the azonal flux is returned, used only if i_pbl_az>=1
-  h_pbl_az = 1000.              ! m, height of the PBL carrying the azonal flux, used only if i_pbl_az>=1
-  aslp_pbl_az_1 = 200.          ! Pa, azonal sea level pressure above which the return band has depth dp_pbl_az, used only if i_pbl_az>=2
-  aslp_pbl_az_2 = -200.         ! Pa, azonal sea level pressure below which the return band reaches the tropopause, used only if i_pbl_az>=2
   i_kata_wind = 2               ! katabatic winds:
                                 ! 0 = no katabatic winds
                                 ! 1 = katabatic winds using u/v grid values

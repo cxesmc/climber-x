@@ -213,7 +213,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: ua
       real(wp), allocatable, dimension(:,:,:) :: va
       real(wp), allocatable, dimension(:,:,:) :: u3
-      real(wp), allocatable, dimension(:,:,:) :: u3f    !! as u3, thermal wind with its own polar/equatorial damping (c_uter_pol_f, c_uter_eq_f), for the stationary waves
+      real(wp), allocatable, dimension(:,:,:) :: u3f    !! as u3, without the polar damping of the thermal wind, for the stationary waves
       real(wp), allocatable, dimension(:,:,:) :: v3
       real(wp), allocatable, dimension(:,:,:) :: uter
       real(wp), allocatable, dimension(:,:,:) :: vter
