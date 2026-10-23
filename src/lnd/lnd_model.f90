@@ -533,8 +533,8 @@ contains
       endif
 
       ! surface resistance for evapotranspiration
-      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%theta_w,lnd%g_can, &
-                     lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can)
+      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%w_snow,lnd%theta_w,lnd%g_can, &
+                     lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can,lnd%f_sub_soil)
 
       ! compute evaporation of intercepted water
       call canopy_water(lnd%frac_surf,lnd%lai,lnd%sai,lnd%r_a,lnd%t_skin, &
@@ -555,7 +555,7 @@ contains
 
       ! solve surface energy balance equation to get among others the ground heat flux 
       if( lnd%f_veg .gt. 0._wp ) then
-       call ebal_veg(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%h_snow(is_veg),lnd%w_snow(is_veg),lnd%lambda_soil, &
+       call ebal_veg(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%h_snow(is_veg),lnd%w_snow(is_veg),lnd%f_sub_soil,lnd%lambda_soil, &
                     lnd%evap_can,lnd%subl_can, &
                     lnd%t_skin,lnd%t_skin_old, &
                     lnd%t_soil,lnd%tatm,lnd%qatm,lnd%pressure, &
@@ -797,7 +797,7 @@ contains
       endif
 
       ! surface hydrology
-      call surface_hydrology(lnd%frac_surf,lnd%mask_snow, &
+      call surface_hydrology(lnd%frac_surf,lnd%mask_snow,lnd%f_sub_soil, &
                             lnd%evap_surface,lnd%rain_ground,lnd%snow_ground, &
                             lnd%snowmelt, lnd%icemelt, lnd%icesub, lnd%et, &
                             lnd%k_sat,lnd%cap_soil(1),lnd%cap_lake(1), &
@@ -820,7 +820,7 @@ contains
                           lnd%psi,lnd%kappa_int)
 
        ! update water content of the soil profile
-       call soil_hydro(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%theta_sat, &
+       call soil_hydro(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%f_sub_soil,lnd%theta_sat, &
                       lnd%k_sat,lnd%k_exp,lnd%psi_exp,lnd%kappa_int,lnd%psi, &
                       lnd%transpiration,lnd%evap_surface,lnd%infiltration,lnd%wilt, &
                       lnd%w_snow(is_veg),lnd%w_w,lnd%w_i, &
@@ -1560,7 +1560,8 @@ end subroutine lnd_update
         if (.not.lnd_restart) lnd%l2d(i,j)%Ri             = 0._wp 
         lnd%l2d(i,j)%r_a            = 0._wp 
         lnd%l2d(i,j)%r_s            = 0._wp 
-        lnd%l2d(i,j)%beta_s         = 0._wp 
+        lnd%l2d(i,j)%beta_s         = 0._wp
+        lnd%l2d(i,j)%f_sub_soil     = 0._wp
         lnd%l2d(i,j)%rain_ground    = 0._wp 
         lnd%l2d(i,j)%evap_can       = 0._wp 
         lnd%l2d(i,j)%snow_ground    = 0._wp 

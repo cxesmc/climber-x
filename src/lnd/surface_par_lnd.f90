@@ -863,20 +863,22 @@ contains
   !   Subroutine :  r e s i s t _ s u r 
   !   Purpose    :  compute surface resistance to evapotranspiration
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine resist_sur(frac_surf,mask_snow,theta_w, g_can, &
-                        beta_s,r_s,beta_s_can,r_s_can)
+  subroutine resist_sur(frac_surf,mask_snow,w_snow,theta_w, g_can, &
+                        beta_s,r_s,beta_s_can,r_s_can,f_sub_soil)
 
     implicit none
 
     integer,  dimension(:), intent(in) :: mask_snow
     real(wp), dimension(:), intent(in) :: frac_surf
+    real(wp), dimension(:), intent(in) :: w_snow
     real(wp), dimension(:), intent(in) :: theta_w
     real(wp), dimension(:), intent(in) :: g_can
     real(wp), dimension(:), intent(out) :: beta_s, r_s
     real(wp), dimension(:), intent(out) :: beta_s_can, r_s_can
+    real(wp), intent(out) :: f_sub_soil
 
     integer :: n
-    real(wp) :: f_snow, beta_soil, beta_snow, r_soil
+    real(wp) :: f_snow, beta_soil, beta_snow, r_soil, f_thin
 
 
     ! bare soil, use beta factor
@@ -889,11 +891,22 @@ contains
       beta_soil = 1._wp
     endif
     if (mask_snow(is_veg).eq.0) then
-      beta_s(i_bare) = beta_soil
+      ! a thin snow pack below w_snow_crit (no explicit snow layer) sublimates over the fraction w_snow/w_snow_crit,
+      ! which makes beta continuous across w_snow_crit: an on/off switch there gives a 2-day sublimation/precipitation
+      ! flip-flop over thin winter snow packs
+      f_thin = min(1._wp, max(0._wp, w_snow(is_veg)/snow_par%w_snow_crit))
+      beta_s(i_bare) = f_thin*beta_snow + (1._wp-f_thin)*beta_soil
+      ! share of the evaporation taken from the snow pack, the rest comes from the top soil layer
+      if (beta_s(i_bare).gt.0._wp) then
+        f_sub_soil = f_thin*beta_snow/beta_s(i_bare)
+      else
+        f_sub_soil = 0._wp
+      endif
     else
       ! snow covered, sublimation from the snow surface is not limited by the soil
       beta_s(i_bare) = beta_snow
       r_s(i_bare) = 0._wp
+      f_sub_soil = 1._wp
     endif
 
     ! lake

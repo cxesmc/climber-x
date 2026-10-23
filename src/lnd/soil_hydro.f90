@@ -48,7 +48,7 @@ contains
   !   Purpose    :  update soil liquid water content
   !              :  by solving the tridiagonal system
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine soil_hydro(frac_surf,mask_snow,theta_sat,k_sat,k_exp,psi_exp,kappa_int,psi, &
+  subroutine soil_hydro(frac_surf,mask_snow,f_sub_soil,theta_sat,k_sat,k_exp,psi_exp,kappa_int,psi, &
                        transpiration,evap_surface,infiltration,wilt, &
                        w_snow,w_w,w_i,theta_w,theta_i,theta,theta_w_cum,theta_i_cum,theta_fire_cum, &
                        drainage,runoff_exc, &
@@ -58,6 +58,7 @@ contains
     implicit none
 
     integer, intent(inout) :: mask_snow
+    real(wp), intent(in) :: f_sub_soil   ! share of the soil-surface evaporation sublimated from a thin snow pack (mask_snow=0)
     real(wp), dimension(:), intent(in) :: frac_surf
     real(wp), intent(in) :: infiltration
     real(wp), dimension(:), intent(in) :: theta_sat, k_sat, kappa_int, psi
@@ -122,11 +123,11 @@ contains
     do n=1,nveg
      if( frac_surf(n) .gt. 0._wp ) then
       ! evaporation from or dew deposition to first soil layer
-      if(mask_snow .eq. 0) then ! no snow
-       e(1) = e(1) + evap_surface(n) * frac_surf(n)/f_veg
+      if(mask_snow .eq. 0) then ! no explicit snow layer, the share f_sub_soil comes from the thin snow pack (surface_hydrology)
+       e(1) = e(1) + (1._wp-f_sub_soil) * evap_surface(n) * frac_surf(n)/f_veg
        if (l_wiso) then
          do iso=1,nwiso
-           e_iso(1,iso) = e_iso(1,iso) + evap_surface_iso(n,iso) * frac_surf(n)/f_veg
+           e_iso(1,iso) = e_iso(1,iso) + (1._wp-f_sub_soil) * evap_surface_iso(n,iso) * frac_surf(n)/f_veg
          enddo
        endif
       endif
