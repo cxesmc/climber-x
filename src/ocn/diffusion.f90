@@ -31,7 +31,7 @@ module diffusion_mod
   use precision, only : wp
   use constants, only : r_earth
   use tridiag, only : tridiag_solve
-  use ocn_params, only : dt, diff_gm, diffx_max, diffy_max, i_a33, l_hdiff_bl, i_taper, slope_width, slope_max
+  use ocn_params, only : dt, diff_gm, diffx_max, diffy_max, l_hdiff_bl, i_taper, slope_width, slope_max
   use ocn_grid, only : k1, maxi, maxj, maxk, mask_ocn, mask_c, mask_u, mask_v, mask_w, dx, dxv, dy, dz, dza, rdx, rdy, rdza, zw, zro, ocn_area
 
   implicit none
@@ -80,7 +80,7 @@ contains
     real(wp), parameter :: f_min = 1.e-30_wp   ! floor for f_ocn in branchless denominator (land f_ocn=0)
 
 
-    if (i_diff.eq.1 .and. i_a33.eq.1) allocate(k33(maxi,maxj,maxk), source=0._wp)
+    if (i_diff.eq.1) allocate(k33(maxi,maxj,maxk), source=0._wp)
 
 
     do k=1,maxk
@@ -220,19 +220,15 @@ contains
                   slope2 = slope_x**2+slope_y**2+eps
                   taper = slope_taper(slope2,slope_crit(j,K))
                   tv = tv + (diff_iso+diff_gm)*taper * (slope_x*dts_dx + slope_y*dts_dy)
-                  ! A33 term, explicit or (i_a33==1) solved implicitly below
-                  if (i_a33.eq.1) then
-                    a33 = a33 + diff_iso*taper*slope2
-                  else
-                    tv = tv - diff_iso*taper*slope2*dts_dz
-                  endif
+                  ! A33 term, solved implicitly below
+                  a33 = a33 + diff_iso*taper*slope2
                   ! average slopes
                   slope_x_avg = slope_x_avg + slope_x
                   slope_y_avg = slope_y_avg + slope_y
                 enddo
               enddo
               fdz(i,j,K) = fdz(i,j,K) + 0.25_wp*tv *ocn_area(i,j)*dt  ! m/s*K *m2*s = m3 * K
-              if (i_a33.eq.1) k33(i,j,K) = 0.25_wp*a33
+              k33(i,j,K) = 0.25_wp*a33
             endif
           else
             fdz(i,j,K) = 0._wp
@@ -266,7 +262,7 @@ contains
 
     ! implicit A33 (backward Euler, per column): dz dT/dt = d/dz(K33 dT/dz), no flux at surface and bottom;
     ! the change is added to the tendency, so it is booked as diffusion like the explicit terms
-    if (i_diff.eq.1 .and. i_a33.eq.1) then
+    if (i_diff.eq.1) then
       do j=1,maxj
         do i=1,maxi
           if (mask_c(i,j,maxk).eq.1) then

@@ -81,8 +81,8 @@
  ! friction settings
  !-------------------------------------------------------------------------------------------
  ! barotropic drag on each face = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag
- adrag = 4.                   ! days, inverse background drag of the barotropic and baroclinic velocities
- drag_frac = 2.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
+ adrag = 8.                   ! days, inverse background drag of the barotropic and baroclinic velocities
+ drag_frac = 4.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
                               ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
                               ! is mostly land is squeezed into a narrow passage. 1/drag_frac is the extra drag of a closing face
  f_frac_crit = 0.5            ! ocean fraction of a face above which there is no partial-cell drag
@@ -90,7 +90,7 @@
                               ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells
                               ! (50 m: 1/(2.3 d) with 2.5e-3/0.1) and is negligible in the deep ocean (4 km: 1/(185 d))
  u_bot = 0.1                  ! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic drag
- drag_cb = 0.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
+ drag_cb = 2.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
                               ! (-1/4)*(second difference of the face transport along the face). Equal to an extra drag 1/drag_cb
                               ! on the 2-grid-point checkerboard of psi (invisible to the J3 Coriolis term), zero for flow linear
                               ! along the face. Makes the psi matrix 9-point (band width 2*maxi)
@@ -134,9 +134,6 @@
                               !     slope, i.e. a vertical diffusivity in all near-neutral columns
                               ! 2 = 0.5*(1+tanh((slope_max-S)/slope_width)) (Danabasoglu and McWilliams 1995), all terms -> 0 for S >> slope_max
  slope_width = 1e-3           ! width of the tanh taper, used only if i_taper==2
- i_a33 = 1                    ! vertical isoneutral diffusion term A33 = diff_iso*S^2:
-                              ! 0 = explicit; the taper slope is also limited by the explicit stability limit dz/sqrt(4*diff_iso*dt)
-                              ! 1 = implicit (tridiagonal solve per column); the taper slope is set by slope_max only
  l_hdiff_bl = T               ! keep full horizontal diffusion (no slope taper of A11, A22) inside the mixed layer?
 
  !-------------------------------------------------------------------------------------------

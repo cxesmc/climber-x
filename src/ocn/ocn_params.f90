@@ -119,7 +119,6 @@ module ocn_params
      real(wp) :: slope_max 
      integer :: i_taper         !! isoneutral slope taper: 1 = (Sc/S)^2 (Gerdes 1991), 2 = tanh (Danabasoglu and McWilliams 1995)
      real(wp) :: slope_width    !! width of the tanh taper, used only if i_taper==2 []
-     integer :: i_a33           !! vertical isoneutral diffusion term A33 = K*S^2: 0 = explicit, 1 = implicit
      logical :: l_hdiff_bl      !! no slope taper of the horizontal diffusion (A11, A22) inside the mixed layer
      real(wp) :: diff_gm
      real(wp) :: tau_sst, tau_sss
@@ -316,7 +315,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","slope_max",slope_max)
     call nml_read(filename,"ocn_par","i_taper",i_taper)
     call nml_read(filename,"ocn_par","slope_width",slope_width)
-    call nml_read(filename,"ocn_par","i_a33",i_a33)
     call nml_read(filename,"ocn_par","l_hdiff_bl",l_hdiff_bl)
     call nml_read(filename,"ocn_par","diff_gm",diff_gm)
 

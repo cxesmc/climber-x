@@ -46,7 +46,7 @@ module transport_ocn_mod
   use ocn_params, only : diff_iso, diff_gm
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
-  use ocn_params, only : slope_max, slope_crit, i_a33
+  use ocn_params, only : slope_max, slope_crit
   use ocn_params, only : diffx_max, diffy_max
   use ocn_params, only : mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
   use ocn_params, only : l_downslope
@@ -583,12 +583,8 @@ contains
     ! stability criterion for isoneutral diffusion, eq. A.2 in Gerdes 1991 (eq. C2 in Griffies 1998?)
     do j=1,maxj
       do k=1,maxk
-        if (i_a33.eq.1) then
-          ! implicit A33: only the limits of the explicit off-diagonal terms remain
-          slope_crit(j,k) = min( dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
-        else
-          slope_crit(j,k) = min( dz(k)/sqrt(4._wp*diff_iso*dt), dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
-        endif
+        ! A33 is implicit: only the limits of the explicit off-diagonal terms remain
+        slope_crit(j,k) = min( dx(j)*dz(k)/(4._wp*diff_iso*dt), dy*dz(k)/(4._wp*diff_iso*dt) )
         slope_crit(j,k) = min(slope_max,slope_crit(j,k))
       enddo
     enddo
