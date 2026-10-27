@@ -41,18 +41,17 @@ module transport_ocn_mod
   use ocn_grid, only : zro, zw, dz, rdza, z2dzg, depth, dx, dxv, rdx, dy, rdy
   use ocn_params, only : dt, rho0
   use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
-  use ocn_params, only : i_advection
-  use ocn_params, only : i_diff, i_diff_dia
+  use ocn_params, only : i_diff_dia
   use ocn_params, only : diff_iso, diff_gm
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
-  use ocn_params, only : slope_max, slope_crit
+  use ocn_params, only : slope_max, slope_crit, drho_hbl
   use ocn_params, only : diffx_max, diffy_max
   use ocn_params, only : mlddec, mlddecd, ke_wind_dec, pe_buoy_coeff
   use ocn_params, only : l_downslope
 
-  use advection_mod, only : advection_upstream, advection_fct
-  use diffusion_mod, only : diffusion, slope_taper
+  use advection_mod, only : advection_fct
+  use diffusion_mod, only : diffusion_coef, diffusion, slope_taper
   use eos_mod
   use convection_mod, only : convection
   use krausturner_mod
@@ -62,6 +61,8 @@ module transport_ocn_mod
 
   real(wp), dimension(:,:,:), allocatable :: drho_dx, drho_dy, drho_dz, Ri
   real(wp), dimension(:,:,:), allocatable :: v_gm   !! Gent-McWilliams eddy-induced meridional velocity on the v-grid, diagnostic only [m/s]
+  real(wp), dimension(:,:), allocatable :: hbl     !! surface boundary layer depth for the isoneutral diffusion and GM (positive) [m]
+  real(wp), dimension(:,:), allocatable :: sx_bl, sy_bl   !! tapered isoneutral slopes at the base of the boundary layer []
 
   private
   public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri, v_gm
@@ -73,7 +74,7 @@ contains
   !   Subroutine :  t r a n s p o r t
   !   Purpose    :  transport of tracers
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine transport(l_tracers_trans,l_tracers_isodiff,l_large_vol_change, &
+  subroutine transport(l_tracers_trans, &
                       u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
                       ts,rho,nconv,dconv,kven,dven,conv_pe,fds,zds, &
                       mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
@@ -83,8 +84,6 @@ contains
     implicit none
 
     logical, dimension(:), intent(in) :: l_tracers_trans
-    logical, dimension(:), intent(in) :: l_tracers_isodiff
-    logical, intent(in) :: l_large_vol_change
     real(wp), dimension(1:,0:,0:,:), intent(in) :: u
     real(wp), dimension(:,:), intent(in) :: ke_tau
     real(wp), dimension(:,:,:), intent(in) :: flx_sur
@@ -101,7 +100,7 @@ contains
     real(wp), dimension(:,:), intent(inout) :: fds
     real(wp), dimension(:,:), intent(inout) :: zds
 
-    real(wp), dimension(:,:), intent(inout) :: mld   ! in: previous step (boundary layer for the diffusion), out: new
+    real(wp), dimension(:,:), intent(inout) :: mld   ! Kraus-Turner mixed layer depth (negative) [m]
     real(wp), dimension(:,:,:,:), intent(out) :: fdx
     real(wp), dimension(:,:,:,:), intent(out) :: fdy
     real(wp), dimension(:,:,:,:), intent(out) :: fdz
@@ -113,7 +112,8 @@ contains
 
     logical, intent(inout) :: error
 
-    integer :: i, j, k, l, ll, ip1, idiff, k1_max
+    integer :: i, j, k, l, ll, ip1, k1_max
+    logical :: par_tracers
     integer, allocatable, dimension(:,:) :: mldk
     real(wp), dimension(maxk) :: rho_old
     real(wp), allocatable, dimension(:,:) :: pe_layer1
@@ -122,6 +122,9 @@ contains
     real(wp) :: brunt_vaisala
     real(wp) :: diff_dia_tmp
     real(wp) :: rho1, rho2, rho_c, drhodz, dudz2, tv1
+    integer :: kb, knp, nnp, i0, i1, jm, j0
+    real(wp) :: slope_x, slope_y, taper, mc_x, yfac
+    real(wp), parameter :: eps = 1.e-15_wp
 
     !$ logical, parameter :: print_omp = .false.
     !$ real(wp) :: time1,time2
@@ -156,7 +159,6 @@ contains
 
 
     ! tracer-independent part of isoneutral diffusion
-    if (i_diff.eq.1) then
     !$ time1 = omp_get_wtime()
 
       ! check density with reference values
@@ -231,66 +233,74 @@ contains
        enddo
       !$omp end parallel do
 
+      ! surface boundary layer of the isoneutral diffusion and GM: depth and tapered slopes at its base,
+      ! averaged over the 4 corners of the w-point as in the vertical isoneutral flux in diffusion.f90
+      !$omp parallel do collapse(2) private(i,j,k,kb,knp,nnp,i0,i1,jm,j0,drhodz,slope_x,slope_y,taper,mc_x,yfac)
+      do j=1,maxj
+        do i=1,maxi
+          hbl(i,j) = 1._wp
+          sx_bl(i,j) = 0._wp
+          sy_bl(i,j) = 0._wp
+          if (mask_ocn(i,j).eq.1) then
+            hbl(i,j) = hbl_density(ts(i,j,:,1),ts(i,j,:,2),k1(i,j),drho_hbl)
+            ! first w-level below the boundary layer, none if it reaches the bottom
+            kb = 0
+            do k=maxk-1,k1(i,j),-1
+              if (zw(k).lt.-hbl(i,j)) then
+                kb = k
+                exit
+              endif
+            enddo
+            if (kb.gt.0) then
+              drhodz = min(-eps,drho_dz(i,j,kb))
+              do knp=0,1
+                do nnp=0,1
+                  i0 = modulo(i-2+2*nnp, maxi) + 1
+                  i1 = modulo(i+nnp-2, maxi) + 1
+                  mc_x = real(mask_c(i0,j,kb+knp),wp)
+                  slope_x = mc_x * drho_dx(i1,j,kb+knp)/drhodz
+                  j0 = j-1+2*nnp
+                  jm = max(j+nnp-1, 1)
+                  yfac = merge(real(mask_c(i,min(max(j0,1),maxj),kb+knp),wp), 0._wp, j0.ge.1 .and. j0.le.maxj)
+                  slope_y = yfac * drho_dy(i,jm,kb+knp)/drhodz
+                  taper = slope_taper(slope_x**2+slope_y**2+eps,slope_crit(j,kb))
+                  sx_bl(i,j) = sx_bl(i,j) + 0.25_wp*taper*slope_x
+                  sy_bl(i,j) = sy_bl(i,j) + 0.25_wp*taper*slope_y
+                enddo
+              enddo
+            endif
+          endif
+        enddo
+      enddo
+      !$omp end parallel do
+
       ! eddy-induced meridional velocity, needed only for the overturning and heat transport diagnostics
       call eddy_induced_velocity
 
+      ! tracer-independent coefficients of the diffusion, shared by all tracers
+      call diffusion_coef(diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit,hbl,sx_bl,sy_bl)
+
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: diffini ',time2-time1
-    endif
 
-    ! tracer loop
+    ! tracer loop; parallel over tracers if there are enough of them to keep the threads busy (e.g. with BGC),
+    ! otherwise serial with advection and diffusion parallel over the grid
     !$ time1 = omp_get_wtime()
-    !$omp parallel do private ( ll, l , idiff)
-    do ll=1,n_tracers_trans
-      l = idx_tracers_trans(ll)
-       !!$ print *,l,ll,omp_get_thread_num(),'/',omp_get_num_threads()
-
-       ! advection
-       if (i_advection.eq.1) then
-          ! Fiadeiro and Veronis 1977 weighted upstream/centred differences scheme (standard in Goldstein)
-          call advection_upstream(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
-                                 fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
-       elseif (i_advection.eq.2) then
-          ! Flux corrected transport advection scheme following Zalesak 1979
-          call advection_fct(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
-                            fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
-       endif
-
-       if (i_diff.eq.1 .and. l_tracers_isodiff(l) .and. .not.l_large_vol_change) then
-         idiff = 1      ! use isopycnal diffusion
-       else
-         idiff = 0      ! use horizontal diffusion
-       endif
-
-       ! diffusion
-       call diffusion(idiff,f_ocn,ts(:,:,:,l),diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit,mld, &
-         fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
-
-       ! apply advection and diffusion to tracer field
-       where (mask_c.eq.1)
-         ts(:,:,:,l) = ts(:,:,:,l) + dt*(dts_dt_adv(:,:,:,l)+dts_dt_diff(:,:,:,l))
-       endwhere
-
-       !if (l.gt.1 .and. count(ts(:,:,:,l).lt.0._wp).gt.0) then
-       !  print *,'WARNING: negative tracer concentration for tracer #', l-2,' in # points: ',count(ts(:,:,:,l).lt.0._wp)
-       !endif
-
-       !do j=1,maxj
-       !  do i=1,maxi
-       !    if (l.gt.1 .and. any(ts(i,j,k1(i,j):maxk,l).lt.0._wp)) then
-       !      print *
-       !      print *,'after diffusion+advection'
-       !      print *,'WARNING: negative tracer concentration for tracer #', l-2,' in cell (i,j) ',(i,j)
-       !      print *,doy
-       !      print *,ts(i,j,k1(i,j):maxk,l)
-       !      print *,'set tracer concentration to 0'
-       !      !ts(i,j,k1(i,j):maxk,l) = max(0._wp,ts(i,j,k1(i,j):maxk,l))
-       !    endif
-       !  enddo
-       !enddo
-
-    enddo ! tracer loop
-    !$omp end parallel do
+    ! (two explicit branches rather than an if clause on the directive: with an inactive outer region the grid loops
+    ! become nested regions, which start a second thread pool that competes with the other components)
+    par_tracers = .false.
+    !$ par_tracers = 2*n_tracers_trans.ge.omp_get_max_threads()
+    if (par_tracers) then
+      !$omp parallel do private(ll)
+      do ll=1,n_tracers_trans
+        call advdiff_tracer(idx_tracers_trans(ll))
+      enddo
+      !$omp end parallel do
+    else
+      do ll=1,n_tracers_trans
+        call advdiff_tracer(idx_tracers_trans(ll))
+      enddo
+    endif
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: advdiff ',time2-time1
 
@@ -406,6 +416,59 @@ contains
 
    return
 
+  contains
+
+    subroutine advdiff_tracer(l)
+
+    ! advection and diffusion of tracer l
+
+    implicit none
+
+    integer, intent(in) :: l
+    integer :: i, j, k
+
+
+       ! advection, flux corrected transport scheme following Zalesak 1979
+       call advection_fct(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
+                         fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
+
+       ! diffusion
+       call diffusion(f_ocn,ts(:,:,:,l),diff_iso, &
+         fdx(:,:,:,l), fdy(:,:,:,l), fdz(:,:,:,l), dts_dt_diff(:,:,:,l))
+
+       ! apply advection and diffusion to tracer field
+       !$omp parallel do collapse(2) private(i,j,k)
+       do k=1,maxk
+         do j=1,maxj
+           do i=1,maxi
+             if (mask_c(i,j,k).eq.1) ts(i,j,k,l) = ts(i,j,k,l) + dt*(dts_dt_adv(i,j,k,l)+dts_dt_diff(i,j,k,l))
+           enddo
+         enddo
+       enddo
+       !$omp end parallel do
+
+       !if (l.gt.1 .and. count(ts(:,:,:,l).lt.0._wp).gt.0) then
+       !  print *,'WARNING: negative tracer concentration for tracer #', l-2,' in # points: ',count(ts(:,:,:,l).lt.0._wp)
+       !endif
+
+       !do j=1,maxj
+       !  do i=1,maxi
+       !    if (l.gt.1 .and. any(ts(i,j,k1(i,j):maxk,l).lt.0._wp)) then
+       !      print *
+       !      print *,'after diffusion+advection'
+       !      print *,'WARNING: negative tracer concentration for tracer #', l-2,' in cell (i,j) ',(i,j)
+       !      print *,doy
+       !      print *,ts(i,j,k1(i,j):maxk,l)
+       !      print *,'set tracer concentration to 0'
+       !      !ts(i,j,k1(i,j):maxk,l) = max(0._wp,ts(i,j,k1(i,j):maxk,l))
+       !    endif
+       !  enddo
+       !enddo
+
+   return
+
+    end subroutine advdiff_tracer
+
   end subroutine transport
 
 
@@ -442,8 +505,14 @@ contains
             ! average over the two adjacent tracer columns
             do n=0,1
               if (mask_w(i,j+n,k).eq.1) then
-                slope_y = drhody/min(-eps,drho_dz(i,j+n,k))
-                taper = slope_taper(slope_y**2,slope_crit(j+n,k))
+                if (zw(k).ge.-hbl(i,j+n)) then
+                  ! boundary layer: slope linear in depth from its value at the base, no taper (as in diffusion.f90)
+                  slope_y = -zw(k)/hbl(i,j+n)*sy_bl(i,j+n)
+                  taper = 1._wp
+                else
+                  slope_y = drhody/min(-eps,drho_dz(i,j+n,k))
+                  taper = slope_taper(slope_y**2,slope_crit(j+n,k))
+                endif
                 psi(k) = psi(k) + 0.5_wp*diff_gm*taper*slope_y   ! m2/s
               endif
             enddo
@@ -461,6 +530,55 @@ contains
     !$omp end parallel do
 
   end subroutine eddy_induced_velocity
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function :  h b l _ d e n s i t y
+  !   Purpose  :  boundary layer depth from a potential density criterion: depth where potential density
+  !               is drho above its value at 10 m, linear interpolation between layer centres, minimum 10 m,
+  !               full depth if the column is mixed to the bottom (as the mldst03 diagnostic in ocn_out.f90)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function hbl_density(t_col, s_col, kbot, drho) result(h)
+
+    implicit none
+
+    real(wp), dimension(:), intent(in) :: t_col, s_col
+    integer, intent(in) :: kbot
+    real(wp), intent(in) :: drho
+    real(wp) :: h
+
+    integer :: k, k10
+    real(wp) :: rho10, rho_k, rho_ml, z_ml
+
+
+    h = -zw(kbot-1)   ! mixed to the bottom
+    if (kbot.lt.maxk) then
+      k10 = maxk-1
+      do while (zro(k10).gt.-10._wp .and. k10.gt.kbot)
+        k10 = k10-1
+      enddo
+      rho_k = eos(t_col(k10),s_col(k10),0._wp)
+      if (zro(k10).gt.-10._wp) then
+        rho10 = rho_k
+      else
+        rho_ml = eos(t_col(k10+1),s_col(k10+1),0._wp)
+        rho10 = rho_ml + (rho_k-rho_ml)*(-10._wp-zro(k10+1))/(zro(k10)-zro(k10+1))
+      endif
+      z_ml = -10._wp
+      rho_ml = rho10
+      do k=k10,kbot,-1
+        rho_k = eos(t_col(k),s_col(k),0._wp)
+        if (rho_k-rho10.ge.drho) then
+          h = -(z_ml + (zro(k)-z_ml)*(rho10+drho-rho_ml)/(rho_k-rho_ml))
+          exit
+        endif
+        z_ml = zro(k)
+        rho_ml = rho_k
+      enddo
+      h = max(h,10._wp)
+    endif
+
+  end function hbl_density
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -489,6 +607,9 @@ contains
     allocate(drho_dz(maxi,maxj,maxk))
     allocate(Ri(maxi,maxj,maxk))
     allocate(v_gm(maxi,maxj,maxk))
+    allocate(hbl(maxi,maxj), source=1._wp)
+    allocate(sx_bl(maxi,maxj), source=0._wp)
+    allocate(sy_bl(maxi,maxj), source=0._wp)
 
     drho_dz = 0._wp
     drho_dx = 0._wp

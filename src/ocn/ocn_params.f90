@@ -95,7 +95,6 @@ module ocn_params
      end type
      type(drag_par_type) :: drag_par
 
-     integer :: i_advection
      integer :: i_conv_shuffle
      logical :: l_conv_shuffle_passive
      logical :: l_downslope           !! downsloping flow of dense shelf water (Campin and Goosse 1999)?
@@ -109,7 +108,6 @@ module ocn_params
      integer :: i_cor_form      
      integer :: nbw             !! half band width of the streamfunction matrix (maxi+1 for the 5-point stencil, 2*maxi with drag_cb > 0)
      real(wp), allocatable :: qcor(:,:)  !! f/H at tracer points, used by the J3 Coriolis term (i_cor_form=1)
-     integer :: i_diff
      integer :: i_diff_dia
      real(wp) :: diff_iso, diff_dia_zref
      real(wp) :: diff_dia_min, diff_dia_max, diff_dia_ref
@@ -119,7 +117,7 @@ module ocn_params
      real(wp) :: slope_max 
      integer :: i_taper         !! isoneutral slope taper: 1 = (Sc/S)^2 (Gerdes 1991), 2 = tanh (Danabasoglu and McWilliams 1995)
      real(wp) :: slope_width    !! width of the tanh taper, used only if i_taper==2 []
-     logical :: l_hdiff_bl      !! no slope taper of the horizontal diffusion (A11, A22) inside the mixed layer
+     real(wp) :: drho_hbl       !! potential density threshold relative to 10 m for the boundary layer depth [kg/m3]
      real(wp) :: diff_gm
      real(wp) :: tau_sst, tau_sss
      integer :: n_cells_dist_runoff
@@ -300,9 +298,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","fcormin",fcormin)
     fcormin_ref = fcormin
 
-    call nml_read(filename,"ocn_par","i_advection",i_advection)
 
-    call nml_read(filename,"ocn_par","i_diff",i_diff)
     call nml_read(filename,"ocn_par","i_diff_dia",i_diff_dia)
     call nml_read(filename,"ocn_par","diff_iso",diff_iso)
     call nml_read(filename,"ocn_par","diff_dia_zref",diff_dia_zref)
@@ -315,7 +311,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","slope_max",slope_max)
     call nml_read(filename,"ocn_par","i_taper",i_taper)
     call nml_read(filename,"ocn_par","slope_width",slope_width)
-    call nml_read(filename,"ocn_par","l_hdiff_bl",l_hdiff_bl)
+    call nml_read(filename,"ocn_par","drho_hbl",drho_hbl)
     call nml_read(filename,"ocn_par","diff_gm",diff_gm)
 
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)

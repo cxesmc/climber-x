@@ -468,7 +468,7 @@ contains
       ! tracer transport (advection+diffusion+convection)
       !------------------------------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call transport(ocn%l_tracers_trans,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
+      call transport(ocn%l_tracers_trans, &
                     ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
                     ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe,ocn%fds,ocn%zds, &
                     ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
@@ -642,8 +642,6 @@ contains
     ! default is to transport all tracers, can be changed by bgc
     ocn%l_tracers_trans = .true.
     allocate(idx_tracers_trans(n_tracers_tot))
-    ! default is to apply isopycnal diffusion to all tracers, can be changed by bgc
-    ocn%l_tracers_isodiff = .true.
     
 
     !------------------------------------------------------------------------
@@ -946,7 +944,6 @@ contains
 
 
     allocate(ocn%l_tracers_trans(n_tracers_tot))
-    allocate(ocn%l_tracers_isodiff(n_tracers_tot))
 
     allocate(ocn%z_ocn_max(maxi,maxj))
     allocate(ocn%z_ocn(maxi,maxj))

@@ -260,8 +260,6 @@
     l_trans_zoo = F     ! transport (advection+diffusion) zooplankton?
     l_trans_dust = F    ! transport (advection+diffusion) dust?
 
-    l_isodiff = T
-
     l_output_3d_mon = F ! write monthly 3D output?
     l_write_sed_classes = F     ! write additional per-depth-class sediment diagnostics to the bgc sediment output (only meaningful with l_sed_hypsometry=T)
 

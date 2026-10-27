@@ -160,7 +160,6 @@ module ocn_grid
     real(wp), dimension(:), allocatable :: zw  !! depth of layer edges, zero at the surface, decreasing [m]
     real(wp), dimension(:), allocatable :: dz  !! thickness of layers [m] 
     real(wp), dimension(:), allocatable :: dza !! thickness between layer centers [m]
-    logical :: l_large_vol_change    
   end type
 
 contains
@@ -735,13 +734,9 @@ contains
     ocn_vol_tot_old = sum(grid%ocn_vol_old)
 
     if (abs(ocn_vol_tot-ocn_vol_tot_old)/ocn_vol_tot.gt.1e-2_wp) then
-      grid%l_large_vol_change = .true.
       print *,'WARNING: large change in ocean volume!'
-      print *,'use of horizontal diffusion enforced for all tracers for the current year'
       print *,'old ocean volume',ocn_vol_tot_old
       print *,'new ocean volume',ocn_vol_tot
-    else
-      grid%l_large_vol_change = .false.
     endif
 
     !print *,'ocn_vol_tot_real',grid%ocn_vol_tot_real,'ocn_vol_tot after',ocn_vol_tot
