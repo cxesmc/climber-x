@@ -29,7 +29,7 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, l_diff_impl, rh_max_ocn, rh_max_lnd, tsl_gams_min, i_tsl, c_tsl_gam, hgams
+  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, l_diff_impl, rh_max_ocn, rh_max_lnd, i_tsl, c_tsl_gam, hgams
   use atm_params, only : z_q2, z_q2_ocn, p0
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr, cheat
@@ -144,7 +144,7 @@ contains
     ! global atmospheric energy budget accumulators (for check_energy)
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
-    !$omp parallel do private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
+    !$omp parallel do collapse(2) private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
     !$omp private(rh_max,frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,tam_old_loc,z_ab,t_ab,r_ab,q_ab,rho_ab,cq2l,gq2,ddtcol) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
@@ -386,25 +386,11 @@ contains
           tsksl(i,j) = tsl(i,j)
         else if (i_tsl.eq.1) then
           ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = tskina(i,j) &
-            - max((frst(i,j,i_lnd)+frst(i,j,i_ice))*tsl_gams_min,gams(i,j))*hgams &
-            + c_tsl_gam*zsa(i,j)
+          tsksl(i,j) = tskina(i,j) - gams(i,j)*hgams + c_tsl_gam*zsa(i,j)
         else if (i_tsl.eq.2) then
           ! built from the skin temperature instead, carried down through the surface layer and then to sea level
           tsksl(i,j) = t_prof(zsa(i,j), 0._wp, tskina(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
-            - max((frst(i,j,i_lnd)+frst(i,j,i_ice))*tsl_gams_min,gams(i,j))*hgams
-        else if (i_tsl.eq.3) then
-          tsksl(i,j) = tam(i,j) + c_tsl_gam*zsa(i,j)
-        else if (i_tsl.eq.4) then
-          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = tskina(i,j) &
-            - max((frst(i,j,i_lnd)+frst(i,j,i_ice)+frst(i,j,i_sic))*tsl_gams_min,gams(i,j))*hgams &
-            + c_tsl_gam*zsa(i,j)
-        else if (i_tsl.eq.5) then
-          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = tskina(i,j) &
-            - max(tsl_gams_min,gams(i,j))*hgams &
-            + c_tsl_gam*zsa(i,j)
+            - gams(i,j)*hgams
         endif
 
         !-------------------------------------

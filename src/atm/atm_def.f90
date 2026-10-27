@@ -187,6 +187,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: aslp_topo
       real(wp), allocatable, dimension(:,:) :: aslp_eddy
       real(wp), allocatable, dimension(:,:) :: aslp_gill
+      real(wp), allocatable, dimension(:,:) :: aslp_temp_slow   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
       real(wp), allocatable, dimension(:,:) :: dz500
       real(wp), allocatable, dimension(:,:) :: slp
       real(wp), allocatable, dimension(:,:) :: slp_dat
@@ -227,11 +228,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: fac_topo
       real(wp), allocatable, dimension(:,:) :: psi
       real(wp), allocatable, dimension(:,:) :: psi_topo
-      real(wp), allocatable, dimension(:,:) :: froude   !! Froude number U/(N*H) of the low-level flow against the local crest
-      real(wp), allocatable, dimension(:,:) :: dp_ret_topo   !! hPa, thickness of the band in which the topographic part of the column mass correction is returned
-      real(wp), allocatable, dimension(:,:) :: p_ret_topo   !! hPa, mid pressure of the band in which the topographic part of the column mass correction is returned
-      real(wp), allocatable, dimension(:,:) :: dp_ret_ageo   !! hPa, thickness of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions
-      real(wp), allocatable, dimension(:,:) :: p_ret_ageo   !! hPa, mid pressure of the band in which the azonal ageostrophic PBL mass flux is returned, weighted by the shallow/deep fractions
       real(wp), allocatable, dimension(:,:,:) :: fax_psi
       real(wp), allocatable, dimension(:,:,:) :: fay_psi
       real(wp), allocatable, dimension(:,:,:) :: fax_psi_topo

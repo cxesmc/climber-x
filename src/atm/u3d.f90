@@ -26,14 +26,12 @@
 module u3d_mod
 
   use atm_params, only : wp
-  use constants, only : g, T0, r_earth, pi
+  use constants, only : g, T0, r_earth, pi, omega
   use atm_params, only : amas, ra, dpc, i_dpc, dp_com, ptopdyn
-  use atm_params, only : hatm
-  use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com, gad
-  use atm_params, only : p0
+  use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
   use atm_params, only : c_uter_pol, c_uter_eq
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
-  use atm_grid, only : fcort, cost, sint
+  use atm_grid, only : fcort, cost, sint, cosu, sinu
   use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
 
   implicit none
@@ -77,26 +75,56 @@ contains
     real(wp) :: lamb
     real(wp) :: wx(jm), wy(jmc)
     real(wp), dimension(jm) :: aa, bb, cc
-    complex(dp), dimension(jm) :: rr, gam, xx
+    complex(dp), dimension(jm) :: rr, xx
     complex(dp) :: bet
     complex(dp), dimension(im/2+1,jm) :: rhs_fft
     real(dp), dimension(im), save :: row
     complex(dp), dimension(im/2+1), save :: row_fft
     type(C_PTR), save :: plan_r2c, plan_c2r
     logical, save :: plans_ready = .false.
+    ! The operator depends on the grid only, so the Thomas elimination factors of each
+    ! wavenumber are computed once: gam_t, bet_t and the sub-diagonal aa_t
+    real(wp), dimension(jm), save :: aa_t
+    complex(dp), dimension(jm,im/2+1), save :: gam_t, bet_t
 
-
-    ! metric weights of the flux-form gradient
-    do j=1,jm
-      wx(j) = dy/dxt(j)
-    enddo
-    do j=1,jmc
-      wy(j) = dxu(j)/dy
-    enddo
 
     if (.not.plans_ready) then
       plan_r2c = fftw_plan_dft_r2c_1d(im, row, row_fft, FFTW_ESTIMATE)
       plan_c2r = fftw_plan_dft_c2r_1d(im, row_fft, row, FFTW_ESTIMATE)
+
+      ! metric weights of the flux-form gradient
+      do j=1,jm
+        wx(j) = dy/dxt(j)
+      enddo
+      do j=1,jmc
+        wy(j) = dxu(j)/dy
+      enddo
+
+      do n=1,im/2+1
+        nn = n-1
+        ! eigenvalue of the zonal second difference for wavenumber nn
+        lamb = -4._wp*sin(pi*real(nn,wp)/real(im,wp))**2
+        do j=1,jm
+          aa(j) = wy(j)
+          cc(j) = wy(j+1)
+          bb(j) = -(wy(j)+wy(j+1)) + lamb*wx(j)
+        enddo
+        if (nn.eq.0) then
+          bb(1) = 1._wp
+          cc(1) = 0._wp
+        endif
+        ! Thomas algorithm, elimination factors
+        bet = bb(1)
+        bet_t(1,n) = bet
+        gam_t(1,n) = (0._dp,0._dp)
+        do j=2,jm
+          gam_t(j,n) = cc(j-1)/bet
+          bet = bb(j)-aa(j)*gam_t(j,n)
+          bet_t(j,n) = bet
+        enddo
+      enddo
+      aa_t(:) = wy(1:jm)
+
       plans_ready = .true.
     endif
 
@@ -106,34 +134,24 @@ contains
       rhs_fft(:,j) = row_fft(:)
     enddo
 
+    ! the wavenumbers are independent
+    !$omp parallel do private(n,j,rr,xx)
     do n=1,im/2+1
-      nn = n-1
-      ! eigenvalue of the zonal second difference for wavenumber nn
-      lamb = -4._wp*sin(pi*real(nn,wp)/real(im,wp))**2
       do j=1,jm
-        aa(j) = wy(j)
-        cc(j) = wy(j+1)
-        bb(j) = -(wy(j)+wy(j+1)) + lamb*wx(j)
         rr(j) = rhs_fft(n,j)
       enddo
-      if (nn.eq.0) then
-        bb(1) = 1._wp
-        cc(1) = 0._wp
-        rr(1) = (0._dp,0._dp)
-      endif
-      ! Thomas algorithm
-      bet = bb(1)
-      xx(1) = rr(1)/bet
+      if (n.eq.1) rr(1) = (0._dp,0._dp)   ! psi pinned at the first row for wavenumber zero
+      ! Thomas algorithm, substitution
+      xx(1) = rr(1)/bet_t(1,n)
       do j=2,jm
-        gam(j) = cc(j-1)/bet
-        bet = bb(j)-aa(j)*gam(j)
-        xx(j) = (rr(j)-aa(j)*xx(j-1))/bet
+        xx(j) = (rr(j)-aa_t(j)*xx(j-1))/bet_t(j,n)
       enddo
       do j=jm-1,1,-1
-        xx(j) = xx(j)-gam(j+1)*xx(j+1)
+        xx(j) = xx(j)-gam_t(j+1,n)*xx(j+1)
       enddo
       rhs_fft(n,:) = xx(:)
     enddo
+    !$omp end parallel do
 
     do j=1,jm
       row_fft(:) = rhs_fft(:,j)
@@ -149,11 +167,10 @@ contains
   !   Subroutine :  u 3 d
   !   Purpose    :  computation of 3D wind field and advective mass fluxes
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine u3d(niter, pzsa, ptrop, ugb, vgb, uab, vab, t3, gams, &
+  subroutine u3d(niter, pzsa, ptrop, ugb, vgb, uab, vab, t3, &
         ua, va, uter, vter, uterf, vterf, u3, u3f, v3, w3, w3_nt, uz500, &
         fax, faxo, fay, fayo, fac, fac_topo, psi, psi_topo, &
-        fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, froude, &
-        dp_ret_topo, p_ret_topo, dp_ret_ageo, p_ret_ageo)
+        fax_psi, fay_psi, fax_psi_topo, fay_psi_topo)
 
     implicit none
 
@@ -165,7 +182,6 @@ contains
     real(wp), intent(in   ) :: uab(:,:)
     real(wp), intent(in   ) :: vab(:,:)
     real(wp), intent(in   ) :: t3(:,:,:)
-    real(wp), intent(in   ) :: gams(:,:)
 
     real(wp), intent(out  ) :: ua(:,:,:)
     real(wp), intent(out  ) :: va(:,:,:)
@@ -196,14 +212,6 @@ contains
     real(wp), intent(out  ) :: fay_psi(:,:,:)
     real(wp), intent(out  ) :: fax_psi_topo(:,:,:)
     real(wp), intent(out  ) :: fay_psi_topo(:,:,:)
-    ! Froude number U/(N*H) of the low-level flow against the local crest (diagnostic)
-    real(wp), intent(out  ) :: froude(:,:)
-    ! hPa, thickness and mid pressure of the bands in which the topographic correction and the
-    ! ageostrophic PBL flux are returned (diagnostics)
-    real(wp), intent(out  ) :: dp_ret_topo(:,:)
-    real(wp), intent(out  ) :: p_ret_topo(:,:)
-    real(wp), intent(out  ) :: dp_ret_ageo(:,:)
-    real(wp), intent(out  ) :: p_ret_ageo(:,:)
 
     integer :: i, j, k, ipl, imi, jmi, kpl
     real(wp) :: pzx, pzy, dp_c, pbl_t, pbl_u, dp, pc1, pc2, dp_l, pl1, pl2, fxpbl, fypbl, uabc, vabc, ctv
@@ -213,6 +221,7 @@ contains
     real(wp), dimension(imc,jm) :: fxcol
     real(wp), dimension(im,jmc) :: fycol
     real(wp) :: u_g, v_g, ug_b, vg_b
+    real(wp), dimension(km) :: ftop   ! fraction of each layer below ptopdyn
     real(wp) :: u3k, u3kp1, v3k, v3kp1
     real(wp) :: dplxdy, dplydxu
     real(wp) :: c_damp_eq, c_damp_pol
@@ -221,15 +230,22 @@ contains
     real(wp), dimension(kmc) :: uteri
     real(wp), dimension(kmc) :: vteri
     real(wp), dimension(kmc) :: uterif, vterif   ! thermal wind on levels for the EKE production
+    real(wp), dimension(kmc) :: uterid           ! zonal thermal wind on levels from the polar damped azonal temperature
+    real(wp), dimension(jm)  :: cdamp            ! polar damping factor, applied to the azonal temperature
+    real(wp), dimension(jm,kmc) :: t3z           ! zonal mean temperature on levels
     real(wp) :: pst
 
-    ! Froude number diagnostic
-    real(wp), dimension(im,jm) :: pcr
-    real(wp) :: n_bv, u_k, h_cr
-    real(wp), parameter :: froude_max = 10._wp
 
 
-    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,pst,ctv,c_damp_eq,c_damp_pol)
+    ! polar damping factor of the thermal wind and zonal mean temperature
+    do j=1,jm
+      cdamp(j) = min(1._wp,c_uter_pol*cost(j)**2)
+      do k=1,kmc
+        t3z(j,k) = sum(t3(:,j,k))*aim
+      enddo
+    enddo
+
+    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,uterid,pst,ctv,c_damp_eq,c_damp_pol)
     do j=1,jm
       do i=1,im
 
@@ -343,8 +359,25 @@ contains
           ! thermal wind in layers, dampened at equator and poles
           c_damp_pol = min(1._wp,c_uter_pol*cost(j)**2)
           c_damp_eq  = min(1._wp, c_uter_eq*sint(j)**2)
+          ! Polar damping. Scaling the wind by a latitude dependent factor c is the
+          ! geostrophic wind of f/c, whose beta, beta*(1+2tan^2) at high latitudes, makes the
+          ! flux divergent, and the column mass correction would then return that mass in its
+          ! band, damping the azonal temperature. Instead, the azonal temperature of each row
+          ! is scaled by c before the gradient, which keeps the azonal thermal wind
+          ! non-divergent apart from the true beta, at the cost of an extra zonal wind
+          ! -K*T_az*dc/dy. The zonal mean part carries no meridional flux and is scaled by
+          ! c(j); v is unchanged, as c(j) factors out of the zonal gradient.
+          ! The equatorial damping scales the wind: inside c, K*dc/dy ~ phi/f would stay
+          ! finite at the equator and add a tropical zonal wind of several m/s.
+          uterid(1) = 0._wp
+          uterid(km+1) = 0._wp
+          do k=1,km-1
+            ctv = (zl(k+1)-zl(k))*g/(T0*fcort(j))
+            uterid(k+1) = uterid(k)-ctv*( cdamp(jmi)*(t3(i,jmi,k)-t3z(jmi,k)) - cdamp(j+1)*(t3(i,j+1,k)-t3z(j+1,k)) &
+                                        + cdamp(j)*(t3z(jmi,k)-t3z(j+1,k)) )/(2._wp*dy)
+          enddo
           do k=1,km
-            uter(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * c_damp_eq * c_damp_pol 
+            uter(i,j,k) = 0.5_wp*(uterid(k)+uterid(k+1)) * c_damp_eq
             vter(i,j,k) = 0.5_wp*(vteri(k)+vteri(k+1)) * c_damp_eq * c_damp_pol 
             ! thermal wind without polar damping needed for EKE production
             uterf(i,j,k) = 0.5_wp*(uterif(k)+uterif(k+1)) * c_damp_eq 
@@ -363,6 +396,13 @@ contains
     ! advective mass transport
     !-------------------------------------------------------
 
+    ! The geostrophic (ugb,vgb) and the thermal wind (uter,vter) components are carried
+    ! up to the top pressure ptopdyn; the layer holding the top carries the part of it
+    ! below the top.
+    do k=1,km
+      ftop(k) = max(0._wp, min(1._wp, (pl(k)-ptopdyn)*rdpl(k)))
+    enddo
+
     !$omp parallel do collapse(2) private(i,j,k,imi,u_g,v_g,dplxdy,dplydxu)
     do k=1,km
       do j=1,jm
@@ -372,14 +412,9 @@ contains
         do i=1,im
           imi = modulo(i - 2, im) + 1
           ! geostrophic zonal wind on u-points, limited to troposphere
-          if (pl(k+1).ge.ptopdyn) then
-            u_g  = 0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))
-          elseif (pl(k+1).lt.ptopdyn.and.pl(k).ge.ptopdyn) then
-            u_g  = (0.5_wp*(ugb(imi,j)+ugb(i,j)) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))) *(pl(k)-ptopdyn)*rdpl(k)
-          else
-            u_g  = 0._wp
-          endif 
           dplxdy = dplx(i,j,k)*dy
+          ! geostrophic and thermal wind, averaged from the T-points to the face
+          u_g = 0.5_wp*(ugb(imi,j)+ugb(i,j))*ftop(k) + 0.5_wp*(uter(imi,j,k)+uter(i,j,k))*ftop(k)
           ! mass flux
           fax(i,j,k) = (u_g+ua(i,j,k))*dplxdy ! m/s * kg/m2 * m = kg/s
           ! orographic component of mass flux 
@@ -399,15 +434,9 @@ contains
             fay(i,jmc,k)  = 0._wp
             fayo(i,jmc,k) = 0._wp
           else
-            ! geostrophic meridional wind on u-points, limited to troposphere
-            if (pl(k+1).ge.ptopdyn) then
-              v_g  = 0.5_wp*(vgb(i,j-1)+vgb(i,j)) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))
-            elseif (pl(k+1).lt.ptopdyn.and.pl(k).ge.ptopdyn) then
-              v_g  = (0.5_wp*(vgb(i,j-1)+vgb(i,j)) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))) *(pl(k)-ptopdyn)*rdpl(k)
-            else
-              v_g  = 0._wp
-            endif 
+            ! geostrophic meridional wind on v-points, limited to troposphere
             dplydxu = dply(i,j,k)*dxu(j)
+            v_g = 0.5_wp*(vgb(i,j-1)+vgb(i,j))*ftop(k) + 0.5_wp*(vter(i,j-1,k)+vter(i,j,k))*ftop(k)
             ! mass flux
             fay(i,j,k) = (v_g+va(i,j,k))*dplydxu  ! m/s * kg/m2 * m = kg/s
             ! orographic component of mass flux for temperature
@@ -416,41 +445,8 @@ contains
         enddo
 
       enddo
-    enddo 
-    !$omp end parallel do
-
-    !-------------------------------------------------------
-    ! crest of the 3x3 neighbourhood and Froude number of the low-level flow
-    !-------------------------------------------------------
-    ! pcr is the surface pressure of the highest surface of the 3x3 neighbourhood,
-    ! the crest the low-level air of the column runs into. The Froude number
-    ! Fr = U/(N*H), H = crest height above the local surface, U = geostrophic plus
-    ! thermal wind of the layer holding the surface, N from gams, is a diagnostic of
-    ! the flow regime: below Fr~1 the low-level flow is blocked, and the blocked depth
-    ! above the local surface is H*max(0,1-Fr). Capped at froude_max where the column
-    ! is its own crest.
-    do j=1,jm
-      do i=1,im
-        pcr(i,j) = pzsa(i,j)
-        do jmi=max(1,j-1),min(jm,j+1)
-          do ipl=-1,1
-            pcr(i,j) = min(pcr(i,j),pzsa(modulo(i+ipl-1,im)+1,jmi))
-          enddo
-        enddo
-        h_cr = hatm*log(pzsa(i,j)/pcr(i,j))
-        n_bv = sqrt(max(1.e-6_wp, g/T0*(gad-gams(i,j))))
-        k = 1
-        do while (k.lt.km .and. pl(k+1).ge.pzsa(i,j))
-          k = k+1
-        enddo
-        u_k = max(0.5_wp, sqrt((ugb(i,j)+uter(i,j,k))**2 + (vgb(i,j)+vter(i,j,k))**2))
-        if (n_bv*h_cr*froude_max.gt.u_k) then
-          froude(i,j) = u_k/(n_bv*h_cr)
-        else
-          froude(i,j) = froude_max
-        endif
-      enddo
     enddo
+    !$omp end parallel do
 
     !-------------------------------------------------------
     ! per-column mass conservation
@@ -568,39 +564,18 @@ contains
 
     endif
 
-    fax_psi(:,:,:)      = 0._wp
-    fay_psi(:,:,:)      = 0._wp
-    fax_psi_topo(:,:,:) = 0._wp
-    fay_psi_topo(:,:,:) = 0._wp
-
-    !-------------------------------------------------------
-    ! diagnostics: bands in which the mass is returned, on T-points, hPa
-    !-------------------------------------------------------
-    ! Topographic correction: the terrain following band from dps_com_topo above the
-    ! surface, of depth dp_com_topo, capped at the tropopause; zero unless i_mass_com=1.
-    ! Ageostrophic PBL flux: the slab of depth dpc below the tropopause (i_dpc=0), or the
-    ! fraction dpc of the troposphere in pressure below it (i_dpc=1).
-    do j=1,jm
-      do i=1,im
-        if (i_mass_com.eq.1) then
-          pc1 = max(pzsa(i,j)-dps_com_topo,ptrop(j)+0.05_wp)
-          pc2 = max(pc1-dp_com_topo,ptrop(j))
-          dp_ret_topo(i,j) = (pc1-pc2)*p0/100._wp
-          p_ret_topo(i,j)  = 0.5_wp*(pc1+pc2)*p0/100._wp
-        else
-          dp_ret_topo(i,j) = 0._wp
-          p_ret_topo(i,j)  = 0._wp
+    !$omp parallel do collapse(2) private(j,k)
+    do k=1,km
+      do j=1,jmc
+        if (j.le.jm) then
+          fax_psi(:,j,k)      = 0._wp
+          fax_psi_topo(:,j,k) = 0._wp
         endif
-        pc2 = ptrop(j)
-        if (i_dpc.eq.1) then
-          pc1 = pc2+dpc*(1._wp-pc2)
-        else
-          pc1 = pc2+dpc
-        endif
-        dp_ret_ageo(i,j) = (pc1-pc2)*p0/100._wp
-        p_ret_ageo(i,j)  = 0.5_wp*(pc1+pc2)*p0/100._wp
+        fay_psi(:,j,k)      = 0._wp
+        fay_psi_topo(:,j,k) = 0._wp
       enddo
     enddo
+    !$omp end parallel do
 
     ! zonal component of the corrective flux, on u-points
     !$omp parallel do private(i,j,k,imi,fcx,fcxt,dfx,dp_c,pc1,pc2,pl1,pl2,dp_l,ptrx)

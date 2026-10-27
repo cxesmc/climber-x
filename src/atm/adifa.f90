@@ -33,7 +33,7 @@ module adifa_mod
   use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
   use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr
-  use adv_fct_mod, only : fct_ratios
+  use adv_fct_mod, only : fct_level, fct_diag_add
   !$ use omp_lib
 
   implicit none
@@ -117,6 +117,9 @@ contains
     real(wp) :: cmass, ctp, mc_psi, mc_psi_topo, m_k
     integer :: ipl
     integer :: idg_dse, idg_wtr
+    integer :: n, nfct
+    real(wp), dimension(4,jm,km) :: dacc_dse, dacc_wtr   ! per level limiter diagnostics
+    real(wp), dimension(4,jm,1)  :: dacc_nul             ! not used, the diagnostics are off for these
     real(wp), dimension(imc,jm) :: faxdse_psi, faxdse_psi_topo
     ! tropospheric mass weighted mean of tp, the reference the parts are measured against
     real(wp), dimension(im,jm) :: tp_col
@@ -151,30 +154,65 @@ contains
         idg_wtr = 2
       endif
 
-      call fct_ratios(km, fax, fay, dplt, tp, rx_dse, ry_dse, idg_dse)
-      call fct_ratios(km, fax, fay, dplt, q3, rx_wtr, ry_wtr, idg_wtr)
-      if (l_dust) call fct_ratios(km, fax, fay, dplt, d3, rx_dst, ry_dst, 0)
-
       ! CO2 is uniform over the column, so its limiter is a single level problem
       ! carried by the column integrated mass flux and the column mass
-      fmx_col(:,:,1) = sum(fax(1:imc,1:jm,1:km),dim=3)
-      fmy_col(:,:,1) = sum(fay(1:im,1:jmc,1:km),dim=3)
-      dm_col(:,:,1)  = sum(dplt(1:im,1:jm,1:km),dim=3)
-      cam_col(:,:,1) = cam(1:im,1:jm)
-      call fct_ratios(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, 0)
+      !$omp parallel do private(i,j,k)
+      do j=1,jmc
+        do i=1,imc
+          if (j.le.jm) then
+            fmx_col(i,j,1) = 0._wp
+            do k=1,km
+              fmx_col(i,j,1) = fmx_col(i,j,1) + fax(i,j,k)
+            enddo
+          endif
+          if (i.le.im) then
+            fmy_col(i,j,1) = 0._wp
+            do k=1,km
+              fmy_col(i,j,1) = fmy_col(i,j,1) + fay(i,j,k)
+            enddo
+          endif
+          if (i.le.im .and. j.le.jm) then
+            dm_col(i,j,1) = 0._wp
+            do k=1,km
+              dm_col(i,j,1) = dm_col(i,j,1) + dplt(i,j,k)
+            enddo
+            cam_col(i,j,1) = cam(i,j)
+          endif
+        enddo
+      enddo
+      !$omp end parallel do
+
+      ! The limiter of each level is independent of the others, and so is that of each tracer:
+      ! all (tracer, level) pairs are done in one parallel loop, as there are only km levels
+      ! per tracer. Items 1:km are dse, km+1:2km water, 2km+1 CO2 and 2km+2:3km+1 dust.
+      nfct = 2*km+1
+      if (l_dust) nfct = nfct+km
+      !$omp parallel do schedule(dynamic,1) private(n)
+      do n=1,nfct
+        if (n.le.km) then
+          call fct_level(n, fax, fay, dplt, tp, rx_dse, ry_dse, dacc_dse(:,:,n), idg_dse)
+        else if (n.le.2*km) then
+          call fct_level(n-km, fax, fay, dplt, q3, rx_wtr, ry_wtr, dacc_wtr(:,:,n-km), idg_wtr)
+        else if (n.eq.2*km+1) then
+          call fct_level(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, dacc_nul(:,:,1), 0)
+        else
+          call fct_level(n-2*km-1, fax, fay, dplt, d3, rx_dst, ry_dst, dacc_nul(:,:,1), 0)
+        endif
+      enddo
+      !$omp end parallel do
+      if (idg_dse.gt.0) call fct_diag_add(km, dacc_dse, idg_dse)
+      if (idg_wtr.gt.0) call fct_diag_add(km, dacc_wtr, idg_wtr)
 
     endif
 
 
-    !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
+    !$omp parallel do collapse(2) private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
     !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk) &
     !$omp private (ipl, cmass, ctp, m_k) 
     do j=1,jm
-
-      jmi=max(1,j-1)
-
       do i=1,im
 
+        jmi=max(1,j-1)
         imi=i-1
         if (imi.eq.0) imi=im
 
@@ -331,35 +369,32 @@ contains
         enddo
 
       enddo
-
-      ! no-flux condition at the poles
-      if (j.eq.jm) then
-        faydse(:,jmc) = 0._wp              
-        faydse_psi(:,jmc) = 0._wp
-        faydse_psi_topo(:,jmc) = 0._wp
-        faywtr(:,jmc) = 0._wp          
-        faydst(:,jmc) = 0._wp          
-        fayco2(:,jmc) = 0._wp          
-        fdydse(:,jmc) = 0._wp              
-        fdywtr(:,jmc) = 0._wp        
-        fdydst(:,jmc) = 0._wp 
-        fdyco2(:,jmc) = 0._wp 
-      endif
-
-      ! Cycling
-      faxdse(imc,j) = faxdse(1,j)              
-      faxdse_psi(imc,j) = faxdse_psi(1,j)
-      faxdse_psi_topo(imc,j) = faxdse_psi_topo(1,j)
-      faxwtr(imc,j) = faxwtr(1,j)          
-      faxdst(imc,j) = faxdst(1,j)          
-      faxco2(imc,j) = faxco2(1,j)          
-      fdxdse(imc,j) = fdxdse(1,j)              
-      fdxwtr(imc,j) = fdxwtr(1,j)        
-      fdxdst(imc,j) = fdxdst(1,j)        
-      fdxco2(imc,j) = fdxco2(1,j)        
-
     enddo
     !$omp end parallel do
+
+    ! no-flux condition at the poles
+    faydse(:,jmc) = 0._wp              
+    faydse_psi(:,jmc) = 0._wp
+    faydse_psi_topo(:,jmc) = 0._wp
+    faywtr(:,jmc) = 0._wp          
+    faydst(:,jmc) = 0._wp          
+    fayco2(:,jmc) = 0._wp          
+    fdydse(:,jmc) = 0._wp              
+    fdywtr(:,jmc) = 0._wp        
+    fdydst(:,jmc) = 0._wp 
+    fdyco2(:,jmc) = 0._wp 
+
+    ! Cycling
+    faxdse(imc,:) = faxdse(1,:)              
+    faxdse_psi(imc,:) = faxdse_psi(1,:)
+    faxdse_psi_topo(imc,:) = faxdse_psi_topo(1,:)
+    faxwtr(imc,:) = faxwtr(1,:)          
+    faxdst(imc,:) = faxdst(1,:)          
+    faxco2(imc,:) = faxco2(1,:)          
+    fdxdse(imc,:) = fdxdse(1,:)              
+    fdxwtr(imc,:) = fdxwtr(1,:)        
+    fdxdst(imc,:) = fdxdst(1,:)        
+    fdxco2(imc,:) = fdxco2(1,:)        
 
 
     !-----------------------------------

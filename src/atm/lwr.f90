@@ -539,6 +539,7 @@ contains
     real(wp), dimension(20) :: am_o3
     real(wp), dimension(20) :: am_wv
     real(wp), dimension(20) :: am_co2
+    real(wp), dimension(20) :: cum_cld, cum_o3, cum_wv, cum_co2   ! absorber amounts from level k up to level l
 
     real(wp) :: rhos, zsur
     real(wp) :: zlsk 
@@ -623,17 +624,29 @@ contains
 
     do k=1,llwr-1
 
+      ! absorber amounts between levels k and l, accumulated first so that the loop over l
+      ! below has no dependency and can be vectorised (it is dominated by the power laws)
       am_cld_kl = 0._wp
       am_o3_kl  = 0._wp
       am_wv_kl  = 0._wp
       am_co2_kl = 0._wp
-
       do l=k+1,llwr
-
         am_cld_kl = am_cld_kl + am_cld(l-1)
         am_o3_kl  = am_o3_kl  + am_o3(l-1)
         am_wv_kl  = am_wv_kl  + am_wv(l-1)
         am_co2_kl = am_co2_kl + am_co2(l-1)
+        cum_cld(l) = am_cld_kl
+        cum_o3(l)  = am_o3_kl
+        cum_wv(l)  = am_wv_kl
+        cum_co2(l) = am_co2_kl
+      enddo
+
+      do l=k+1,llwr
+
+        am_cld_kl = cum_cld(l)
+        am_o3_kl  = cum_o3(l)
+        am_wv_kl  = cum_wv(l)
+        am_co2_kl = cum_co2(l)
 
         ! equation (6.7) in PIK report 81
         d_o3 = 1.0_wp-a_o3*(am_o3_kl**beta_o3)      

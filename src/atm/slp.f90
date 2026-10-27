@@ -29,12 +29,14 @@ module slp_mod
   use constants, only : pi, r_earth, omega, g, Rd, T0, Le
   use atm_params, only : ra, p0, hatm
   use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
-  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
+  use atm_params, only : c_slp_trop_f, c_slp_trop_tau, c_slp_trop_lat0, c_slp_trop_lat1
+  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau, i_aslp_temp_adv_u
   use atm_params, only : l_aslp_topo, c_aslp_sw_amp, c_aslp_sw_tau, c_aslp_sw_h, c_aslp_sw_umin, c_aslp_sw_lateq, n_aslp_sw
   use atm_params, only : c_aslp_sw_fr, c_aslp_sw_nbv
   use atm_params, only : c_aslp_sw_eddy, i_aslp_sw_eddy, n_aslp_sw_eddy
   use atm_params, only : l_aslp_gill, c_aslp_gill, c_aslp_gill_tau, c_aslp_gill_c, c_aslp_gill_lat0, c_aslp_gill_lat1, n_aslp_gill
-  use atm_params, only : i_aslp_gill_lat
+  use atm_params, only : i_aslp_gill_lat, c_aslp_gill_trel
+  use timer, only : dt_atm, sec_day
   use atm_params, only : cp
   use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2, i_mmc_geo, c_mmc_edge
   use atm_params, only : i_mmc_itcz, c_mmc_efe
@@ -63,7 +65,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine azslp(tsksl, htrop, zsa, uz500, u3f, sam, eke, prc, ficz, &
       aslp, &
-      aslp_temp, aslp_topo, aslp_eddy, aslp_gill, dz500, atsl)
+      aslp_temp, aslp_topo, aslp_eddy, aslp_gill, aslp_temp_slow, dz500, atsl)
 
     use, intrinsic :: iso_c_binding 
 
@@ -75,8 +77,8 @@ contains
     real(wp), intent(in   ) :: tsksl(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: uz500(:)
-    real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used only if l_aslp_topo
+    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind of u3 (polar-damped thermal wind)
+    real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used if l_aslp_topo or i_aslp_temp_adv_u>=2
     real(wp), intent(in   ) :: sam(:,:)       !! synoptic eddy kinetic energy, used only if l_aslp_topo and c_aslp_sw_eddy>0
     real(wp), intent(in   ) :: eke(:,:)       !! ERA-Interim 2-6 day eddy kinetic energy climatology, used only if i_aslp_sw_eddy==2
     real(wp), intent(in   ) :: prc(:,:)       !! precipitation (kg/m2/s), previous step, used only if l_aslp_gill
@@ -87,6 +89,7 @@ contains
     real(wp), intent(inout) :: aslp_topo(:,:)
     real(wp), intent(inout) :: aslp_eddy(:,:)
     real(wp), intent(inout) :: aslp_gill(:,:)
+    real(wp), intent(inout) :: aslp_temp_slow(:,:)   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
 
     real(wp), intent(out  ) :: atsl(:,:)
     real(wp), intent(out  ) :: dz500(:,:)
@@ -95,19 +98,39 @@ contains
     real(wp) :: k, uz
     real(wp) :: tslz(jm)
     real(wp) :: htropz(jm)
+    real(wp) :: uz500u(jm)
     real(wp) :: uz500s(jm)
     type(C_PTR) :: plan_r2c_temp, plan_c2r_temp
     real(wp) :: aslp_frc(im,jm), fd
+    real(wp) :: aslp_gill_new(im,jm), cgill
+    real(wp) :: cslow, ftrop, wtrop, alat
     real(dp), dimension(im) :: aslp_temp_dp
     complex(dp), dimension(im/2+1) :: aslp_temp_fft
 
 
+    ! zonal mean zonal wind for the upstream displacement of aslp_temp:
+    ! 500 hPa from u3 (thermal wind damped towards the poles) or from u3f (undamped),
+    ! or 850 hPa from u3f, the low-level flow that carries the cooling/heating air column
+    if (i_aslp_temp_adv_u.eq.1) then
+      uz500u(:) = uz500(:)
+    else if (i_aslp_temp_adv_u.eq.2) then
+      do j=1,jm
+        uz500u(j) = sum(u3f(:,j,k500))*aim
+      enddo
+    else if (i_aslp_temp_adv_u.eq.3) then
+      do j=1,jm
+        uz500u(j) = sum(u3f(:,j,k850))*aim
+      enddo
+    else
+      stop 'i_aslp_temp_adv_u'
+    endif
+
     ! smooth zonal mean 500 hPa zonal wind
     do j=2,jm-1
-      uz500s(j) = 0.4_wp*uz500(j)+0.3_wp*(uz500(j+1)+uz500(j-1))
+      uz500s(j) = 0.4_wp*uz500u(j)+0.3_wp*(uz500u(j+1)+uz500u(j-1))
     enddo
-    uz500s(1)  = 0.5_wp*(uz500(1)+uz500(2))
-    uz500s(jm) = 0.5_wp*(uz500(jm)+uz500(jm-1))
+    uz500s(1)  = 0.5_wp*(uz500u(1)+uz500u(2))
+    uz500s(jm) = 0.5_wp*(uz500u(jm)+uz500u(jm-1))
 
     ! zonal mean sea level temperature and tropopause height
     do j=1,jm
@@ -229,9 +252,54 @@ contains
     !------------------------------------------------
 
     if (l_aslp_gill) then
-      call gill_response(prc, ficz, aslp_gill)
+      if (c_aslp_gill_trel.gt.0._wp) then
+        ! The Gill response relaxes towards the response to the current heating with its own time scale.
+        ! Heating -> Kelvin low east of it -> convergence -> heating further east closes an eastward
+        ! propagating loop (10-40 d tropical waves); a relaxation time longer than the loop period breaks it
+        ! while keeping the seasonal monsoon/ITCZ response, which only lags by atan(2pi*trel/1yr).
+        call gill_response(prc, ficz, aslp_gill_new)
+        cgill = min(1._wp, dt_atm/(c_aslp_gill_trel*sec_day))
+        aslp_gill = aslp_gill + cgill*(aslp_gill_new-aslp_gill)
+      else
+        call gill_response(prc, ficz, aslp_gill)
+      endif
     else
       aslp_gill(:,:) = 0._wp
+    endif
+
+
+    !------------------------------------------------
+    ! damping of the fast part of the thermal azonal sea level pressure
+    !------------------------------------------------
+
+    ! Over land the thermal low closes a delayed negative feedback (warm skin -> low ->
+    ! ageostrophic convergence -> ascent cooling) that oscillates with a ~10 d period in JAS over
+    ! West Africa, and with 20-40 d over Tibet/Central Asia in MJJASO (both grow with CO2).
+    ! Lowering c_slp_2 kills the tropical one only by halving the equilibrium tropical aslp (the
+    ! equatorial damping accumulates as c S/(1-(1-c) S)), which changes the mean climate. Here only
+    ! the departure of aslp_temp from its slowly relaxed state is damped, by f, with a relaxation
+    ! time tau: the time mean is unchanged and the seasonal cycle lags by ~(1-f)*tau.
+    ! f is c_slp_trop_f equatorward of c_slp_trop_lat0 and 1 (no damping) poleward of c_slp_trop_lat1,
+    ! with a cosine transition in between. Extratropical damping (tested down to tau 5 d) creates a
+    ! new ~10 d mode over Tibet at the LGM.
+    if (c_slp_trop_f.lt.1._wp) then
+      if (any(aslp_temp_slow.gt.1.e19_wp)) aslp_temp_slow = aslp_temp
+      cslow = min(1._wp, dt_atm/(c_slp_trop_tau*sec_day))
+      do j=1,jm
+        alat = abs(asin(sint(j)))*180._wp/pi
+        if (alat.le.c_slp_trop_lat0) then
+          wtrop = 1._wp
+        else if (alat.ge.c_slp_trop_lat1) then
+          wtrop = 0._wp
+        else
+          wtrop = 0.5_wp*(1._wp+cos(pi*(alat-c_slp_trop_lat0)/(c_slp_trop_lat1-c_slp_trop_lat0)))
+        endif
+        ftrop = wtrop*c_slp_trop_f + (1._wp-wtrop)
+        do i=1,im
+          aslp_temp_slow(i,j) = aslp_temp_slow(i,j) + cslow*(aslp_temp(i,j)-aslp_temp_slow(i,j))
+          aslp_temp(i,j) = aslp_temp_slow(i,j) + ftrop*(aslp_temp(i,j)-aslp_temp_slow(i,j))
+        enddo
+      enddo
     endif
 
 
@@ -649,6 +717,8 @@ contains
     ! the remaining unknowns are ordered x = (phi_1, v_1, phi_2, v_2, ..., phi_jm), a banded system
     ! solved with Gaussian elimination and partial pivoting.
     phi_hat(:,:) = (0._dp,0._dp)
+    ! the wavenumbers are independent; each dense solve is O(jm^3)
+    !$omp parallel do schedule(dynamic,1) private(n,rn,amat,rhs,x,j,r,k,f,jj)
     do n=1,nmax
       rn = real(n,wp)
       amat(:,:) = (0._dp,0._dp)
@@ -684,6 +754,7 @@ contains
         phi_hat(n+1,j) = x(2*j-1)
       enddo
     enddo
+    !$omp end parallel do
 
     do j=1,jm
       rowc(:) = phi_hat(:,j)

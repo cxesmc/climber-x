@@ -30,7 +30,7 @@ module smooth_atm_mod
   implicit none
 
   private
-  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx
+  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr
 
 contains
 
@@ -137,6 +137,85 @@ contains
     return
 
   end subroutine shapiro2dx
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  l i m i t _ f i l t _ w t r
+  !   Purpose    :  keep the Shapiro filter of the moisture convergence from
+  !                 draining a column. The filter is not positive definite: a
+  !                 dry cell between strongly divergent neighbours (a 2dx
+  !                 checkerboard, e.g. the Atacama) gets a filtered divergence
+  !                 that removes more water in one step than the column holds,
+  !                 and the qam floor then refills it, creating water that was
+  !                 booked as negative precipitation.
+  !                 Where the filtered convergence would take wcon below wmin
+  !                 within tstep, its filter increment is reduced (never beyond
+  !                 the unfiltered value). The withheld water is taken from the
+  !                 positive filter increments within the filter's reach
+  !                 (+-nord cells), so that sum(sqr*conv) is conserved.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine limit_filt_wtr(conv, conv_raw, sqr, wcon, wmin, evpa, tstep, nord)
+
+    implicit none
+
+    real(wp), intent(inout) :: conv(:,:)       ! filtered convergence, kg/m2/s
+    real(wp), intent(in   ) :: conv_raw(:,:)   ! unfiltered convergence, kg/m2/s
+    real(wp), intent(in   ) :: sqr(:,:)        ! cell area, m2
+    real(wp), intent(in   ) :: wcon(:,:)       ! column water, kg/m2
+    real(wp), intent(in   ) :: wmin(:,:)       ! lowest column water the step may leave, kg/m2
+    real(wp), intent(in   ) :: evpa(:,:)       ! evaporation, kg/m2/s
+    real(wp), intent(in   ) :: tstep           ! s
+    integer,  intent(in   ) :: nord            ! filter order = reach of the filter in cells
+
+    integer :: i, j, ii, jj, i2, im, jm
+    real(wp) :: conv_min, conv_new, dw, pos, r
+    real(wp) :: dinc(size(conv,1),size(conv,2))
+
+
+    im = size(conv,1)
+    jm = size(conv,2)
+
+    ! filter increment
+    dinc = conv - conv_raw
+
+    ! serial: limited cells are rare, and the redistribution touches neighbours
+    do j=1,jm
+      do i=1,im
+        if (dinc(i,j).ge.0._wp) cycle
+        ! lowest convergence that leaves at least wmin after tstep
+        conv_min = (wmin(i,j)-wcon(i,j))/tstep - evpa(i,j)
+        if (conv(i,j).ge.conv_min) cycle
+        conv_new = min(conv_raw(i,j), conv_min)
+        if (conv_new.le.conv(i,j)) cycle
+        dw = (conv_new-conv(i,j))*sqr(i,j)   ! kg/s withheld from this cell
+        ! positive filter increments within reach
+        pos = 0._wp
+        do jj=max(1,j-nord),min(jm,j+nord)
+          do ii=i-nord,i+nord
+            i2 = modulo(ii-1,im)+1
+            if (dinc(i2,jj).gt.0._wp) pos = pos + dinc(i2,jj)*sqr(i2,jj)
+          enddo
+        enddo
+        if (pos.le.0._wp) cycle   ! nothing to take it from, leave this cell unlimited
+        ! withhold at most what the neighbours received
+        r = min(1._wp, dw/pos)
+        do jj=max(1,j-nord),min(jm,j+nord)
+          do ii=i-nord,i+nord
+            i2 = modulo(ii-1,im)+1
+            if (dinc(i2,jj).gt.0._wp) then
+              conv(i2,jj) = conv(i2,jj) - r*dinc(i2,jj)
+              dinc(i2,jj) = (1._wp-r)*dinc(i2,jj)
+            endif
+          enddo
+        enddo
+        conv(i,j) = conv(i,j) + r*pos/sqr(i,j)
+        dinc(i,j) = conv(i,j) - conv_raw(i,j)
+      enddo
+    enddo
+
+    return
+
+  end subroutine limit_filt_wtr
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  s m o o t h 2

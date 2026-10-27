@@ -89,8 +89,13 @@ module atm_params
   real(wp) :: c_slp_3
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
+  real(wp) :: c_slp_trop_f
+  real(wp) :: c_slp_trop_tau
+  real(wp) :: c_slp_trop_lat0
+  real(wp) :: c_slp_trop_lat1
   logical :: l_aslp_temp_adv
   real(wp) :: c_aslp_temp_tau
+  integer :: i_aslp_temp_adv_u
   logical :: l_aslp_topo
   real(wp) :: c_aslp_sw_amp
   real(wp) :: c_aslp_sw_tau
@@ -106,6 +111,7 @@ module atm_params
   logical :: l_aslp_gill
   real(wp) :: c_aslp_gill
   real(wp) :: c_aslp_gill_tau
+  real(wp) :: c_aslp_gill_trel
   real(wp) :: c_aslp_gill_c
   real(wp) :: c_aslp_gill_lat0
   real(wp) :: c_aslp_gill_lat1
@@ -149,7 +155,6 @@ module atm_params
   real(wp) :: c_gam_rel
   integer :: i_tsl
   real(wp) :: c_tsl_gam
-  real(wp) :: tsl_gams_min
 
 
   real(wp) :: c_hrs_1   
@@ -369,9 +374,14 @@ contains
     call nml_read(filename,"atm_par","c_slp_3",c_slp_3)
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
+    call nml_read(filename,"atm_par","c_slp_trop_f",c_slp_trop_f)
+    call nml_read(filename,"atm_par","c_slp_trop_tau",c_slp_trop_tau)
+    call nml_read(filename,"atm_par","c_slp_trop_lat0",c_slp_trop_lat0)
+    call nml_read(filename,"atm_par","c_slp_trop_lat1",c_slp_trop_lat1)
     call nml_read(filename,"atm_par","l_aslp_temp_adv",l_aslp_temp_adv)
     call nml_read(filename,"atm_par","c_aslp_temp_tau",c_aslp_temp_tau)
     c_aslp_temp_tau = c_aslp_temp_tau * sec_day
+    call nml_read(filename,"atm_par","i_aslp_temp_adv_u",i_aslp_temp_adv_u)
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
     call nml_read(filename,"atm_par","c_aslp_sw_amp",c_aslp_sw_amp)
     call nml_read(filename,"atm_par","c_aslp_sw_tau",c_aslp_sw_tau)
@@ -388,6 +398,7 @@ contains
     call nml_read(filename,"atm_par","l_aslp_gill",l_aslp_gill)
     call nml_read(filename,"atm_par","c_aslp_gill",c_aslp_gill)
     call nml_read(filename,"atm_par","c_aslp_gill_tau",c_aslp_gill_tau)
+    call nml_read(filename,"atm_par","c_aslp_gill_trel",c_aslp_gill_trel)
     call nml_read(filename,"atm_par","c_aslp_gill_c",c_aslp_gill_c)
     call nml_read(filename,"atm_par","c_aslp_gill_lat0",c_aslp_gill_lat0)
     call nml_read(filename,"atm_par","c_aslp_gill_lat1",c_aslp_gill_lat1)
@@ -417,7 +428,6 @@ contains
     call nml_read(filename,"atm_par","nsmooth_cld",nsmooth_cld)
     call nml_read(filename,"atm_par","i_tsl",i_tsl)
     call nml_read(filename,"atm_par","c_tsl_gam",c_tsl_gam)
-    call nml_read(filename,"atm_par","tsl_gams_min",tsl_gams_min)
     call nml_read(filename,"atm_par","hcld_base",hcld_base)
     call nml_read(filename,"atm_par","i_lw_cld",i_lw_cld)
     call nml_read(filename,"atm_par","c_lw_clot",c_lw_clot)

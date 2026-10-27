@@ -89,12 +89,15 @@
   c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
-  l_aslp_temp_adv = F           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
+  c_slp_trop_f = 0.35           ! fraction of the fast (sub-seasonal) part of the temperature related azonal SLP kept equatorward of c_slp_trop_lat0 (1 = off)
+  c_slp_trop_tau = 10.          ! days, relaxation time of the slow part of the temperature related azonal SLP, used only if c_slp_trop_f<1
+  c_slp_trop_lat0 = 25.         ! deg, c_slp_trop_f applies equatorward of c_slp_trop_lat0 ...
+  c_slp_trop_lat1 = 30.         ! deg, ... and no damping poleward of c_slp_trop_lat1 (cosine transition)
+  l_aslp_temp_adv = T           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
   c_aslp_temp_tau = 1.0         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
+  i_aslp_temp_adv_u = 1         ! zonal mean wind for the upstream displacement: 1 = 500 hPa from u3 (polar-damped thermal wind), 2 = 500 hPa from u3f (undamped), 3 = 850 hPa from u3f
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure? Linear barotropic vorticity equation
-                                ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by
-                                ! the ~850 hPa zonal mean flow over zsa; both winds from u3f, i.e. without the polar damping of the
-                                ! thermal wind (c_aslp_sw_*); replaces the role of the upstream shift, use with l_aslp_temp_adv=F
+                                ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by the ~850 hPa zonal mean flow over zsa
   c_aslp_sw_amp = 1.5           ! scaling of the sea level pressure response to the ~300 hPa height anomaly (x ra*g), used only if l_aslp_topo==T
   c_aslp_sw_tau = 4.            ! days, Rayleigh damping time scale of the stationary waves, used only if l_aslp_topo==T
   c_aslp_sw_h = 8000.           ! m, scale height of the topographic vortex stretching, used only if l_aslp_topo==T
@@ -109,6 +112,7 @@
   l_aslp_gill = T               ! add the Gill-type (first baroclinic mode) sea level pressure response to the azonal latent heating?
   c_aslp_gill = 1.              ! scaling of the Gill response, used only if l_aslp_gill==T
   c_aslp_gill_tau = 5.          ! days, Rayleigh friction and Newtonian cooling time scale of the Gill response, used only if l_aslp_gill==T
+  c_aslp_gill_trel = 30.        ! days, relaxation time of the Gill response towards the response to the current heating (0 = instantaneous), used only if l_aslp_gill==T
   c_aslp_gill_c = 50.           ! m/s, gravity wave speed of the first baroclinic mode, used only if l_aslp_gill==T
   i_aslp_gill_lat = 2           ! latitude window of the heating forcing: 1 = distance from the equator, 2 = distance from the ITCZ (ficz), used only if l_aslp_gill==T
   c_aslp_gill_lat0 = 25.        ! deg, the heating forcing is tapered (cosine) from 1 at c_aslp_gill_lat0 ...
@@ -130,7 +134,7 @@
   dp_com = 0.1                  ! depth of the slab below the tropopause (i_mass_com=0,1), or of the terrain following band (i_mass_com=2), for the column mass correction
   dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1)
   dp_com_topo = 1.0             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1); 1 = up to the tropopause
-  ptopdyn = 0.25                ! pressure level above which geostrophic wind components are disregarded 
+  ptopdyn = 0.25                ! pressure level (p/p0) above which the geostrophic (ugb,vgb) and thermal (uter,vter) winds are disregarded in the advective mass fluxes
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
   i_kata_wind = 2               ! katabatic winds:
@@ -158,11 +162,9 @@
   c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
   i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
                                 !   0 = tsksl = tsl, the air temperature profile reduced to sea level
-                                !   1 = built from the skin temperature (c_tsl_gam, tsl_gams_min below)
-                                !   2 = skin temperature reduced with the model lapse rate profile, tsl_gams_min floor as in 1
-                                !   3 = tam + c_tsl_gam*zsa, no skin temperature and no surface types
+                                !   1 = built from the skin temperature, carried down through the surface layer (gams, hgams) and to sea level with c_tsl_gam
+                                !   2 = skin temperature reduced with the model lapse rate profile, then through the surface layer as in 1
   c_tsl_gam = 5.e-3             ! lapse rate for reduction of skin temperature to sea level, all surface types
-  tsl_gams_min = 6.5e-3         ! K/m, minimum surface layer lapse rate for the sea level temperature over land and ice sheets
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
@@ -218,19 +220,19 @@
   i_diff = 2                    ! macro-diffusivity closure (energy, water, dust):
                                 ! 1 = c_diff*sqrt(EKE), K = c*V'
                                 ! 2 = c_diff*EKE,       K = c*V'^2 (Caballero & Hanley 2012)
-  c_diff = 3.5e4                ! macro-diffusivity factor
+  c_diff = 4.e4                 ! macro-diffusivity factor
   h_diff = 3000.                ! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983 vertical structure of the baroclinic eddy flux)
                                 ! <=0 = vertically uniform.
   i_hdiff_ref = 2               ! height reference for h_diff:
                                 ! 1 = height above the local surface
                                 ! 2 = height above sea level
   c_diff_dse_eq = 3.            ! amplification of the ZONAL dry static energy diffusivity at the equator, tapering as exp(-(lat/fi_diff_dse_eq)^2). 1 = off.
-  fi_diff_dse_eq = 15.          ! deg, e-folding latitude of the above
+  fi_diff_dse_eq = 25.          ! deg, e-folding latitude of the above
 
   !-----------------------------------------------------------
   ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
-  i_adv = 1                     ! advection scheme:
+  i_adv = 2                     ! advection scheme:
                                 ! 1 = first order upstream 
                                 ! 2 = flux corrected transport (Zalesak 1979)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
@@ -240,8 +242,8 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.56                !
-  c_cld_2 = 0.56                !
+  c_cld_1 = 0.55                !
+  c_cld_2 = 0.55                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
