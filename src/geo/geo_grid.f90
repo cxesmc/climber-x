@@ -65,7 +65,7 @@ contains
 
 
     ! generate grid object
-    call grid_init(grid,name="GEO-5x5",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp))
+    call grid_init(grid,name="GEO-5x5",mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon,dp),y=real(lat,dp))
 
     ! read topography/bathymetry on high resolution
     ni_topo = nc_size(trim(geo_ref_file),"lon")
@@ -84,7 +84,7 @@ contains
 
     ! generate high resolution grid object
     ppos = scan(trim(geo_ref_file),".", BACK= .true.)-1
-    call grid_init(grid_hires,name=trim(geo_ref_file(7:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(grid_hires,name=trim(geo_ref_file(7:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_topo(1),dp),dx=real(dlon_topo,dp),nx=ni_topo,y0=real(lat_topo(1),dp),dy=real(dlat_topo,dp),ny=nj_topo)
 
     ! number of topo points in one model surface grid cell
