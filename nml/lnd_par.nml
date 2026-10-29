@@ -340,6 +340,7 @@
     uniform_porosity       = T  ! use uniform porosity? If .true. value below is used
     uniform_soil_par_therm = T  ! use uniform soil thermal parameters? If .true. values below are used
     uniform_soil_par_hydro = T  ! use uniform soil hydrological parameters? If .true. values below are used
+    uniform_soil_par_alb   = F  ! use uniform bare soil albedos? If .true. values below are used. If .false. values from lnd_par_file are used, but all values poleward of 50° are set to 0.2
     ! time dependence of soil properties on organic matter content
     constant_porosity       = T ! use constant soil porosity? (either uniform of geographically varying)
     constant_soil_par_therm = T ! use constant soil thermal parameters? (either uniform of geographically varying)
@@ -353,6 +354,8 @@
     psi_sat_u    = -0.2         ! m, uniform matric potential at saturation, -0.19 (-0.71 - -0.05)
     k_sat_u      = 100          ! kg/m2/day, uniform hydraulic conductivity at saturation, 520 (86 - 1900)
     b_u          = 3            ! integer, unifrom Clapp-Horneberger parameter, 6 (4 - 14)
+    alb_bare_vis_u = 0.15	! [], bare soil albedo in visible spectrum
+    alb_bare_nir_u = 0.3	! [], bare soil albedo in near-infrared
 
     lnd_par_file    = "input/lnd_par.nc"
     soil_texture = 1            ! which soil texture to use; 1...HWSD, 2...GSDE
