@@ -113,7 +113,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_geo(1),dp),dx=real(dlon_geo,dp),nx=ni_geo,y0=real(lat_geo(1),dp),dy=real(dlat_geo,dp),ny=nj_geo)
 
     call nc_read(trim(fake_geo_const_file),"bedrock_topography",fake_geo%z_bed)
@@ -127,7 +127,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_geo(1),dp),dx=real(dlon_geo,dp),nx=ni_geo,y0=real(lat_geo(1),dp),dy=real(dlat_geo,dp),ny=nj_geo)
 
     ! read time dimension
@@ -178,7 +178,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_geo%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_geo(1),dp),dx=real(dlon_geo,dp),nx=ni_geo,y0=real(lat_geo(1),dp),dy=real(dlat_geo,dp),ny=nj_geo)
 
     ! read time dimension

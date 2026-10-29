@@ -199,7 +199,7 @@ contains
     allocate(h_ice(ni,nj))
 
     ! generate grid object
-    call grid_init(vilma1_grid,name="vilma_grid",mtype="latlon",units="degrees", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
+    call grid_init(vilma1_grid,name="vilma_grid",mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon,dp),y=real(lat,dp), lon180=.true.)
 
     ! generate maps for mapping between geo and vilma1
     call map_init(maps_geo_to_vilma1,geo_grid,vilma1_grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
