@@ -69,11 +69,11 @@ LIB_VILMA1 = ${VILMA1ROOT}/lib/vega_pism.a
 
 # --- VILMA2 (fesmc/vilma solid-earth model; cloned at vilma2/ by configme, like
 # yelmo, and built from source against the SAME fesm-utils as climber-x:
-# `make vilma-static` -> obj/libvilma.a, .mod files in obj/).
+# `make vilma-static` -> libvilma/include/libvilma.a and the .mod files).
 # It is a swappable alternative to VILMA1, selected at runtime with i_geo=3.
 VILMA2ROOT = vilma2
-INC_VILMA2 = -I${VILMA2ROOT}/obj
-LIB_VILMA2 = ${VILMA2ROOT}/obj/libvilma.a
+INC_VILMA2 = -I${VILMA2ROOT}/libvilma/include
+LIB_VILMA2 = ${VILMA2ROOT}/libvilma/include/libvilma.a
 
 # --- SHTns (spherical-harmonic transforms; provided by fesm-utils, pulled in by
 # VILMA2). FFTW (wired above) is linked after it (SHTns calls FFTW). Serial
