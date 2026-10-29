@@ -102,7 +102,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_ice(1),dp),dx=real(dlon_ice,dp),nx=ni_ice,y0=real(lat_ice(1),dp),dy=real(dlat_ice,dp),ny=nj_ice)
 
     call nc_read(trim(fake_ice_const_file),"ice_thickness",fake_ice%h_ice)
@@ -113,7 +113,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_ice(1),dp),dx=real(dlon_ice,dp),nx=ni_ice,y0=real(lat_ice(1),dp),dy=real(dlat_ice,dp),ny=nj_ice)
 
     ! read time dimension
@@ -165,7 +165,7 @@ contains
     ! generate grid object
     spos = scan(trim(fnm),"/", BACK= .true.)+1
     ppos = scan(trim(fnm),".", BACK= .true.)-1
-    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+    call grid_init(fake_ice%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
       x0=real(lon_ice(1),dp),dx=real(dlon_ice,dp),nx=ni_ice,y0=real(lat_ice(1),dp),dy=real(dlat_ice,dp),ny=nj_ice)
 
     ! read time dimension

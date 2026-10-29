@@ -159,8 +159,8 @@ runme -rs -q short --omp 16 -o output/clim-bgc -p ctl.flag_bgc=T
 ### CLIMBER-X climate and ice sheet model
 
 If you would also like to run with an interactive ice sheet, the **Yelmo** ice-sheet code
-must be downloaded and configured and the solid Earth model **VILMA** libraries must be
-downloaded before compiling:
+must be downloaded and configured and the legacy solid Earth model **VILMA1** libraries must be
+downloaded before compiling (or compile with `vilma1=0` and use VILMA2, `i_geo=3`):
 
 ```bash
 # yelmo
@@ -172,13 +172,11 @@ python3 config.py config/pik_hpc2024_ifx   # Or config file for your system
 ln -s $FESMUSRC .              # Link absolute path
 cd ../..            # Return to climber-x parent directory
 
-# vilma
-cd src/
-git clone git@github.com:cxesmc/vilma.git  # private repository, premission needed
-cd ..
+# vilma1
+git clone git@github.com:cxesmc/vilma.git src/vilma1  # private repository, permission needed
 ```
 
-Since the VILMA model code is not open source, the `vilma` repository is private at the moment and you need to be given permission in order to access it. Please send an email to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz.de?subject=[GitHub]%20VILMA%20access) and you will be granted permission to access the `vilma` repository.
+Since the VILMA1 model code is not open source, the `cxesmc/vilma` repository is private at the moment and you need to be given permission in order to access it. Please send an email to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz.de?subject=[GitHub]%20VILMA%20access) and you will be granted permission to access the `cxesmc/vilma` repository.
 
 ```bash
 # Compile the climate and ice sheet model

@@ -28,7 +28,7 @@ module bmb_model
   use nml
   use ncio
   use precision, only : wp, dp
-  use constants, only : rho_i, rho_sw, Lf, cap_w, map_gen
+  use constants, only : rho_i, rho_sw, Lf, cap_sw, map_gen
   use timer, only : year_ini, year_now, nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
   use control, only : out_dir, restart_in_dir, bmb_restart
   use bmb_grid, only : bmb_grid_init
@@ -351,10 +351,10 @@ contains
         bmb%bmb(i,j) = bmb_const  ! kg/m2/s
       else if (i_bmb==1) then
         ! Beckmann & Goose 2003
-        bmb%bmb(i,j) = - k_1 * rho_sw*cap_w/(rho_i*Lf) * (bmb%t_bmb(i,j)-bmb%t_freeze(i,j))  ! kg/m2/s
+        bmb%bmb(i,j) = - k_1 * rho_sw*cap_sw/(rho_i*Lf) * (bmb%t_bmb(i,j)-bmb%t_freeze(i,j))  ! kg/m2/s
       else if (i_bmb==2) then
         ! Pollard & DeConto 2012, eq 17
-        bmb%bmb(i,j) = - k_2 * rho_sw*cap_w/(rho_i*Lf) * abs(bmb%t_bmb(i,j)-bmb%t_freeze(i,j))*(bmb%t_bmb(i,j)-bmb%t_freeze(i,j))  ! kg/m2/s
+        bmb%bmb(i,j) = - k_2 * rho_sw*cap_sw/(rho_i*Lf) * abs(bmb%t_bmb(i,j)-bmb%t_freeze(i,j))*(bmb%t_bmb(i,j)-bmb%t_freeze(i,j))  ! kg/m2/s
       endif
 
       if (bmb%mask_ocn_lake(i,j).eq.1 .and. i_bmb_lake.eq.2) then
@@ -561,7 +561,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_x,x=bmb%grid%G%x0,dx=bmb%grid%G%dx,nx=nx,axis="x",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_y,x=bmb%grid%G%y0,dx=bmb%grid%G%dy,nx=ny,axis="y",units="m",ncid=ncid)
 

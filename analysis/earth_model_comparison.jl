@@ -5,15 +5,15 @@
 # Compare the solid-earth response at the end of two otherwise-identical
 # lgm_ice_nh simulations that differ only in the geodynamic earth model:
 #
-#   igeo2  ->  VILMA        (i_geo = 2)
-#   igeo3  ->  FastEarth3D  (i_geo = 3)
+#   igeo2  ->  VILMA1  (i_geo = 2)
+#   igeo3  ->  VILMA2  (i_geo = 3)
 #
 # The comparison uses geo_restart.nc from each run, which is written by the
 # CLIMBER-X geo module on a common 2880x1440 (0.125 deg) grid, so the fields
-# are directly comparable between the two earth models. VILMA's own rsl.nc is
-# on a different grid and has no FastEarth3D counterpart, so it is not used.
+# are directly comparable between the two earth models. VILMA1's own rsl.nc is
+# on a different grid and has no VILMA2 counterpart, so it is not used.
 #
-# Fields plotted (each as three panels: VILMA, FastEarth3D, difference):
+# Fields plotted (each as three panels: VILMA1, VILMA2, difference):
 #   z_bed              bedrock elevation                 [m]
 #   rsl                relative sea level                [m]
 #   z_bed - z_bed_ref  bedrock deflection (GIA response) [m]
@@ -36,11 +36,11 @@ const RUN = isempty(ARGS) ? "lgm_ice_nh" : ARGS[1]
 const OUTDIR = joinpath(@__DIR__, "..", "output", RUN)
 
 const RUNS = (
-    vilma      = joinpath(OUTDIR, "igeo2", "restart_out", "year_500", "geo_restart.nc"),
-    fastearth  = joinpath(OUTDIR, "igeo3", "restart_out", "year_500", "geo_restart.nc"),
+    vilma1  = joinpath(OUTDIR, "igeo2", "restart_out", "year_500", "geo_restart.nc"),
+    vilma2  = joinpath(OUTDIR, "igeo3", "restart_out", "year_500", "geo_restart.nc"),
 )
 
-const LABELS = (vilma = "VILMA (i_geo=2)", fastearth = "FastEarth3D (i_geo=3)")
+const LABELS = (vilma1 = "VILMA1 (i_geo=2)", vilma2 = "VILMA2 (i_geo=3)")
 
 const FIGDIR = joinpath(@__DIR__, "figures", RUN)
 
@@ -83,10 +83,10 @@ add_coast!(ax, a) =
 
 """
 Three-panel comparison map for one field, stacked vertically:
-row 1 = VILMA, row 2 = FastEarth3D (sharing one colorbar), row 3 = difference.
+row 1 = VILMA1, row 2 = VILMA2 (sharing one colorbar), row 3 = difference.
 
 `get` extracts the 2D array (lon,lat) from a run NamedTuple. `coast` overlays
-present-day continent outlines. `bsl`, if given as (vilma=, fastearth=), prints
+present-day continent outlines. `bsl`, if given as (vilma1=, vilma2=), prints
 the barystatic sea level on each absolute panel.
 """
 function panel_field(a, b, get; title, unit, cmap = :vik, coast = false, bsl = nothing)
@@ -99,8 +99,8 @@ function panel_field(a, b, get; title, unit, cmap = :vik, coast = false, bsl = n
     Label(fig[0, 1:2], title; fontsize = 20, font = :bold)
 
     abs_panels = (
-        (1, da, LABELS.vilma,     bsl === nothing ? nothing : bsl.vilma),
-        (2, db, LABELS.fastearth, bsl === nothing ? nothing : bsl.fastearth),
+        (1, da, LABELS.vilma1, bsl === nothing ? nothing : bsl.vilma1),
+        (2, db, LABELS.vilma2, bsl === nothing ? nothing : bsl.vilma2),
     )
 
     local hm_abs
@@ -117,7 +117,7 @@ function panel_field(a, b, get; title, unit, cmap = :vik, coast = false, bsl = n
     # One shared colorbar for the two absolute panels, half their combined height.
     Colorbar(fig[1:2, 2], hm_abs; label = "$title [$unit]", height = Relative(1 / 2))
 
-    axd = Axis(fig[3, 1]; title = "Difference (FE3D − VILMA)",
+    axd = Axis(fig[3, 1]; title = "Difference (VILMA2 − VILMA1)",
                xlabel = "Longitude", ylabel = "Latitude", aspect = DataAspect())
     hmd = heatmap!(axd, a.lon, a.lat, ddiff; colorrange = (-dlim, dlim), colormap = :RdBu)
     coast && add_coast!(axd, a)
@@ -138,32 +138,32 @@ function main()
     end
     d = map(load_geo, RUNS)
 
-    bsl = (vilma = d.vilma.sea_level, fastearth = d.fastearth.sea_level)
+    bsl = (vilma1 = d.vilma1.sea_level, vilma2 = d.vilma2.sea_level)
     println("\nBarystatic sea level (sea_level scalar in restart):")
-    @printf("  %-22s % .3f m\n", LABELS.vilma,     bsl.vilma)
-    @printf("  %-22s % .3f m\n", LABELS.fastearth, bsl.fastearth)
-    if bsl.fastearth == 0
-        println("  (FE3D sea_level == 0 => this output predates the geo.f90 fix that " *
+    @printf("  %-22s % .3f m\n", LABELS.vilma1, bsl.vilma1)
+    @printf("  %-22s % .3f m\n", LABELS.vilma2, bsl.vilma2)
+    if bsl.vilma2 == 0
+        println("  (VILMA2 sea_level == 0 => this output predates the geo.f90 fix that " *
                 "computes the scalar for i_geo==3; the rsl field is valid regardless.)")
     end
 
     figs = (
-        ("z_bed",  panel_field(d.vilma, d.fastearth, x -> x.z_bed;
+        ("z_bed",  panel_field(d.vilma1, d.vilma2, x -> x.z_bed;
                                title = "Bedrock elevation", unit = "m", cmap = :bukavu)),
-        ("rsl",    panel_field(d.vilma, d.fastearth, x -> x.rsl;
+        ("rsl",    panel_field(d.vilma1, d.vilma2, x -> x.rsl;
                                title = "Relative sea level", unit = "m", cmap = :vik,
                                coast = true, bsl = bsl)),
-        ("dz_bed", panel_field(d.vilma, d.fastearth, x -> x.z_bed .- x.z_bed_ref;
+        ("dz_bed", panel_field(d.vilma1, d.vilma2, x -> x.z_bed .- x.z_bed_ref;
                                title = "Bedrock deflection (z_bed − z_bed_ref)", unit = "m",
                                cmap = :vik, coast = true)),
     )
 
-    println("\nField statistics (global), mean ± std over (FE3D − VILMA):")
+    println("\nField statistics (global), mean ± std over (VILMA2 − VILMA1):")
     for (name, _) in figs
         get = name == "z_bed"  ? (x -> x.z_bed) :
               name == "rsl"    ? (x -> x.rsl)   :
                                  (x -> x.z_bed .- x.z_bed_ref)
-        diff = filter(isfinite, vec(get(d.fastearth) .- get(d.vilma)))
+        diff = filter(isfinite, vec(get(d.vilma2) .- get(d.vilma1)))
         @printf("  %-8s  mean=% .3f  std=% .3f  max|Δ|=% .3f m\n",
                 name, mean(diff), std(diff), maximum(abs, diff))
     end

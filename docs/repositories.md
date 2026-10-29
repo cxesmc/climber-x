@@ -16,7 +16,8 @@ Repositories are organized into several communities.
 | CLIMBER-X input files | base | [https://gitlab.pik-potsdam.de/cxesmc/climber-x-input](https://gitlab.pik-potsdam.de/cxesmc/climber-x-input) |
 | FESM Utilities | base | [https://github.com/fesmc/fesm-utils](https://github.com/fesmc/fesm-utils) |
 | Biogeochemistry (BGC, i.e. HAMOCC)² | optional | [https://github.com/cxesmc/bgc](https://github.com/cxesmc/bgc) |
-| Solid Earth model (VILMA)³ | optional | [https://github.com/cxesmc/vilma](https://github.com/cxesmc/vilma) |
+| Solid Earth model (VILMA2) | optional | [https://github.com/fesmc/vilma](https://github.com/fesmc/vilma) |
+| Legacy solid Earth model (VILMA1)³ | optional | [https://github.com/cxesmc/vilma](https://github.com/cxesmc/vilma) |
 | Ice-sheet model (Yelmo) | optional | [https://github.com/palma-ice/yelmo](https://github.com/palma-ice/yelmo) |
 
 ²PRIVATE. Since the HAMOCC model code is not open source, the `bgc` repository is private at the moment and
@@ -26,7 +27,7 @@ A pre-requisite to access the `bgc` repository is therefore that you agree to th
 by following the steps outlined here: [https://code.mpimet.mpg.de/projects/mpi-esm-license](https://code.mpimet.mpg.de/projects/mpi-esm-license).
 Once you have done so, send an email to [Matteo Willeit](mailto:matteo.willeit@gmail.com?subject=[GitHub]%20bgc%20source%20code) and you will be granted permission to access the `bgc` repository.
 
-³PRIVATE. Since the VILMA model code is not open source, the `vilma` repository is private at the moment
+³PRIVATE. Since the VILMA1 model code is not open source, the `cxesmc/vilma` repository is private at the moment
 and you need to be given permission in order to access it. Please send an email
 to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz.de?subject=[GitHub]%20VILMA%20access)
-and you will be granted permission to access the `vilma` repository.
+and you will be granted permission to access the `cxesmc/vilma` repository.

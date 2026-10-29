@@ -26,27 +26,24 @@
     dt_method       = 2                 ! 0: no internal timestep, 1: adaptive, cfl, 2: adaptive, pc
     dt_min          = 0.01              ! [a] Minimum timestep 
     cfl_max         = 0.5               ! Maximum value is 1.0, lower will be more stable
-    cfl_diff_max    = 0.12              ! Bueler et al (2007), Eq. 25  
     pc_method       = "AB-SAM"          ! "FE-SBE", "AB-SAM", "HEUN"
     pc_controller   = "PI42"            ! PI42, H312b, H312PID, H321PID, PID1
     pc_use_H_pred   = True              ! Use predicted H_ice instead of corrected H_ice 
     pc_filter_vel   = True              ! Use mean vel. solution of current and previous timestep
-    pc_corr_vel     = False             ! Calculate dynamics again for corrected H_ice
     pc_n_redo       = 5                 ! How many times can the same iteration be repeated (when high error exists)
-    pc_tol          = 5.0               ! [m/a] Tolerance threshold to redo timestep
-    pc_eps          = 1.0               ! Predictor-corrector tolerance  
+    pc_tol          = 1.0               ! [1/a] Redo the timestep when pc_eta > pc_tol
+    pc_eps          = 0.02              ! [1/a] Target pc_eta of the adaptive timestep (dt_method=2), must be <= pc_tol
+    pc_rho_max      = 2.0               ! Maximum growth factor dt_new/dt per step of the pc adaptive timestep (dt_method=2)
     
 /
 
 &ytopo
     solver              = "impl-lis"        ! "expl", "impl-lis"
-    surf_gl_method      = 0                 ! 0: binary (max grnd/flt elevation), 1: subgrid average elevation
     grad_lim            = 0.1               ! [m/m] Maximum allowed sloped in gradient calculations (dz/dx,dH/dx)
     grad_lim_zb         = 0.05              ! [m/m] Maximum allowed sloped in bed gradient (dzb/dx)
-    dHdt_dyn_lim        = 100.0             ! [m/yr] Maximum allowed ice thickness change due to dynamics
-    margin2nd           = False             ! Apply second-order upwind approximation to gradients at the margin
-    margin_flt_subgrid  = False             ! Allow fractional ice area for floating margins
-    f_ice_method        = "upstream"        ! "upstream" (H_ice/H_neighb) or "lsf" (geometric LSF area fraction)
+    front_subgrid       = "marine"          ! Subgrid ice fronts: "none" (binary f_ice), "floating", "marine" (floating + marine-grounded)
+    front_H_eff_min     = 50.0              ! [m] Minimum effective thickness of front cells (front_subgrid)
+    front_dHdx          = 0.0               ! [m/m] Thickness gradient assumed at a full front (front_subgrid)
     use_bmb             = True              ! Use basal mass balance in mass conservation equation
     topo_fixed          = False             ! Keep ice thickness fixed, perform other ytopo calculations
     topo_rel            = 0                 ! 0: No relaxation; 1: relax shelf; 2: relax shelf + gl; 3: all points 
@@ -88,6 +85,7 @@
     ! === numeric noise === 
     H_min_grnd          = 0.1               ! [m] Minimum ice thickness at grounded margin (thinner ice is ablated) - helps with stability, smaller value will lead to more precise summit
     H_min_flt           = 0.0               ! [m] Minimum ice thickness at floating margin (thinner ice is ablated) - helps with stability
+    H_min_tau           = 10.0              ! [yr] Timescale for removing margin ice thinner than H_min_grnd/H_min_flt and isolated partial cells
     sd_min              = 100.0             ! [m] calv_grnd(z_bed_sd <= sd_min) = 0.0 
     sd_max              = 500.0             ! [m] calv_grnd(z_bed_sd >= sd_max) = calv_max  
     calv_grnd_max       = 0.0               ! [m/a] Maximum grounded calving rate from high stdev(z_bed)
@@ -99,7 +97,8 @@
     w2                  = 0.0               ! Weighting coefficient of 2nd principal strain/stress
     kt_ref              = 0.0025            ! [m yr-1 Pa-1] vm-l19 calving scaling parameter
     kt_deep             = 0.1               ! [m yr-1 Pa-1] vm-l19 calving scaling parameter for deep ocean
-    tau_ice             = 85.0e3            ! [Pa] Ice strength failure
+    tau_ice_flt         = 85.0e3            ! [Pa] Ice strength failure, floating fronts (vm-m16)
+    tau_ice_grnd        = 85.0e3            ! [Pa] Ice strength failure, marine-grounded fronts (vm-m16)
 
     ! === threshold method ===
     Hc_ref_flt          = 50.0              ! [m] Calving limit in ice thickness (thinner ice calves)
@@ -127,19 +126,20 @@
     H_grnd_lim          = 500.0           ! [m] For beta_gl_scale=1, reduce beta linearly between H_grnd=0 and H_grnd_lim 
     beta_min            = 100.0           ! [Pa a m-1] Minimum value of beta allowed for grounded ice (for stability)
     eps_0               = 1e-6            ! [1/a] Regularization term for effective viscosity - minimum strain rate
-    scale_T             = 1               ! 0: no scaling of c_bed with T, 1: linearly increase c_bed to c_bed_frozen=cf_ref*N_eff for cold ice
-    T_frz               = -3.0            ! Temperature below which ice considered fully frozen (linear increase in friction )
+    frz_scale           = True            ! Reduce sliding where the bed is below the pressure melting point
+    frz_efold           = 3.0             ! [K] e-folding temperature of the sliding speed
+    frz_min             = 1e-3            ! [-] Minimum sliding-speed factor for frozen beds
     ssa_solver          = "residual"    ! "residual" | "energy"
     ssa_lis_opt_residual= "-i minres -p jacobi -maxiter 100 -tol 1.0e-2 -initx_zeros false"  ! See Lis library !-omp_num_threads 2
     ssa_lis_opt_energy  = "-i cg -p jacobi -maxiter 200 -tol 1.0e-4 -initx_zeros false"       ! SPD => CG (matches Yelmo.jl default)
     ssa_lat_bc          = "floating"      ! "all", "marine", "floating", "none", "slab"
-    ssa_beta_max        = 1e20            ! [Pa a m-1] Maximum value of beta for which ssa should be calculated 
-    ssa_vel_max         = 5000.0          ! [m a-1] SSA velocity limit to avoid spurious results 
+    ssa_vel_lim_method  = "drag"          ! "clip": clip each component at ssa_vel_max; "drag": smooth speed-limit drag above 0.8*ssa_vel_max
+    ssa_vel_max         = 10000.0         ! [m a-1] SSA velocity limit
+    ssa_vel_lim_tau     = 1e5             ! [Pa] Speed-limit drag at ssa_vel_max (ssa_vel_lim_method="drag")
     ssa_iter_max        = 5               ! Number of maximum allowed iterations over ssa to converge on vel. solution (20)
     ssa_iter_rel        = 0.7             ! [--] Relaxation fraction [0:1] to stabilize ssa iterations
     ssa_iter_conv       = 1e-1            ! [--] L2 relative error convergence limit to exit ssa iterations (1e-2)
     taud_lim            = 2e5             ! [Pa] Maximum allowed driving stress
-    cb_sia              = 0.0             ! [m a-1 Pa-1] Bed roughness coefficient for SIA sliding
     neff_nxi            = 0               ! Subgrid interp. of hyd%N onto dyn%N_eff. 0: none, 1: Gaussian quad., >1: nxi x nxi (was yneff.nxi)
 
 /
@@ -171,7 +171,7 @@
     ! ---- bucket (bkt_) ----
     bkt_N_closure     = 3      ! 0=CONST 1=OVERBURDEN 2=MARINE 3=TILL 4=TWO_VALUE   (was yneff.method=3)
     bkt_till_rate     = 0.008  ! [m/a]  was ytherm.till_rate
-    bkt_floating_mode = 1      ! 0=ZERO 1=MARGIN_FILL (legacy saturate floating+margin ring)
+    bkt_floating_mode = 2      ! 0=ZERO 1=MARGIN_FILL (legacy saturate floating+margin ring) 2=SATURATED (saturate floating only)
 
     ! ---- closures (no prefix) ----
     const_N         = 1e7    ! [Pa] N_CLOSURE_CONST (was yneff.const)
@@ -233,7 +233,7 @@
     solver_advec    = "impl-upwind"     ! "expl", "impl-upwind"
     advecxy_order   = 2                 ! Horizontal advection order: 1=upwind, 2=flux-limited 2nd-order upwind
     gamma           = 1.0               ! [K] Scalar for the pressure melting point decay function
-    use_strain_sia  = False             ! True: calculate strain heating from SIA approx.
+    strain_heating  = "full"            ! "full": from 3D viscosity and strain rate, "sia": SIA approx., "none": no strain heating
     use_const_cp    = False             ! Use specified constant value of heat capacity?
     const_cp        = 2009.0            ! [J kg-1 K-1] Specific heat capacity 
     use_const_kt    = False             ! Use specified constant value of heat conductivity?
@@ -243,23 +243,26 @@
     H_ice_thin      = 10.0              ! [m] Skip column solver below this thickness (linear profile imposed)
     enth_cp_method  = "integral"        ! Enthalpy heat capacity: "const" (cp_ref) or "integral" (int cp(T) dT)
     ! Basal water bucket (till_rate, H_w_max) moved to &yhyd (bkt_till_rate, W_til_max).
+    basal_bc_method = "capacity"        ! Grounded basal BC: "capacity" (bmb_grnd* vs freeze-on capacity C) or "wtil" (deprecated)
+    gl_temperate    = True              ! Hold grounded bases next to floating ice or open ocean at the pressure melting point
 
     rock_method     = "active"          ! "equil" (not active bedrock) or "active"
     nzr_aa          = 5                 ! Number of vertical points in bedrock 
     zeta_scale_rock = "exp-inv"         ! "linear", "exp-inv"
     zeta_exp_rock   = 2.0  
     H_rock          = 2000.0            ! [m] Lithosphere thickness 
-    cp_rock         = 1000.0            ! [J kg-1 K-1] Specific heat capacity of bedrock
+    rhoc_rock       = 2.0e6             ! [J m-3 K-1] Volumetric heat capacity of bedrock (rho*cp)
     kt_rock         = 6.3e7             ! [J a-1 m-1 K-1] Thermal conductivity of bedrock [W m-1 K-1 * sec_year] => [J a-1 m-1 K-1]
 /
 
 &yelmo_masks
-    basins_load     = False 
-    basins_path     = "ice_data/{domain}/{grid_name}/{grid_name}_BASINS-nasa.nc" 
-    basins_nms      = "basin" "basin_mask"
-    regions_load    = False 
-    regions_path    = "ice_data/{domain}/{grid_name}/{grid_name}_REGIONS.nc"
-    regions_nms     = "mask" "None"
+    regions_group    = "None"            ! group of the regions (fesm-utils regions); "None" = no layers
+    basins           = "None"            ! basin ids of bnd%basins: a layer of the regions, "None" or "domain" (one basin)
+    mask_ice_dynamic = "all"             ! where ice is dynamic, else no ice (selection expression of the regions)
+    mask_ice_fixed   = "none"            ! where ice thickness is prescribed (over mask_ice_dynamic)
+    relax            = "none"            ! where ice relaxes to H_ice_ref (ytopo.topo_rel = -1)
+    relax_tau        = 0.0               ! [yr] relaxation timescale there
+    mask_rmse        = "all"             ! where the error metrics are computed
 /
 
 &yelmo_init_topo

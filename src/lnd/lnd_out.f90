@@ -2005,7 +2005,7 @@ contains
     if( write_surf ) then
       call surf_ave( mon_su,ann_su,mon_su_g,ann_su_g )
       fnm = trim(out_dir)//"/lnd_surf.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call surf_nc_write(fnm,ncid,mon_su(k),mon_su_g(k),k,nout)
@@ -2017,7 +2017,7 @@ contains
     if ( write_surf .and. l_daily_output) then
       ! write to file
       fnm = trim(out_dir)//"/lnd_surf_daily.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp), dim1=dim_time, start=[nout], count=[1],ncid=ncid)    
       do k = 1, nday_year
         call surf_daily_nc_write(fnm,ncid,day_su(k),k,nout)
@@ -2030,7 +2030,7 @@ contains
     if( write_carbon ) then
       call carbon_ave( mon_c,ann_c,mon_c_g,ann_c_g )
       fnm = trim(out_dir)//"/lnd_carb.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call carbon_nc_write(fnm,ncid,mon_c(k),mon_c_g(k),k,nout)
@@ -2044,7 +2044,7 @@ contains
     if( write_soil ) then
       call soil_ave( mon_s,ann_s )
       fnm = trim(out_dir)//"/lnd_soil.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call soil_nc_write(fnm,ncid,mon_s(k),k,nout)
@@ -2058,7 +2058,7 @@ contains
     if( write_soil_par ) then
       call soil_par_ave( mon_sp,ann_sp )
       fnm = trim(out_dir)//"/lnd_soil_par.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call soil_par_nc_write(fnm,ncid,mon_sp(k),k,nout)
@@ -2071,7 +2071,7 @@ contains
     if( write_lake ) then
       call lake_ave( mon_l,ann_l )
       fnm = trim(out_dir)//"/lnd_lake.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call lake_nc_write(fnm,ncid,mon_l(k),k,nout)
@@ -2085,7 +2085,7 @@ contains
     if( write_cons ) then
       call cons_ave( mon_b,ann_b )
       fnm = trim(out_dir)//"/lnd_conservation.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,real(year_now,wp),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
       do k = 1, nmon_year
         call cons_nc_write(fnm,ncid,mon_b(k),k,nout)
@@ -2138,7 +2138,7 @@ contains
     character (len=*) :: fnm
     integer :: ndat, y, ncid, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), &
     dim1=dim_time,start=[ndat],count=[y],ncid=ncid)   
     call nc_write(fnm,"co2", sngl(vars%co2),    dim1=dim_time,start=[ndat],count=[y],long_name="atmospheric CO2",units="ppm",missing_value=missing_value,ncid=ncid)
@@ -2442,7 +2442,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)    
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -2876,7 +2876,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)    
     call nc_write_dim(fnm, dim_day, x=1._wp, dx=1._wp, nx=nday_year, axis="e", &
@@ -2953,7 +2953,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, units="months", ncid=ncid)
@@ -3063,7 +3063,7 @@ end do
  
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -3306,7 +3306,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -3440,7 +3440,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -3567,7 +3567,7 @@ end do
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm, dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &

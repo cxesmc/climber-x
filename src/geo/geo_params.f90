@@ -36,7 +36,7 @@ module geo_params
   logical :: l_visc_3d
   character (len=256) :: visc_1d_file
   character (len=256) :: visc_3d_file
-  character (len=256) :: vilma_grid_file
+  character (len=256) :: vilma1_grid_file
   real(wp) :: f_visc_sd
   real(wp) :: sigma_log10_visc
   real(wp) :: visc_log10_min
@@ -123,7 +123,7 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","l_visc_3d",l_visc_3d)
     call nml_read(filename,"geo_par","visc_1d_file",visc_1d_file)
     call nml_read(filename,"geo_par","visc_3d_file",visc_3d_file)
-    call nml_read(filename,"geo_par","vilma_grid_file",vilma_grid_file)
+    call nml_read(filename,"geo_par","vilma1_grid_file",vilma1_grid_file)
     call nml_read(filename,"geo_par","f_visc_sd",f_visc_sd)
     call nml_read(filename,"geo_par","sigma_log10_visc",sigma_log10_visc)
     call nml_read(filename,"geo_par","visc_log10_min",visc_log10_min)

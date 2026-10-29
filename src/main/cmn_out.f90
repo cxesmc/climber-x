@@ -634,7 +634,7 @@ contains
 
 
     fnm = trim(out_dir)//"/cmn.nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,dble(year_now),dim1=dim_time,start=[nout],count=[1],ncid=ncid)
     do k = 1, nmon_year
       call surf_nc_write(fnm,ncid,mon_sur(k),k,nout)
@@ -684,7 +684,7 @@ contains
     character (len=*) :: fnm
     integer :: ndat, y, ncid, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", dble([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))]), &
     dim1=dim_time,start=[ndat],count=[y],ncid=ncid)    
     call nc_write(fnm,"t2m",     vars%t2m,    dim1=dim_time,start=[ndat],count=[y],long_name="global mean annual surface air temperaure",units="°C",ncid=ncid)
@@ -897,7 +897,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)    
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &

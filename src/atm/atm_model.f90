@@ -757,7 +757,7 @@ contains
 
 
     call monthly2daily(m0,m1,wtm0,wtm1)
-    call nc_read("input/era_interim_monthly_eke_1981_2010_5x5.nc","eke_2_6_int",eke_mon(:,jm:1:-1,1:12) )
+    call nc_read("input/era_interim_monthly_eke_1981_2010_5x5.nc","eke_2_6_int",eke_mon(:,jm:1:-1,1:12),start=[1,1,1],count=[im,jm,12])
     eke_mon(:,:,0)   = eke_mon(:,:,12)
     eke_mon(:,:,13)  = eke_mon(:,:,1)
 

@@ -281,7 +281,7 @@ contains
 
       fnm = trim(out_dir)//"/feedback_save.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write_dim(fnm,"doy",x=1._wp,dx=1._wp,nx=nday_year,ncid=ncid)
       call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
       call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -758,7 +758,7 @@ contains
     ! write results of feedback analysis
     fnm = trim(out_dir)//"/feedbacks.nc"
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,"c",x=1,ncid=ncid)
     call nc_write_dim(fnm,"fb",x=1,dx=1,nx=nfb,ncid=ncid)
     call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)

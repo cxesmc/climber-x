@@ -39,7 +39,11 @@ module constants
 
   real(wp), parameter :: cap_a   = 1000._wp     !! J/kg/K, specific heat capacity of air
   real(wp), parameter :: cap_i   = 2110._wp     !! J/kg/K, specific heat capacity of ice
-  real(wp), parameter :: cap_w   = 4187._wp     !! J/kg/K, specific heat capacity of water
+  real(wp), parameter :: cap_w   = 4187._wp     !! J/kg/K, specific heat capacity of pure water
+  real(wp), parameter :: cap_sw  = 3974._wp     !! J/kg/K, specific heat capacity of seawater
+                                                !! (phys_constants cp_ocn; use this
+                                                !! where the medium is the ocean, as in
+                                                !! the ice-shelf melt parameterisation)
 
   real(wp), parameter :: lambda_a = 0.023_wp    !! W/m/K, thermal conductivity of air
   real(wp), parameter :: lambda_i = 2.2_wp      !! W/m/K, thermal conductivity of ice
@@ -49,7 +53,10 @@ module constants
   real(wp), parameter :: emis_w = 0.98_wp       !! longwave emissivity of water
 
   real(wp), parameter :: Le      = 2501.e3_wp   !! J/kg, latent heat of evaporation
-  real(wp), parameter :: Lf      = 334.e3_wp    !! J/kg, latent heat of fusion
+  real(wp), parameter :: Lf      = 333.5e3_wp   !! J/kg, latent heat of fusion
+                                                !! (was 334.e3; 3.335e5 is the
+                                                !! standard value and what the
+                                                !! ice sheet model uses)
   real(wp), parameter :: Ls      = Le + Lf      !! J/kg, latent heat of sublimation
 
   real(wp), parameter :: Rd      = 287.058_wp   !! J/kg/K, specific gas constant of dry air 
@@ -95,6 +102,39 @@ module constants
 
 
 contains
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  c o n s t a n t s _ p h y s _ c o n s t
+  !   Purpose    :  express this module's physical constants as a
+  !                 fesm-utils phys_const_class, so that a coupled
+  !                 component's set can be compared against it with
+  !                 phys_const_compare instead of diverging silently.
+  !
+  !                 cp_w is CLIMBER-X's pure-water capacity and cp_ocn its
+  !                 seawater one, the same split phys_constants makes.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine constants_phys_const(c)
+
+    use phys_constants, only : phys_const_class, phys_const_set
+
+    implicit none
+
+    type(phys_const_class), intent(out) :: c
+
+    call phys_const_set(c, label="CLIMBER-X", source="src/main/constants.f90", &
+                        g            = real(g,      kind(1.d0)),  &
+                        T0           = real(T0,     kind(1.d0)),  &
+                        rho_ice      = real(rho_i,  kind(1.d0)),  &
+                        rho_w        = real(rho_w,  kind(1.d0)),  &
+                        rho_sw       = real(rho_sw, kind(1.d0)),  &
+                        rho_asth     = real(rho_as, kind(1.d0)),  &
+                        L_ice        = real(Lf,     kind(1.d0)),  &
+                        cp_ice       = real(cap_i,  kind(1.d0)),  &
+                        cp_w         = real(cap_w,  kind(1.d0)),  &
+                        cp_ocn       = real(cap_sw, kind(1.d0)))
+
+  end subroutine constants_phys_const
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

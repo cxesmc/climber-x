@@ -92,7 +92,7 @@ contains
   ! create atm grid object
   spos = scan(trim(fnm),"/", BACK= .true.)+1
   ppos = scan(trim(fnm),".", BACK= .true.)-1
-  call grid_init(atm%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+  call grid_init(atm%grid,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
     x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
   ! initialize map
@@ -170,32 +170,32 @@ contains
   ! read constant climate forcing
   if (ifake_atm_hires.eq.0) then
 
-    call nc_read(fake_atm_hires_const_file,"t_air",tair(:,:,1:12) )
-    !call nc_read(fake_atm_hires_const_file,"tstd",tstd(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"tmaxstd",tstd(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"qair",qair(:,:,1:12) )
+    call nc_read(fake_atm_hires_const_file,"t_air",tair(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    !call nc_read(fake_atm_hires_const_file,"tstd",tstd(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"tmaxstd",tstd(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"qair",qair(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     if (prc_forcing.eq.0) then
       ! read rain and snow separately
-      call nc_read(fake_atm_hires_const_file,"rain",rain(:,:,1:12) )
-      call nc_read(fake_atm_hires_const_file,"snow",snow(:,:,1:12) )
+      call nc_read(fake_atm_hires_const_file,"rain",rain(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+      call nc_read(fake_atm_hires_const_file,"snow",snow(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     else if (prc_forcing.eq.1) then
-      call nc_read(fake_atm_hires_const_file,"prc",prc(:,:,1:12) )
+      call nc_read(fake_atm_hires_const_file,"prc",prc(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     endif
-    call nc_read(fake_atm_hires_const_file,"pressure",pressure(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"swdown",swdown(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"lwdown",lwdown(:,:,1:12) )
+    call nc_read(fake_atm_hires_const_file,"pressure",pressure(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"swdown",swdown(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"lwdown",lwdown(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     if (wind_forcing.eq.0) then
       ! read u and v wind separately
-      call nc_read(fake_atm_hires_const_file,"usur",usur(:,:,1:12) )
-      call nc_read(fake_atm_hires_const_file,"vsur",vsur(:,:,1:12) )
+      call nc_read(fake_atm_hires_const_file,"usur",usur(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+      call nc_read(fake_atm_hires_const_file,"vsur",vsur(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
       ! derive wind speed, not correct but the best that can be done
       wind(:,:,1:12) = sqrt(usur(:,:,1:12)**2+vsur(:,:,1:12)**2)
     else
-      call nc_read(fake_atm_hires_const_file,"wind",wind(:,:,1:12) )
+      call nc_read(fake_atm_hires_const_file,"wind",wind(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     endif
-    call nc_read(fake_atm_hires_const_file,"cld",cld(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"cod",cod(:,:,1:12) )
-    call nc_read(fake_atm_hires_const_file,"alb",alb(:,:,1:12) )
+    call nc_read(fake_atm_hires_const_file,"cld",cld(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"cod",cod(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
+    call nc_read(fake_atm_hires_const_file,"alb",alb(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
 
   ! initilaize variable climate forcing
   else if (ifake_atm_hires.eq.1) then

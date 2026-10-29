@@ -58,9 +58,9 @@ creates a `.runme_config`, and clones the large input-data repository into
 `input/`. If `configme` can detect your machine from the hostname it does so,
 otherwise it prompts you.
 
-It also *attempts* to clone the private `bgc` and `vilma` components (needed for
+It also *attempts* to clone the private `bgc` and `vilma1` components (needed for
 the `bgc` and `ice` flavors). If you do not have access these are skipped with a
-note rather than failing the install — see [Private components](#private-components-bgc-and-vilma).
+note rather than failing the install — see [Private components](#private-components-bgc-and-vilma1).
 
 Common options:
 
@@ -80,7 +80,7 @@ context on the [configme install details](configme-install-details.md) page —
 these are for reference only; `configme install` is the recommended path and you
 do not need to run them by hand.
 
-## Private components (bgc and vilma)
+## Private components (bgc and vilma1)
 
 Two components are needed only for the carbon-cycle and ice-sheet flavors and
 live in private repositories. `configme install climber-x` attempts to clone
@@ -99,8 +99,10 @@ access.
   [Matteo Willeit](mailto:matteo.willeit@gmail.com?subject=[GitHub]%20bgc%20source%20code)
   and you will be granted permission.
 
-- **`vilma`** (VILMA solid-Earth model — required for `climber-clim-ice`).
-  Since the VILMA model code is not open source, the `vilma` repository is
+- **`vilma1`** (legacy VILMA solid-Earth model, `i_geo=2` — used by
+  `climber-clim-ice` unless built with `vilma1=0`; the open-source VILMA2,
+  `i_geo=3`, is cloned by `configme` into `vilma2/`).
+  Since the VILMA1 model code is not open source, the `cxesmc/vilma` repository is
   private and you need to be given permission to access it. Please send an email
   to [Matteo Willeit and Volker Klemann](mailto:matteo.willeit@gmail.com,volker.klemann@gfz-potsdam.de?subject=[GitHub]%20VILMA%20access)
   and you will be granted permission.
@@ -118,7 +120,7 @@ in the main directory.
 ### Climate model
 
 The climate-only version `climber-clim` corresponds to the version described by
-Willeit et al. (2022). It requires neither the private `bgc`/`vilma` code nor the
+Willeit et al. (2022). It requires neither the private `bgc`/`vilma1` code nor the
 LIS library.
 
 ```bash
@@ -135,7 +137,7 @@ version (which should typically not be used).
 
 ### Climate and carbon cycle model
 
-Requires the private `bgc` component (see [Private components](#private-components-bgc-and-vilma)).
+Requires the private `bgc` component (see [Private components](#private-components-bgc-and-vilma1)).
 
 ```bash
 make clean
@@ -147,8 +149,9 @@ runme -rs -q short --omp 16 -o output/clim-bgc -p ctl.flag_bgc=T
 
 ### Climate and ice sheet model
 
-Uses the `yelmo` ice-sheet model (cloned by `configme`) and requires the private
-`vilma` solid-Earth component (see [Private components](#private-components-bgc-and-vilma)).
+Uses the `yelmo` ice-sheet model (cloned by `configme`) and the private
+`vilma1` solid-Earth component (see [Private components](#private-components-bgc-and-vilma1));
+without it, build with `vilma1=0` and use VILMA2 (`i_geo=3`).
 
 ```bash
 make clean
@@ -160,7 +163,7 @@ runme -rs -q short --omp 16 -o output/clim-ice -p ctl.flag_ice=T ctl.flag_geo=T 
 
 ### Fully coupled configuration
 
-With both `bgc` and `vilma` available you can build the fully coupled model:
+With both `bgc` and `vilma1` available you can build the fully coupled model:
 
 ```bash
 make clean

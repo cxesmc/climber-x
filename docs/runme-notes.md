@@ -7,7 +7,7 @@ After **CLIMBER-X** has been compiled, several steps must be completed to run th
 1. Create a run directory (`RUNDIR`).
 2. Copy namelist parameter files to `RUNDIR`.
 3. Make links to the `input`, `maps` and `restart` directories in `RUNDIR`.
-4. Copy `VILMA` restart files to `RUNDIR` (since these are eventually modified by `climber.x`).
+4. Copy `VILMA1` restart files to `RUNDIR` (since these are eventually modified by `climber.x`).
 5. Copy the executable file `climber.x` to `RUNDIR`.
 6. To run on the cluster, create a job submission script (e.g. `job.submit`) in `RUNDIR` to manage various computing options (number of processors, etc).
 

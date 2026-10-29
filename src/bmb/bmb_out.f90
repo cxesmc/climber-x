@@ -207,7 +207,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/bmb_"//trim(bmb%grid%name)//".nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,dble(year_now), dim1=dim_time, start=[bmb%nout], count=[1],ncid=ncid)    
     do k = 1, nmon_year
        call bmb_nc_write(fnm,ncid,bmb%mon_s(k),grid,k,bmb%nout)
@@ -254,7 +254,7 @@ contains
     character (len=*) :: fnm
     integer :: nout, ncid, y, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time",  real([(i,i=(year_now-(y-1)*n_accel),(year_now),(n_accel))],wp), dim1=dim_time,start=[nout],count=[y],ncid=ncid)    
     call nc_write(fnm,"bmb", vars%bmb, dims=[dim_time],start=[nout],count=[y],&
     long_name="integrated floating ice basal mass balance of ice sheets",units="Gt/a",ncid=ncid)
@@ -282,7 +282,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
