@@ -128,7 +128,7 @@ module ocn_grid
   real(wp), dimension(:), allocatable :: dza !! thickness between layer centers [m]
   real(wp), dimension(:), allocatable :: rdz  !! reverse of dz [1/m] 
   real(wp), dimension(:), allocatable :: rdza !! reverse of dza [1/m]
-  real(wp), dimension(:), allocatable :: f_pbl  !! fraction of layers in boundary layer [] 
+  real(wp), dimension(:), allocatable :: f_ek   !! layer mean of d(tau/tau0)/dz times dbl**2/2 for tau = tau0*(1+z/dbl)**2, sums to dbl**2/2 over dz [m]
 
   real(wp) :: dzz
   real(wp), dimension(:,:), allocatable :: dzg !! 2D "depth" grid of difference between each pair of levels [m]
@@ -235,7 +235,7 @@ contains
     allocate(rdza(maxk))
     allocate(rdzg(maxk,maxk))
     allocate(z2dzg(maxk,maxk))
-    allocate(f_pbl(maxk))
+    allocate(f_ek(maxk))
     allocate(h(3,0:maxi+1,0:maxj+1))
     allocate(rh(3,0:maxi+1,0:maxj+1))
     allocate(ocn_area(maxi,maxj))
@@ -348,13 +348,13 @@ contains
     zro_nom = zro
     dz_nom  = dz
 
-    ! define fraction of layers in boundary layer
+    ! exact layer integral of the parabolic wind-stress profile tau = tau0*(1+z/dbl)**2 in the boundary layer, used by velc
     do k=maxk,1,-1
-      f_pbl(k) = max(0.,min(1.,(zw(k)+dbl)/(zw(k)-zw(k-1))))
+      f_ek(k) = 0.5_wp*dbl**2*(max(0._wp,1._wp+zw(k)/dbl)**2 - max(0._wp,1._wp+zw(k-1)/dbl)**2)/(zw(k)-zw(k-1))
     enddo
 
-    print*,'layer #, layer top, layer mid, layer thick, dz layer mid, f_pbl'
-    write(6,'(i7,5f12.4)')(k,zw(k),zro(k),dz(k),dza(k),f_pbl(k),k=maxk,1,-1)
+    print*,'layer #, layer top, layer mid, layer thick, dz layer mid, f_ek'
+    write(6,'(i7,5f12.4)')(k,zw(k),zro(k),dz(k),dza(k),f_ek(k),k=maxk,1,-1)
 
     ! define shelf depth, needed? fixme
     k1_shelf = maxk

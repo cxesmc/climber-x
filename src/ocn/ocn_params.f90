@@ -92,6 +92,10 @@ module ocn_params
        real(wp) :: cd_bot          !! bottom drag coefficient, 0 = no bottom friction
        real(wp) :: u_bot           !! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic bottom drag
        real(wp) :: drag_cb         !! checkerboard friction rate (namelist in days, 0 = off), see stencil_coef in invert.f90
+       real(wp) :: adrag_bcl       !! baroclinic drag away from the equator (namelist in days, 0 = adrag)
+       real(wp) :: lat_drag_bcl    !! deg, e-folding latitude of the transition from adrag (equator) to adrag_bcl
+       integer  :: i_fric_ret      !! return flow of the barotropic friction: 0 = uniform over the column, 1 = in the bottom level
+       real(wp) :: lat_fric_ret    !! deg, equatorial regularisation of 1/f in the bottom return, f/(f^2+f0^2) with f0 = f(lat_fric_ret)
      end type
      type(drag_par_type) :: drag_par
 
@@ -102,6 +106,7 @@ module ocn_params
      real(wp) :: ent_downslope       !! entrainment of ambient water by the plume, fraction of its volume per km of descent []
      real(wp) :: drho_downslope_min  !! minimum shelf-minus-ambient density contrast for a downslope flow [kg/m3]
      real(wp) :: f_downslope_max     !! maximum fraction of a cell volume exchanged per time step []
+     real(wp) :: z_downslope_max     !! maximum bottom depth of a source (shelf) cell [m]
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
      real(wp) :: drhcor_max
@@ -285,6 +290,18 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","cd_bot",drag_par%cd_bot)
     call nml_read(filename,"ocn_par","u_bot",drag_par%u_bot)
     call nml_read(filename,"ocn_par","drag_cb",drag_par%drag_cb)
+    call nml_read(filename,"ocn_par","adrag_bcl",drag_par%adrag_bcl)
+    call nml_read(filename,"ocn_par","lat_drag_bcl",drag_par%lat_drag_bcl)
+    call nml_read(filename,"ocn_par","i_fric_ret",drag_par%i_fric_ret)
+    call nml_read(filename,"ocn_par","lat_fric_ret",drag_par%lat_fric_ret)
+    if (drag_par%lat_drag_bcl.le.0._wp .or. drag_par%lat_fric_ret.le.0._wp) then
+      print *,'ERROR: lat_drag_bcl and lat_fric_ret must be > 0',drag_par%lat_drag_bcl,drag_par%lat_fric_ret
+      stop
+    endif
+    if (drag_par%i_fric_ret.lt.0 .or. drag_par%i_fric_ret.gt.1) then
+      print *,'ERROR: i_fric_ret must be 0 or 1, i_fric_ret =',drag_par%i_fric_ret
+      stop
+    endif
 
     call nml_read(filename,"ocn_par","i_eos",i_eos)
     if (i_eos<0 .or. i_eos>4) then
@@ -321,6 +338,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","ent_downslope",ent_downslope)
     call nml_read(filename,"ocn_par","drho_downslope_min",drho_downslope_min)
     call nml_read(filename,"ocn_par","f_downslope_max",f_downslope_max)
+    call nml_read(filename,"ocn_par","z_downslope_max",z_downslope_max)
 
     call nml_read(filename,"ocn_par","pe_buoy_coeff",pe_buoy_coeff)
     call nml_read(filename,"ocn_par","ke_tau_coeff",ke_tau_coeff)

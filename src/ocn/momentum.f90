@@ -32,7 +32,7 @@ module momentum_mod
   use dim_name
 
   use precision, only : wp
-  use constants, only : omega
+  use constants, only : omega, pi
   use timer, only : time_soy_ocn, doy, year
   use control, only : out_dir
   use climber_grid, only : lon
@@ -270,8 +270,14 @@ contains
        drag(2,maxi+1,j) = drag(2,1,j)
     enddo
 
-    ! baroclinic velocities: background drag only
-    drag_bcl(:,:,:) = drag_par%adrag
+    ! baroclinic velocities: background drag only, adrag at the equator (regularises f -> 0) relaxing to adrag_bcl
+    ! poleward with e-folding latitude lat_drag_bcl; identical to adrag everywhere if adrag_bcl = adrag
+    do j=1,maxj
+      drag_bcl(1,:,j) = drag_par%adrag_bcl + (drag_par%adrag-drag_par%adrag_bcl) &
+                        * exp(-(asin(s(j))*180._wp/pi/drag_par%lat_drag_bcl)**2)
+      drag_bcl(2,:,j) = drag_par%adrag_bcl + (drag_par%adrag-drag_par%adrag_bcl) &
+                        * exp(-(asin(sv(j))*180._wp/pi/drag_par%lat_drag_bcl)**2)
+    enddo
 
     ! on rows where the Coriolis parameter is set to zero (|f| < fcormin, see momentum_init) add drag instead,
     ! r_eff = r + fcormin^2/r, so that r_eff/(0+r_eff^2) = r/(fcormin^2+r^2)
@@ -570,6 +576,11 @@ contains
       drag_par%f_frac_crit = 1._wp
     endif
     if (drag_par%drag_cb.gt.0._wp) drag_par%drag_cb = 1._wp/(drag_par%drag_cb*86400._wp) ! 1/s
+    if (drag_par%adrag_bcl.gt.0._wp) then
+      drag_par%adrag_bcl = 1._wp/(drag_par%adrag_bcl*86400._wp) ! 1/s
+    else
+      drag_par%adrag_bcl = drag_par%adrag   ! same baroclinic and barotropic background drag everywhere
+    endif
 
     ! Coriolis parameter
     ! Rows with |f| < fcormin (only the equator v-line on the 5 deg grid) get f = 0 and instead a larger drag,

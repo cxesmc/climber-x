@@ -80,7 +80,7 @@
  !-------------------------------------------------------------------------------------------
  ! friction settings
  !-------------------------------------------------------------------------------------------
- ! barotropic drag on each face = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag
+ ! barotropic drag on each face = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag, see adrag_bcl
  adrag = 8.                   ! days, inverse background drag of the barotropic and baroclinic velocities
  drag_frac = 4.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
                               ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
@@ -94,6 +94,13 @@
                               ! (-1/4)*(second difference of the face transport along the face). Equal to an extra drag 1/drag_cb
                               ! on the 2-grid-point checkerboard of psi (invisible to the J3 Coriolis term), zero for flow linear
                               ! along the face. Makes the psi matrix 9-point (band width 2*maxi)
+ adrag_bcl = 0.               ! days, 0 = adrag. Baroclinic background drag away from the equator: the baroclinic drag is
+                              ! adrag at the equator (regularises f -> 0) and relaxes to adrag_bcl poleward,
+                              ! r = r_bcl + (r_adrag - r_bcl)*exp(-(lat/lat_drag_bcl)^2)
+ lat_drag_bcl = 15.           ! deg, e-folding latitude of the equatorial baroclinic drag
+ i_fric_ret = 0               ! return flow of the barotropic friction (r*ub/f): 0 = uniform over the column (as the depth-mean
+                              ! velocity), 1 = in the bottom level of the face (bottom Ekman layer), column transport and psi unchanged
+ lat_fric_ret = 5.            ! deg, i_fric_ret=1 only: 1/f -> f/(f^2+f0^2) with f0 = f(lat_fric_ret), removes the return near the equator
 
  !-------------------------------------------------------------------------------------------
  ! Coriolis 
@@ -154,6 +161,8 @@
  drho_downslope_min = 0.01    ! kg/m3, minimum density excess of the shelf water over the ambient water at the
                               ! shelf-bottom level for the flow to start
  f_downslope_max = 0.5        ! maximum fraction of any involved cell volume exchanged per ocean time step
+ z_downslope_max = 2000.      ! m, maximum bottom depth of a source cell (shelves and upper slopes only; deeper steps
+                              ! between nearly homogeneous deep columns would give spurious open-ocean flows)
 
  !-------------------------------------------------------------------------------------------
  ! mixed layer settings
