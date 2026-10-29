@@ -784,7 +784,7 @@ contains
       nlon = ceiling((lon_max-lon_min)/dlon)
       dlat = (smb%grid%G%dy*1.e3_wp * 360._wp) / (2._wp*pi*r_earth*cos(0.5_wp*(lat_max+lat_min)*pi/180._wp)) ! meridional resolution in deg
       nlat = ceiling((lat_max-lat_min)/dlat)
-      call grid_init(smb%grid_latlon,name=trim(smb%grid%name)//trim("_latlon"),mtype="latlon",units="degrees", &
+      call grid_init(smb%grid_latlon,name=trim(smb%grid%name)//trim("_latlon"),mtype="latlon",units="degrees",planet="Spherical Earth", &
         x0=real(lon_min,dp),dx=real(dlon,dp),nx=nlon,y0=real(lat_min,dp),dy=real(dlat,dp),ny=nlat)
       call map_init(smb%maps_to_latlon,smb%grid,smb%grid_latlon,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_init(smb%maps_from_latlon,smb%grid_latlon,smb%grid,method="con",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
@@ -809,7 +809,7 @@ contains
       ! grid definition
       spos = scan(trim(mask_maxice_file),"/", BACK= .true.)+1
       ppos = scan(trim(mask_maxice_file),".", BACK= .true.)-1
-      call grid_init(mask_maxice_grid,name=trim(mask_maxice_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
+      call grid_init(mask_maxice_grid,name=trim(mask_maxice_file(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", x=lon_maxi,y=lat_maxi)
       ! map to ice grid
       call map_init(maps_maxice_to_ice,mask_maxice_grid,smb%grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
       call map_field(maps_maxice_to_ice,"mask",maxi,smb%mask_maxice,stat="mean",missing_value=-9999)

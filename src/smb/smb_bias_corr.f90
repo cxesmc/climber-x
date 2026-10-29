@@ -141,7 +141,7 @@ contains
    ! create grid object
    spos = scan(trim(fnm),"/", BACK= .true.)+1
    ppos = scan(trim(fnm),".", BACK= .true.)-1
-   call grid_init(grid_ref,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees", &
+   call grid_init(grid_ref,name=trim(fnm(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
      x0=real(lon(1),dp),dx=real(dlon,dp),nx=ni,y0=real(lat(1),dp),dy=real(dlat,dp),ny=nj)
 
    ! initialize map

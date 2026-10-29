@@ -226,7 +226,7 @@ contains
         geo%hires%z_bed_std = z_bed_std
       else
         ! different grid, map 
-        call grid_init(grid_z_bed_std,name="z_bed_std",mtype="latlon",units="degrees", x=real(lon_z_bed_std,dp),y=real(lat_z_bed_std,dp))
+        call grid_init(grid_z_bed_std,name="z_bed_std",mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon_z_bed_std,dp),y=real(lat_z_bed_std,dp))
         call map_init(maps_z_bed_std_to_geo,grid_z_bed_std,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_z_bed_std_to_geo,"z_bed_std",z_bed_std,geo%hires%z_bed_std,stat="mean",missing_value=-9999._dp)
       endif
@@ -515,7 +515,7 @@ contains
       else
         ! generate grid object
         ppos = scan(trim(z_bed_rel_file),".", BACK= .true.)-1
-        call grid_init(grid_rel,name=trim(z_bed_rel_file(7:ppos)),mtype="latlon",units="degrees", &
+        call grid_init(grid_rel,name=trim(z_bed_rel_file(7:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", &
           x0=real(lon_rel(1),dp),dx=real(dlon_rel,dp),nx=ni_rel,y0=real(lat_rel(1),dp),dy=real(dlat_rel,dp),ny=nj_rel)
 
         allocate( tmp(ni_rel,nj_rel) )
