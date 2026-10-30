@@ -560,7 +560,7 @@ contains
   pft_par%photos_k3 = log(0.99_wp/0.01_wp) / (pft_par%t_co2_high - pft_par%t_photos_high)
 
   ! bare soil/desert albedo
-  if(soil_par%uniform_soil_par_alb .eq. 0) then
+  if(soil_par%uniform_soil_par_alb) then
      surf_par%alb_bare_vis = soil_par%alb_bare_vis_u
      surf_par%alb_bare_nir = soil_par%alb_bare_nir_u
   else
@@ -576,6 +576,7 @@ contains
         enddo
      enddo
   endif
+  print *, surf_par%alb_bare_vis
 
   ! load spatially resolved soil params only if at least one of the uniform flags is false
   if (.not. (soil_par%uniform_porosity .and. soil_par%uniform_soil_par_therm .and. soil_par%uniform_soil_par_hydro)) then
