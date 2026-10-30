@@ -47,6 +47,8 @@ module lnd_params
   character (len=256) :: lnd_par_file
   logical :: write_surf, write_surf_n, write_carbon, write_soil, write_soil_par, write_lake, write_cons, l_daily_output
 
+  character (len=256) :: cti_file
+
   integer :: i_init_veg
   logical :: l_dynveg
   character (len=256) :: pft_fix_file
@@ -90,6 +92,7 @@ module lnd_params
     integer :: i_hydro_par
     integer :: i_wtab
     integer :: i_fwet
+    logical :: l_uniform_fwet_params
     logical :: l_dew 
     logical :: l_prc_intercept
     integer :: i_runoff
@@ -114,6 +117,12 @@ module lnd_params
     real(wp) :: wtab_scale
     real(wp) :: fmax_crit
     real(wp) :: cti_mean_crit
+    real(wp) :: cti_mean_u
+    real(wp) :: cti_cdf_u(15)
+    real(wp) :: k_u
+    real(wp) :: xm_u
+    real(wp) :: v_u
+    real(wp) :: fmax_u
   end type
   type(hydro_par_type) :: hydro_par
 
@@ -604,21 +613,33 @@ contains
      mineral%k_sat = 0.0070556_wp*10**(-0.884_wp+0.0153_wp*frac_sand)  ! kg/m2/s
      mineral%Bi = 2.91_wp+0.159_wp*frac_clay
   endif
+
+  if (hydro_par%l_uniform_fwet_params) then
+     do i=1,nx
+        do j=1,ny       
+           topmodel(i,j)%cti_mean = hydro_par%cti_mean_u
+           topmodel(i,j)%cti_cdf = hydro_par%cti_cdf_u
+           dyptop(i,j)%k = hydro_par%k_u
+           dyptop(i,j)%xm = hydro_par%xm_u
+           dyptop(i,j)%v = hydro_par%v_u
+           dyptop(i,j)%fmax = hydro_par%fmax_u
+        enddo   
+     enddo
+  else
+     ! read topmodel parameters
+     call nc_read('input/cti_5x5.nc', "cti_mean",topmodel%cti_mean)
+     do i=1,15
+        call nc_read('input/cti_5x5.nc', "cti_cdf",topmodel%cti_cdf(i),start=[1,1,i],count=[nx,ny,1])
+     enddo
+    
+     !call nc_read( "input/fmax_5x5.nc", "fmax",clm_fmax )
+     ! read dyptop parameters
+     call nc_read( lnd_par_file, "k",dyptop%k )
+     call nc_read( lnd_par_file, "xm",dyptop%xm )
+     call nc_read( lnd_par_file, "v",dyptop%v )
+     call nc_read( lnd_par_file, "fmax",dyptop%fmax )
+  endif
   
-
-  ! read topmodel parameters
-  call nc_read('input/cti_5x5.nc', "cti_mean",topmodel%cti_mean)
-  do i=1,15
-    call nc_read('input/cti_5x5.nc', "cti_cdf",topmodel%cti_cdf(i),start=[1,1,i],count=[nx,ny,1])
-  enddo
-
-  !call nc_read( "input/fmax_5x5.nc", "fmax",clm_fmax )
-  ! read dyptop parameters
-  call nc_read( lnd_par_file, "k",dyptop%k )
-  call nc_read( lnd_par_file, "xm",dyptop%xm )
-  call nc_read( lnd_par_file, "v",dyptop%v )
-  call nc_read( lnd_par_file, "fmax",dyptop%fmax )
-
   ! lithologies
 
   if (i_weathering.eq.1) then
@@ -744,6 +765,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","dt_day_veg",dt_day_veg)
     call nml_read(filename,"lnd_par","dt_day_carb",dt_day_carb)
     call nml_read(filename,"lnd_par","lnd_par_file",lnd_par_file)
+    call nml_read(filename,"lnd_par","cti_file",cti_file)
 
     call nml_read(filename,"lnd_par","l_diurnal_cycle" ,l_diurnal_cycle )
     call nml_read(filename,"lnd_par","l_neutral",l_neutral)
@@ -799,6 +821,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","i_cond_theta",hydro_par%i_cond_theta)
     call nml_read(filename,"lnd_par","i_wtab",hydro_par%i_wtab)
     call nml_read(filename,"lnd_par","i_fwet",hydro_par%i_fwet)
+    call nml_read(filename,"lnd_par","l_uniform_fwet_params",hydro_par%l_uniform_fwet_params)
     call nml_read(filename,"lnd_par","i_evp_soil",hydro_par%i_evp_soil)
     call nml_read(filename,"lnd_par","theta_crit_evp",hydro_par%theta_crit_evp)
     call nml_read(filename,"lnd_par","dz_evp",hydro_par%dz_evp)
@@ -810,6 +833,12 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","cti_min",hydro_par%cti_min)
     call nml_read(filename,"lnd_par","fmax_crit",hydro_par%fmax_crit)
     call nml_read(filename,"lnd_par","cti_mean_crit",hydro_par%cti_mean_crit)
+    call nml_read(filename,"lnd_par","cti_mean_u",hydro_par%cti_mean_u)
+    call nml_read(filename,"lnd_par","cti_cdf_u",hydro_par%cti_cdf_u)
+    call nml_read(filename,"lnd_par","k_u",hydro_par%k_u)
+    call nml_read(filename,"lnd_par","xm_u",hydro_par%xm_u)
+    call nml_read(filename,"lnd_par","v_u",hydro_par%v_u)
+    call nml_read(filename,"lnd_par","fmax_u",hydro_par%fmax_u)
     call nml_read(filename,"lnd_par","alpha_int_w_tree",alpha_int_w_tree)
     call nml_read(filename,"lnd_par","alpha_int_w_grass",alpha_int_w_grass)
     do n=1,npft

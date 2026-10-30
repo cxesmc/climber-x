@@ -79,11 +79,20 @@
     p_psi_max    = -5.0         ! m, matric potential at field capacity (approx)
     i_wtab      = 5             ! param of water table depth
     i_fwet      = 3             ! param of water saturated fraction; 1..SIMTOP, 2..DYPTOP, 3..TOPMODEL
+    l_uniform_fwet_params = F   ! use uniform fwet params (CTI) instead of spatially resolved data from lnd_par_file
     wtab_scale  = 4             ! scaling for water table depth, used only if i_wtab==3
     f_wtab       = 2.5          ! scaling parameter in computation of saturated grid cell fraction 
     fmax_crit    = 0.55         ! critical maximum wetland fraction above which wetlands can occur, used only if i_fwet==1,2
     cti_min = 0.                ! minimum CTI index for floodability, 8.5 in Kleinen 2020
     cti_mean_crit = 5.5         ! critical grid-cell mean CTI index below which no wetlands, 5.5 in Kleinen 2020, used only for i_fwet==3
+    cti_mean_u = 6.0   		! uniform mean CTI index value, used only if l_uniform_fwet_params==T and (i_fwet==1 or i_fwet==3)
+    cti_cdf_u = 8.17e-04, 2.63e-02, 1.01e-01, 2.12e-01, 3.73e-01, 5.53e-01, 7.29e-01, 8.34e-01, 8.96e-01, 9.34e-01, 9.59e-01, 9.76e-01, 9.88e-01, 9.95e-01, 1.0
+    	      		  	! uniform cumulative distribution of CTI, used only if l_uniform_fwet_params==T and (i_fwet==1 or i_fwet==3)
+    cti_file = "input/cti_5x5.nc" ! spatially resolved cti_mean and cti_cdf fields, only used if l_uniform_fwet_params==F
+    k_u = 25.3 			! uniform DYPTOP param k, used only if l_uniform_fwet_params==T and i_fwet==2
+    xm_u = 0.28			! uniform DYPTOP param xm, used only if l_uniform_fwet_params==T and i_fwet==2
+    v_u = 9.3			! uniform DYPTOP param v, used only if l_uniform_fwet_params==T and i_fwet==2
+    fmax_u = 0.60		! uniform DYPTOP param fmax, used only if l_uniform_fwet_params==T and i_fwet==2
 
     !------------------------------------------------------------------------------------
     ! lake parameters 
