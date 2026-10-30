@@ -568,24 +568,43 @@ contains
      enddo
   endif
 
-  ! soil texture
-  if( soil_par%soil_texture .eq. 1 ) then
-    call nc_read( trim(lnd_par_file), "fclay_hwsd",frac_clay )
-    call nc_read( trim(lnd_par_file), "fsand_hwsd",frac_sand )
-    elseif( soil_par%soil_texture .eq. 2 ) then
-    call nc_read( trim(lnd_par_file), "fclay_gsde",frac_clay )
-    call nc_read( trim(lnd_par_file), "fsand_gsde",frac_sand )
+  ! load spatially resolved soil params only if at least one of the uniform flags is false
+  if (.not. (soil_par%uniform_porosity .and. soil_par%uniform_soil_par_therm .and. soil_par%uniform_soil_par_hydro)) then
+     ! soil texture
+     if( soil_par%soil_texture .eq. 1 ) then
+        call nc_read( trim(lnd_par_file), "fclay_hwsd",frac_clay )
+        call nc_read( trim(lnd_par_file), "fsand_hwsd",frac_sand )
+     elseif( soil_par%soil_texture .eq. 2 ) then
+        call nc_read( trim(lnd_par_file), "fclay_gsde",frac_clay )
+        call nc_read( trim(lnd_par_file), "fsand_gsde",frac_sand )
+     endif
   endif
   
   ! mineral soil characteristics
-  mineral%theta_sat = 0.489_wp-0.00126_wp*frac_sand
-  mineral%lambda_s = (8.80_wp*frac_sand+2.92_wp*frac_clay)/(frac_sand+frac_clay)
-  bulk_den = 2700.0_wp*(1.0_wp-mineral%theta_sat)
-  mineral%lambda_dry = (0.135_wp*bulk_den+64.7_wp)/(2700.0_wp-0.947_wp*bulk_den)
-  mineral%heatcap = (2.128_wp*frac_sand+2.385_wp*frac_clay)/(frac_sand+frac_clay)*1.0d6
-  mineral%psi_sat = (-10.0_wp*10**(1.88_wp-0.0131_wp*frac_sand)) *1.d-3  ! m
-  mineral%k_sat = 0.0070556_wp*10**(-0.884_wp+0.0153_wp*frac_sand)  ! kg/m2/s
-  mineral%Bi = 2.91_wp+0.159_wp*frac_clay
+  if (soil_par%uniform_porosity) then
+     mineral%theta_sat = soil_par%theta_sat_u
+  else
+     mineral%theta_sat = 0.489_wp-0.00126_wp*frac_sand
+  endif
+  if (soil_par%uniform_soil_par_therm) then
+     mineral%lambda_s = soil_par%lambda_s_u
+     mineral%lambda_dry = soil_par%lambda_dry_u
+  else
+     mineral%lambda_s = (8.80_wp*frac_sand+2.92_wp*frac_clay)/(frac_sand+frac_clay)
+     bulk_den = 2700.0_wp*(1.0_wp-mineral%theta_sat)
+     mineral%lambda_dry = (0.135_wp*bulk_den+64.7_wp)/(2700.0_wp-0.947_wp*bulk_den)
+     mineral%heatcap = (2.128_wp*frac_sand+2.385_wp*frac_clay)/(frac_sand+frac_clay)*1.0d6 ! this seems to be unused
+  endif
+  if (soil_par%uniform_soil_par_hydro) then
+     mineral%psi_sat = soil_par%psi_sat_u
+     mineral%k_sat = soil_par%k_sat_u
+     mineral%Bi = soil_par%b_u
+  else
+     mineral%psi_sat = (-10.0_wp*10**(1.88_wp-0.0131_wp*frac_sand)) *1.d-3  ! m
+     mineral%k_sat = 0.0070556_wp*10**(-0.884_wp+0.0153_wp*frac_sand)  ! kg/m2/s
+     mineral%Bi = 2.91_wp+0.159_wp*frac_clay
+  endif
+  
 
   ! read topmodel parameters
   call nc_read('input/cti_5x5.nc', "cti_mean",topmodel%cti_mean)

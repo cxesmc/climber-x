@@ -93,10 +93,17 @@ contains
       k_exp(k) = 2*nint(Bi)+3
       psi_exp(k) = -nint(Bi)
 
-      ! field capacity
-      theta_field(k) = theta_sat(k) * (0.1_wp / (86400._wp * k_sat(k)))**(1._wp/k_exp(k))
-      ! wilting point
-      theta_wilt(k) = theta_sat(k) * (hydro_par%p_psi_min / psi_sat(k))**(1._wp/psi_exp(k))
+      if (soil_par%uniform_soil_par_hydro) then
+         ! field capacity
+         theta_field(k) = soil_par%theta_field_u
+         ! wilting point
+         theta_wilt(k) = soil_par%theta_wilt_u
+      else
+         ! field capacity
+         theta_field(k) = theta_sat(k) * (0.1_wp / (86400._wp * k_sat(k)))**(1._wp/k_exp(k))
+         ! wilting point
+         theta_wilt(k) = theta_sat(k) * (hydro_par%p_psi_min / psi_sat(k))**(1._wp/psi_exp(k))
+      endif
      endif
 
      ! update soil thermal parameters
