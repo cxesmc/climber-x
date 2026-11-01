@@ -74,6 +74,9 @@ module sic_params
     real(wp) :: p0_rho                  ! The pressure constant divided by ice density [N m kg-1].
     real(wp) :: c0 = 20.                ! A constant in the exponent of the expression for the ice strength, c* in Hunke & Dukowicz 1997.
     real(wp) :: cdw = 3.24e-3           ! The drag coefficient between the sea ice and water. [nondim]
+    logical :: l_stress_conc = .false.  ! If true, scale the air stress and the ice-ocean drag in the ice momentum equation by the
+                                        ! sea ice concentration on the velocity faces (CICE, SI3; Connolley et al. 2004), consistent
+                                        ! with the grid-mean ice mass; if false, unscaled (Hibler 1979, SIS2)
     real(wp) :: EC = 2.0                ! The ellipticity coefficient for the plastic yield curve in the sea-ice rheology.  
                                         ! For an infinite ellipticity (i.e., a cavitating fluid rheology), use 0. units="Nondim"
     real(wp) :: Rho_ocean = 1030.       ! The nominal density of sea water [kg m-3].
@@ -187,6 +190,7 @@ contains
     call nml_read(filename,"sic_par","f_Ri_stab",f_Ri_stab)
     call nml_read(filename,"sic_par","f_Ri_unstab",f_Ri_unstab)
     call nml_read(filename,"sic_par","l_daily_output",l_daily_output)
+    call nml_read(filename,"sic_par","l_diag_dyn",l_diag_dyn)
 
     call nml_read(filename,"sic_par","i_snow_albedo",snow_par%i_snow_albedo)
     call nml_read(filename,"sic_par","l_snow_aging",snow_par%l_snow_aging)
@@ -201,6 +205,7 @@ contains
     call nml_read(filename,"sic_par","p0              ", dyn_par%p0)               
     call nml_read(filename,"sic_par","c0              ", dyn_par%c0) 
     call nml_read(filename,"sic_par","cdw             ", dyn_par%cdw) 
+    call nml_read(filename,"sic_par","l_stress_conc", dyn_par%l_stress_conc)
     call nml_read(filename,"sic_par","EC              ", dyn_par%EC) 
     call nml_read(filename,"sic_par","Tdamp           ", dyn_par%Tdamp) 
     call nml_read(filename,"sic_par","del_sh_min_scale", dyn_par%del_sh_min_scale)

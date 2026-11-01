@@ -107,6 +107,11 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
                 ! This is set based on considerations of numerical stability, and varies with the grid spacing.
 
   real(wp), dimension(maxi,maxj) :: u_tmp ! A temporary copy of the old values of ui [m s-1].
+  real(wp), dimension(maxi,maxj) :: v_tmp ! A temporary copy of the old values of vi [m s-1].
+  real(wp), dimension(dyn_par%evp_sub_steps) :: dtc ! elapsed time within this call at the end of each EVP subcycle [s]
+  integer, dimension(maxi*maxj) :: ia, ja ! packed indices of the points with mask_dyn==1
+  integer :: n_act    ! number of points with mask_dyn==1
+  integer :: k
   real(wp), dimension(maxi,maxj) :: mi_u  ! The total ice and snow mass interpolated to u points [kg m-2].
   real(wp), dimension(maxi,maxj) :: f2dt_u  ! The squared effective Coriolis parameter at u-points times a time step [s-1].
   real(wp), dimension(maxi,maxj) :: I1_f2dt2_u  ! 1 / ( 1 + f^2 dt_evp^2) at u-points [nondim].
@@ -138,6 +143,8 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   real(wp) :: fxic_now  ! Zonal ice internal stress convergence [kg m-1 s-2].
   real(wp) :: fyic_now  ! Meridional ice internal stress convergence [kg m-1 s-2].
   real(wp) :: drag_u, drag_v ! Drag rates with the ocean at u & v points [kg m-2 s-1].
+  real(wp) :: a_face   ! sea ice concentration on the velocity face scaling air stress and ice-ocean drag (1 if not l_stress_conc) [nondim]
+  real(wp) :: r_face   ! 1/a_face, converts grid-mean mass and forces to per unit ice area in the drag projection [nondim]
   real(wp) :: dxharm    ! The harmonic mean of the x- and y- grid spacings [m].
   real(wp) :: muq2, mvq2  ! The product of the u- and v-face masses per unit cell area surrounding a vorticity point [kg2 m-4].
   real(wp) :: muq, mvq    ! The u- and v-face masses per unit cell area extrapolated to a vorticity point on the coast [kg m-2].
@@ -419,17 +426,35 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
 
   !$omp end parallel
 
+  ! Points where the dynamics is solved, packed into a list so that the threads share the work evenly
+  ! (sea ice is confined to the polar rows, which a static split of the full grid hands to a few threads only).
+  ! Outside mask_dyn ui and vi are zero and never change during the subcycles.
+  n_act = 0
+  do j=1,maxj
+    do i=1,maxi
+      if (mask_dyn(i,j).eq.1) then
+        n_act = n_act+1
+        ia(n_act) = i
+        ja(n_act) = j
+      endif
+    enddo
+  enddo
+
+  ! elapsed time at the end of each subcycle, accumulated as before for reproducibility
   dt_cumulative = 0._wp
+  do n=1,dyn_par%evp_sub_steps
+    dt_cumulative = dt_cumulative + dt_evp
+    dtc(n) = dt_cumulative
+  enddo
+
+  ! old velocities used for the Coriolis and drag terms of the other component, refreshed every subcycle
+  u_tmp(:,:) = ui(:,:)
+  v_tmp(:,:) = vi(:,:)
 
   ! Do the iterative time steps.
-  ! A single parallel region spans the whole EVP subcycle
+  ! A single parallel region spans the whole EVP subcycle, with 4 barriers per subcycle
   !$omp parallel private(n)
   do n=1,dyn_par%evp_sub_steps
-
-    ! single thread accumulates the elapsed time (kept exact for reproducibility)
-    !$omp single
-    dt_cumulative = dt_cumulative + dt_evp
-    !$omp end single
 
     !    Calculate the strain tensor for viscosities and forcing elastic eqn.
     !  The following are the forms of the horizontal tension and hori-
@@ -437,11 +462,10 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
     !  Griffies and Hallberg (MWR, 2000).  Similar forms are used in the sea
     !  ice model of Bouillon et al. (Ocean Modelling, 2009).
 
-    !$omp do collapse(2) private(i,j,ip1,im1)
-    do j=1,maxj
-      do i=1,maxi
-
-        if (mask_dyn(i,j).eq.1) then
+    !$omp do schedule(static) private(k,i,j,ip1,im1)
+    do k=1,n_act
+        i = ia(k)
+        j = ja(k)
 
         ip1 = i+1 
         if (ip1.eq.maxi+1) ip1=1
@@ -475,23 +499,19 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           ! The choice to base this on the final velocity, the initial concentration
           ! and the elapsed time is because it is that final velocity that will drive
           ! ice convergence.
-          f_sic_proj(i,j) = f_sic(i,j) * exp(-dt_cumulative*sh_Dd(i,j))
+          f_sic_proj(i,j) = f_sic(i,j) * exp(-dtc(n)*sh_Dd(i,j))
           ! Recompute pres_mice.
           pres_mice(i,j) = dyn_par%p0_rho*exp(-dyn_par%c0*max(1._wp-f_sic_proj(i,j),0._wp))
         endif
 
-      endif
-
-      enddo 
     enddo
     !$omp end do
 
     ! calculate viscosities - how often should we do this ?
-    !$omp do collapse(2) private(i,j,im1,jm1)
-    do j=1,maxj
-      do i=1,maxi
-
-        if (mask_dyn(i,j).eq.1) then
+    !$omp do schedule(static) private(k,i,j,im1,jm1)
+    do k=1,n_act
+        i = ia(k)
+        j = ja(k)
 
         im1 = i-1 
         if (im1.eq.0) im1=maxi
@@ -512,18 +532,14 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           zeta(i,j) = 0._wp
         endif
 
-        endif
-
-      enddo 
     enddo
     !$omp end do
 
     ! Step the stress component equations semi-implicitly.
-    !$omp do collapse(2) private(i,j,ip1)
-    do j=1,maxj
-      do i=1,maxi
-
-        if (mask_dyn(i,j).eq.1) then
+    !$omp do schedule(static) private(k,i,j,ip1)
+    do k=1,n_act
+        i = ia(k)
+        j = ja(k)
 
         ip1 = i+1 
         if (ip1.eq.maxi+1) ip1=1
@@ -546,30 +562,35 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
             mi_ratio_A_q(I,J) * sh_Ds(I,J) ) )
         endif
 
-        endif
+        ! Save the current velocities, the u- and v-updates below read the other component from these
+        u_tmp(I,j) = ui(I,j)
+        v_tmp(i,J) = vi(i,J)
 
-      enddo 
     enddo
     !$omp end do
 
-    !$omp do collapse(2) private(i,j,ip1,Cor,fxic_now,v2_at_u,uio_init,drag_u,m_uio_explicit,b_vel0,uio_pred,uio_C)
-    do j=1,maxj
-      do i=1,maxi
-
-        if (mask_dyn(i,j)==1) then
+    ! u- and v-updates in one loop: both use the old velocities of the other component (u_tmp, v_tmp)
+    !$omp do schedule(static) private(k,i,j,ip1,im1,Cor,fxic_now,v2_at_u,uio_init,drag_u,m_uio_explicit,b_vel0,uio_pred,uio_C, &
+    !$omp& fyic_now,u2_at_v,vio_init,drag_v,m_vio_explicit,vio_pred,vio_C,a_face,r_face)
+    do k=1,n_act
+        i = ia(k)
+        j = ja(k)
 
         ip1 = i+1 
         if (ip1.eq.maxi+1) ip1=1
+        im1 = i-1 
+        if (im1.eq.0) im1=maxi
 
-        ! Save the current values of u for later use in updating v.
-        u_tmp(I,j) = ui(I,j)
+        !-------------------------------------------------------------
+        ! zonal velocity
+        !-------------------------------------------------------------
 
         if (j.gt.1) then
-          Cor = ((azon(I,j) * vi(ip1,J) + czon(I,j) * vi(i,J-1)) + &
-            (bzon(I,j) * vi(i,J) + dzon(I,j) * vi(ip1,J-1))) ! - Cor_ref_u(I,j)
+          Cor = ((azon(I,j) * v_tmp(ip1,J) + czon(I,j) * v_tmp(i,J-1)) + &
+            (bzon(I,j) * v_tmp(i,J) + dzon(I,j) * v_tmp(ip1,J-1))) ! - Cor_ref_u(I,j)
         else
-          Cor = ((azon(I,j) * vi(ip1,J)) + &
-            (bzon(I,j) * vi(i,J))) ! - Cor_ref_u(I,j)
+          Cor = ((azon(I,j) * v_tmp(ip1,J)) + &
+            (bzon(I,j) * v_tmp(i,J))) ! - Cor_ref_u(I,j)
         endif
 
         !  Evaluate 1/m x.Div(m strain).  This expressions include all metric terms
@@ -580,18 +601,29 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
             (1._wp/dy *(dy**2*str_t(ip1,j) - dy**2*str_t(i,j)) + &
             1._wp/dx(j) *(dxv(J)**2  *str_s(I,J) - dxv(J-1)**2*str_s(I,J-1)) ) / (dx(j)*dy) 
           v2_at_u =  dyn_par%drag_bg_vel2 + 0.25_wp * &
-            (((vi(i,J)-vo(i,J))**2 + (vi(ip1,J-1)-vo(ip1,J-1))**2) + &
-            ((vi(ip1,J)-vo(ip1,J))**2 + (vi(i,J-1)-vo(i,J-1))**2))
+            (((v_tmp(i,J)-vo(i,J))**2 + (v_tmp(ip1,J-1)-vo(ip1,J-1))**2) + &
+            ((v_tmp(ip1,J)-vo(ip1,J))**2 + (v_tmp(i,J-1)-vo(i,J-1))**2))
         else
           fxic_now = 1._wp/dx(j) * (str_d(ip1,j) - str_d(i,j)) + &
             (1._wp/dy *(dy**2*str_t(ip1,j) - dy**2*str_t(i,j)) + &
             1._wp/dx(j) *(dxv(j)**2  *str_s(I,J)) ) / (dx(j)*dy) 
           v2_at_u =  dyn_par%drag_bg_vel2 + 0.25_wp * &
-            (((vi(i,J)-vo(i,J))**2) + &
-            ((vi(ip1,J)-vo(ip1,J))**2))
+            (((v_tmp(i,J)-vo(i,J))**2) + &
+            ((v_tmp(ip1,J)-vo(ip1,J))**2))
         endif
 
         uio_init = (ui(I,j)-uo(I,j))
+
+        ! with l_stress_conc the air stress and the ice-ocean drag act on the ice-covered part of the face only:
+        ! m du/dt = a*tau_a - a*drag*(u-uo) + ..., m the grid-mean mass; tauxo stays the stress per unit ice area,
+        ! which the coupler weights with the face concentration (= a_face) for the ocean
+        a_face = 1._wp
+        r_face = 1._wp
+        if (dyn_par%l_stress_conc) then
+          a_face = 0.5_wp*(f_sic(i,j)+f_sic(ip1,j))*mask_u(I,j)
+          r_face = 0._wp
+          if (a_face > 0._wp) r_face = 1._wp/a_face
+        endif
 
         if (dyn_par%project_drag_vel) then
           ! Project the new u-velocity using a quasi-analytic implicit treatment for
@@ -599,10 +631,11 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           ! coefficient, then take the larger of the two estimates of
           ! the ice-ocean drag.
           drag_u = 0._wp
-          if (mask_u(I,j) > 0._wp) then
-            m_uio_explicit = uio_init*mi_u(I,j) + dt_evp * &
-              ((Cor + PFu(I,j))*mi_u(I,j) + (fxic_now + tauxa(I,j)))
-            b_vel0 = mi_u(I,j) * I_cdRhoDt + &
+          if (mask_u(I,j) > 0._wp .and. a_face > 0._wp) then
+            ! per unit ice area: mass mi_u/a_face, forces fxic/a_face
+            m_uio_explicit = uio_init*mi_u(I,j)*r_face + dt_evp * &
+              ((Cor + PFu(I,j))*mi_u(I,j)*r_face + (fxic_now*r_face + tauxa(I,j)))
+            b_vel0 = mi_u(I,j)*r_face * I_cdRhoDt + &
               ( sqrt(uio_init**2 + v2_at_u) - abs(uio_init) )
             if (b_vel0**2 > 1.e8_wp*I_cdRhoDt*abs(m_uio_explicit)) then
               uio_pred = m_uio_explicit * I_cdRhoDt / b_vel0
@@ -629,8 +662,8 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
         ! update of the other terms and an implicit bottom drag calculation.
         uio_C =  mask_u(I,j) * ( mi_u(I,j) * &
           ((ui(I,j) + dt_evp * Cor) * I1_f2dt2_u(I,j) - uo(I,j)) + &
-          dt_evp * (mi_u(I,j) * PFu(I,j) + (fxic_now + tauxa(I,j))) ) / &
-          (mi_u(I,j) + m_neglect + dt_evp * drag_u)
+          dt_evp * (mi_u(I,j) * PFu(I,j) + (fxic_now + a_face*tauxa(I,j))) ) / &
+          (mi_u(I,j) + m_neglect + dt_evp * a_face*drag_u)
 
         ui(I,j) = (uio_C + uo(I,j)) * mask_u(I,j)
 
@@ -643,20 +676,11 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
         ! Note that tauxo is the stress felt by the ocean.
         tauxo(I,j) = tauxo(I,j) + drag_u*uio_C
 
-      endif
+        !-------------------------------------------------------------
+        ! meridional velocity
+        !-------------------------------------------------------------
 
-      enddo
-    enddo
-    !$omp end do
-
-    !$omp do collapse(2) private(i,j,im1,Cor,fyic_now,u2_at_v,vio_init,drag_v,m_vio_explicit,b_vel0,vio_pred,vio_C)
-    do j=1,maxj-1
-      do i=1,maxi
-
-        if (mask_dyn(i,j)==1) then
-
-        im1 = i-1 
-        if (im1.eq.0) im1=maxi
+        if (j.lt.maxj) then
 
         Cor = -1._wp*((amer(Im1,j) * u_tmp(Im1,j) + cmer(I,j+1) * u_tmp(I,j+1)) + &
           (bmer(I,j) * u_tmp(I,j) + dmer(Im1,j+1) * u_tmp(Im1,j+1)))
@@ -674,6 +698,15 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
 
         vio_init = (vi(i,J)-vo(i,J))
 
+        ! concentration on the v-face, see the u-equation
+        a_face = 1._wp
+        r_face = 1._wp
+        if (dyn_par%l_stress_conc) then
+          a_face = 0.5_wp*(f_sic(i,j)+f_sic(i,j+1))*mask_v(i,J)
+          r_face = 0._wp
+          if (a_face > 0._wp) r_face = 1._wp/a_face
+        endif
+
         if (dyn_par%project_drag_vel) then
           ! Project the new v-velocity using a quasi-analytic implicit treatment for
           ! drag, but explicit treatments for everything else, to estimate the drag
@@ -681,10 +714,10 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           ! the ice-ocean drag.
 
           drag_v = 0._wp
-          if (mask_v(i,J) > 0._wp) then
-            m_vio_explicit = vio_init*mi_v(i,J) + dt_evp * &
-              ((Cor + PFv(i,J))*mi_v(i,J) + (fyic_now + tauya(i,J)))
-            b_vel0 = mi_v(i,J) * I_cdRhoDt + (sqrt(vio_init**2 + u2_at_v) - abs(vio_init))
+          if (mask_v(i,J) > 0._wp .and. a_face > 0._wp) then
+            m_vio_explicit = vio_init*mi_v(i,J)*r_face + dt_evp * &
+              ((Cor + PFv(i,J))*mi_v(i,J)*r_face + (fyic_now*r_face + tauya(i,J)))
+            b_vel0 = mi_v(i,J)*r_face * I_cdRhoDt + (sqrt(vio_init**2 + u2_at_v) - abs(vio_init))
             if (b_vel0**2 > 1.e8_wp*I_cdRhoDt*abs(m_vio_explicit)) then
               vio_pred = m_vio_explicit * I_cdRhoDt / b_vel0
             else
@@ -710,8 +743,8 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
         ! update of the other terms and an implicit bottom drag calculation.
         vio_C =  mask_v(i,J) * ( mi_v(i,J) * &
           ((vi(i,J) + dt_evp * Cor) * I1_f2dt2_v(i,J) - vo(i,J)) + &
-          dt_evp * (mi_v(i,J) * PFv(i,J) + (fyic_now + tauya(i,J))) ) / &
-          (mi_v(i,J) + m_neglect + dt_evp * drag_v)
+          dt_evp * (mi_v(i,J) * PFv(i,J) + (fyic_now + a_face*tauya(i,J))) ) / &
+          (mi_v(i,J) + m_neglect + dt_evp * a_face*drag_v)
 
         vi(i,J) = (vio_C + vo(i,J)) * mask_v(i,J)
 
@@ -724,13 +757,12 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
         ! Note that tauyo is the stress felt by the ocean.
         tauyo(i,J) = tauyo(i,J) + drag_v*vio_C
 
-      endif
+        endif
 
-      enddo
     enddo
     !$omp end do
 
-  enddo ! l=1,evp_sub_steps
+  enddo ! n=1,evp_sub_steps
   !$omp end parallel
 
   ! make averages
