@@ -582,9 +582,6 @@ contains
      enddo
   endif
 
-  print *, "alb_bare_vis", surf_par%alb_bare_vis
-  print *, "alb_bare_nir", surf_par%alb_bare_nir
-
   ! load spatially resolved soil params only if at least one of the uniform flags is false
   if (.not. (soil_par%uniform_porosity .and. soil_par%uniform_soil_par_therm .and. soil_par%uniform_soil_par_hydro)) then
      ! soil texture
