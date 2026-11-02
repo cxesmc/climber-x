@@ -225,7 +225,7 @@ module lnd_params
   ! soil parameters
   type soil_par_type
     integer :: soil_texture
-    logical :: uniform_porosity, uniform_soil_par_therm, uniform_soil_par_hydro, uniform_soil_par_alb
+    logical :: uniform_porosity, uniform_soil_par_therm, uniform_soil_par_hydro, uniform_soil_par_alb, uniform_soil_par_alb_polar
     logical :: constant_porosity, constant_soil_par_therm, constant_soil_par_hydro
     real(wp) :: cap_s = 2.3d6   ! J/m3/K, volumetric heat capacity of soil
     real(wp) :: theta_sat_u
@@ -237,6 +237,8 @@ module lnd_params
     real(wp) :: psi_sat_u
     real(wp) :: alb_bare_vis_u
     real(wp) :: alb_bare_nir_u
+    real(wp) :: alb_bare_vis_polar
+    real(wp) :: alb_bare_nir_polar
     integer :: b_u
   end type
   type(soil_par_type) :: soil_par
@@ -566,17 +568,22 @@ contains
   else
      call nc_read( trim(lnd_par_file), "a_vis",surf_par%alb_bare_vis )
      call nc_read( trim(lnd_par_file), "a_nir",surf_par%alb_bare_nir )
+  endif
+
+  if(soil_par%uniform_soil_par_alb_polar) then
      ! set to constant value in mid- to high latitudes (poleward of 50°)
      do i=1,nx
         do j=1,ny
            if (abs(lat(j)).gt.50._wp) then
-              surf_par%alb_bare_vis(i,j) = 0.2_wp
-              surf_par%alb_bare_nir(i,j) = 0.2_wp
+              surf_par%alb_bare_vis(i,j) = soil_par%alb_bare_vis_polar
+              surf_par%alb_bare_nir(i,j) = soil_par%alb_bare_nir_polar
            endif
         enddo
      enddo
   endif
-  print *, surf_par%alb_bare_vis
+
+  print *, "alb_bare_vis", surf_par%alb_bare_vis
+  print *, "alb_bare_nir", surf_par%alb_bare_nir
 
   ! load spatially resolved soil params only if at least one of the uniform flags is false
   if (.not. (soil_par%uniform_porosity .and. soil_par%uniform_soil_par_therm .and. soil_par%uniform_soil_par_hydro)) then
@@ -957,6 +964,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","uniform_soil_par_hydro",soil_par%uniform_soil_par_hydro)
     call nml_read(filename,"lnd_par","uniform_soil_par_therm",soil_par%uniform_soil_par_therm)
     call nml_read(filename,"lnd_par","uniform_soil_par_alb",soil_par%uniform_soil_par_alb)
+    call nml_read(filename,"lnd_par","uniform_soil_par_alb_polar",soil_par%uniform_soil_par_alb_polar)
     
     call nml_read(filename,"lnd_par","constant_porosity",soil_par%constant_porosity)
     call nml_read(filename,"lnd_par","constant_soil_par_hydro",soil_par%constant_soil_par_hydro)
@@ -975,9 +983,9 @@ subroutine lnd_par_load
 
     call nml_read(filename,"lnd_par","alb_bare_vis_u",soil_par%alb_bare_vis_u)
     call nml_read(filename,"lnd_par","alb_bare_nir_u",soil_par%alb_bare_nir_u)
-
+    call nml_read(filename,"lnd_par","alb_bare_vis_polar",soil_par%alb_bare_vis_polar)
+    call nml_read(filename,"lnd_par","alb_bare_nir_polar",soil_par%alb_bare_nir_polar)
     
-
     call nml_read(filename,"lnd_par","l_burial",soilc_par%l_burial)
     call nml_read(filename,"lnd_par","heat_soc",soilc_par%heat_soc)
     call nml_read(filename,"lnd_par","f_resp_litter",soilc_par%f_resp_litter)
