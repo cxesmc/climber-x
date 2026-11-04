@@ -90,7 +90,7 @@
                               ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells
                               ! (50 m: 1/(2.3 d) with 2.5e-3/0.1) and is negligible in the deep ocean (4 km: 1/(185 d))
  u_bot = 0.1                  ! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic drag
- drag_cb = 2.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
+ drag_cb = 1.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
                               ! (-1/4)*(second difference of the face transport along the face). Equal to an extra drag 1/drag_cb
                               ! on the 2-grid-point checkerboard of psi (invisible to the J3 Coriolis term), zero for flow linear
                               ! along the face. Makes the psi matrix 9-point (band width 2*maxi)
@@ -143,6 +143,7 @@
                               ! 1 = shuffle convection applied everywhere
                               ! 2 = shuffle convection applied only along the coast
  l_conv_shuffle_passive = F   ! apply shuffle convection also to passive (including bgc) tracers? Used only if i_conv_shuffle>0
+ drho_conv = 1.e-4            ! kg/m3, minimum density inversion between two layers that triggers convective mixing (Rahmstorf scheme).
 
  !-------------------------------------------------------------------------------------------
  ! downsloping flow of dense shelf water (Campin and Goosse 1999)
