@@ -530,7 +530,7 @@ contains
     ! diagnose free surface elevation, needed by sea ice 
     !------------------------------------------------------------------------
     !$ time1 = omp_get_wtime()
-    call free_surface(ocn%rho, ocn%ssh, ocn%error)
+    call free_surface(ocn%rho, ocn%ub, ocn%psi, ocn%tau, ocn%f_ocn, ocn%ssh)
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'free surface',time2-time1
 

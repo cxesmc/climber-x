@@ -482,7 +482,7 @@ $(objdir)/ocn_grid_update_state.o : $(dir_ocn)ocn_grid_update_state.f90 $(objdir
 $(objdir)/cfc_flux.o : $(dir_ocn)cfc_flux.f90 $(objdir)/ocn_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/free_surface.o : $(dir_ocn)free_surface.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/free_surface.o : $(dir_ocn)free_surface.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/island.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/bering.o : $(dir_ocn)bering.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o

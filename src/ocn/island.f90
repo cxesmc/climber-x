@@ -37,7 +37,7 @@ module island_mod
   implicit none
 
   private
-  public :: island
+  public :: island, face_cb
 
 contains
 

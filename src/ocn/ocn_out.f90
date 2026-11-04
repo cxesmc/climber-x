@@ -61,6 +61,10 @@ module ocn_out
   integer :: nout
 
   real, parameter :: missing_value = -9999.
+
+  ! reference of the sterodynamic sea level: annual mean ssh of the first simulation year and ocean mask of that year
+  real(wp), allocatable :: ssh_ref(:,:)
+  integer, allocatable :: mask_ssh_ref(:,:)
   real(wp) :: mon_avg, ann_avg
   integer :: k_over
   integer :: k_drho
@@ -189,6 +193,7 @@ module ocn_out
      real(wp), dimension(:,:), allocatable :: dconv, dven, nconv, kven
      real(wp), dimension(:,:), allocatable :: z_brines
      real(wp), dimension(:,:), allocatable :: ssh
+     real(wp), dimension(:,:), allocatable :: sdsl
      real(wp), dimension(:,:), allocatable :: q_geo
   end type
 
@@ -376,6 +381,11 @@ contains
     allocate(ann_o%zds(maxi,maxj))
     allocate(ann_o%conv_pe_max(maxi,maxj))
     allocate(ann_o%ssh(maxi,maxj))
+    allocate(ann_o%sdsl(maxi,maxj))
+    allocate(ssh_ref(maxi,maxj))
+    allocate(mask_ssh_ref(maxi,maxj))
+    ssh_ref = 0._wp
+    mask_ssh_ref = 0
     allocate(ann_o%q_geo(maxi,maxj))
 
     do k=1,nmon_year
@@ -471,6 +481,7 @@ contains
      allocate(mon_o(k)%zds(maxi,maxj))
      allocate(mon_o(k)%ke_tau(maxi,maxj))
      allocate(mon_o(k)%ssh(maxi,maxj))
+     allocate(mon_o(k)%sdsl(maxi,maxj))
     enddo
 
     allocate(t_atl(maxj,maxk))
@@ -1627,6 +1638,9 @@ contains
     if (year.eq.1) then
       rsl_steric0 = rsl_steric
       rsl_mass0 = rsl_mass
+      ! reference of the sterodynamic sea level: annual mean ssh of the first simulation year
+      mask_ssh_ref = ocn%grid%mask_ocn
+      where (ocn%grid%mask_ocn.eq.1) ssh_ref = ssh_ref + ocn%ssh/real(nstep_year_ocn,wp)
     endif
 
     global_sst = sum_2d(1)/ocn_area_tot
@@ -2996,7 +3010,13 @@ contains
           mon_o(m)%fdysi = 0._wp
           mon_o(m)%taux  = 0._wp
           mon_o(m)%tauy  = 0._wp
-          mon_o(m)%ssh = 0._wp
+          where (ocn%grid%mask_ocn.eq.1)
+            mon_o(m)%ssh = 0._wp
+            mon_o(m)%sdsl = 0._wp
+          elsewhere
+            mon_o(m)%ssh = missing_value
+            mon_o(m)%sdsl = missing_value
+          endwhere
           where (ocn%f_ocn.gt.0._wp) 
             mon_o(m)%dt_dt_flxsur = 0._wp
             mon_o(m)%ds_dt_flxsur = 0._wp
@@ -3350,7 +3370,10 @@ contains
 
     mon_o(mon)%taux  = mon_o(mon)%taux  + ocn%tau(1,:,:) * mon_avg
     mon_o(mon)%tauy  = mon_o(mon)%tauy  + ocn%tau(2,:,:) * mon_avg
-    mon_o(mon)%ssh = mon_o(mon)%ssh  + ocn%ssh * mon_avg
+    where (ocn%grid%mask_ocn.eq.1)
+      mon_o(mon)%ssh = mon_o(mon)%ssh  + ocn%ssh * mon_avg
+      mon_o(mon)%sdsl = mon_o(mon)%sdsl + (ocn%ssh + rsl_steric-rsl_steric0) * mon_avg   ! ssh_ref removed in ocn_diag_out
+    endwhere
     mon_o(mon)%ub    = mon_o(mon)%ub    + ocn%ub(1,1:maxi,1:maxj) * mon_avg ! m/s
     mon_o(mon)%vb    = mon_o(mon)%vb    + ocn%ub(2,1:maxi,1:maxj) * mon_avg ! m/s
     where (ocn%f_ocn.gt.0._wp) 
@@ -3644,6 +3667,15 @@ contains
 
 
     nout = nout + 1
+
+    ! sterodynamic sea level relative to the first simulation year; missing where there was no ocean in that year
+    do k = 1, nmon_year
+      where (mask_ssh_ref.eq.1 .and. mon_o(k)%sdsl.ne.missing_value)
+        mon_o(k)%sdsl = mon_o(k)%sdsl - ssh_ref
+      elsewhere
+        mon_o(k)%sdsl = missing_value
+      endwhere
+    enddo
 
     ! Get annual values
     call ocn_ave( mon_o,ann_o )
@@ -4222,7 +4254,8 @@ contains
     call nc_write(fnm,"conv_pe", sngl(vars%conv_pe),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="potential energy released by convection",units="J/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"fds", sngl(vars%fds),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="downslope volume flux of dense shelf water out of the cell",units="Sv",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"zds", sngl(vars%zds),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="flux-weighted depth at which the downslope plume is deposited",units="m",missing_value=missing_value,ncid=ncid)
-    call nc_write(fnm,"ssh",      sngl(vars%ssh),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="elevation of the free surface",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"ssh",      sngl(vars%ssh),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sea surface height from the depth-mean momentum balance, area mean 0 (equivalent to zos)",units="m",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"sdsl",     sngl(vars%sdsl),dims=[dim_lon,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="sterodynamic sea level change relative to the first simulation year, ssh - ssh(year 1) + rsl_steric",units="m",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"obvfsq",       sngl(vars%bvf2),dims=[dim_lon,dim_lat,dim_levw,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="square of Brunt-Vaisala frequency, N2 = -g/rho0*drho_dz with locally referenced potential density (CMIP6 obvfsq)",units="1/s2",missing_value=missing_value,ncid=ncid)
 
     if (l_output_extended) then
@@ -4408,6 +4441,7 @@ contains
     ave%fds  = 0._wp
     ave%zds  = 0._wp
     ave%ssh = 0._wp
+    ave%sdsl = 0._wp
 
     ! Loop over the time indices to sum up and average (if necessary)
     do k = 1, n
@@ -4501,6 +4535,7 @@ contains
        ave%fds = ave%fds  + d(k)%fds  / div
        ave%zds = ave%zds  + d(k)%zds  / div
        ave%ssh = ave%ssh  + d(k)%ssh  / div
+       ave%sdsl = ave%sdsl + d(k)%sdsl / div
     end do
 
    return
