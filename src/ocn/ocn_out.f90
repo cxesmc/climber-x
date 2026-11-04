@@ -4064,6 +4064,23 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, ncid
 
+    integer :: i, j, ip1
+    real(wp) :: curl_tau(maxi,maxj)
+
+    ! wind stress curl at the cell corners (lonu, latv), from the staggered taux (u-points) and tauy (v-points);
+    ! defined where the three cells carrying the stress components are ocean, missing at the north pole edge
+    curl_tau = missing_value
+    do j=1,maxj-1
+      do i=1,maxi
+        ip1 = i+1
+        if (ip1.gt.maxi) ip1 = 1
+        if (mask_c(i,j,maxk).eq.1 .and. mask_c(ip1,j,maxk).eq.1 .and. mask_c(i,j+1,maxk).eq.1) then
+          curl_tau(i,j) = (vars%tauy(ip1,j)-vars%tauy(i,j))/dxv(j) &
+                        - (vars%taux(i,j+1)*dx(j+1)-vars%taux(i,j)*dx(j))/(dy*dxv(j))  ! N/m3
+        endif
+      enddo
+    enddo
+
     if (ndat.eq.13) then
     call nc_write(fnm,"mask_ocn",    vars%mask_ocn,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="surface ocean mask",units="/",missing_value=int(missing_value),ncid=ncid)
     call nc_write(fnm,"basin_mask",  vars%basin_mask,  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[maxi,maxj,1],long_name="basin mask used for the overturning and budget diagnostics (1=Atlantic incl. Mediterranean 2=Pacific 3=Indian 4=Southern)",units="/",missing_value=int(missing_value),ncid=ncid)
@@ -4136,6 +4153,7 @@ contains
     call nc_write(fnm,"rho_so",    sngl(vars%rho_so),  dims=[dim_lat,dim_lev,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxj,maxk,1,1],long_name="Zonal mean Southern Ocean in-situ density",units="kg/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"taux",       sngl(vars%taux), dims=[dim_lonu,dim_lat,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="zonal wind/sea ice stress",units="N/m2",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"tauy",       sngl(vars%tauy), dims=[dim_lon,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="meridional wind/sea ice stress",units="N/m2",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"curl_tau",   sngl(curl_tau),  dims=[dim_lonu,dim_latv,dim_month,dim_time],start=[1,1,ndat,nout],count=[maxi,maxj,1,1],long_name="wind/sea ice stress curl at cell corners",units="N/m3",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"u",        sngl(vars%u),  dims=[dim_lonu,dim_lat,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="zonal velocity",units="m/s",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"v",        sngl(vars%v),  dims=[dim_lon,dim_latv,dim_lev,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="meridional velocity",units="m/s",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"w",        sngl(vars%w),  dims=[dim_lon,dim_lat,dim_levw,dim_month,dim_time],start=[1,1,1,ndat,nout],count=[maxi,maxj,maxk,1,1],long_name="vertical velocity",units="m/s",missing_value=missing_value,ncid=ncid)

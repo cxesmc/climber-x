@@ -35,7 +35,7 @@ module convection_mod
 
   use precision, only : wp
   use ocn_grid
-  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, n_tracers_tot, n_tracers_ocn
+  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, n_tracers_tot, n_tracers_ocn, drho_conv
   use eos_mod
 
   implicit none
@@ -110,8 +110,9 @@ contains
       ru = eos(ts(kt,1),ts(kt,2),zw(kb))
       rl = eos(ts(kb,1),ts(kb,2),zw(kb))
 
-      ! sum the first pair found in an unstable region
-      if (ru > rl) then
+      ! sum the first pair found in an unstable region (unstable by more than drho_conv, so that layers already
+      ! mixed to neutral are not mixed again by round-off level changes)
+      if (ru > rl+drho_conv) then
         chk_la = .true.
         chk_lb = .true.
         zsm    = dz(kt) + dz(kb)
@@ -130,7 +131,7 @@ contains
             ru = eos(tmx(1),tmx(2),zw(lb))
             rl = eos(ts(lb,1),ts(lb,2),zw(lb))
 
-            if (ru > rl) then
+            if (ru > rl+drho_conv) then
               ! add new level to sums
               kb     = lb
               zsm    = zsm + dz(kb)
@@ -152,7 +153,7 @@ contains
             ru = eos(ts(la,1),ts(la,2),zw(kt))
             rl = eos(tmx(1),tmx(2),zw(kt))
 
-            if (ru > rl) then
+            if (ru > rl+drho_conv) then
               ! add new level to sums
               kt     = la
               zsm    = zsm + dz(kt)
