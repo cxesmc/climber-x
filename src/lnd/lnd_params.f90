@@ -47,6 +47,8 @@ module lnd_params
   character (len=256) :: lnd_par_file
   logical :: write_surf, write_surf_n, write_carbon, write_soil, write_soil_par, write_lake, write_cons, l_daily_output
 
+  character (len=256) :: cti_file
+
   integer :: i_init_veg
   logical :: l_dynveg
   character (len=256) :: pft_fix_file
@@ -86,6 +88,7 @@ module lnd_params
   ! hydrology parameters
   type hydro_par_type
     integer :: i_hydro_par
+    logical :: l_uniform_fwet_params
     logical :: l_dew 
     logical :: l_prc_intercept
     logical :: l_runoff_icemelt
@@ -109,6 +112,8 @@ module lnd_params
     real(wp) :: f_drain_perch ! 1/m, TOPMODEL transmissivity decay factor of the perched zone
     real(wp) :: cti_min
     real(wp) :: cti_mean_crit
+    real(wp) :: cti_mean_u
+    real(wp) :: cti_cdf_u(15)
   end type
   type(hydro_par_type) :: hydro_par
 
@@ -203,7 +208,7 @@ module lnd_params
   ! soil parameters
   type soil_par_type
     integer :: soil_texture
-    logical :: uniform_porosity, uniform_soil_par_therm, uniform_soil_par_hydro
+    logical :: uniform_porosity, uniform_soil_par_therm, uniform_soil_par_hydro, uniform_soil_par_alb, uniform_soil_par_alb_polar
     logical :: constant_porosity, constant_soil_par_therm, constant_soil_par_hydro
     real(wp) :: cap_s = 2.3d6   ! J/m3/K, volumetric heat capacity of soil
     real(wp) :: theta_sat_u
@@ -213,6 +218,10 @@ module lnd_params
     real(wp) :: lambda_dry_u
     real(wp) :: k_sat_u
     real(wp) :: psi_sat_u
+    real(wp) :: alb_bare_vis_u
+    real(wp) :: alb_bare_nir_u
+    real(wp) :: alb_bare_vis_polar
+    real(wp) :: alb_bare_nir_polar
     integer :: b_u
     integer :: k_exp_u
   end type
@@ -541,45 +550,78 @@ contains
   pft_par%photos_k3 = log(0.99_wp/0.01_wp) / (pft_par%t_co2_high - pft_par%t_photos_high)
 
   ! bare soil/desert albedo
-  call nc_read( trim(lnd_par_file), "a_vis",surf_par%alb_bare_vis )
-  call nc_read( trim(lnd_par_file), "a_nir",surf_par%alb_bare_nir )
-  ! set to constant value in mid- to high latitudes (poleward of 50°)
-  do i=1,nx
-    do j=1,ny
-      if (abs(lat(j)).gt.50._wp) then
-        surf_par%alb_bare_vis(i,j) = 0.2_wp
-        surf_par%alb_bare_nir(i,j) = 0.2_wp
-      endif
-    enddo
-  enddo
+  if(soil_par%uniform_soil_par_alb) then
+     surf_par%alb_bare_vis = soil_par%alb_bare_vis_u
+     surf_par%alb_bare_nir = soil_par%alb_bare_nir_u
+  else
+     call nc_read( trim(lnd_par_file), "a_vis",surf_par%alb_bare_vis )
+     call nc_read( trim(lnd_par_file), "a_nir",surf_par%alb_bare_nir )
+  endif
 
-  ! soil texture
-  if( soil_par%soil_texture .eq. 1 ) then
-    call nc_read( trim(lnd_par_file), "fclay_hwsd",frac_clay )
-    call nc_read( trim(lnd_par_file), "fsand_hwsd",frac_sand )
-    elseif( soil_par%soil_texture .eq. 2 ) then
-    call nc_read( trim(lnd_par_file), "fclay_gsde",frac_clay )
-    call nc_read( trim(lnd_par_file), "fsand_gsde",frac_sand )
+  if(soil_par%uniform_soil_par_alb_polar) then
+     ! set to constant value in mid- to high latitudes (poleward of 50°)
+     do i=1,nx
+        do j=1,ny
+           if (abs(lat(j)).gt.50._wp) then
+              surf_par%alb_bare_vis(i,j) = soil_par%alb_bare_vis_polar
+              surf_par%alb_bare_nir(i,j) = soil_par%alb_bare_nir_polar
+           endif
+        enddo
+     enddo
+  endif
+
+  ! load spatially resolved soil params only if at least one of the uniform flags is false
+  if (.not. (soil_par%uniform_porosity .and. soil_par%uniform_soil_par_therm .and. soil_par%uniform_soil_par_hydro)) then
+     ! soil texture
+     if( soil_par%soil_texture .eq. 1 ) then
+        call nc_read( trim(lnd_par_file), "fclay_hwsd",frac_clay )
+        call nc_read( trim(lnd_par_file), "fsand_hwsd",frac_sand )
+     elseif( soil_par%soil_texture .eq. 2 ) then
+        call nc_read( trim(lnd_par_file), "fclay_gsde",frac_clay )
+        call nc_read( trim(lnd_par_file), "fsand_gsde",frac_sand )
+     endif
   endif
   
   ! mineral soil characteristics
-  mineral%theta_sat = 0.489_wp-0.00126_wp*frac_sand
-  mineral%lambda_s = (8.80_wp*frac_sand+2.92_wp*frac_clay)/(frac_sand+frac_clay)
-  bulk_den = 2700.0_wp*(1.0_wp-mineral%theta_sat)
-  mineral%lambda_dry = (0.135_wp*bulk_den+64.7_wp)/(2700.0_wp-0.947_wp*bulk_den)
-  mineral%heatcap = (2.128_wp*frac_sand+2.385_wp*frac_clay)/(frac_sand+frac_clay)*1.0d6
-  mineral%psi_sat = (-10.0_wp*10**(1.88_wp-0.0131_wp*frac_sand)) *1.d-3  ! m
-  mineral%k_sat = 0.0070556_wp*10**(-0.884_wp+0.0153_wp*frac_sand)  ! kg/m2/s
-  mineral%Bi = 2.91_wp+0.159_wp*frac_clay
+  if (soil_par%uniform_porosity) then
+     mineral%theta_sat = soil_par%theta_sat_u
+  else
+     mineral%theta_sat = 0.489_wp-0.00126_wp*frac_sand
+  endif
+  if (soil_par%uniform_soil_par_therm) then
+     mineral%lambda_s = soil_par%lambda_s_u
+     mineral%lambda_dry = soil_par%lambda_dry_u
+  else
+     mineral%lambda_s = (8.80_wp*frac_sand+2.92_wp*frac_clay)/(frac_sand+frac_clay)
+     bulk_den = 2700.0_wp*(1.0_wp-mineral%theta_sat)
+     mineral%lambda_dry = (0.135_wp*bulk_den+64.7_wp)/(2700.0_wp-0.947_wp*bulk_den)
+     mineral%heatcap = (2.128_wp*frac_sand+2.385_wp*frac_clay)/(frac_sand+frac_clay)*1.0d6 ! this seems to be unused
+  endif
+  if (soil_par%uniform_soil_par_hydro) then
+     mineral%psi_sat = soil_par%psi_sat_u
+     mineral%k_sat = soil_par%k_sat_u
+     mineral%Bi = soil_par%b_u
+  else
+     mineral%psi_sat = (-10.0_wp*10**(1.88_wp-0.0131_wp*frac_sand)) *1.d-3  ! m
+     mineral%k_sat = 0.0070556_wp*10**(-0.884_wp+0.0153_wp*frac_sand)  ! kg/m2/s
+     mineral%Bi = 2.91_wp+0.159_wp*frac_clay
+  endif
 
-  ! read topmodel parameters
-  call nc_read('input/cti_5x5.nc', "cti_mean",topmodel%cti_mean)
-  do i=1,15
-    call nc_read('input/cti_5x5.nc', "cti_cdf",topmodel%cti_cdf(i),start=[1,1,i],count=[nx,ny,1])
-  enddo
-
-  !call nc_read( "input/fmax_5x5.nc", "fmax",clm_fmax )
-
+  if (hydro_par%l_uniform_fwet_params) then
+     do i=1,nx
+        do j=1,ny       
+           topmodel(i,j)%cti_mean = hydro_par%cti_mean_u
+           topmodel(i,j)%cti_cdf = hydro_par%cti_cdf_u
+        enddo   
+     enddo
+  else
+     ! read topmodel parameters
+     call nc_read('input/cti_5x5.nc', "cti_mean",topmodel%cti_mean)
+     do i=1,15
+        call nc_read('input/cti_5x5.nc', "cti_cdf",topmodel%cti_cdf(i),start=[1,1,i],count=[nx,ny,1])
+     enddo
+  endif
+  
   ! lithologies
 
   if (i_weathering.eq.1) then
@@ -705,6 +747,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","dt_day_veg",dt_day_veg)
     call nml_read(filename,"lnd_par","dt_day_carb",dt_day_carb)
     call nml_read(filename,"lnd_par","lnd_par_file",lnd_par_file)
+    call nml_read(filename,"lnd_par","cti_file",cti_file)
 
     call nml_read(filename,"lnd_par","l_diurnal_cycle" ,l_diurnal_cycle )
     call nml_read(filename,"lnd_par","l_neutral",l_neutral)
@@ -763,6 +806,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","z_wtab_max",hydro_par%z_wtab_max)
     call nml_read(filename,"lnd_par","f_drain",hydro_par%f_drain)
     call nml_read(filename,"lnd_par","kappa_max",hydro_par%kappa_max)
+    call nml_read(filename,"lnd_par","l_uniform_fwet_params",hydro_par%l_uniform_fwet_params)
     call nml_read(filename,"lnd_par","theta_crit_evp",hydro_par%theta_crit_evp)
     call nml_read(filename,"lnd_par","p_psi_min",hydro_par%p_psi_min)
     call nml_read(filename,"lnd_par","p_psi_max",hydro_par%p_psi_max)
@@ -770,7 +814,8 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","f_drain_perch",hydro_par%f_drain_perch)
     call nml_read(filename,"lnd_par","cti_min",hydro_par%cti_min)
     call nml_read(filename,"lnd_par","cti_mean_crit",hydro_par%cti_mean_crit)
-
+    call nml_read(filename,"lnd_par","cti_mean_u",hydro_par%cti_mean_u)
+    call nml_read(filename,"lnd_par","cti_cdf_u",hydro_par%cti_cdf_u)
     call nml_read(filename,"lnd_par","alpha_int_w_tree",alpha_int_w_tree)
     call nml_read(filename,"lnd_par","alpha_int_w_grass",alpha_int_w_grass)
     do n=1,npft
@@ -887,19 +932,18 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","uniform_porosity",soil_par%uniform_porosity)
     call nml_read(filename,"lnd_par","uniform_soil_par_hydro",soil_par%uniform_soil_par_hydro)
     call nml_read(filename,"lnd_par","uniform_soil_par_therm",soil_par%uniform_soil_par_therm)
+    call nml_read(filename,"lnd_par","uniform_soil_par_alb",soil_par%uniform_soil_par_alb)
+    call nml_read(filename,"lnd_par","uniform_soil_par_alb_polar",soil_par%uniform_soil_par_alb_polar)
+    
     call nml_read(filename,"lnd_par","constant_porosity",soil_par%constant_porosity)
     call nml_read(filename,"lnd_par","constant_soil_par_hydro",soil_par%constant_soil_par_hydro)
     call nml_read(filename,"lnd_par","constant_soil_par_therm",soil_par%constant_soil_par_therm)
+    
     call nml_read(filename,"lnd_par","k_sat_u",soil_par%k_sat_u)
     soil_par%k_sat_u = soil_par%k_sat_u/sec_day
     call nml_read(filename,"lnd_par","psi_sat_u",soil_par%psi_sat_u)
     call nml_read(filename,"lnd_par","b_u",soil_par%b_u)
     call nml_read(filename,"lnd_par","k_exp_u",soil_par%k_exp_u)
-    ! the exponent of the hydraulic conductivity curve is decoupled from the exponent of the
-    ! retention curve: k_exp_u<0 restores the Clapp-Hornberger/Burdine relation k_exp = 2*b+3,
-    ! a smaller value gives an effective grid-scale conductivity curve flatter than the
-    ! point-scale one (see below)
-    if (soil_par%k_exp_u.lt.0) soil_par%k_exp_u = 2*soil_par%b_u+3
     call nml_read(filename,"lnd_par","theta_sat_u",soil_par%theta_sat_u)
     call nml_read(filename,"lnd_par","theta_field_u",soil_par%theta_field_u)
     call nml_read(filename,"lnd_par","theta_wilt_u",soil_par%theta_wilt_u)
@@ -907,6 +951,11 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","lambda_s_u",soil_par%lambda_s_u)
     call nml_read(filename,"lnd_par","lambda_dry_u",soil_par%lambda_dry_u)
 
+    call nml_read(filename,"lnd_par","alb_bare_vis_u",soil_par%alb_bare_vis_u)
+    call nml_read(filename,"lnd_par","alb_bare_nir_u",soil_par%alb_bare_nir_u)
+    call nml_read(filename,"lnd_par","alb_bare_vis_polar",soil_par%alb_bare_vis_polar)
+    call nml_read(filename,"lnd_par","alb_bare_nir_polar",soil_par%alb_bare_nir_polar)
+    
     call nml_read(filename,"lnd_par","l_burial",soilc_par%l_burial)
     call nml_read(filename,"lnd_par","heat_soc",soilc_par%heat_soc)
     call nml_read(filename,"lnd_par","f_resp_litter",soilc_par%f_resp_litter)

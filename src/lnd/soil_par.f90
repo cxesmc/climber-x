@@ -90,13 +90,32 @@ contains
       psi_sat(k) = (1._wp - frac_soc(k)) * mineral_psi_sat + frac_soc(k) * organic%psi_sat
 
       Bi = (1._wp - frac_soc(k)) * mineral_Bi + frac_soc(k) * organic%Bi
-      k_exp(k) = 2*nint(Bi)+3
       psi_exp(k) = -nint(Bi)
 
-      ! field capacity
-      theta_field(k) = theta_sat(k) * (0.1_wp / (86400._wp * k_sat(k)))**(1._wp/k_exp(k))
-      ! wilting point
-      theta_wilt(k) = theta_sat(k) * (hydro_par%p_psi_min / psi_sat(k))**(1._wp/psi_exp(k))
+      if (soil_par%uniform_soil_par_hydro) then
+         ! field capacity
+         theta_field(k) = soil_par%theta_field_u
+         ! wilting point
+         theta_wilt(k) = soil_par%theta_wilt_u
+
+
+         ! the exponent of the hydraulic conductivity curve is decoupled from the exponent of the
+         ! retention curve: k_exp_u<0 restores the Clapp-Hornberger/Burdine relation k_exp = 2*b+3,
+         ! a smaller value gives an effective grid-scale conductivity curve flatter than the
+         ! point-scale one (see below)
+         if (soil_par%k_exp_u.lt.0) then
+            k_exp(k) = 2*nint(Bi)+3
+         else
+            k_exp(k) = soil_par%k_exp_u
+         endif
+      else
+         ! field capacity
+         theta_field(k) = theta_sat(k) * (0.1_wp / (86400._wp * k_sat(k)))**(1._wp/k_exp(k))
+         ! wilting point
+         theta_wilt(k) = theta_sat(k) * (hydro_par%p_psi_min / psi_sat(k))**(1._wp/psi_exp(k))
+
+         k_exp(k) = 2*nint(Bi)+3
+      endif
      endif
 
      ! update soil thermal parameters
