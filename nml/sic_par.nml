@@ -81,7 +81,7 @@
                            ! when an finite stress is applied to thin ice moving with the velocity of the ocean.
  project_f_sic =  T        ! If true, project the ice concentration and related ice strength changes due to the convergent or divergent ice flow.
  evp_sub_steps = 100       ! The number of iterations in the EVP dynamics for each slow time step. default=432
- cfl_fac = 0.1             ! factor for CFL stability near the Poles
+ cfl_fac = 0.5             ! factor for CFL stability near the Poles
 
  !-----------------------------------------------------------------------------------------
  ! control of sea ice model output 

@@ -213,13 +213,12 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
   m_neglect4 = m_neglect**4
 
   ! velocity limits for CFL
-  ! the teoretical limit for 2D advection is 1./sqrt(1./dx(j)**2+1./dy**2)/dt
-  ! so use dx for both u and v components, as it is always the limiting factor
+  ! flux-form advection requires |ui|*dt/dx + |vi|*dt/dy < 1, so ui is limited by dx and vi by dy
   do j=1,maxj
     ui_min_cfl(j) = -dyn_par%cfl_fac * dx(j) / dt
     ui_max_cfl(j) =  dyn_par%cfl_fac * dx(j) / dt
-    vi_min_cfl(j) = -dyn_par%cfl_fac * dxv(J) / dt
-    vi_max_cfl(j) =  dyn_par%cfl_fac * dxv(J) / dt
+    vi_min_cfl(j) = -dyn_par%cfl_fac * dy / dt
+    vi_max_cfl(j) =  dyn_par%cfl_fac * dy / dt
   enddo
 
   !$omp parallel 
@@ -666,6 +665,9 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           (mi_u(I,j) + m_neglect + dt_evp * a_face*drag_u)
 
         ui(I,j) = (uio_C + uo(I,j)) * mask_u(I,j)
+        ! no ice on either side of the face: no mass to carry a velocity, and any leftover stress in the
+        ! empty cells would otherwise be divided by m_neglect and accelerate ui up to the limit
+        if (mi_u(I,j) <= 0._wp) ui(I,j) = 0._wp
 
         if (ui(I,j) < ui_min_cfl(j)) then
           ui(I,j) = ui_min_cfl(j)
@@ -747,6 +749,9 @@ subroutine sic_dyn(dt, f_sic, h_sic_mean, h_snow_mean, uo, vo, tauxa, tauya, ssh
           (mi_v(i,J) + m_neglect + dt_evp * a_face*drag_v)
 
         vi(i,J) = (vio_C + vo(i,J)) * mask_v(i,J)
+        ! no ice on either side of the face: no mass to carry a velocity, and any leftover stress in the
+        ! empty cells would otherwise be divided by m_neglect and accelerate vi up to the limit
+        if (mi_v(i,J) <= 0._wp) vi(i,J) = 0._wp
 
         if (vi(i,J) < vi_min_cfl(J)) then
           vi(i,J) = vi_min_cfl(J)
