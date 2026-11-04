@@ -227,6 +227,8 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: tauy   !! meridional surface wind stress [N/m2] 
       real(wp), dimension(:,:),   allocatable :: tauxo  !! zonal sea ice stress on ocean [N/m2]
       real(wp), dimension(:,:),   allocatable :: tauyo  !! meridional sea ice stress on ocean [N/m2] 
+      real(wp), dimension(:,:),   allocatable :: tauxo_u  !! zonal sea ice stress on ocean on the u-grid of the sea ice model [N/m2]
+      real(wp), dimension(:,:),   allocatable :: tauyo_v  !! meridional sea ice stress on ocean on the v-grid of the sea ice model [N/m2]
       real(wp), dimension(:,:),   allocatable :: rbatm_dat   !! radiative balance of atmosphere for fix rad setup [W/m2]
       real(wp), dimension(:,:),   allocatable :: cld_dat   !! cloud fraction for fix rad setup [/]
       real(wp), dimension(:,:),   allocatable :: cld_day_dat   !! daytime cloud fraction for fix rad setup [/]
@@ -397,7 +399,13 @@ contains
         enddo
         ki1(k) = max(1,kk-1)
         ki2(k) = min(size(cmn%o3_pl),kk)
-        w1(k)  = 1._wp - (atm%pl(k)-cmn%o3_pl(ki1(k))) / (cmn%o3_pl(ki2(k))-cmn%o3_pl(ki1(k)))
+        if (ki2(k).eq.ki1(k)) then
+          w1(k) = 1._wp
+        else
+          w1(k)  = 1._wp - (atm%pl(k)-cmn%o3_pl(ki1(k))) / (cmn%o3_pl(ki2(k))-cmn%o3_pl(ki1(k)))
+          ! no extrapolation outside the levels of the O3 input: constant above the top and below the bottom level
+          w1(k)  = min(1._wp,max(0._wp,w1(k)))
+        endif
         w2(k)  = 1._wp-w1(k)
       enddo
       firstcall = .false.
@@ -764,6 +772,8 @@ contains
 
     real(wp) :: avg
     real(wp) :: taux(ni,nj), tauy(ni,nj)   ! fixed-size local scratch (ni,nj are compile-time parameters), avoids per-call heap allocation
+    real(wp) :: taux_ow(ni,nj), tauy_ow(ni,nj), fsic(ni,nj)   ! open-water part of the stress and sea ice fraction (0 on land)
+    logical :: l_face
 
 
     ! update masks and sea level at beginning of year
@@ -787,16 +797,26 @@ contains
     ocn%buoy_sic_NA(:) = cmn%buoy_sic_NA(:)
 
     ! weighted average of wind stress over sea ice-free ocean and sea ice stress over sea ice covered fraction
+    ! with the sea ice model on, the sea ice stress on ocean on the u/v-faces (tauxo_u, tauyo_v) is used directly for
+    ! the stresses on the ocean u/v-faces (stressxu, stressyv), instead of interpolating it to the c-points and back
+    l_face = .false.
     if (flag_atm .and. atm_fix_tau) then
       taux = cmn%taux_dat
       tauy = cmn%tauy_dat
     else
+      l_face = flag_sic
       do j=1,nj
         do i=1,ni
           if (cmn%f_ocn(i,j).gt.0._wp) then
-            taux(i,j) = (cmn%f_sic(i,j)*(cmn%tauxo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%taux(i,j,i_surf_macro_ocn))
-            tauy(i,j) = (cmn%f_sic(i,j)*(cmn%tauyo(i,j)) + (1._wp-cmn%f_sic(i,j))*cmn%tauy(i,j,i_surf_macro_ocn))
+            fsic(i,j)    = cmn%f_sic(i,j)
+            taux_ow(i,j) = (1._wp-cmn%f_sic(i,j))*cmn%taux(i,j,i_surf_macro_ocn)
+            tauy_ow(i,j) = (1._wp-cmn%f_sic(i,j))*cmn%tauy(i,j,i_surf_macro_ocn)
+            taux(i,j) = cmn%f_sic(i,j)*cmn%tauxo(i,j) + taux_ow(i,j)
+            tauy(i,j) = cmn%f_sic(i,j)*cmn%tauyo(i,j) + tauy_ow(i,j)
           else
+            fsic(i,j)    = 0._wp
+            taux_ow(i,j) = 0._wp
+            tauy_ow(i,j) = 0._wp
             taux(i,j) = 0._wp
             tauy(i,j) = 0._wp
           endif
@@ -816,6 +836,11 @@ contains
         ocn%stressyv(i,j) = 0.5_wp*(tauy(i,j)+tauy(i,jp1))  ! meridional wind stress on v-grid
         ocn%stressxv(i,j) = 0.5_wp*(taux(i,j)+taux(i,jp1))  ! zonal wind stress on v-grid
         ocn%stressyu(i,j) = 0.5_wp*(tauy(i,j)+tauy(ip1,j))  ! meridional wind stress on u-grid
+        if (l_face) then
+          ! same two-cell average, with the sea ice part taken from the face itself
+          ocn%stressxu(i,j) = 0.5_wp*(taux_ow(i,j)+taux_ow(ip1,j)) + 0.5_wp*(fsic(i,j)+fsic(ip1,j))*cmn%tauxo_u(i,j)
+          ocn%stressyv(i,j) = 0.5_wp*(tauy_ow(i,j)+tauy_ow(i,jp1)) + 0.5_wp*(fsic(i,j)+fsic(i,jp1))*cmn%tauyo_v(i,j)
+        endif
         ! wind
         ocn%wind(i,j) = cmn%wind(i,j,i_surf_macro_ocn)
         if (cmn%mask_ocn(i,j).eq.1) then
@@ -1178,6 +1203,9 @@ contains
         if (flag_ocn) then
           im1 = i-1
           if (im1.eq.0) im1=ni
+          ! sea ice stress on ocean on the u- and v-faces, shared by the sea ice and ocean grids, passed unchanged
+          cmn%tauxo_u(i,j) = sic%tauxo(i,j)
+          cmn%tauyo_v(i,j) = sic%tauyo(i,j)
           ! intrerpolate zonal sea ice stress on ocean from u-points to c-points
           cmn%tauxo(i,j)   = 0.5_wp * (sic%tauxo(i,j) + sic%tauxo(im1,j))   ! on c-points
           ! intrerpolate meridional sea ice stress on ocean from v-points to c-points
@@ -3453,6 +3481,9 @@ contains
 
       cmn%so4(:,:) = bnd%so4(:,:)
 
+      ! O3 levels as in the input file
+      if (.not.allocated(cmn%o3_pl)) allocate(cmn%o3_pl(size(bnd%o3_pl)))
+      if (.not.allocated(cmn%o3)) allocate(cmn%o3(ni,nj,size(bnd%o3_pl)))
       cmn%o3_pl(:) = bnd%o3_pl(:)
       cmn%o3(:,:,:) = bnd%o3(:,:,:)
 
@@ -4446,8 +4477,6 @@ contains
     allocate(cmn%delta_C13_ocn_2d(ni,nj)) 
     allocate(cmn%delta_C14_ocn_2d(ni,nj)) 
     allocate(cmn%so4(ni,nj))
-    allocate(cmn%o3_pl(11))
-    allocate(cmn%o3(ni,nj,11))
     allocate(cmn%mask_ocn(ni,nj))
     allocate(cmn%mask_lnd(ni,nj))
     allocate(cmn%mask_smb(ni,nj))
@@ -4509,6 +4538,10 @@ contains
     allocate(cmn%tauy(ni,nj,nsurf_macro))
     allocate(cmn%tauxo(ni,nj))
     allocate(cmn%tauyo(ni,nj))
+    allocate(cmn%tauxo_u(ni,nj))
+    allocate(cmn%tauyo_v(ni,nj))
+    cmn%tauxo_u = 0._wp
+    cmn%tauyo_v = 0._wp
     allocate(cmn%uo1(ni,nj))
     allocate(cmn%vo1(ni,nj))
     allocate(cmn%ssh(ni,nj))
