@@ -123,6 +123,7 @@
     snow_1 = 0.5                ! parameter in dependence of snowfall rate for grain size evolution, used only if l_snow_aging==T
     snow_grain_fresh = 50       ! micro m, snow grain size of fresh snow
     snow_grain_old = 1000       ! micro m, snow grain size of old snow
+    tau_snow_grain = 8.         ! days, relaxation timescale of the snow grain size, 0 = no relaxation
     l_snow_dust = T             ! dust effect on snow albedo?
     w_snow_crit = 10.           ! kg/m2, minimum snow water equivalent for explicit snow layer
     w_snow_off = 1000           ! kg/m2, maximum snow water equivalent

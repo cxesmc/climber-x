@@ -1607,7 +1607,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%icemelt        = 0._wp
         lnd%l2d(i,j)%icesub         = 0._wp
 
-        lnd%l2d(i,j)%snow_grain     = 0._wp  
+        if (.not.lnd_restart) lnd%l2d(i,j)%snow_grain = 0._wp  
         lnd%l2d(i,j)%dust_con       = 0._wp  
         lnd%l2d(i,j)%runoff         = 0._wp  
         lnd%l2d(i,j)%runoff_sur     = 0._wp  
@@ -2520,6 +2520,13 @@ end subroutine lnd_update
    call nc_write(fnm,"h_snow",          var_n,          dims=[dim_nsoil,dim_lon,dim_lat],start=[1,1,1],count=[nsoil,ni,nj],long_name="snow thickness",units="m",ncid=ncid)
    do i=1,nx
      do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%snow_grain(:)
+     enddo
+   enddo
+   ! snow_grain is a prognostic state if tau_snow_grain>0 (see snow_grain_size)
+   call nc_write(fnm,"snow_grain",      var_n,          dims=[dim_nsoil,dim_lon,dim_lat],start=[1,1,1],count=[nsoil,ni,nj],long_name="snow grain size",units="micro m",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
        vari_n(:,i,j) = lnd(i,j)%mask_snow(:)
      enddo
    enddo
@@ -3162,6 +3169,13 @@ end subroutine lnd_update
     do j=1,ny; do i=1,nx; lnd(i,j)%w_snow_max = tmp_snw(:,i,j); enddo; enddo
     call nc_read(fnm,"h_snow",tmp_snw,ncid=ncid)
     do j=1,ny; do i=1,nx; lnd(i,j)%h_snow = tmp_snw(:,i,j); enddo; enddo
+    ! older restarts have no snow_grain, 0 = start from the diagnosed value
+    if (nc_exists_var(fnm,"snow_grain")) then
+      call nc_read(fnm,"snow_grain",tmp_snw,ncid=ncid)
+      do j=1,ny; do i=1,nx; lnd(i,j)%snow_grain = tmp_snw(:,i,j); enddo; enddo
+    else
+      do j=1,ny; do i=1,nx; lnd(i,j)%snow_grain = 0._wp; enddo; enddo
+    endif
     call nc_read(fnm,"mask_snow",itmp_snw,ncid=ncid)
     do j=1,ny; do i=1,nx; lnd(i,j)%mask_snow = itmp_snw(:,i,j); enddo; enddo
     deallocate(tmp_snw,itmp_snw)

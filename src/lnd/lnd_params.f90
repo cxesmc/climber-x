@@ -130,6 +130,7 @@ module lnd_params
     real(wp) :: alb_snow_nir_dif_new = 0.65_wp
     real(wp) :: snow_grain_fresh
     real(wp) :: snow_grain_old
+    real(wp) :: tau_snow_grain
     real(wp) :: f_age_t 
     real(wp) :: snow_0
     real(wp) :: snow_1
@@ -738,6 +739,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","l_snow_dust",snow_par%l_snow_dust)
     call nml_read(filename,"lnd_par","snow_grain_fresh" ,snow_par%snow_grain_fresh )
     call nml_read(filename,"lnd_par","snow_grain_old" ,snow_par%snow_grain_old )
+    call nml_read(filename,"lnd_par","tau_snow_grain" ,snow_par%tau_snow_grain )
     call nml_read(filename,"lnd_par","f_age_t" ,snow_par%f_age_t)
     call nml_read(filename,"lnd_par","snow_0" ,snow_par%snow_0 )
     snow_par%snow_0 = snow_par%snow_0/sec_day

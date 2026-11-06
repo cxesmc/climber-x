@@ -129,7 +129,7 @@ contains
 
       ! snow grain size
       if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_veg, snow(i_bare), &
+        call snow_grain_size(t_skin_veg, snow(i_bare), w_snow(is_veg), &
                              snow_grain(is_veg))
       else
         snow_grain(is_veg) = snow_par%snow_grain_fresh
@@ -169,7 +169,7 @@ contains
 
       ! snow grain size
       if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_ice, snow(i_ice), &
+        call snow_grain_size(t_skin_ice, snow(i_ice), w_snow(is_ice), &
                              snow_grain(is_ice))
       else
         snow_grain(is_ice) = snow_par%snow_grain_fresh
@@ -210,7 +210,7 @@ contains
 
       ! snow grain size
       if (snow_par%l_snow_aging) then
-        call snow_grain_size(t_skin_lake, snow(i_lake), &
+        call snow_grain_size(t_skin_lake, snow(i_lake), w_snow(is_lake), &
                              snow_grain(is_lake))
       else
         snow_grain(is_lake) = snow_par%snow_grain_fresh
@@ -415,13 +415,16 @@ contains
   !   Subroutine :  s n o w _ g r a i n _ s i z e
   !   Purpose    :  compute snow grain size
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine snow_grain_size(t_skin,snow, &
+  subroutine snow_grain_size(t_skin,snow,w_snow, &
                              snow_grain)
 
     implicit none
 
-    real(wp), intent(in) :: t_skin, snow
+    real(wp), intent(in) :: t_skin, snow, w_snow
+    ! snow_grain is a state if tau_snow_grain>0: it is relaxed in time (see below)
     real(wp), intent(inout) :: snow_grain
+
+    real(wp) :: snow_grain_new
 
     real(wp) :: f_age, f_tage1, f_tage2, f_tage, f_p
 
@@ -439,7 +442,16 @@ contains
     f_p = f_tage * (snow_par%snow_0/max(1.e-20_wp,snow))**snow_par%snow_1
     f_age = 1._wp - log(1._wp+f_p)/f_p
     ! snow grain size
-    snow_grain = snow_par%snow_grain_fresh + (snow_par%snow_grain_old-snow_par%snow_grain_fresh)*f_age 
+    snow_grain_new = snow_par%snow_grain_fresh + (snow_par%snow_grain_old-snow_par%snow_grain_fresh)*f_age 
+
+    ! Relax towards the value for the current snowfall and temperature, needed for stability where snowfall follows local
+    ! evaporation: snowfall -> albedo -> SW -> evaporation -> snowfall is otherwise a 4-day limit cycle.
+    ! No memory without a snow pack (snow_grain<=0 flags a restart without snow_grain)
+    if (snow_par%tau_snow_grain.le.0._wp .or. w_snow.le.0._wp .or. snow_grain.le.0._wp) then
+      snow_grain = snow_grain_new
+    else
+      snow_grain = snow_grain + min(dt_lnd/(snow_par%tau_snow_grain*sec_day), 1._wp)*(snow_grain_new-snow_grain)
+    endif
 
 
     return
