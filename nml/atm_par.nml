@@ -57,7 +57,7 @@
   c_mmc_had = 0.25              ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
-  c_mmc_fer = 0.08              ! parameter for strength of Ferrel cells
+  c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor of the ITCZ displacement of the cell pattern, used only if i_mmc_geo=0
   i_mmc_geo = 1                 ! meridional cell geometry: 0 = whole pattern displaced towards the ITCZ, decaying as 1/(1+c_mmc_1*(fi-ficz)**2),
@@ -67,7 +67,7 @@
   i_mmc_itcz = 1                ! ITCZ position: 0 = c_mmc_2 x interhemispheric sea level temperature contrast,
                                 !                1 = c_mmc_efe x energy flux equator (efe output)
   c_mmc_efe = 0.85              ! ITCZ latitude per degree of energy flux equator, used only if i_mmc_itcz=1
-  c_mmc_dt0 = 62.               ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
+  c_mmc_dt0 = 58.               ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
   c_mmc_dt1 = 0.25              ! exponent of the Held (2000) supercriticality scaling of the Hadley width (tropopause height x bulk dry stability)
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity
   c_mmc_mt = 1.                 ! weight of the mountain torque [p_s dz_s/dx] in the lower-branch momentum budget: only f*M - MT is
@@ -84,9 +84,8 @@
   !-----------------------------------------------------------
   l_p0_var = T                  ! Allow sea level pressure to vary according to topography distribution?
   p0 = 101100                   ! Pa, mean sea level pressure, used only if l_p0_var==F
-  c_slp_1 = 1.                  ! scaling factor for azonal sea level pressure 
+  c_slp_1 = 1.0                 ! scaling factor for azonal sea level pressure 
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
-  c_slp_3 = 20.                 ! parameter for polar damping of azonal sea level pressure 
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
   c_slp_trop_f = 0.35           ! fraction of the fast (sub-seasonal) part of the temperature related azonal SLP kept equatorward of c_slp_trop_lat0 (1 = off)
@@ -95,7 +94,7 @@
   c_slp_trop_lat1 = 30.         ! deg, ... and no damping poleward of c_slp_trop_lat1 (cosine transition)
   l_aslp_temp_adv = T           ! displace the temperature-related azonal sea level pressure upstream of the sea level temperature anomaly?
   c_aslp_temp_tau = 1.0         ! days, relaxation time scale for the upstream displacement of the temperature-related azonal sea level pressure
-  i_aslp_temp_adv_u = 1         ! zonal mean wind for the upstream displacement: 1 = 500 hPa from u3 (polar-damped thermal wind), 2 = 500 hPa from u3f (undamped), 3 = 850 hPa from u3f
+  c_uz500_pol = 3.              ! polar damping of the thermal wind in the 500 hPa zonal mean wind of the upstream displacement, min(1,c*cos(lat)**2), independent of c_uter_pol; <=0 = undamped
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure? Linear barotropic vorticity equation
                                 ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by the ~850 hPa zonal mean flow over zsa
   c_aslp_sw_amp = 1.5           ! scaling of the sea level pressure response to the ~300 hPa height anomaly (x ra*g), used only if l_aslp_topo==T
@@ -141,14 +140,17 @@
                                 ! 0 = no katabatic winds
                                 ! 1 = katabatic winds using u/v grid values
                                 ! 2 = katabatic winds using upwind values
+                                ! 3 = inversion-layer slab with Coriolis (Ball 1960, Mahrt 1982), V_k = F/(r+if), r = cd0a*W/h_kata,
+                                !     buoyancy from the Ball deficit c_kata*(gamb-gams)*hgams*(1-h_kata/(2 hgams)), unclipped T-point slope
   h_kata = 100.                 ! m, surface layer thickness for katabatic winds, used only if i_kata_wind>0 
+  c_kata = 0.5                  ! factor on the Ball temperature deficit, used only if i_kata_wind=3
 
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 3.4e-3              ! K/m, background lapse rate
-  c_gam_2 = 0.02                ! K/m, moisture dependence of lapse rate
-  c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
+  c_gam_1 = 4.0e-3              ! K/m, background lapse rate
+  c_gam_2 = 0.055               ! K/m, moisture dependence of lapse rate
+  c_gam_3 = 4.e-3               ! K/m, increase on background lapse rate at top of troposphere
   ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
   ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
   ! also act as the bounds, and sh_gams is the flux scale over which it changes regime. A second
@@ -159,12 +161,14 @@
   gams_max_conv = 7.5e-3        ! K/m, surface lapse rate in the very unstable limit (set = gams_max to switch off)
   sh_gams_conv = 60.            ! W/m2, sensible heat flux at which the transition to gams_max_conv is centred
   dsh_gams_conv = 15.           ! W/m2, flux width of the transition to gams_max_conv
-  c_gam_rel = 0.995             ! lapse rate time relaxation parameter for stability
-  i_tsl = 1                     ! sea level temperature used for the azonal sea level pressure,
+  c_gam_tau = 25.               ! days, relaxation time of the lapse rates gams, gamb, gamt
+  c_hrm_tau = 1.25              ! days, relaxation time of the relative humidity height scale hrm
+  i_tsl = 3                     ! sea level temperature used for the azonal sea level pressure,
                                 !   0 = tsksl = tsl, the air temperature profile reduced to sea level
                                 !   1 = built from the skin temperature, carried down through the surface layer (gams, hgams) and to sea level with c_tsl_gam
                                 !   2 = skin temperature reduced with the model lapse rate profile, then through the surface layer as in 1
   c_tsl_gam = 5.e-3             ! lapse rate for reduction of skin temperature to sea level, all surface types
+  tsl_gams_min = 0.0         
   hgams = 1500.                 ! m, height of surface layer for lapse rate
   hgamt = 15000.                ! m, height of 'troposphere' for lapse rate
   zmax = 30.e3                  ! m, maximum height for potential temperature computation
@@ -176,8 +180,8 @@
                                 ! 1 = longwave radiation balance only
                                 ! 2 = include also solar radiation absorbtion by stratospheric O3
   c_trop_1 = 100.               ! m3/W
-  c_trop_2 = 18.                ! W/m2
-  c_trop_3 = 1.0                ! 
+  c_trop_2 = 26.                ! W/m2
+  c_trop_3 = 0.85               ! with c_trop_2=30, c_gam_3=4e-3: htrop ~ERA-1 km at poles/tropics, ~ERA at midlat (output/radtrop4)
 
   !-----------------------------------------------------------
   ! relative humidity height scale parameters
@@ -232,9 +236,15 @@
   !-----------------------------------------------------------
   ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
-  i_adv = 2                     ! advection scheme:
+  i_adv = 1                     ! advection scheme:
                                 ! 1 = first order upstream 
                                 ! 2 = flux corrected transport (Zalesak 1979)
+  c_adv_polar = 0.5             ! zonal sub-cycling of the tracer advection in polar rows (|lat| > lat_adv_polar) whose zonal Courant number
+                                ! exceeds c_adv_polar (strong azonal SLP near the pole): the zonal face values of those rows are replaced by
+                                ! the time mean of ceil(C/c_adv_polar) upstream sub-steps along the row. Zonal inflow-mass Courant threshold
+                                ! and target per sub-step
+  lat_adv_polar = 75.           ! deg, the zonal sub-cycling acts only poleward of this latitude (the zonal inflow-mass Courant number is
+                                ! also >1 in thin, topography-cut layers elsewhere, where the FCT upstream fallback copes)
   l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr/convdst) to suppress grid-scale checkerboard; 0 = off
   nord_filt_conv = 2            ! order (selectivity) of the convergence 2dx filter
@@ -242,8 +252,8 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.55                !
-  c_cld_2 = 0.55                !
+  c_cld_1 = 0.56                !
+  c_cld_2 = 0.56                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
@@ -266,7 +276,7 @@
   !-----------------------------------------------------------
   c_hcld_low = 1500.            ! m, height of the low cloud top above the surface
   c_hcld_dz_min = 1000.         ! m, minimum thickness of the radiating cloud slab in the longwave column (lwr.f90).
-  c_hcld_1 = 2000.              !
+  c_hcld_1 = 2250.              !
   c_hcld_2 = 0.3                !
   c_hcld_3 = 200.               !
   c_hcld_4 = 0.                 !
@@ -288,12 +298,19 @@
   l_sct_0  = T                  !
   l_alb_0  = F                  !
   f_ice_pow = 1.                !
-  r_scat   = 0.15               !
+  r_scat   = 0.1542             ! Rayleigh albedo (VU); with i_swr_ray==1 the value at cosz=0.5
   a1_w     = 0.21               !
   b1_w     = 6.27               !
   b2_w     = 0.0267             !
-  c_itf_c  = 0.9                !
-  c_itf_cc = 0.9                !
+  c_itf_c  = 0.927              ! cloud ITF, TOA path (0.9 before i_swr_gas)
+  c_itf_cc = 0.970              ! cloud ITF, surface path (0.9 before i_swr_gas)
+  i_swr_ray = 1                 ! Rayleigh scattering albedo: 0 = constant r_scat, 1 = zenith-angle dependent, r_scat*(1-exp(-tau_ray/mu))/(1-exp(-tau_ray/0.5))
+  tau_ray = 0.222               ! effective Rayleigh optical depth (VU band), used only if i_swr_ray==1
+  i_swr_gas = 1                 ! non-water gas absorption: 0 = constant O3 transmission (VU) 0.98, 1 = path-dependent 1-a*m^b for VU (O3) and IR (O2, CO2, CH4)
+  a_gas_vu = 0.0168             ! used only if i_swr_gas==1
+  b_gas_vu = 0.0091             !
+  a_gas_ir = 0.0454             !
+  b_gas_ir = 0.487              !
 
   !-----------------------------------------------------------
   ! longwave radiation parameters
@@ -308,6 +325,34 @@
   a2_vap = 0.1                  !
   beta2_vap = 1.5               !
   a3_vap = 0.01                 !
+  i_lwr_band = 1                ! LW spectral structure: 0 = one broadband transmission, 1 = three Planck-weighted bands (window / CO2 / water vapour rest)
+  nu_win1 = 800.                ! cm-1, window band, used only if i_lwr_band==1
+  nu_win2 = 1250.               ! cm-1
+  nu_co21 = 550.                ! cm-1, CO2 band
+  nu_co22 = 800.                ! cm-1
+  k_cont = 7.029                ! window: water vapour self-continuum absorption coefficient
+  c_cont_T = 3.637              ! window: continuum temperature dependence exp(c_cont_T*(296/T-1))
+  k_wvw = 0.1014                ! window: weak water vapour line absorption coefficient
+  ak_wvw = 0.9477               ! window: pressure scaling exponent of the weak water vapour lines
+  f_wv_co2 = 0.09809            ! CO2 band: water vapour absorber amount relative to the water vapour band
+  ak_co2_3b = 2.108             ! CO2 band: as ak_co2, beta_co2 and the hard-coded a0_co2, a1_co2
+  beta_co2_3b = 0.3614          !
+  a0_co2_3b = 0.5416            !
+  a1_co2_3b = 0.09983           !
+  ak_wv_3b = 0.7309             ! water vapour band: as ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap
+  a_vap_3b = 6.209              !
+  beta_vap_3b = 0.6845          !
+  a2_vap_3b = 0.3405            !
+  beta2_vap_3b = 0.3045         !
+  a3_vap_3b = 0.01024           !
+  ak_o3_3b = 2.266              ! window: O3, as the hard-coded ak_o3, a_o3, beta_o3
+  a_o3_3b = 0.5857              !
+  beta_o3_3b = 0.107            !
+  k_co2w = 0.01055              ! window band: CO2 band-wing / 9.4-10.4 um absorption, transmission exp(-k_co2w*(1.66*u_co2)**b_co2w); 0 = off
+  k_co2r = 0.01036              ! water vapour band: CO2 band-wing absorption, exp(-k_co2r*(1.66*u_co2)**b_co2w); 0 = off
+  b_co2w = 0.373                ! exponent of the CO2 band-wing absorber amount
+  c_co2_hi = 0.01392            ! CO2 band: high-CO2 transmission reduction 1-min(0.2,c_co2_hi*(u_co2/1000)**2), as in the broadband scheme
+  z_top_lw = 30000.             ! m, top of the LW radiation column (was fixed at 30 km); O3 is constant above 30 km
   l_o3 = T                      !
   hpbl = 1500.                  ! m
   ecs_scale = 1.                ! scaling of effective CO2 in long-wave radiation to mimic lower (<1) or higher (>1) climate sensitivity
@@ -323,8 +368,8 @@
   c_dust_wet = 0.075            ! scavenging parameter for wet dust deposition (m2/kg), 0.075 in Bauer 2010
   c_dust_dry = 2.5e-3           ! dry dust deposition velocity (m/s), 2.5e-3 in Bauer 2010
   c_dust_mec = 950.             ! dust mass extinction efficiency (m^2/kg)
-  ars_ot = 0.1                  ! dust optical depth for clear sky conditions, used only if l_dust==F or l_dust_rad==F
-  ars_im = 0.01                 ! imaginary part of dust refractive index for clear-sky conditions
+  ars_ot = 0.1                  ! dust optical depth for clear sky conditions (at p0; scaled with surface pressure), used only if l_dust==F or l_dust_rad==F
+  ars_im = 0.0025               ! imaginary part of dust refractive index for clear-sky conditions (0.0025: global clear-sky atm SW absorption = CERES)
 
   !-----------------------------------------------------------
   ! sulfate aerosols parameters 
@@ -345,11 +390,11 @@
   nsmooth_zsa = 0               ! spatial topography smoothing 
   nsmooth_cda  = 1              ! spatial drag coefficient smoothing
   nsmooth_weff  = 2             ! spatial smoothing of effective vertical velocity
-  nsmooth_aslp = 2              ! spatial smoothing of azonal sea level pressure
-  i_aslp_smooth = 1             ! where the azonal sea level pressure is smoothed and damped (polar/equatorial):
-                                ! 1 = the time-relaxed state, every call (accumulates: equilibrium c S X/(1-(1-c)S), ~40% weaker, flatter)
-                                ! 2 = the forcing before the time relaxation (equilibrium = smoothed forcing; the damping keeps the
-                                !     effective latitude profile of 1, c fd/(1-(1-c) fd))
+  nsmooth_aslp = 1              ! spatial smoothing of azonal sea level pressure (acts on the time-relaxed state, every call, so it
+                                ! accumulates: equilibrium c S X/(1-(1-c)S), ~40% weaker, flatter)
+  aslp_polar_lat = 65.          ! deg, latitude where the polar vorticity taper of the azonal sea level pressure forcing starts: lap(p)
+                                !     of the forcing is multiplied by a raised cosine (1 at aslp_polar_lat, 0 at the pole) and inverted
+                                !     per zonal wavenumber, so the vorticity decays monotonically to the pole
   nsmooth_acbar = 1             ! spatial smoothing of cross-isobar angle
   nsmooth_gam = 2               ! spatial smoothing of lapse rate 
   nsmooth_cld = 1 !0

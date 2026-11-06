@@ -28,9 +28,9 @@ module slp_mod
   use atm_params, only : wp, dp
   use constants, only : pi, r_earth, omega, g, Rd, T0, Le
   use atm_params, only : ra, p0, hatm
-  use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
+  use atm_params, only : c_slp_1, c_slp_2, c_slp_4, c_slp_5
   use atm_params, only : c_slp_trop_f, c_slp_trop_tau, c_slp_trop_lat0, c_slp_trop_lat1
-  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau, i_aslp_temp_adv_u
+  use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
   use atm_params, only : l_aslp_topo, c_aslp_sw_amp, c_aslp_sw_tau, c_aslp_sw_h, c_aslp_sw_umin, c_aslp_sw_lateq, n_aslp_sw
   use atm_params, only : c_aslp_sw_fr, c_aslp_sw_nbv
   use atm_params, only : c_aslp_sw_eddy, i_aslp_sw_eddy, n_aslp_sw_eddy
@@ -43,7 +43,7 @@ module slp_mod
   use atm_params, only : i_mmc_fer
   use atm_params, only : i_mmc_had, c_mmc_q, q_mmc_ref
   use atm_params, only : c_mmc_dt0, c_mmc_dt1, hdv_mmc_ref, c_mmc_mt, amas
-  use atm_params, only : nsmooth_aslp, i_aslp_smooth
+  use atm_params, only : nsmooth_aslp, aslp_polar_lat
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, k850, k300, i_ice
   use atm_grid, only : fcorua, sint, cost, fiu, fit, dxt, pblu
   use atm_grid, only : zc, k_dse_lo, k_dse_up
@@ -77,8 +77,8 @@ contains
     real(wp), intent(in   ) :: tsksl(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind of u3 (polar-damped thermal wind)
-    real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used if l_aslp_topo or i_aslp_temp_adv_u>=2
+    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind for the upstream displacement of aslp_temp, thermal wind damped with c_uz500_pol
+    real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used if l_aslp_topo
     real(wp), intent(in   ) :: sam(:,:)       !! synoptic eddy kinetic energy, used only if l_aslp_topo and c_aslp_sw_eddy>0
     real(wp), intent(in   ) :: eke(:,:)       !! ERA-Interim 2-6 day eddy kinetic energy climatology, used only if i_aslp_sw_eddy==2
     real(wp), intent(in   ) :: prc(:,:)       !! precipitation (kg/m2/s), previous step, used only if l_aslp_gill
@@ -98,10 +98,9 @@ contains
     real(wp) :: k, uz
     real(wp) :: tslz(jm)
     real(wp) :: htropz(jm)
-    real(wp) :: uz500u(jm)
     real(wp) :: uz500s(jm)
     type(C_PTR) :: plan_r2c_temp, plan_c2r_temp
-    real(wp) :: aslp_frc(im,jm), fd
+    real(wp) :: aslp_frc(im,jm)
     real(wp) :: aslp_gill_new(im,jm), cgill
     real(wp) :: cslow, ftrop, wtrop, alat
     real(dp), dimension(im) :: aslp_temp_dp
@@ -109,28 +108,12 @@ contains
 
 
     ! zonal mean zonal wind for the upstream displacement of aslp_temp:
-    ! 500 hPa from u3 (thermal wind damped towards the poles) or from u3f (undamped),
-    ! or 850 hPa from u3f, the low-level flow that carries the cooling/heating air column
-    if (i_aslp_temp_adv_u.eq.1) then
-      uz500u(:) = uz500(:)
-    else if (i_aslp_temp_adv_u.eq.2) then
-      do j=1,jm
-        uz500u(j) = sum(u3f(:,j,k500))*aim
-      enddo
-    else if (i_aslp_temp_adv_u.eq.3) then
-      do j=1,jm
-        uz500u(j) = sum(u3f(:,j,k850))*aim
-      enddo
-    else
-      stop 'i_aslp_temp_adv_u'
-    endif
-
     ! smooth zonal mean 500 hPa zonal wind
     do j=2,jm-1
-      uz500s(j) = 0.4_wp*uz500u(j)+0.3_wp*(uz500u(j+1)+uz500u(j-1))
+      uz500s(j) = 0.4_wp*uz500(j)+0.3_wp*(uz500(j+1)+uz500(j-1))
     enddo
-    uz500s(1)  = 0.5_wp*(uz500u(1)+uz500u(2))
-    uz500s(jm) = 0.5_wp*(uz500u(jm)+uz500u(jm-1))
+    uz500s(1)  = 0.5_wp*(uz500(1)+uz500(2))
+    uz500s(jm) = 0.5_wp*(uz500(jm)+uz500(jm-1))
 
     ! zonal mean sea level temperature and tropopause height
     do j=1,jm
@@ -160,8 +143,8 @@ contains
           aslp_temp(i,j) = 0._wp
         else
           ! as in CLIMBER-2, Petoukhov 2000, eq. (17)
-          !aslp_temp(i,j) = -c_slp_1*g*p0*12000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
-          aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
+          aslp_temp(i,j) = -c_slp_1*g*p0*10000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
+          !aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
         endif
       enddo
 
@@ -315,60 +298,165 @@ contains
     ! azonal component of sea level pressure 
     !------------------------------------------------
 
-    if (i_aslp_smooth.eq.1) then
-
-      ! smoothing and damping act on the time-relaxed state at every call, so they accumulate:
-      ! the equilibrium is c S X/(1-(1-c) S) instead of S X (analysis/stationary_wave/aslp_smooth_loop.jl)
-      do j=1,jm
-        do i=1,im
-          ! relax in time
-          aslp(i,j) = (1._wp-c_slp_2)*aslp(i,j)+c_slp_2*(aslp_temp(i,j)+aslp_topo(i,j)+aslp_gill(i,j))
-        enddo
+    ! the forcing is tapered once per call through its vorticity (does not accumulate), while smoothing and
+    ! equatorial damping act on the time-relaxed state at every call, so they accumulate: the equilibrium
+    ! is c S X/(1-(1-c) S) instead of S X (analysis/stationary_wave/aslp_smooth_loop.jl)
+    do j=1,jm
+      do i=1,im
+        aslp_frc(i,j) = aslp_temp(i,j)+aslp_topo(i,j)+aslp_gill(i,j)
       enddo
-
-      ! smooth in space
-      call smooth2_m(aslp,nsmooth_aslp)
-
-      ! polar and equatorial damping
-      do j=1,jm
-        do i=1,im
-          aslp(i,j)=aslp(i,j) &
-            * min(1._wp,c_slp_3*(cost(j)-cost(1))**2) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
-        enddo
+    enddo
+    call vorticity_taper(aslp_frc)
+    do j=1,jm
+      do i=1,im
+        ! relax in time
+        aslp(i,j) = (1._wp-c_slp_2)*aslp(i,j)+c_slp_2*aslp_frc(i,j)
       enddo
+    enddo
 
-    else if (i_aslp_smooth.eq.2) then
+    ! smooth in space
+    call smooth2_m(aslp,nsmooth_aslp)
 
-      ! smooth and damp the forcing, then relax in time: the equilibrium is the smoothed, damped forcing.
-      ! The polar/equatorial damping factor fd is applied in the form the accumulating version 1 had at
-      ! equilibrium, c fd/(1-(1-c) fd) (0.06 instead of 0.4 at 7.5 deg): applying fd once lets the
-      ! tropical azonal pressure grow 4-7x and crashes the model (negative precipitation in the SE Pacific)
-      do j=1,jm
-        do i=1,im
-          aslp_frc(i,j) = aslp_temp(i,j)+aslp_topo(i,j)+aslp_gill(i,j)
-        enddo
+    ! equatorial damping
+    do j=1,jm
+      do i=1,im
+        aslp(i,j) = aslp(i,j) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
       enddo
-
-      ! smooth in space
-      call smooth2_m(aslp_frc,nsmooth_aslp)
-
-      do j=1,jm
-        fd = min(1._wp,c_slp_3*(cost(j)-cost(1))**2) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
-        fd = c_slp_2*fd/(1._wp-(1._wp-c_slp_2)*fd)
-        do i=1,im
-          ! polar and equatorial damping
-          aslp_frc(i,j) = aslp_frc(i,j)*fd
-          ! relax in time
-          aslp(i,j) = (1._wp-c_slp_2)*aslp(i,j)+c_slp_2*aslp_frc(i,j)
-        enddo
-      enddo
-
-    endif
+    enddo
 
 
     return
 
   end subroutine azslp
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  v o r t i c i t y _ t a p e r
+  !   Purpose    :  polar taper of an azonal field through its vorticity
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Multiplying the field by a latitude taper T adds the curvature 2 grad(T).grad(p) + p lap(T), which
+  ! for a deep subpolar low is a cyclonic band equatorward and an anticyclonic band poleward of the
+  ! taper edge (analysis/amoc_stab/polar_taper_offline.jl). Instead, poleward of aslp_polar_lat the
+  ! Laplacian of the field is multiplied by T (raised cosine, 1 at aslp_polar_lat, 0 at the pole) and
+  ! inverted per zonal wavenumber n,
+  !   lap_n(p_n) = T * lap_n(x_n) ,   p_n = x_n at the last row equatorward of aslp_polar_lat ,
+  ! with the same discrete Laplacian (5 point, face cosines, zero flux through the pole face). The
+  ! vorticity then decays monotonically to the pole and never changes sign, and each wavenumber decays
+  ! harmonically (regularly) towards the pole. The zonal mean (n=0) is left unchanged.
+  subroutine vorticity_taper(x)
+
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+
+    include 'fftw3.f03'
+
+    real(wp), intent(inout) :: x(:,:)
+
+    integer :: j, k, n, m, jb, hemi, nrow
+    integer :: rows(jm)
+    real(wp) :: dphi, dlon, al, tap, den
+    real(wp) :: a(jm), b(jm), c(jm)
+    complex(dp) :: rhs(jm), cp(jm), dpv(jm), sol(jm), pb
+    type(C_PTR) :: plan_r2c, plan_c2r
+    real(dp), dimension(im) :: row
+    complex(dp), dimension(im/2+1) :: rowc
+    complex(dp) :: xh(im/2+1,jm)
+
+
+    dphi = pi/real(jm,wp)
+    dlon = 2._wp*pi/real(im,wp)
+
+    plan_r2c = fftw_plan_dft_r2c_1d(im, row, rowc, FFTW_ESTIMATE)
+    plan_c2r = fftw_plan_dft_c2r_1d(im, rowc, row, FFTW_ESTIMATE)
+
+    do j=1,jm
+      row(:) = x(:,j)
+      call fftw_execute_dft_r2c(plan_r2c, row, rowc)
+      xh(:,j) = rowc(:)
+    enddo
+
+    do hemi=1,2
+
+      ! rows of the cap ordered from the edge to the pole (internal j=1 is the North Pole row);
+      ! jb is the Dirichlet row, the last one equatorward of aslp_polar_lat
+      nrow = 0
+      if (hemi.eq.1) then
+        do j=jm/2,1,-1
+          if (fit(j)*180._wp/pi.gt.aslp_polar_lat) then
+            nrow = nrow+1
+            rows(nrow) = j
+          endif
+        enddo
+        if (nrow.eq.0) cycle
+        jb = rows(1)+1
+      else
+        do j=jm/2+1,jm
+          if (-fit(j)*180._wp/pi.gt.aslp_polar_lat) then
+            nrow = nrow+1
+            rows(nrow) = j
+          endif
+        enddo
+        if (nrow.eq.0) cycle
+        jb = rows(1)-1
+      endif
+      m = nrow
+
+      do n=1,im/2
+        do k=1,m
+          al = abs(fit(rows(k)))
+          a(k) = cos(al-0.5_wp*dphi)/(r_earth**2*cos(al)*dphi**2)
+          c(k) = max(0._wp,cos(al+0.5_wp*dphi))/(r_earth**2*cos(al)*dphi**2)
+          if (k.eq.m) c(k) = 0._wp   ! no flux through the pole face
+          b(k) = -(a(k)+c(k)) - (2._wp-2._wp*cos(real(n,wp)*dlon))/(r_earth*cos(al)*dlon)**2
+        enddo
+        ! tapered Laplacian of the field
+        pb = xh(n+1,jb)
+        do k=1,m
+          al = abs(fit(rows(k)))*180._wp/pi
+          tap = 0.5_wp*(1._wp+cos(pi*(al-aslp_polar_lat)/(90._wp-aslp_polar_lat)))
+          if (k.eq.1) then
+            rhs(k) = a(k)*pb
+          else
+            rhs(k) = a(k)*xh(n+1,rows(k-1))
+          endif
+          rhs(k) = rhs(k) + b(k)*xh(n+1,rows(k))
+          if (k.lt.m) rhs(k) = rhs(k) + c(k)*xh(n+1,rows(k+1))
+          rhs(k) = tap*rhs(k)
+        enddo
+        rhs(1) = rhs(1) - a(1)*pb
+        ! Thomas algorithm
+        cp(1) = c(1)/b(1)
+        dpv(1) = rhs(1)/b(1)
+        do k=2,m
+          den = b(k) - a(k)*real(cp(k-1),wp)
+          cp(k) = c(k)/den
+          dpv(k) = (rhs(k) - a(k)*dpv(k-1))/den
+        enddo
+        sol(m) = dpv(m)
+        do k=m-1,1,-1
+          sol(k) = dpv(k) - cp(k)*sol(k+1)
+        enddo
+        do k=1,m
+          xh(n+1,rows(k)) = sol(k)
+        enddo
+      enddo
+
+      ! back to grid space for the cap rows; the zonal mean (n=0) is kept
+      do k=1,m
+        rowc(:) = xh(:,rows(k))
+        call fftw_execute_dft_c2r(plan_c2r, rowc, row)
+        x(:,rows(k)) = row(:)*aim
+      enddo
+
+    enddo
+
+    call fftw_destroy_plan(plan_r2c)
+    call fftw_destroy_plan(plan_c2r)
+
+    return
+
+  end subroutine vorticity_taper
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

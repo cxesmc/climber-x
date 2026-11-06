@@ -29,7 +29,7 @@ module u3d_mod
   use constants, only : g, T0, r_earth, pi, omega
   use atm_params, only : amas, ra, dpc, i_dpc, dp_com, ptopdyn
   use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
-  use atm_params, only : c_uter_pol, c_uter_eq
+  use atm_params, only : c_uter_pol, c_uter_eq, c_uz500_pol
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
   use atm_grid, only : fcort, cost, sint, cosu, sinu
   use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
@@ -231,6 +231,7 @@ contains
     real(wp), dimension(kmc) :: vteri
     real(wp), dimension(kmc) :: uterif, vterif   ! thermal wind on levels for the EKE production
     real(wp), dimension(kmc) :: uterid           ! zonal thermal wind on levels from the polar damped azonal temperature
+    real(wp) :: cdamp_uz
     real(wp), dimension(jm)  :: cdamp            ! polar damping factor, applied to the azonal temperature
     real(wp), dimension(jm,kmc) :: t3z           ! zonal mean temperature on levels
     real(wp) :: pst
@@ -772,15 +773,16 @@ contains
           ipl = modulo(i,im) + 1
 
           ug_b = ugb(i,j)    
+          ! on the polar rows v at the T-point is the v of the one interior face (v does not vanish at the pole)
           vg_b = vgb(i,j)
           u3(i,j,1) = 0.5_wp*(ua(i,j,1)+ua(ipl,j,1)) + ug_b
           u3f(i,j,1) = u3(i,j,1)
-          v3(i,j,1) = 0.5_wp*(va(i,j,1)+va(i,min(j+1,jm),1)) + vg_b
+          v3(i,j,1) = 0.5_wp*(va(i,max(j,2),1)+va(i,min(j+1,jm),1)) + vg_b
           do k=1,km-1     
             u3k   = 0.5_wp*(ua(i,j,k)+ua(ipl,j,k)) + ug_b + uter(i,j,k)
-            v3k   = 0.5_wp*(va(i,j,k)+va(i,min(j+1,jm),k)) + vg_b + vter(i,j,k)
+            v3k   = 0.5_wp*(va(i,max(j,2),k)+va(i,min(j+1,jm),k)) + vg_b + vter(i,j,k)
             u3kp1 = 0.5_wp*(ua(i,j,k+1)+ua(ipl,j,k+1)) + ug_b + uter(i,j,k+1)
-            v3kp1 = 0.5_wp*(va(i,j,k+1)+va(i,min(j+1,jm),k+1)) + vg_b + vter(i,j,k+1)
+            v3kp1 = 0.5_wp*(va(i,max(j,2),k+1)+va(i,min(j+1,jm),k+1)) + vg_b + vter(i,j,k+1)
             u3(i,j,k+1) = 0.5_wp*(u3k+u3kp1)
             ! the same without the polar damping of the thermal wind
             u3f(i,j,k+1) = u3(i,j,k+1) + 0.5_wp*(uteru(i,j,k)-uter(i,j,k) + uteru(i,j,k+1)-uter(i,j,k+1))
@@ -836,9 +838,13 @@ contains
 
       ! zonal mean 500 hPa zonal wind
       do j=1,jm
+        ! polar damping of the thermal wind in the wind for the sea level pressure, independent of c_uter_pol
+        cdamp_uz = 1._wp
+        if (c_uz500_pol.gt.0._wp) cdamp_uz = min(1._wp,c_uz500_pol*cost(j)**2)
         uz500(j) = 0._wp
         do i=1,im
-          uz500(j) = uz500(j)+u3(i,j,k500)/im
+          uz500(j) = uz500(j) + (u3f(i,j,k500) &
+            - (1._wp-cdamp_uz)*0.5_wp*(uteru(i,j,k500-1)+uteru(i,j,k500)))/im
         enddo
       enddo
 

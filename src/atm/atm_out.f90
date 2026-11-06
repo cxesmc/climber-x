@@ -188,6 +188,7 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: slope_y
     real(wp), allocatable, dimension(:,:) :: frlnd
     real(wp), allocatable, dimension(:,:) :: frocn
+    real(wp), allocatable, dimension(:,:,:) :: o3     !! O3 concentration at the atmospheric levels (mol/mol), annual only
 
     real(wp), allocatable, dimension(:,:) :: tam        !! extrapolated surface temperature (K)
     real(wp), allocatable, dimension(:,:) :: qam        !! extrapolated surface specific humidity (kg/kg)
@@ -299,6 +300,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: vab
     real(wp), allocatable, dimension(:,:,:) :: taux
     real(wp), allocatable, dimension(:,:,:) :: tauy
+    real(wp), allocatable, dimension(:,:) :: tauxa      !! grid-cell mean zonal surface stress, all surface types (N/m2)
+    real(wp), allocatable, dimension(:,:) :: tauya      !! grid-cell mean meridional surface stress, all surface types (N/m2)
     real(wp), allocatable, dimension(:,:) :: wcld
     real(wp), allocatable, dimension(:,:) :: woro
     real(wp), allocatable, dimension(:,:) :: wsyn       !! vertical synoptic wind component (m/s)
@@ -472,6 +475,7 @@ contains
      allocate(ann_a%slope_y(im,jm))
      allocate(ann_a%frlnd(im,jm))
      allocate(ann_a%frocn(im,jm))
+     allocate(ann_a%o3(im,jm,kmc))
 
      allocate(ann_a%tam(im,jm))  
      allocate(ann_a%qam(im,jm))  
@@ -582,6 +586,8 @@ contains
      allocate(ann_a%vab(im,jmc))
      allocate(ann_a%taux(im,jm,nm))
      allocate(ann_a%tauy(im,jm,nm))
+     allocate(ann_a%tauxa(im,jm))
+     allocate(ann_a%tauya(im,jm))
      allocate(ann_a%wcld(im,jm))
      allocate(ann_a%woro(im,jm))
      allocate(ann_a%wsyn(im,jm))
@@ -816,6 +822,8 @@ contains
      allocate(mon_a(k)%vab(im,jmc))
      allocate(mon_a(k)%taux(im,jm,nm))
      allocate(mon_a(k)%tauy(im,jm,nm))
+     allocate(mon_a(k)%tauxa(im,jm))
+     allocate(mon_a(k)%tauya(im,jm))
      allocate(mon_a(k)%wcld(im,jm))
      allocate(mon_a(k)%woro(im,jm))
      allocate(mon_a(k)%wsyn(im,jm))
@@ -1598,6 +1606,8 @@ contains
           mon_a(m)%vab        = 0. 
           mon_a(m)%taux        = 0. 
           mon_a(m)%tauy        = 0. 
+          mon_a(m)%tauxa       = 0. 
+          mon_a(m)%tauya       = 0. 
           mon_a(m)%wcld        = 0. 
           mon_a(m)%woro        = 0. 
           mon_a(m)%weff        = 0. 
@@ -1820,6 +1830,8 @@ contains
       mon_a(mon)%vab        = mon_a(mon)%vab        + mon_avg * atm%vab
       mon_a(mon)%taux        = mon_a(mon)%taux        + mon_avg * atm%taux
       mon_a(mon)%tauy        = mon_a(mon)%tauy        + mon_avg * atm%tauy
+      mon_a(mon)%tauxa       = mon_a(mon)%tauxa       + mon_avg * sum(atm%taux*atm%frst,3)
+      mon_a(mon)%tauya       = mon_a(mon)%tauya       + mon_avg * sum(atm%tauy*atm%frst,3)
       mon_a(mon)%wcld        = mon_a(mon)%wcld        + mon_avg * atm%wcld
       mon_a(mon)%woro        = mon_a(mon)%woro        + mon_avg * atm%woro
       mon_a(mon)%weff        = mon_a(mon)%weff        + mon_avg * atm%weff
@@ -2261,6 +2273,7 @@ contains
       ann_a%slope_y     = atm%slope_y
       ann_a%frlnd       = atm%frlnd
       ann_a%frocn       = atm%frocn
+      ann_a%o3          = atm%o3      ! prescribed, updated once per year
 
       ! reference 2m temperature for the bias diagnostic: CMIP6 piControl multi-model median
       ! (benchmark/scripts/make_cmip6_t2m_median.jl), pre-industrial like the model's control
@@ -2523,6 +2536,9 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, ncid
 
+    integer :: i, j, ipl, imi
+    real(wp) :: curl_tau(im,jm)
+
 
     if (ndat.eq.13) then
 
@@ -2549,6 +2565,8 @@ contains
         start=[1,1,nout],count=[im,jm,1],long_name="land fraction in grid cell",units="1",ncid=ncid)
       call nc_write(fnm,"frocn      ", sngl(vars%frocn     (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
         start=[1,1,nout],count=[im,jm,1],long_name="ocean fraction in grid cell",units="1",ncid=ncid)
+      call nc_write(fnm,"o3         ", sngl(vars%o3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","time "], &
+        start=[1,1,1,nout],count=[im,jm,kmc,1],long_name="O3 concentration at the atmospheric levels",units="mol/mol",ncid=ncid)
       call nc_write(fnm,"zs         ", sngl(vars%zs        (:,jm:1:-1,:) ), dims=["lon ","lat ","st  ","time"], &
         start=[1,1,1,nout],count=[im,jm,nm,1],long_name="surface elevation for each macro surface type",units="m",ncid=ncid)
 
@@ -2674,6 +2692,25 @@ contains
       start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="zonal surface wind stress",units="N/m2",ncid=ncid)
     call nc_write(fnm,"tauy       ", sngl(vars%tauy      (:,jm:1:-1,:) ), dims=["lon ","lat ","st  ","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="meridional surface wind stress",units="N/m2",ncid=ncid)
+    call nc_write(fnm,"tauxa      ", sngl(vars%tauxa     (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean zonal surface stress (all surface types)",units="N/m2",ncid=ncid)
+    call nc_write(fnm,"tauya      ", sngl(vars%tauya     (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean meridional surface stress (all surface types)",units="N/m2",ncid=ncid)
+    ! curl of the grid-cell mean surface stress at T-points (centred differences; j=1 is the northernmost row).
+    ! Unlike curl_tau in ocn.nc (the stress felt by the ocean, i.e. the ice-ocean stress under sea ice, at cell corners)
+    ! this is the curl of the total atmospheric surface stress, comparable with reanalysis iews/inss.
+    curl_tau = -9999._wp
+    do j=2,jm-1
+      do i=1,im
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
+        curl_tau(i,j) = (vars%tauya(ipl,j)-vars%tauya(imi,j))/(2._wp*dxt(j)) &
+                      - (vars%tauxa(i,j-1)*cost(j-1)-vars%tauxa(i,j+1)*cost(j+1))/(2._wp*dy*cost(j))
+      enddo
+    enddo
+    call nc_write(fnm,"curl_tau   ", sngl(curl_tau(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="curl of the grid-cell mean surface stress (all surface types)",units="N/m3", &
+      missing_value=-9999.,ncid=ncid)
 
     call nc_write(fnm,"tsl        ", sngl(vars%tsl       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level temperature",units="K",ncid=ncid)
@@ -3245,6 +3282,8 @@ contains
     ave%vab        = 0._wp
     ave%taux        = 0._wp
     ave%tauy        = 0._wp
+    ave%tauxa       = 0._wp
+    ave%tauya       = 0._wp
     ave%wcld        = 0._wp
     ave%woro        = 0._wp
     ave%weff        = 0._wp
@@ -3467,6 +3506,8 @@ contains
        ave%vab        = ave%vab        + d(k)%vab        / div
        ave%taux        = ave%taux        + d(k)%taux        / div
        ave%tauy        = ave%tauy        + d(k)%tauy        / div
+       ave%tauxa       = ave%tauxa       + d(k)%tauxa       / div
+       ave%tauya       = ave%tauya       + d(k)%tauya       / div
        ave%wcld        = ave%wcld        + d(k)%wcld        / div
        ave%woro        = ave%woro        + d(k)%woro        / div
        ave%weff        = ave%weff        + d(k)%weff        / div

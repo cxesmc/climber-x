@@ -39,7 +39,8 @@ module atm_model
     use atm_params, only : atm_params_init
     use atm_params, only : nstep_fast
     use atm_params, only : p0, ra, nsmooth_cda
-    use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad
+    use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad, hatm
+    use atm_params, only : i_swr_gas, a_gas_vu
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
     use atm_params, only : l_diff_impl, i_adv
@@ -153,7 +154,8 @@ contains
     if (flag_dust .and. l_dust .and. l_dust_rad) then
       atm%aerosol_ot(:,:) = atm%dust_ot(:,:)
     else
-      atm%aerosol_ot(:,:) = ars_ot 
+      ! background aerosol optical depth scaled with the surface pressure of the grid cell
+      atm%aerosol_ot(:,:) = ars_ot*exp(-atm%zsa(:,:)/hatm)
     endif
     atm%aerosol_im(:,:) = ars_im
 
@@ -165,7 +167,8 @@ contains
       atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%hcld, atm%hqeff, atm%aerosol_ot, atm%aerosol_im, atm%so4, &    ! in
       atm%alb_cld, atm%swr_top, atm%swr_top_cs, atm%swr_top_cld, atm%swr_sur, atm%fswr_sur, atm%fswr_sur_cs, atm%fswr_sur_cld, & ! out
       atm%dswd_dalb_vu_cs, atm%dswd_dalb_ir_cs, atm%dswd_dalb_vu_cld, atm%dswd_dalb_ir_cld, atm%dswd_dz_ir_cs, atm%dswd_dz_ir_cld, &  ! out
-      atm%swr_dw_sur_vis_cs, atm%swr_dw_sur_nir_cs, atm%swr_dw_sur_vis_cld, atm%swr_dw_sur_nir_cld)
+      atm%swr_dw_sur_vis_cs, atm%swr_dw_sur_nir_cs, atm%swr_dw_sur_vis_cld, atm%swr_dw_sur_nir_cld, &
+      zs=atm%zs)
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'swr',time2-time1
 
@@ -179,8 +182,13 @@ contains
       ! longwave radiation balance only
       atm%rb_str = atm%lwr_top - atm%lwr_tro
     else if (i_rbstr.eq.2) then
-      ! include also solar radiation absorbtion by stratospheric O3
-      atm%rb_str = atm%lwr_top - atm%lwr_tro + frac_vu*0.02*atm%swr_dw_top    ! 0.02=1-ITF_O3
+      ! include also solar radiation absorbtion by stratospheric O3, with the same VU absorptance as in the SW
+      ! (vertical path): 0.02=1-ITF_O3 for the constant O3 transmission, a_gas_vu if i_swr_gas==1
+      if (i_swr_gas.eq.1) then
+        atm%rb_str = atm%lwr_top - atm%lwr_tro + frac_vu*a_gas_vu*atm%swr_dw_top
+      else
+        atm%rb_str = atm%lwr_top - atm%lwr_tro + frac_vu*0.02*atm%swr_dw_top    ! 0.02=1-ITF_O3
+      endif
     endif
 
     !-------------------------------------------------
@@ -286,6 +294,7 @@ contains
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
         call usur(atm%ugb, atm%vgb, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%t2a, atm%tskina, atm%cd0a, atm%slope_x, atm%slope_y, &
+          atm%frst, atm%frlnd, atm%zsa, atm%gams, atm%gamb, atm%synsur, &
           atm%usk, atm%vsk, & 
           atm%us, atm%vs)
         !$ time2 = omp_get_wtime()

@@ -28,12 +28,13 @@ module vesta_mod
   use atm_params, only : wp
   use constants, only : fqsat, pi
   use atm_params, only : gad, hatm, p0, ra, zmax
-  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_rel, nsmooth_gam
+  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
   use atm_params, only : gams_min, gams_max, sh_gams, gams_max_conv, sh_gams_conv, dsh_gams_conv
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
+  use timer, only : sec_day
   use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc, i_lnd, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
@@ -75,12 +76,16 @@ contains
     real(wp), intent(out) :: hdust(:,:)
 
     integer :: i, j
-    real(wp) :: hrs, fi, f_trop
+    real(wp) :: hrs, fi, f_trop, cgam, chrm
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
     real(wp), parameter :: hrs_min = 1.e3_wp
     real(wp), parameter :: hrs_max = 10.e3_wp
 
+
+    ! time relaxation weights per fast step, hscales is called every fast step
+    cgam = min(1._wp, tstep/(c_gam_tau*sec_day))
+    chrm = min(1._wp, tstep/(c_hrm_tau*sec_day))
 
     !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop)
     do j=1,jm
@@ -117,7 +122,7 @@ contains
         hrs = f_trop * c_hrs_1*exp(c_hrs_2*wcld(i,j)) + (1._wp-f_trop) * c_hrs_1*c_hrs_3 
         hrs = max(hrs,hrs_min)   
         hrs = min(hrs,hrs_max)   
-        hrm(i,j) = 0.9_wp*hrm(i,j) + 0.1_wp*hrs 
+        hrm(i,j) = (1._wp-chrm)*hrm(i,j) + chrm*hrs 
 
         !----------------------------------------------
         ! effective moisture height scale
@@ -141,21 +146,21 @@ contains
     call smooth2(gam_s,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gams(i,j) = c_gam_rel*gams(i,j) + (1._wp-c_gam_rel)*gam_s(i,j)
+        gams(i,j) = (1._wp-cgam)*gams(i,j) + cgam*gam_s(i,j)
       enddo
     enddo
     !$omp section
     call smooth2(gam_b,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gamb(i,j) = c_gam_rel*gamb(i,j) + (1._wp-c_gam_rel)*gam_b(i,j)
+        gamb(i,j) = (1._wp-cgam)*gamb(i,j) + cgam*gam_b(i,j)
       enddo
     enddo
     !$omp section
     call smooth2(gam_t,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gamt(i,j) = c_gam_rel*gamt(i,j) + (1._wp-c_gam_rel)*gam_t(i,j)
+        gamt(i,j) = (1._wp-cgam)*gamt(i,j) + cgam*gam_t(i,j)
       enddo
     enddo
     !$omp end parallel sections

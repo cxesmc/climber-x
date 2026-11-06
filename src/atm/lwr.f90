@@ -33,6 +33,11 @@ module lw_radiation_mod
   use atm_params, only : ak_co2, beta_co2
   use atm_params, only : ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap, rh_strat
   use atm_params, only : l_o3
+  use atm_params, only : i_lwr_band, nu_win1, nu_win2, nu_co21, nu_co22, k_cont, c_cont_T, k_wvw, ak_wvw, f_wv_co2
+  use atm_params, only : ak_co2_3b, beta_co2_3b, a0_co2_3b, a1_co2_3b
+  use atm_params, only : ak_wv_3b, a_vap_3b, beta_vap_3b, a2_vap_3b, beta2_vap_3b, a3_vap_3b
+  use atm_params, only : ak_o3_3b, a_o3_3b, beta_o3_3b
+  use atm_params, only : k_co2w, k_co2r, b_co2w, c_co2_hi, z_top_lw
   use atm_grid, only : im, jm, kmc, nm, i_ocn
   use atm_grid, only : zl, llwr, llwr1, llwr2, llwr3, llwr4, nlwr1, nlwr2, nlwr3, nlwr4
   use vesta_mod, only : t_prof, rh_prof
@@ -52,9 +57,16 @@ module lw_radiation_mod
   real(wp), parameter :: a_o3=8.246_wp
   real(wp), parameter :: beta_o3=0.539_wp
 
-  real(wp), parameter :: z_atm = 30.e3_wp   
 
   logical :: fb_q  ! flag for feedback analysis
+
+  ! three-band LW (i_lwr_band==1): bands 1 = window (nu_win1-nu_win2), 2 = CO2 (nu_co21-nu_co22),
+  ! 3 = rest (water vapour); fraction of sigma*T^4 in each band tabulated as a function of temperature
+  integer, parameter :: nband = 3
+  real(wp), parameter :: tpf_min = 100._wp, dtpf = 0.5_wp
+  integer, parameter :: ntpf = 601
+  real(wp) :: pfrac_tab(ntpf,nband)
+  logical :: l_pfrac_init = .false.
 
   private
   public :: lw_radiation
@@ -132,6 +144,18 @@ contains
     real(wp), allocatable, dimension(:) :: fcl_dw
     real(wp), allocatable, dimension(:) :: fcs_up
     real(wp), allocatable, dimension(:) :: fcs_dw
+    real(wp), allocatable, dimension(:) :: fbl_up
+    real(wp), allocatable, dimension(:) :: fbl_dw
+    real(wp), allocatable, dimension(:) :: fbs_up
+    real(wp), allocatable, dimension(:) :: fbs_dw
+    real(wp), allocatable, dimension(:,:) :: BSB3
+    real(wp), allocatable, dimension(:,:,:) :: DCS3
+    real(wp), allocatable, dimension(:,:,:) :: DCL3
+    integer :: ib
+    real(wp) :: tsur_eff
+    real(wp), dimension(nband) :: pf_sur
+    integer :: n_col
+    logical :: l_new_col
 
     real(wp), dimension(nm) :: fst
     real(wp), dimension(nm) :: flwr_sur
@@ -180,8 +204,17 @@ contains
     allocate(fcl_dw(llwr))
     allocate(fcs_up(llwr))
     allocate(fcs_dw(llwr))
+    allocate(fbl_up(llwr))
+    allocate(fbl_dw(llwr))
+    allocate(fbs_up(llwr))
+    allocate(fbs_dw(llwr))
+    allocate(BSB3(llwr,nband))
+    allocate(DCS3(llwr,llwr,nband))
+    allocate(DCL3(llwr,llwr,nband))
 
     h0 = hatm*100._wp   ! cm
+
+    if (i_lwr_band.eq.1 .and. .not.l_pfrac_init) call pfrac_init
 
     !-----------------------------------------------------------
     ! compute effective CO2 concentration for longwave radiation
@@ -207,17 +240,27 @@ contains
     q_co2 = co2e*1.e-6_wp * 44.0095_wp/28.97_wp ! kg/kg
 
     !$omp parallel do collapse(2) private(i, j, n, zlwr, tlwr, qlwr, O3lwr, DCS, DCL, BSB, fcl_up, fcl_dw, fcs_up, fcs_dw) &
-    !$omp private (fst, flwr_sur, flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_tro_cs, flwr_cld)
+    !$omp private (fst, flwr_sur, flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_tro_cs, flwr_cld) &
+    !$omp private (fbl_up, fbl_dw, fbs_up, fbs_dw, BSB3, DCS3, DCL3, ib, tsur_eff, pf_sur, n_col, l_new_col)
     do i=1,im
       do j=1,jm 
 
+        n_col = 0   ! last surface type for which the column and the transmission functions were computed
         do n=1,nm
           fst(n) = frst(i,j,n)
           if (fst(n).gt.0._wp .or. n.eq.i_ocn) then     ! always compute it over the ocean (for SEMI)
 
+            ! the column and the transmission functions depend on the surface type only through zs and ra2,
+            ! reuse them if these are the same as for the previous surface type (e.g. sea ice and ocean)
+            l_new_col = .true.
+            if (n_col.gt.0) l_new_col = zs(i,j,n).ne.zs(i,j,n_col) .or. ra2(i,j,n).ne.ra2(i,j,n_col)
+            if (l_new_col) n_col = n
+
             !-----------------------------------------------------------
             ! Atmospheric characteristics at vertical levels
-            if (.not.fb_q) then
+            if (.not.l_new_col) then
+              ! same as for n_col
+            else if (.not.fb_q) then
               call lwr_column(zsa(i,j), zs(i,j,n), htrop(i,j), hcld(i,j), &    ! in
                 gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), ttrop(i,j), o3(i,j,:), &   ! in
                 zlwr, tlwr, qlwr, O3lwr)    ! out
@@ -228,20 +271,48 @@ contains
                 gams_q(i,j), gamb_q(i,j), gamt_q(i,j), tam_q(i,j), ttrop_q(i,j), htrop_q(i,j)) ! optional input arguments for feedback analysis
             endif
 
-            !-----------------------------------------------------------
-            ! Computation of clear-sky and cloudy LWR transmission functions
-            call lwr_transfer(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, &
-              BSB, DCS, DCL)
+            if (i_lwr_band.eq.0) then
 
-            !-----------------------------------------------------------
-            ! LWR fluxes for clear-sky atmosphere  
-            call lwr_clear_sky(flwr_up_sur(i,j,n), BSB, DCS, &
-              fcs_up, fcs_dw)
+              !-----------------------------------------------------------
+              ! Computation of clear-sky and cloudy LWR transmission functions
+              if (l_new_col) call lwr_transfer(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, &
+                BSB, DCS, DCL)
 
-            !-----------------------------------------------------------
-            ! LWR fluxes for cloudy conditon
-            call lwr_clouds(flwr_up_sur(i,j,n), BSB, DCL, &
-              fcl_up, fcl_dw)
+              !-----------------------------------------------------------
+              ! LWR fluxes for clear-sky atmosphere  
+              call lwr_clear_sky(flwr_up_sur(i,j,n), BSB, DCS, &
+                fcs_up, fcs_dw)
+
+              !-----------------------------------------------------------
+              ! LWR fluxes for cloudy conditon
+              call lwr_clouds(flwr_up_sur(i,j,n), BSB, DCL, &
+                fcl_up, fcl_dw)
+
+            else
+
+              !-----------------------------------------------------------
+              ! three Planck-weighted bands, fluxes summed over the bands;
+              ! the surface emission is split with the Planck fraction at the surface radiative temperature
+              tsur_eff = (flwr_up_sur(i,j,n)/sigma)**0.25_wp
+              call pfrac3(tsur_eff, pf_sur)
+              if (l_new_col) call lwr_transfer_3b(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, &
+                BSB3, DCS3, DCL3)
+              fcs_up = 0._wp
+              fcs_dw = 0._wp
+              fcl_up = 0._wp
+              fcl_dw = 0._wp
+              do ib=1,nband
+                call lwr_clear_sky(flwr_up_sur(i,j,n)*pf_sur(ib), BSB3(:,ib), DCS3(:,:,ib), &
+                  fbs_up, fbs_dw)
+                call lwr_clouds(flwr_up_sur(i,j,n)*pf_sur(ib), BSB3(:,ib), DCL3(:,:,ib), &
+                  fbl_up, fbl_dw)
+                fcs_up = fcs_up + fbs_up
+                fcs_dw = fcs_dw + fbs_dw
+                fcl_up = fcl_up + fbl_up
+                fcl_dw = fcl_dw + fbl_dw
+              enddo
+
+            endif
 
             !-----------------------------------------------------------
             ! total LWR fluxes 
@@ -289,6 +360,13 @@ contains
     deallocate(fcl_dw)
     deallocate(fcs_up)
     deallocate(fcs_dw)
+    deallocate(fbl_up)
+    deallocate(fbl_dw)
+    deallocate(fbs_up)
+    deallocate(fbs_dw)
+    deallocate(BSB3)
+    deallocate(DCS3)
+    deallocate(DCL3)
 
     return
 
@@ -410,7 +488,7 @@ contains
     dz_l1 = (z_cld_bot-zs)/(nlwr1-1._wp)
     dz_l2 = (z_cld_top-z_cld_bot)/nlwr2
     dz_l3 = (htrop-z_cld_top)/nlwr3      
-    dz_l4 = (z_atm-htrop)/nlwr4
+    dz_l4 = (z_top_lw-htrop)/nlwr4
 
     ! levels 
 
@@ -489,8 +567,8 @@ contains
           w = (zlwr(k)-zl(1)) / (zl(2)-zl(1))
           o3lwr(k) = (1._wp-w)*o3(1) + w*o3(2)
         else if (zlwr(k)>=zl(kmc)) then
-          w = (zlwr(k)-zl(kmc-1)) / (zl(kmc)-zl(kmc-1))
-          o3lwr(k) = (1._wp-w)*o3(kmc-1) + w*o3(kmc)
+          ! above the top atmospheric level (30 km) O3 is kept at its value there
+          o3lwr(k) = o3(kmc)
         else
           do kk=2,kmc
             if (zlwr(k)>=zl(kk-1) .and. zlwr(k)<=zl(kk)) then
@@ -688,6 +766,281 @@ contains
     return
 
   end subroutine lwr_transfer
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p f r a c _ i n i t
+  !   Purpose    :  tabulate the fraction of sigma*T^4 emitted in each band
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine pfrac_init
+
+    implicit none
+
+    integer :: it
+    real(wp) :: T
+
+    do it=1,ntpf
+      T = tpf_min + (it-1)*dtpf
+      pfrac_tab(it,1) = planck_frac(T, nu_win1, nu_win2)
+      pfrac_tab(it,2) = planck_frac(T, nu_co21, nu_co22)
+      pfrac_tab(it,3) = 1._wp - pfrac_tab(it,1) - pfrac_tab(it,2)
+    enddo
+    l_pfrac_init = .true.
+
+    return
+
+  end subroutine pfrac_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function :  p l a n c k _ f r a c
+  !   Purpose  :  fraction of sigma*T^4 between wavenumbers nu1 and nu2 (cm-1)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function planck_frac(T, nu1, nu2) result(pf)
+
+    implicit none
+
+    real(wp), intent(in) :: T, nu1, nu2
+    real(wp) :: pf
+
+    integer, parameter :: n = 200
+    real(wp), parameter :: c1 = 1.191042e-8_wp   ! 2hc^2, W/m2/sr/(cm-1)^4
+    real(wp), parameter :: c2 = 1.4388_wp        ! hc/k, cm K
+    integer :: i
+    real(wp) :: nu, dnu, w
+
+    dnu = (nu2-nu1)/n
+    pf = 0._wp
+    do i=0,n
+      nu = nu1+i*dnu
+      w = 1._wp
+      if (i.eq.0 .or. i.eq.n) w = 0.5_wp
+      pf = pf + w*nu**3/(exp(c2*nu/T)-1._wp)
+    enddo
+    pf = 3.14159265358979_wp*c1*pf*dnu/(sigma*T**4)
+
+  end function planck_frac
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p f r a c 3
+  !   Purpose    :  band fractions of sigma*T^4 from the table, all bands
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine pfrac3(T, pf)
+
+    implicit none
+
+    real(wp), intent(in) :: T
+    real(wp), intent(out) :: pf(nband)
+
+    integer :: it
+    real(wp) :: x
+
+    x = (min(max(T,tpf_min),tpf_min+(ntpf-1)*dtpf)-tpf_min)/dtpf
+    it = min(int(x)+1,ntpf-1)
+    x = x-(it-1)
+    pf(:) = (1._wp-x)*pfrac_tab(it,:) + x*pfrac_tab(it+1,:)
+
+  end subroutine pfrac3
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  l w r _ t r a n s f e r _ 3 b
+  !   Purpose    :  Planck-weighted emission and transmission functions for the
+  !                 three LW bands (i_lwr_band==1), all bands in one pass:
+  !                 1 window:  water vapour self-continuum, weak water vapour lines, O3
+  !                 2 CO2:     CO2 + water vapour (absorber amount scaled by f_wv_co2)
+  !                 3 rest:    water vapour
+  !                 Same absorber amounts and transmission forms as lwr_transfer, with the
+  !                 band parameters *_3b. The powers of the absorber amounts are evaluated
+  !                 as exp(b*log(u)) with one log per absorber shared by all bands, and the
+  !                 cloud transmission is band independent
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine lwr_transfer_3b(ra2, clot, zlwr, tlwr, qlwr, O3lwr, &
+      BSB, DCS, DCL)
+
+    implicit none
+    
+    real(wp), intent(in) :: ra2
+    real(wp), intent(in) :: clot
+    real(wp), intent(in) :: zlwr(:)
+    real(wp), intent(in) :: tlwr(:)
+    real(wp), intent(in) :: qlwr(:)
+    real(wp), intent(in) :: O3lwr(:)
+
+    real(wp), intent(out) :: BSB(:,:)
+    real(wp), intent(out) :: DCS(:,:,:)
+    real(wp), intent(out) :: DCL(:,:,:)
+
+    integer :: k, l, ib, ip, np
+
+    real(wp), dimension(20) :: expc
+    real(wp), dimension(20) :: am_cld, am_o3, am_wv, am_co2, am_cnt, am_wvw
+    real(wp), dimension(190) :: cum_cld, cum_o3, cum_wv, cum_co2, cum_cnt, cum_wvw
+    real(wp), dimension(190) :: d_win, d_co2, d_wvr, d_cld
+    real(wp), dimension(nband) :: pf
+
+    real(wp) :: rhos, zsur
+    real(wp) :: Z1,Z2,Zm,dZ,hq
+    real(wp) :: ql1,ql2,qm,tm
+    real(wp) :: kappa_co2, kappa_wv, kappa_wvw
+    real(wp) :: u_cld, u_o3, u_wv, u_co2, u_cnt, u_wvw
+    real(wp) :: x_wv, lx_wv, e1_wv, e2_wv, e3_wv, lx_co2, pw_co2, pc_co2
+    real(wp) :: f1_wv_co2, f2_wv_co2, f3_wv_co2
+
+
+    rhos = ra2*0.001_wp    ! g/cm3
+    zsur = zlwr(1)*100._wp
+    kappa_co2 = (ak_co2_3b+1._wp)/h0  ! 1/cm
+
+    ! water vapour of the CO2 band: (f_wv_co2*u)**b = f_wv_co2**b * u**b
+    f1_wv_co2 = f_wv_co2**beta_vap_3b
+    f2_wv_co2 = f_wv_co2**beta2_vap_3b
+    f3_wv_co2 = f_wv_co2**3
+
+    ! 1) band emission at the levels
+    do k=1,llwr
+      expc(k) = exp(-kappa_co2*zlwr(k)*100._wp)
+      call pfrac3(tlwr(k), pf)
+      BSB(k,:) = emis*sigma*tlwr(k)**4*pf(:)
+    enddo 
+
+    ! 2) absorber amounts in the layers
+    do k=1,llwr-1
+
+      Z1 = zlwr(k)*100._wp    ! cm
+      Z2 = zlwr(k+1)*100._wp  ! cm
+      Zm = 0.5_wp*(Z1+Z2)     ! cm
+      dZ = Z2-Z1              ! cm
+
+      ql1 = qlwr(k)
+      ql2 = qlwr(k+1)
+      if (ql1.gt.ql2 .and. ql2.gt.0._wp) then
+        hq = dZ/log(ql1/ql2)    ! cm
+        hq = min(hq,h0)
+      else
+        hq = h0
+      endif       
+
+      ! window: weak water vapour lines, own pressure scaling
+      kappa_wvw = (ak_wvw+1._wp)/h0 + 1._wp/hq
+      am_wvw(k) = rhos*ql1*exp(z1/hq+zsur/h0)/kappa_wvw*(exp(-kappa_wvw*z1)-exp(-kappa_wvw*z2))   ! g/cm2
+      ! window: self-continuum, proportional to q*e, temperature dependent
+      tm = 0.5_wp*(tlwr(k)+tlwr(k+1))
+      qm = sqrt(max(ql1,1.e-12_wp)*max(ql2,1.e-12_wp))
+      am_cnt(k) = rhos*exp(-(Zm-zsur)/h0)*qm*(qm*exp(-Zm/h0)/0.622_wp)*exp(c_cont_T*(296._wp/tm-1._wp))*dZ   ! g/cm2
+      ! window: ozone
+      if (l_o3) then
+        am_o3(k) = ra*1.e-3_wp*exp(-Zm*(ak_o3_3b+1._wp)/h0)*0.5_wp*(O3lwr(k)+O3lwr(k+1))*dZ  ! g/cm2
+      else
+        am_o3(k) = 0._wp
+      endif
+      ! water vapour band (the CO2 band sees f_wv_co2 times this)
+      kappa_wv = (ak_wv_3b+1._wp)/h0 + 1._wp/hq
+      am_wv(k) = rhos*ql1*exp(z1/hq+zsur/h0)/kappa_wv*(exp(-kappa_wv*z1)-exp(-kappa_wv*z2))   ! g/cm2
+      ! CO2: main band (ib=2) and, through k_co2w/k_co2r, the band wings in the window and in the water vapour band
+      am_co2(k) = q_co2/kappa_co2*(expc(k)-expc(k+1))  ! cm
+
+      ! clouds
+      if (i_lw_cld.eq.2 .and. k>=llwr1 .and. k<llwr2) then
+        am_cld(k) = clot/nlwr2 
+      else
+        am_cld(k) = 0._wp
+      endif
+
+    enddo
+   
+    ! 3) absorber amounts between all pairs of levels k<l
+    np = 0
+    do k=1,llwr-1
+      u_cld = 0._wp
+      u_o3  = 0._wp
+      u_wv  = 0._wp
+      u_co2 = 0._wp
+      u_cnt = 0._wp
+      u_wvw = 0._wp
+      do l=k+1,llwr
+        u_cld = u_cld + am_cld(l-1)
+        u_o3  = u_o3  + am_o3(l-1)
+        u_wv  = u_wv  + am_wv(l-1)
+        u_co2 = u_co2 + am_co2(l-1)
+        u_cnt = u_cnt + am_cnt(l-1)
+        u_wvw = u_wvw + am_wvw(l-1)
+        np = np+1
+        cum_cld(np) = u_cld
+        cum_o3(np)  = u_o3
+        cum_wv(np)  = u_wv
+        cum_co2(np) = u_co2
+        cum_cnt(np) = u_cnt
+        cum_wvw(np) = u_wvw
+      enddo
+    enddo
+
+    ! 4) integral transmission functions, one branch-free (vectorisable) loop over all pairs;
+    ! zero absorber amounts are floored at tiny so that their powers vanish
+    do ip=1,np
+
+      ! powers of the water vapour amount, shared by the CO2 and water vapour bands
+      x_wv  = max(beta0*cum_wv(ip),tiny(1._wp))
+      lx_wv = log(x_wv)
+      e1_wv = a_vap_3b*exp(beta_vap_3b*lx_wv)
+      e2_wv = a2_vap_3b*exp(beta2_vap_3b*lx_wv)
+      e3_wv = a3_vap_3b*x_wv**3
+
+      ! powers of the CO2 amount, shared by all bands
+      lx_co2 = log(max(beta0*cum_co2(ip),tiny(1._wp)))
+      pw_co2 = exp(b_co2w*lx_co2)
+      pc_co2 = exp(beta_co2_3b*lx_co2)
+
+      ! 1 window
+      d_win(ip) = exp(-beta0*(k_cont*cum_cnt(ip)+k_wvw*cum_wvw(ip)) - k_co2w*pw_co2) &
+        * (1.0_wp-a_o3_3b*exp(beta_o3_3b*log(max(cum_o3(ip),tiny(1._wp)))))
+
+      ! 2 CO2
+      d_co2(ip) = 1.0_wp/(1.0_wp+f1_wv_co2*e1_wv+f2_wv_co2*e2_wv+f3_wv_co2*e3_wv) &
+        * (1._wp-min(0.2_wp,c_co2_hi*(cum_co2(ip)/1000._wp)**2)) &
+        * (1._wp+a0_co2_3b*a1_co2_3b*pc_co2)/(1._wp+a0_co2_3b*pc_co2)
+
+      ! 3 water vapour
+      d_wvr(ip) = exp(-k_co2r*pw_co2)/(1.0_wp+e1_wv+e2_wv+e3_wv)
+
+      ! clouds, band independent
+      d_cld(ip) = exp(-c_lw_clot*cum_cld(ip))
+
+    enddo
+
+    np = 0
+    do k=1,llwr-1
+      do l=k+1,llwr
+        np = np+1
+        DCS(l,k,1) = d_win(np)
+        DCS(l,k,2) = d_co2(np)
+        DCS(l,k,3) = d_wvr(np)
+        DCL(l,k,1) = d_win(np)*d_cld(np)
+        DCL(l,k,2) = d_co2(np)*d_cld(np)
+        DCL(l,k,3) = d_wvr(np)*d_cld(np)
+      enddo
+    enddo
+
+    do ib=1,nband
+      ! symmetric matrix
+      do l=1, llwr-1
+        do k=l+1, llwr
+          DCS(l,k,ib) = DCS(k,l,ib)
+          DCL(l,k,ib) = DCL(k,l,ib)
+        enddo
+      enddo
+      ! diagonal terms
+      do k=1, llwr
+        DCS(k,k,ib) = 1.0_wp
+        DCL(k,k,ib) = 1.0_wp
+      enddo 
+    enddo
+
+    return
+
+  end subroutine lwr_transfer_3b
+
 
       
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
