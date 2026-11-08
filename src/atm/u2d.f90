@@ -27,7 +27,7 @@ module u2d_mod
 
   use atm_params, only : wp
   use constants, only : g
-  use atm_params, only : ra, i_kata_wind, h_kata, c_kata, hgams
+  use atm_params, only : ra, l_kata_wind, h_kata, c_kata, l_kata_upw, hgams
   use atm_grid, only : im, imc, jm, jmc, nm, dxt, dy
   use atm_grid, only : fcorg, fcorta, fcorua, signf
   !$use omp_lib
@@ -122,7 +122,7 @@ contains
   !   Subroutine :  u s u r
   !   Purpose    :  computation of near-surface wind components
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine usur(ugb, vgb, epsa, cos_acbar, sin_acbar, t2a, tskina, cd0a, slope_x, slope_y, &
+  subroutine usur(ugb, vgb, epsa, cos_acbar, sin_acbar, tskina, cd0a, &
       frst, frlnd, zsa, gams, gamb, synsur, &
       usk, vsk, &
       us, vs)
@@ -134,11 +134,8 @@ contains
     real(wp), intent(in   ) :: epsa(:,:,:)
     real(wp), intent(in   ) :: cos_acbar(:,:,:)
     real(wp), intent(in   ) :: sin_acbar(:,:,:)
-    real(wp), intent(in   ) :: t2a(:,:)
     real(wp), intent(in   ) :: tskina(:,:)
     real(wp), intent(in   ) :: cd0a(:,:)
-    real(wp), intent(in   ) :: slope_x(:,:)
-    real(wp), intent(in   ) :: slope_y(:,:)
     real(wp), intent(in   ) :: frst(:,:,:)
     real(wp), intent(in   ) :: frlnd(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
@@ -153,15 +150,24 @@ contains
     real(wp), intent(out  ) :: vs(:,:,:)
 
     integer :: i, j, n, ipl, imi, iter
-    real(wp) :: cd, theta0, theta1, dtheta
-    real(wp) :: fx, fy, fcor, ul, vl, syn2, ukk, vkk, w, r, den
+    real(wp) :: dtheta
+    real(wp) :: fx, fy, fw, fe, fn, fs, fcor, ul, vl, syn2, ukk, vkk, w, r, den
 
-    real(wp), dimension(im,jm)  :: uk
-    real(wp), dimension(im,jmc) :: vk
-    real(wp), dimension(im,jm)  :: ukt, vkt
+    real(wp), dimension(im,jm)  :: uk, vk
+    real(wp), dimension(im,jm)  :: bk
 
+    ! buoyancy of the inversion layer, g*dtheta/theta0, for the upslope forcing
+    if (l_kata_wind .and. l_kata_upw) then
+      !$omp parallel do collapse(2) private(i,j)
+      do j=1,jm
+        do i=1,im
+          bk(i,j) = g*c_kata*max(gamb(i,j)-gams(i,j),0._wp)*hgams*(1._wp-h_kata/(2._wp*hgams))/tskina(i,j)
+        enddo
+      enddo
+      !$omp end parallel do
+    endif
 
-    !$omp parallel do collapse(2) private(i,j,n,ipl,imi,iter,cd,dtheta,theta0,theta1,fx,fy,fcor,ul,vl,syn2,ukk,vkk,w,r,den)
+    !$omp parallel do collapse(2) private(i,j,n,ipl,imi,iter,dtheta,fx,fy,fw,fe,fn,fs,fcor,ul,vl,syn2,ukk,vkk,w,r,den)
     do j=1,jm
       do i=1,im 
 
@@ -182,10 +188,10 @@ contains
         !------------------------------------------------------
         ! katabatic surface wind 
 
-        ukt(i,j) = 0._wp
-        vkt(i,j) = 0._wp
+        uk(i,j) = 0._wp
+        vk(i,j) = 0._wp
 
-        if (i_kata_wind.eq.3) then
+        if (l_kata_wind) then
 
           ! inversion-layer slab of depth h_kata with Coriolis (Ball 1960, Mahrt 1982), complex notation V = u + i v:
           !   0 = F - i f V_k - r V_k  ->  V_k = F / (r + i f),  r = cd0a*W/h_kata
@@ -193,16 +199,24 @@ contains
           !   dtheta = c_kata * layer-mean deficit vs the free atmosphere extrapolated to the ground (vesta profile):
           !            surface deficit (gamb-gams)*hgams, linear to 0 at hgams -> mean over h_kata: *(1-h_kata/(2 hgams))
           !   W = total wind speed incl. synoptic part, sqrt(|V_ls+V_k|^2 + synsur^2); fixed-point iteration from the previous V_k
-          uk(i,j) = 0._wp
-          vk(i,j) = 0._wp
-          if (j.eq.1) vk(i,jmc) = 0._wp
           if (j.gt.1 .and. j.lt.jm .and. frlnd(i,j).gt.0._wp) then
-            dtheta = c_kata*max(gamb(i,j)-gams(i,j),0._wp)*hgams*(1._wp-h_kata/(2._wp*hgams))
-            fx = -(zsa(ipl,j)-zsa(imi,j))/(2._wp*dxt(j))     ! eastward component of -grad zsa
-            fy = -(zsa(i,j-1)-zsa(i,j+1))/(2._wp*dy)        ! northward component of -grad zsa (j=1 is north)
-            fx = g*dtheta/tskina(i,j)*fx
-            fy = g*dtheta/tskina(i,j)*fy
-            if (dtheta.gt.0._wp .and. (fx.ne.0._wp .or. fy.ne.0._wp)) then
+            if (l_kata_upw) then
+              ! slope on the four faces, each with the buoyancy of its upslope cell (j=1 is north), averaged to the T-point:
+              ! a mixed coastal cell feels the air draining from the ice sheet, not its own deficit lowered by the open water
+              fw = -(zsa(i,j)-zsa(imi,j))/dxt(j)
+              fe = -(zsa(ipl,j)-zsa(i,j))/dxt(j)
+              fn = -(zsa(i,j-1)-zsa(i,j))/dy
+              fs = -(zsa(i,j)-zsa(i,j+1))/dy
+              fx = 0.5_wp*(fw*merge(bk(imi,j),bk(i,j),fw.gt.0._wp) + fe*merge(bk(i,j),bk(ipl,j),fe.gt.0._wp))
+              fy = 0.5_wp*(fn*merge(bk(i,j),bk(i,j-1),fn.gt.0._wp) + fs*merge(bk(i,j+1),bk(i,j),fs.gt.0._wp))
+            else
+              dtheta = c_kata*max(gamb(i,j)-gams(i,j),0._wp)*hgams*(1._wp-h_kata/(2._wp*hgams))
+              fx = -(zsa(ipl,j)-zsa(imi,j))/(2._wp*dxt(j))     ! eastward component of -grad zsa
+              fy = -(zsa(i,j-1)-zsa(i,j+1))/(2._wp*dy)        ! northward component of -grad zsa (j=1 is north)
+              fx = g*dtheta/tskina(i,j)*fx
+              fy = g*dtheta/tskina(i,j)*fy
+            endif
+            if (fx.ne.0._wp .or. fy.ne.0._wp) then
               fcor = signf(j)*fcorta(j)
               ! large-scale wind (grid-cell mean) and synoptic variance
               ul = sum(us(i,j,:)*frst(i,j,:))
@@ -217,75 +231,10 @@ contains
                 ukk = (fx*r+fy*fcor)/den
                 vkk = (fy*r-fx*fcor)/den
               enddo
-              ukt(i,j) = ukk
-              vkt(i,j) = vkk
+              uk(i,j) = ukk
+              vk(i,j) = vkk
             endif
           endif
-
-        else if (i_kata_wind.ne.0) then
-
-          ! compute katabatic winds from balance of bouyancy force and friction, ignoring Coriolis and background pressure gradient
-          ! see e.g. Fedorovich and Shapiro 2009, Prandtl 1942 model
-
-          ! zonal component on u-grid
-          cd = 0.5_wp*(cd0a(i,j)+cd0a(imi,j))
-          if (i_kata_wind.eq.1) then
-            theta0 = 0.5_wp*(tskina(i,j)+tskina(imi,j))
-            theta1 = 0.5_wp*(t2a(i,j)+t2a(imi,j))
-          else if (i_kata_wind.eq.2) then
-            ! use upstream values
-            if (slope_x(i,j).gt.0._wp) then
-              theta0 = tskina(i,j)
-              theta1 = t2a(i,j)
-            else
-              theta0 = tskina(imi,j)
-              theta1 = t2a(imi,j)
-            endif
-          endif
-          dtheta = 2._wp*(theta1-theta0)
-          if (dtheta.gt.0._wp) then
-            uk(i,j) = sign(sqrt(g*h_kata/cd * dtheta/theta0 * abs(slope_x(i,j))), -slope_x(i,j))
-          else
-            uk(i,j) = 0._wp
-          endif
-
-          ! meridional component on v-grid
-          if (j.gt.1) then
-
-            cd = 0.5_wp*(cd0a(i,j-1)+cd0a(i,j))
-            if (i_kata_wind.eq.1) then
-              theta0 = 0.5_wp*(tskina(i,j-1)+tskina(i,j))
-              theta1 = 0.5_wp*(t2a(i,j-1)+t2a(i,j))
-            else if (i_kata_wind.eq.2) then
-              ! use upstream values
-              if (slope_y(i,j).gt.0._wp) then
-                theta0 = tskina(i,j-1)
-                theta1 = t2a(i,j-1)
-              else
-                theta0 = tskina(i,j)
-                theta1 = t2a(i,j)
-              endif
-            endif
-            dtheta = 2._wp*(theta1-theta0) 
-            if (dtheta.gt.0._wp) then
-              vk(i,j) = sign(sqrt(g*h_kata/cd * dtheta/theta0 * abs(slope_y(i,j))), -slope_y(i,j))
-            else
-              vk(i,j) = 0._wp
-            endif
-
-          else
-
-            uk(i,j) = 0._wp
-            vk(i,j) = 0._wp
-            vk(i,jmc) = 0._wp
-
-          endif
-
-        else 
-
-          uk(i,j) = 0._wp
-          vk(i,j) = 0._wp
-          vk(i,jmc) = 0._wp
 
         endif
 
@@ -299,21 +248,13 @@ contains
     vs(:,1,:)  = 0.5_wp*vs(:,2,:)       
     vs(:,jm,:) = 0.5_wp*vs(:,jm-1,:)
 
-    !$omp parallel do collapse(2) private(i,j,n,ipl,imi)
+    !$omp parallel do collapse(2) private(i,j,n)
     do j=1,jm
       do i=1,im 
 
-        ipl = modulo(i,im) + 1
-        imi = modulo(i - 2, im) + 1
-
-        ! interpolate to t-points and relax in time
-        if (i_kata_wind.eq.3) then
-          usk(i,j) = 0.1_wp * ukt(i,j) + 0.9_wp*usk(i,j)
-          vsk(i,j) = 0.1_wp * vkt(i,j) + 0.9_wp*vsk(i,j)
-        else
-          usk(i,j) = 0.1_wp * 0.5_wp*(uk(i,j)+uk(ipl,j)) + 0.9_wp*usk(i,j)
-          vsk(i,j) = 0.1_wp * 0.5_wp*(vk(i,j)+vk(i,j+1)) + 0.9_wp*vsk(i,j)
-        endif
+        ! relax in time
+        usk(i,j) = 0.1_wp*uk(i,j) + 0.9_wp*usk(i,j)
+        vsk(i,j) = 0.1_wp*vk(i,j) + 0.9_wp*vsk(i,j)
 
         ! add katabatic wind to surface wind
         do n=1,nm

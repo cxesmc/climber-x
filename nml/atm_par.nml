@@ -136,21 +136,22 @@
   ptopdyn = 0.25                ! pressure level (p/p0) above which the geostrophic (ugb,vgb) and thermal (uter,vter) winds are disregarded in the advective mass fluxes
   c_uter_pol = 3.               ! parameter for polar damping of thermal wind
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
-  i_kata_wind = 2               ! katabatic winds:
-                                ! 0 = no katabatic winds
-                                ! 1 = katabatic winds using u/v grid values
-                                ! 2 = katabatic winds using upwind values
-                                ! 3 = inversion-layer slab with Coriolis (Ball 1960, Mahrt 1982), V_k = F/(r+if), r = cd0a*W/h_kata,
-                                !     buoyancy from the Ball deficit c_kata*(gamb-gams)*hgams*(1-h_kata/(2 hgams)), unclipped T-point slope
-  h_kata = 100.                 ! m, surface layer thickness for katabatic winds, used only if i_kata_wind>0 
-  c_kata = 0.5                  ! factor on the Ball temperature deficit, used only if i_kata_wind=3
+  l_kata_wind = T               ! katabatic winds: inversion-layer slab with Coriolis (Ball 1960, Mahrt 1982), V_k = F/(r+if), r = cd0a*W/h_kata,
+                                !     buoyancy from the Ball deficit c_kata*(gamb-gams)*hgams*(1-h_kata/(2 hgams)), unclipped slope, cells with land only
+  h_kata = 100.                 ! m, surface layer thickness for katabatic winds, used only if l_kata_wind
+  c_kata = 0.5                  ! factor on the Ball temperature deficit, used only if l_kata_wind
+  l_kata_upw = T                ! force on cell faces with the Ball deficit of the upslope cell (F = T-point slope with the local deficit), used only if l_kata_wind
 
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
   c_gam_1 = 4.0e-3              ! K/m, background lapse rate
   c_gam_2 = 0.055               ! K/m, moisture dependence of lapse rate
-  c_gam_3 = 4.e-3               ! K/m, increase on background lapse rate at top of troposphere
+  c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
+  i_gamb_q = 0                  ! moisture driving the free tropospheric lapse rate: 0 = local qam, 1 = tropical mean (30S-30N) qam anomaly from q_gam_ref, 2 = moist adiabat of the Hadley-cell mean T, both tapered with Hadley width
+  q_gam_ref = 0.01317           ! kg/kg, reference tropical mean qam for i_gamb_q = 1 (PI, output/gamq)
+  c_gam_w = 0.8                 ! i_gamb_q = 2: weight of the Hadley-cell moist adiabat on the tropical gamb (0 = c_gam_1, 1 = moist adiabat)
+  c_gam_twid = 1.0              ! i_gamb_q = 2: taper half-width in units of had_width/2
   ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
   ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
   ! also act as the bounds, and sh_gams is the flux scale over which it changes regime. A second
@@ -276,7 +277,7 @@
   !-----------------------------------------------------------
   c_hcld_low = 1500.            ! m, height of the low cloud top above the surface
   c_hcld_dz_min = 1000.         ! m, minimum thickness of the radiating cloud slab in the longwave column (lwr.f90).
-  c_hcld_1 = 2250.              !
+  c_hcld_1 = 2000.              !
   c_hcld_2 = 0.3                !
   c_hcld_3 = 200.               !
   c_hcld_4 = 0.                 !

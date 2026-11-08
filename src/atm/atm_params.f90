@@ -157,6 +157,10 @@ module atm_params
   real(wp) :: c_gam_1   
   real(wp) :: c_gam_2
   real(wp) :: c_gam_3
+  integer  :: i_gamb_q
+  real(wp) :: q_gam_ref
+  real(wp) :: c_gam_w
+  real(wp) :: c_gam_twid
   real(wp) :: gams_min
   real(wp) :: gams_max
   real(wp) :: sh_gams
@@ -216,9 +220,10 @@ module atm_params
   real(wp) :: c_filt_conv  !! strength [0..1] of the conservative high-order 2dx (Shapiro) filter applied to the convergences (convdse/convwtr) to suppress the grid-scale checkerboard; 0 = off
   integer :: nord_filt_conv !! order (selectivity) of the convergence 2dx filter; higher = more selective (spares resolved scales)
 
-  integer :: i_kata_wind
+  logical  :: l_kata_wind
   real(wp) :: h_kata
   real(wp) :: c_kata
+  logical  :: l_kata_upw
 
   real(wp) :: cd0_ocn
   real(wp) :: cd0_sic
@@ -440,6 +445,10 @@ contains
     call nml_read(filename,"atm_par","c_gam_1",c_gam_1)
     call nml_read(filename,"atm_par","c_gam_2",c_gam_2)
     call nml_read(filename,"atm_par","c_gam_3",c_gam_3)
+    call nml_read(filename,"atm_par","i_gamb_q",i_gamb_q)
+    call nml_read(filename,"atm_par","q_gam_ref",q_gam_ref)
+    call nml_read(filename,"atm_par","c_gam_w",c_gam_w)
+    call nml_read(filename,"atm_par","c_gam_twid",c_gam_twid)
     call nml_read(filename,"atm_par","gams_min",gams_min)
     call nml_read(filename,"atm_par","gams_max",gams_max)
     call nml_read(filename,"atm_par","sh_gams",sh_gams)
@@ -537,9 +546,10 @@ contains
     call nml_read(filename,"atm_par","l_diff_impl",l_diff_impl)
     call nml_read(filename,"atm_par","c_filt_conv",c_filt_conv)
     call nml_read(filename,"atm_par","nord_filt_conv",nord_filt_conv)
-    call nml_read(filename,"atm_par","i_kata_wind",i_kata_wind)
+    call nml_read(filename,"atm_par","l_kata_wind",l_kata_wind)
     call nml_read(filename,"atm_par","h_kata",h_kata)
     call nml_read(filename,"atm_par","c_kata",c_kata)
+    call nml_read(filename,"atm_par","l_kata_upw",l_kata_upw)
     call nml_read(filename,"atm_par","cd0_ocn",cd0_ocn)
     call nml_read(filename,"atm_par","cd0_sic",cd0_sic)
     call nml_read(filename,"atm_par","i_zoro",i_zoro)

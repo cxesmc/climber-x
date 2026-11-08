@@ -293,7 +293,7 @@ contains
       !-------------------------------------------------
       if (niter.eq.1) then
         !$ time1 = omp_get_wtime()
-        call usur(atm%ugb, atm%vgb, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%t2a, atm%tskina, atm%cd0a, atm%slope_x, atm%slope_y, &
+        call usur(atm%ugb, atm%vgb, atm%epsa, atm%cos_acbar, atm%sin_acbar, atm%tskina, atm%cd0a, &
           atm%frst, atm%frlnd, atm%zsa, atm%gams, atm%gamb, atm%synsur, &
           atm%usk, atm%vsk, & 
           atm%us, atm%vs)

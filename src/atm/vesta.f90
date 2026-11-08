@@ -26,8 +26,9 @@
 module vesta_mod
 
   use atm_params, only : wp
-  use constants, only : fqsat, pi
-  use atm_params, only : gad, hatm, p0, ra, zmax
+  use constants, only : fqsat, pi, Le, Rd, Rv, T0, g
+  use atm_params, only : cp, gad, hatm, p0, ra, zmax
+  use atm_params, only : i_gamb_q, q_gam_ref, c_gam_w, c_gam_twid
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
   use atm_params, only : gams_min, gams_max, sh_gams, gams_max_conv, sh_gams_conv, dsh_gams_conv
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
@@ -35,7 +36,7 @@ module vesta_mod
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
   use timer, only : sec_day
-  use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc, i_lnd, dplt
+  use atm_grid, only : im, jm, km, aim, zl, fit, cost, exp_zc, i_lnd, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
@@ -77,17 +78,62 @@ contains
 
     integer :: i, j
     real(wp) :: hrs, fi, f_trop, cgam, chrm
+    real(wp) :: qtrp, wtrp, dq_gam, x_gam
+    real(wp) :: t1had, p1, qs1, gm_had, w_had, dlat, f_gam
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
     real(wp), parameter :: hrs_min = 1.e3_wp
     real(wp), parameter :: hrs_max = 10.e3_wp
+    real(wp), parameter :: lat_gam_trop = 30._wp*pi/180._wp
+    real(wp), parameter :: x1_gam = asin(0.1_wp**(1._wp/8._wp))
 
 
     ! time relaxation weights per fast step, hscales is called every fast step
     cgam = min(1._wp, tstep/(c_gam_tau*sec_day))
     chrm = min(1._wp, tstep/(c_hrm_tau*sec_day))
 
-    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop)
+    ! tropical mean (30S-30N) qam, which drives the free tropospheric lapse rate for i_gamb_q = 1
+    qtrp = 0._wp
+    wtrp = 0._wp
+    if (i_gamb_q.eq.1) then
+      do j=1,jm
+        if (abs(fit(j)).lt.lat_gam_trop) then
+          do i=1,im
+            qtrp = qtrp + qam(i,j)*cost(j)
+            wtrp = wtrp + cost(j)
+          enddo
+        endif
+      enddo
+      qtrp = qtrp/wtrp
+    endif
+
+    ! i_gamb_q = 2: moist adiabatic lapse rate of the mean state over the Hadley cells.
+    ! T1 is the mean temperature at the top of the surface layer (tam - gams*hgams), averaged
+    ! between the two Hadley cell edges (had_fi -/+ had_width/2, edge rows by their fractional
+    ! overlap), so the averaging region follows the circulation through the season and across
+    ! climates. Gamma_m is evaluated at T1 and at p(z*=hgams) and converted to K per unit z*
+    ! (factor T1/T0), the vertical coordinate of t_prof. No reference state enters.
+    gm_had = 0._wp
+    if (i_gamb_q.eq.2) then
+      dlat = abs(fit(2)-fit(1))
+      t1had = 0._wp
+      wtrp = 0._wp
+      do j=1,jm
+        w_had = cost(j)*max(0._wp,min(1._wp,(0.5_wp*had_width-abs(fit(j)-had_fi))/dlat+0.5_wp))
+        if (w_had.gt.0._wp) then
+          do i=1,im
+            t1had = t1had + (tam(i,j)-gams(i,j)*hgams)*w_had
+            wtrp = wtrp + w_had
+          enddo
+        endif
+      enddo
+      t1had = t1had/wtrp
+      p1 = p0*exp(-hgams/hatm)
+      qs1 = fqsat(t1had,p1)
+      gm_had = g/cp*(1._wp+Le*qs1/(Rd*t1had)) / (1._wp+Le**2*qs1*(Rd/Rv)/(cp*Rd*t1had**2)) * t1had/T0
+    endif
+
+    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,dq_gam,x_gam,f_gam)
     do j=1,jm
       do i=1,im
 
@@ -106,11 +152,36 @@ contains
         gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) &
                    + (gams_max_conv-gams_max)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_conv)/dsh_gams_conv))
 
-        ! bottom
-        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
+        if (i_gamb_q.eq.1) then
+          ! The tropical free troposphere follows the moist adiabat of the convecting regions and
+          ! weak temperature gradients spread it, so the lapse rate responds to the tropical mean
+          ! moisture anomaly, not to the local humidity. The anomaly vanishes in the reference
+          ! climate, so c_gam_1 and c_gam_3 set the mean state and c_gam_2 the feedback alone.
+          ! Same latitude taper as the stratospheric heating in tropoheight.
+          x_gam = x1_gam/(0.5_wp*had_width)*(fit(j)-had_fi)
+          x_gam = max(-pi/2._wp,min(pi/2._wp,x_gam))
+          dq_gam = (1._wp-sin(x_gam)**8)*(qtrp-q_gam_ref)
+        else
+          dq_gam = qam(i,j)
+        endif
 
-        ! top
-        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
+        if (i_gamb_q.eq.2) then
+          ! bottom: relax c_gam_1 towards the moist adiabat of the Hadley cells, by a fraction
+          ! c_gam_w in the tropics, tapered to 0 outside them (taper as tropoheight, half-width
+          ! scaled by c_gam_twid). top: same relation as the moisture closure below, with
+          ! c_gam_2*q replaced by c_gam_1-gam_b.
+          x_gam = x1_gam/(c_gam_twid*0.5_wp*had_width)*(fit(j)-had_fi)
+          x_gam = max(-pi/2._wp,min(pi/2._wp,x_gam))
+          f_gam = 1._wp-sin(x_gam)**8
+          gam_b(i,j) = c_gam_1 + c_gam_w*f_gam*(gm_had-c_gam_1)
+          gam_t(i,j) = 2._wp*gam_b(i,j) - c_gam_1 + c_gam_3
+        else
+          ! bottom
+          gam_b(i,j) = c_gam_1 - c_gam_2*dq_gam
+
+          ! top
+          gam_t(i,j) = gam_b(i,j) - c_gam_2*dq_gam + c_gam_3
+        endif
 
         !----------------------------------------------
         ! height scale for relative humidity       
