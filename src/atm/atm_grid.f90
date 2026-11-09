@@ -114,6 +114,8 @@ module atm_grid
   real(wp), allocatable :: rdpl(:)   ! 1/dpl
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
+  real(wp), allocatable :: z3(:,:,:)    !! m, geometric height of the layer centres (pressure exp(-zc/hatm)*p0) from the hypsometric equation, set by vesta
+  real(wp), allocatable :: z3l(:,:,:)   !! m, the same for the level interfaces zl (kmc levels)
   real(wp), allocatable :: cheat(:,:)    !! column heat capacity, J/m2/K; see atm_grid_update
   real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
@@ -155,6 +157,8 @@ contains
     allocate(rdpl(km))
     allocate(zl(kmc))
     allocate(zc(km))
+    allocate(z3(im,jm,km))
+    allocate(z3l(im,jm,kmc))
     allocate(cheat(im,jm))
     allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
@@ -291,6 +295,14 @@ contains
     do k=1,km
       zc(k) = 0.5_wp*(zl(k+1)+zl(k))
       exp_zc(k) = exp(-zc(k)/hatm)
+    enddo
+
+    ! geometric heights of the levels, z* until the first call of vesta
+    do k=1,km
+      z3(:,:,k) = zc(k)
+    enddo
+    do k=1,kmc
+      z3l(:,:,k) = zl(k)
     enddo
 
     ! k-index of selected pressure levels

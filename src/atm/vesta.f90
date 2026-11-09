@@ -26,7 +26,7 @@
 module vesta_mod
 
   use atm_params, only : wp
-  use constants, only : fqsat, pi, Le, Rd, Rv, T0, g
+  use constants, only : fqsat, pi, Le, Rd, Rv, g
   use atm_params, only : cp, gad, hatm, p0, ra, zmax
   use atm_params, only : i_gamb_q, q_gam_ref, c_gam_w, c_gam_twid
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
@@ -36,14 +36,14 @@ module vesta_mod
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
   use timer, only : sec_day
-  use atm_grid, only : im, jm, km, aim, zl, fit, cost, exp_zc, i_lnd, dplt
+  use atm_grid, only : im, jm, km, kmc, aim, zl, zc, z3, z3l, fit, cost, exp_zc, i_lnd, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
   implicit none
 
   private
-  public :: hscales, vesta, t_prof, rh_prof, tropoheight
+  public :: hscales, vesta, t_prof, rh_prof, tropoheight, tropopause_pressure
 
 contains
 
@@ -111,8 +111,8 @@ contains
     ! T1 is the mean temperature at the top of the surface layer (tam - gams*hgams), averaged
     ! between the two Hadley cell edges (had_fi -/+ had_width/2, edge rows by their fractional
     ! overlap), so the averaging region follows the circulation through the season and across
-    ! climates. Gamma_m is evaluated at T1 and at p(z*=hgams) and converted to K per unit z*
-    ! (factor T1/T0), the vertical coordinate of t_prof. No reference state enters.
+    ! climates. Gamma_m is evaluated at T1 and at p(z*=hgams), in K per geometric metre like t_prof.
+    ! No reference state enters.
     gm_had = 0._wp
     if (i_gamb_q.eq.2) then
       dlat = abs(fit(2)-fit(1))
@@ -130,7 +130,7 @@ contains
       t1had = t1had/wtrp
       p1 = p0*exp(-hgams/hatm)
       qs1 = fqsat(t1had,p1)
-      gm_had = g/cp*(1._wp+Le*qs1/(Rd*t1had)) / (1._wp+Le**2*qs1*(Rd/Rv)/(cp*Rd*t1had**2)) * t1had/T0
+      gm_had = g/cp*(1._wp+Le*qs1/(Rd*t1had)) / (1._wp+Le**2*qs1*(Rd/Rv)/(cp*Rd*t1had**2))
     endif
 
     !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,dq_gam,x_gam,f_gam)
@@ -245,6 +245,13 @@ contains
   !   Subroutine :  v e s t a
   !   Purpose    :  vertical structure of atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! t_prof and rh_prof are formulated in geometric height (lapse rates in K/m, zsa, hgams,
+  ! htrop, hrm), while the dynamics treat t3 as the temperature on the pressure levels pl*p0
+  ! (thermal wind, layer masses). Each level is therefore placed at the geometric height that
+  ! the column's own temperature profile gives it, from the hypsometric equation integrated up-
+  ! and downward from the surface (hypso_column); z3/z3l (atm_grid) keep these heights for
+  ! synop, zslp and the output. The level pressure p0*exp_zc in qsat and the layer mass
+  ! dvol (= dp/g) do not depend on it, so A_trop and W_strat are mass integrals.
   subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, dam, hdust, &
       A_trop, W_strat, dtcol, t3, q3, tp, d3, ttrop)
 
@@ -293,6 +300,9 @@ contains
         rsur   = ram(i,j)
         hrml   = hrm(i,j)
 
+        ! geometric heights of the layer centres and interfaces of this column
+        call hypso_column(z_sur, taml, gamsl, gambl, gamtl, htropl, z3(i,j,:), z3l(i,j,:))
+
         ! 3D fields of temperature and humidity
 
         A_l   = 0._wp   ! tropospheric coefficient ∫ g(z)·qsat·ρ dz
@@ -302,7 +312,7 @@ contains
         flag_strat = .false.
         do k=1,km
 
-          z = 0.5_wp*(zl(k)+zl(k+1))
+          z = z3(i,j,k)
 
           if (.not.flag_strat) then
             ! construct vertical temperature profile
@@ -464,7 +474,7 @@ contains
   !   Purpose    :  compute height of tropopause
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine tropoheight(had_fi, had_width, rb_str, hcld, &
-      htrop, ptrop, rb_str_ref)
+      htrop, rb_str_ref)
 
     implicit none
 
@@ -473,7 +483,6 @@ contains
     real(wp), intent(in   ) :: rb_str(:,:)
     real(wp), intent(in   ) :: hcld(:,:)
     real(wp), intent(inout) :: htrop(:,:)
-    real(wp), intent(out  ) :: ptrop(:)
     ! optional reference stratospheric radiative balance, used for the feedback analysis.
     ! If present, the tropopause is relaxed towards the state in which the stratospheric
     ! radiative balance matches rb_str_ref instead of the balance with the prescribed
@@ -497,7 +506,6 @@ contains
       if (fi.gt.pi/2._wp)  fi = pi/2._wp
       if (fi.lt.-pi/2._wp) fi = -pi/2._wp
       sheat = c_trop_2*(1._wp-c_trop_3*(1._wp-sin(fi)**8))
-      ptrop(j) = 0._wp
       do i=1,im
         if (fixed_heat) then
           rbstr = rb_str(i,j) - rb_str_ref(i,j)
@@ -511,13 +519,134 @@ contains
         htropp = min(htropp,h_trop_max)
         ! height of tropopause
         htrop(i,j) = htropp
-        ! pressure at tropopause
-        ptrop(j) = ptrop(j) + exp(-htrop(i,j)/hatm)*aim
       enddo
     enddo
 
     return
 
   end subroutine tropoheight
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  h y p s o _ c o l u m n
+  !   Purpose    :  geometric height of the pressure levels of one column
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure subroutine hypso_column(zs, tam, gams, gamb, gamt, htrop, zc_geo, zl_geo)
+
+    ! Integrates dz/dlnp = -Rd*T(z)/g with T = t_prof(z) from the surface, at pressure
+    ! p0*exp(-zs/hatm) (the surface of the layer masses), upward to the levels above it and
+    ! downward, along the sub-surface extrapolation of t_prof, to those below it. Targets are
+    ! the interfaces zl and the layer centres zc, i.e. ln(p/p0) = -zl/hatm and -zc/hatm.
+    ! Midpoint (RK2) steps of at most dlnp_max; T is constant above the tropopause.
+
+    implicit none
+
+    real(wp), intent(in ) :: zs, tam, gams, gamb, gamt, htrop
+    real(wp), intent(out) :: zc_geo(:)
+    real(wp), intent(out) :: zl_geo(:)
+
+    real(wp), parameter :: dlnp_max = 0.05_wp
+    integer :: k, n, n0, nt
+    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), z, lnp, lnps
+
+    ! targets from the bottom up: interface 1, centre 1, interface 2, ..., interface kmc
+    nt = 2*km+1
+    do k=1,km
+      lnp_t(2*k-1) = -zl(k)/hatm
+      lnp_t(2*k)   = -zc(k)/hatm
+    enddo
+    lnp_t(nt) = -zl(kmc)/hatm
+    lnps = -zs/hatm
+
+    ! first target at or above the surface
+    n0 = nt+1
+    do n=1,nt
+      if (lnp_t(n).le.lnps) then
+        n0 = n
+        exit
+      endif
+    enddo
+
+    ! upward from the surface
+    z = zs
+    lnp = lnps
+    do n=n0,nt
+      z = hypso_dz(z, lnp, lnp_t(n))
+      lnp = lnp_t(n)
+      z_t(n) = z
+    enddo
+
+    ! downward from the surface, below ground
+    z = zs
+    lnp = lnps
+    do n=n0-1,1,-1
+      z = hypso_dz(z, lnp, lnp_t(n))
+      lnp = lnp_t(n)
+      z_t(n) = z
+    enddo
+
+    do k=1,km
+      zl_geo(k) = z_t(2*k-1)
+      zc_geo(k) = z_t(2*k)
+    enddo
+    zl_geo(kmc) = z_t(nt)
+
+  contains
+
+    pure function hypso_dz(z0, lnp0, lnp1) result(z1)
+      real(wp), intent(in) :: z0, lnp0, lnp1
+      real(wp) :: z1, h, zm
+      integer :: ns, s
+      ns = max(1,ceiling(abs(lnp1-lnp0)/dlnp_max))
+      h = (lnp1-lnp0)/real(ns,wp)
+      z1 = z0
+      do s=1,ns
+        zm = z1 - 0.5_wp*h*Rd*t_prof(zs, z1, tam, gams, gamb, gamt, htrop, 1)/g
+        z1 = z1 - h*Rd*t_prof(zs, zm, tam, gams, gamb, gamt, htrop, 1)/g
+      enddo
+    end function hypso_dz
+
+  end subroutine hypso_column
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t r o p o p a u s e _ p r e s s u r e
+  !   Purpose    :  zonal mean relative tropopause pressure from the hypsometric equation
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine tropopause_pressure(zsa, tam, gams, gamb, gamt, htrop, ptrop)
+
+    ! p(htrop)/p0 = exp(-zsa/hatm)*exp(-int_zsa^htrop g/(Rd*T) dz), T = t_prof, consistent with
+    ! the geometric heights of the pressure levels in vesta.
+
+    implicit none
+
+    real(wp), intent(in ) :: zsa(:,:)
+    real(wp), intent(in ) :: tam(:,:)
+    real(wp), intent(in ) :: gams(:,:)
+    real(wp), intent(in ) :: gamb(:,:)
+    real(wp), intent(in ) :: gamt(:,:)
+    real(wp), intent(in ) :: htrop(:,:)
+    real(wp), intent(out) :: ptrop(:)
+
+    real(wp), parameter :: dz_max = 250._wp
+    integer :: i, j, n, ns
+    real(wp) :: h, s
+
+    do j=1,jm
+      ptrop(j) = 0._wp
+      do i=1,im
+        ns = max(1,ceiling(max(0._wp,htrop(i,j)-zsa(i,j))/dz_max))
+        h = max(0._wp,htrop(i,j)-zsa(i,j))/real(ns,wp)
+        s = 0._wp
+        do n=1,ns
+          s = s + g*h/(Rd*t_prof(zsa(i,j), zsa(i,j)+(n-0.5_wp)*h, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1))
+        enddo
+        ptrop(j) = ptrop(j) + exp(-zsa(i,j)/hatm-s)*aim
+      enddo
+    enddo
+
+    return
+
+  end subroutine tropopause_pressure
 
 end module vesta_mod

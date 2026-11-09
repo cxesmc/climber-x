@@ -60,7 +60,7 @@ module atm_model
     use sw_radiation_mod, only : sw_radiation
     use wvel_mod, only : wvel
     use clouds_mod, only : clouds
-    use vesta_mod, only : hscales, vesta, tropoheight
+    use vesta_mod, only : hscales, vesta, tropoheight, tropopause_pressure
     use crisa_mod, only : crisa
     use slp_mod, only : azslp, zslp, efe_diag, col_prev_unset
     use atm_grid, only : cheat
@@ -196,7 +196,10 @@ contains
     !-------------------------------------------------
     !$ time1 = omp_get_wtime()
     call tropoheight(atm%had_fi, atm%had_width, atm%rb_str, atm%hcld, &      ! in
-      atm%htrop, atm%ptrop)      ! out
+      atm%htrop)      ! inout
+    ! zonal mean relative tropopause pressure, hypsometric like the heights of the levels
+    call tropopause_pressure(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, &   ! in
+      atm%ptrop)   ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'htrop',time2-time1
 
@@ -236,7 +239,7 @@ contains
     !$ time1 = omp_get_wtime()
     call azslp(atm%tsksl, atm%htrop, atm%zsa, atm%uz500, atm%u3f, atm%sam, atm%eke, atm%prc, atm%ficz, &  ! in
       atm%aslp, &   ! inout
-      atm%aslp_temp, atm%aslp_topo, atm%aslp_eddy, atm%aslp_gill, atm%aslp_temp_slow, atm%dz500, atm%atsl) ! out
+      atm%aslp_temp, atm%aslp_topo, atm%aslp_eddy, atm%aslp_gill, atm%aslp_temp_slow, atm%atsl) ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'azslp',(time2-time1)
 
@@ -719,7 +722,6 @@ contains
          atm%aslp_eddy(i,j) = 0._wp
          atm%aslp_gill(i,j) = 0._wp
          atm%aslp_temp_slow(i,j) = 1.e20_wp   ! not set, initialised with aslp_temp at the first call
-         atm%dz500(i,j) = 0._wp      
 
          atm%winda(i,j) = 1._wp
          atm%wind(i,j,:) = 1._wp
@@ -964,7 +966,6 @@ contains
      allocate(atm%aslp_eddy(im,jm))
      allocate(atm%aslp_gill(im,jm))
      allocate(atm%aslp_temp_slow(im,jm))
-     allocate(atm%dz500(im,jm))
      allocate(atm%us(im,jm,nm))
      allocate(atm%vs(im,jm,nm))
      allocate(atm%usk(im,jm))
@@ -1242,7 +1243,6 @@ contains
      deallocate(atm%aslp_eddy)
      deallocate(atm%aslp_gill)
      deallocate(atm%aslp_temp_slow)
-     deallocate(atm%dz500)
      deallocate(atm%us)
      deallocate(atm%vs)
      deallocate(atm%usk)
@@ -1427,7 +1427,6 @@ contains
     call nc_write(fnm,"aslp_topo",     atm%aslp_topo,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"aslp_gill",     atm%aslp_gill,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"aslp_temp_slow",atm%aslp_temp_slow,dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"dz500    ",     atm%dz500    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"winda    ",     atm%winda    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"wind     ",     atm%wind     ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"us       ",     atm%us       ,     dims=["lon","lat","nm "],long_name="",units="")
@@ -1534,7 +1533,6 @@ contains
     else
       atm%aslp_temp_slow = 1.e20_wp   ! not set, initialised with aslp_temp at the first call
     endif
-    call nc_read(fnm,"dz500    ",     atm%dz500   ) 
     call nc_read(fnm,"winda    ",     atm%winda   ) 
     call nc_read(fnm,"wind     ",     atm%wind    ) 
     call nc_read(fnm,"us       ",     atm%us      ) 

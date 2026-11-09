@@ -27,7 +27,7 @@ module synop_mod
 
   use atm_params, only : wp
   use constants, only : g, omega, pi, z_sfl
-  use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, zl, k850, k700, k500, i_ocn, sint, cost, fit 
+  use atm_grid, only : im, jm, nm, imc, jmc, km, dxt, dy, z3, k850, k700, k500, i_ocn, sint, cost, fit 
   use atm_params, only : tstep, ra
   use atm_params, only : c_syn_1, c_syn_2, c_syn_3, c_syn_4, c_syn_5, c_syn_6, c_syn_7, windmin, synsurmin, i_diff_syn
   use atm_params, only : i_syn_diss, syn_e0
@@ -96,7 +96,7 @@ contains
     real(wp) :: sxadv, syadv, sxdif, sydif
     real(wp) :: uef, vef
     real(wp) :: dudz, dvdz
-    real(wp) :: ugrad, Nfreq
+    real(wp) :: ugrad, Nfreq, dz58
     real(wp) :: diffxmx(jm)
     real(wp) :: fdiff_eq(jm)   ! tropical amplification of the zonal DSE diffusivity
     real(wp) :: sam_sqrt(im,jm)
@@ -119,7 +119,7 @@ contains
     ! synoptic kinetic energy
     !-----------------------------------------------
 
-    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, sxadv, syadv, sxdif, sydif)
+    !$omp parallel do collapse(2) private(i, j, k, uef, vef, imi, ipl, jmi, jpl, ugrad, dudz, dvdz, Nfreq, dz58, sxadv, syadv, sxdif, sydif)
     do i=1,im
       do j=2,jm-1
 
@@ -137,9 +137,12 @@ contains
 
         ! proportional to max Eady model baroclinic growth rate (e.g. Hoskins and Valdes 1990)
 
-        Nfreq = sqrt(g/tp(i,j,k700)*(tp(i,j,k500)-tp(i,j,k850))/(zl(k500)-zl(k850)))   ! Brunt-Vaisala frequency
-        dudz = (ut3f(i,j,k500)-ut3f(i,j,k850))/(zl(k500)-zl(k850))
-        dvdz = (vt3f(i,j,k500)-vt3f(i,j,k850))/(zl(k500)-zl(k850)) * cost(j)
+        ! geometric distance of the two layer centres (vesta), consistent with tp = t + g*z/cp;
+        ! the thermal wind difference itself is exact in log-pressure
+        dz58 = z3(i,j,k500)-z3(i,j,k850)
+        Nfreq = sqrt(g/tp(i,j,k700)*(tp(i,j,k500)-tp(i,j,k850))/dz58)   ! Brunt-Vaisala frequency
+        dudz = (ut3f(i,j,k500)-ut3f(i,j,k850))/dz58
+        dvdz = (vt3f(i,j,k500)-vt3f(i,j,k850))/dz58 * cost(j)
         ugrad = sqrt(dudz**2+dvdz**2)
         ! Note that the 1/f of the thermal wind inside ugrad cancels the 2*omega*|sin|
         ! in front, so away from the fcort floor the production is proportional to the

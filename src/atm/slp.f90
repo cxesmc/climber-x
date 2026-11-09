@@ -46,7 +46,7 @@ module slp_mod
   use atm_params, only : nsmooth_aslp, aslp_polar_lat
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, k850, k300, i_ice
   use atm_grid, only : fcorua, sint, cost, fiu, fit, dxt, pblu
-  use atm_grid, only : zc, k_dse_lo, k_dse_up
+  use atm_grid, only : z3, k_dse_lo, k_dse_up
   use smooth_atm_mod, only : smooth2_m, zona
   !$ use omp_lib
 
@@ -65,7 +65,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine azslp(tsksl, htrop, zsa, uz500, u3f, sam, eke, prc, ficz, &
       aslp, &
-      aslp_temp, aslp_topo, aslp_eddy, aslp_gill, aslp_temp_slow, dz500, atsl)
+      aslp_temp, aslp_topo, aslp_eddy, aslp_gill, aslp_temp_slow, atsl)
 
     use, intrinsic :: iso_c_binding 
 
@@ -92,7 +92,6 @@ contains
     real(wp), intent(inout) :: aslp_temp_slow(:,:)   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
 
     real(wp), intent(out  ) :: atsl(:,:)
-    real(wp), intent(out  ) :: dz500(:,:)
 
     integer :: i, j
     real(wp) :: k, uz
@@ -284,14 +283,6 @@ contains
         enddo
       enddo
     endif
-
-
-    !-------------------------------------------------------------------------------
-    ! geopotential height zonal anomalies at 500 hPa from planetary stationary waves
-    !-------------------------------------------------------------------------------
-
-    ! height anomaly of the equivalent barotropic (~300 hPa) level, scaled as the sea level pressure
-    dz500(:,:) = aslp_topo(:,:)/(ra*g)  ! m
 
 
     !------------------------------------------------
@@ -966,7 +957,7 @@ contains
     real(wp) :: hadwidsc
     real(wp) :: hadwid
     real(wp) :: ff, coc, psum, csum
-    real(wp) :: dzdse, aferzn, aferzs
+    real(wp) :: aferzn, aferzs
     real(wp) :: qtrp, wtrp, fqhad
     real(wp) :: htrpz, sbotz, stopz, tsfcz, wwid, hdv
 
@@ -1056,7 +1047,7 @@ contains
         ! so vesta's profile loop leaves it holding exactly the tropopause temperature.
         htrpz = htrpz + htrop(i,j)*cost(j)
         stopz = stopz + (ttrop(i,j)+g*htrop(i,j)/cp)*cost(j)
-        sbotz = sbotz + (t3(i,j,1)+g*zc(1)/cp)*cost(j)
+        sbotz = sbotz + (t3(i,j,1)+g*z3(i,j,1)/cp)*cost(j)
         tsfcz = tsfcz + t3(i,j,1)*cost(j)
         wwid  = wwid  + cost(j)
       enddo
@@ -1206,11 +1197,11 @@ contains
 
       ! Bulk dry static energy contrast between the lower and the upper branch of the cells.
       ! It is the denominator of the Ferrel amplitude below. 
-      dzdse = zc(k_dse_up)-zc(k_dse_lo)
+      ! with the geometric distance of the two layer centres of each column (vesta)
       do j=1,jm
         dsez(j) = 0._wp
         do i=1,im
-          dsez(j) = dsez(j) + (cp*(t3(i,j,k_dse_up)-t3(i,j,k_dse_lo)) + g*dzdse)*aim
+          dsez(j) = dsez(j) + (cp*(t3(i,j,k_dse_up)-t3(i,j,k_dse_lo)) + g*(z3(i,j,k_dse_up)-z3(i,j,k_dse_lo)))*aim
         enddo
         dsez(j) = max(dsez(j),dse_min)
       enddo

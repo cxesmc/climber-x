@@ -34,7 +34,7 @@ module atm_out
   use timer, only : time_soy_atm, time_eoy_atm, time_eom_atm, time_out_atm
   use control, only : out_dir
   use climber_grid, only : lon, lat, lon0, lat0, dlon, dlat
-  use atm_grid, only : im, jm, km, imc, jmc, kmc, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, pl, cheat, &
+  use atm_grid, only : im, jm, km, imc, jmc, kmc, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, z3l, pl, cheat, &
   dxt, dy, cost, sint, i_ice
   use atm_params, only : l_daily_output
   use atm_params, only : p0, ra, gad, cle, cls, cp, hatm, sigma_so4, c_syn_6, l_co2d
@@ -270,6 +270,8 @@ module atm_out
 
     ! 3D longitude-latitude-height
     real(wp), allocatable, dimension(:,:,:) :: t3   !! atmospheric temperature (K)
+    real(wp), allocatable, dimension(:,:,:) :: z3   !! geometric height of the levels (m), from the hypsometric equation (vesta)
+    real(wp), allocatable, dimension(:,:,:) :: zg   !! geopotential height of the levels (m), z3 - z3(p0) + Rd*T(p0)/g*ln(slp/p0)
     real(wp), allocatable, dimension(:,:,:) :: q3   !! atmospheric specific humidity (kg/kg)
     real(wp), allocatable, dimension(:,:,:) :: r3   !! atmospheric relative humidity
     real(wp), allocatable, dimension(:,:,:) :: tp   !! potential temperature
@@ -289,7 +291,6 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: aslp_topo
     real(wp), allocatable, dimension(:,:) :: aslp_eddy
     real(wp), allocatable, dimension(:,:) :: aslp_gill
-    real(wp), allocatable, dimension(:,:) :: dz500
     real(wp), allocatable, dimension(:,:) :: us
     real(wp), allocatable, dimension(:,:) :: vs
     real(wp), allocatable, dimension(:,:) :: usk
@@ -556,6 +557,8 @@ contains
      allocate(ann_a%so4_ot(im,jm)) 
 
      allocate(ann_a%t3(im,jm,kmc))
+     allocate(ann_a%z3(im,jm,kmc))
+     allocate(ann_a%zg(im,jm,kmc))
      allocate(ann_a%q3(im,jm,kmc))
      allocate(ann_a%r3(im,jm,kmc))
      allocate(ann_a%tp(im,jm,kmc)) 
@@ -573,7 +576,6 @@ contains
      allocate(ann_a%aslp_topo(im,jm))
      allocate(ann_a%aslp_eddy(im,jm))
      allocate(ann_a%aslp_gill(im,jm))
-     allocate(ann_a%dz500(im,jm))
      allocate(ann_a%slp(im,jm))
      allocate(ann_a%slp1(im,jm))
      allocate(ann_a%us(im,jm))
@@ -792,6 +794,8 @@ contains
      allocate(mon_a(k)%so4_ot(im,jm)) 
 
      allocate(mon_a(k)%t3(im,jm,kmc))
+     allocate(mon_a(k)%z3(im,jm,kmc))
+     allocate(mon_a(k)%zg(im,jm,kmc))
      allocate(mon_a(k)%q3(im,jm,kmc))
      allocate(mon_a(k)%r3(im,jm,kmc))
      allocate(mon_a(k)%tp(im,jm,kmc)) 
@@ -809,7 +813,6 @@ contains
      allocate(mon_a(k)%aslp_topo(im,jm))
      allocate(mon_a(k)%aslp_eddy(im,jm))
      allocate(mon_a(k)%aslp_gill(im,jm))
-     allocate(mon_a(k)%dz500(im,jm))
      allocate(mon_a(k)%slp(im,jm))
      allocate(mon_a(k)%slp1(im,jm))
      allocate(mon_a(k)%us(im,jm))
@@ -975,7 +978,7 @@ contains
     integer :: i, j, m, k, y, ind, imi, jmi, ipl, jpl
     character (len=256) :: fnm
     real(wp) :: mon_avg, ann_avg, jja_avg, favg, favgl, favg6090, fcum, xsum, lsqr, esqr6090
-    real(wp) :: t, rh
+    real(wp) :: t, rh, t_p0, dz_slp
     real(wp) :: faxmasi, faymasi
     real(wp) :: tup
     real(wp) :: ps, slp
@@ -1577,6 +1580,8 @@ contains
           mon_a(m)%evpa        = 0. 
           mon_a(m)%Ri          = 0. 
           mon_a(m)%t3          = 0. 
+          mon_a(m)%z3          = 0. 
+          mon_a(m)%zg          = 0. 
           mon_a(m)%q3          = 0. 
           mon_a(m)%r3          = 0. 
           mon_a(m)%tp          = 0. 
@@ -1593,7 +1598,6 @@ contains
           mon_a(m)%aslp_topo   = 0. 
           mon_a(m)%aslp_eddy   = 0. 
           mon_a(m)%aslp_gill   = 0. 
-          mon_a(m)%dz500       = 0. 
           mon_a(m)%slp         = 0. 
           mon_a(m)%slp1        = 0. 
           mon_a(m)%us         = 0. 
@@ -1818,7 +1822,6 @@ contains
       mon_a(mon)%aslp_topo   = mon_a(mon)%aslp_topo   + mon_avg * atm%aslp_topo
       mon_a(mon)%aslp_eddy   = mon_a(mon)%aslp_eddy   + mon_avg * atm%aslp_eddy
       mon_a(mon)%aslp_gill   = mon_a(mon)%aslp_gill   + mon_avg * atm%aslp_gill
-      mon_a(mon)%dz500       = mon_a(mon)%dz500       + mon_avg * atm%dz500 
       mon_a(mon)%slp         = mon_a(mon)%slp         + mon_avg * atm%slp
       mon_a(mon)%us         = mon_a(mon)%us         + mon_avg * sum(atm%us*atm%frst,3)
       mon_a(mon)%vs         = mon_a(mon)%vs         + mon_avg * sum(atm%vs*atm%frst,3)
@@ -2124,18 +2127,34 @@ contains
           ctt = t_prof(atm%zsa(i,j), atm%hcld(i,j), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
           mon_a(mon)%ctt(i,j) = mon_a(mon)%ctt(i,j) + mon_avg * ctt
 
-          ! recalculation of 3d fields to levels
+          ! Geopotential height of the levels. z3 is anchored at the surface pressure
+          ! p0*exp(-zsa/hatm) of the layer masses and so carries only the thickness. The winds
+          ! are the geostrophic wind of slp at the p0 level plus the thermal wind integrated
+          ! from that level (u2d, u3d), so the geopotential is the thickness above the p0 level,
+          ! z3 - z3l(1), plus the height of the p0 level in a column with sea level pressure
+          ! slp, which with T held on the pressure levels is a layer with the temperature of the
+          ! p0 level (z3l(1) = 0 over the ocean, a sub-surface extrapolation over land):
+          !   zg = z3 - z3l(1) + Rd*T(p0)/g*ln(slp/p0)
+          t_p0 = t_prof(atm%zsa(i,j), z3l(i,j,1), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
+          dz_slp = Rd*t_p0/g*log(atm%slp(i,j)/p0) - z3l(i,j,1)
+
+          ! recalculation of 3d fields to levels: the interfaces, i.e. the pressures pl*p0,
+          ! at their geometric heights z3l (vesta)
           do k=1,kmc
 
+            ! geometric and geopotential height
+            mon_a(mon)%z3(i,j,k) = mon_a(mon)%z3(i,j,k) + mon_avg * z3l(i,j,k)
+            mon_a(mon)%zg(i,j,k) = mon_a(mon)%zg(i,j,k) + mon_avg * (z3l(i,j,k)+dz_slp)
+
             ! temperature
-            t = t_prof(atm%zsa(i,j), zl(k), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
+            t = t_prof(atm%zsa(i,j), z3l(i,j,k), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
             mon_a(mon)%t3(i,j,k) = mon_a(mon)%t3(i,j,k) + mon_avg * t
 
             ! potential temperature
-            mon_a(mon)%tp(i,j,k) = mon_a(mon)%tp(i,j,k) + mon_avg * (t+gad*zl(k))
+            mon_a(mon)%tp(i,j,k) = mon_a(mon)%tp(i,j,k) + mon_avg * (t+gad*z3l(i,j,k))
 
             ! relative humidity
-            rh = rh_prof(atm%zsa(i,j), zl(k), atm%ram(i,j), atm%hrm(i,j), atm%htrop(i,j))
+            rh = rh_prof(atm%zsa(i,j), z3l(i,j,k), atm%ram(i,j), atm%hrm(i,j), atm%htrop(i,j))
             mon_a(mon)%r3(i,j,k) = mon_a(mon)%r3(i,j,k) + mon_avg * rh 
 
             ! specific humidity 
@@ -2145,13 +2164,11 @@ contains
           if (time_eom_atm) then
             do k=1,km
               ! lapse rate
-              mon_a(mon)%gamma(i,j,k) = - (mon_a(mon)%t3(i,j,k+1)-mon_a(mon)%t3(i,j,k))/(zl(k+1)-zl(k))
+              mon_a(mon)%gamma(i,j,k) = - (mon_a(mon)%t3(i,j,k+1)-mon_a(mon)%t3(i,j,k))/(mon_a(mon)%z3(i,j,k+1)-mon_a(mon)%z3(i,j,k))
             enddo
             do k=1,kmc
-              ! density, eq. 4.70 in PIK-Report
-              mon_a(mon)%rho(i,j,k) = ra*exp(-zl(k)/hatm) &
-                * (1.-1./T0*(mon_a(mon)%t3(i,j,1)-T0)) &
-                * (1.-1./mon_a(mon)%t3(i,j,1)*(mon_a(mon)%t3(i,j,k)-mon_a(mon)%t3(i,j,1)))
+              ! density at the level pressure p0*exp(-zl/hatm) and temperature
+              mon_a(mon)%rho(i,j,k) = p0*exp(-zl(k)/hatm)/(Rd*mon_a(mon)%t3(i,j,k))
             enddo
           endif
 
@@ -2507,11 +2524,16 @@ contains
     call nc_write_dim(fnm,"lon", x=lon, axis="x", ncid=ncid)
     call nc_write_dim(fnm,"doy",x=1._wp,dx=1._wp,nx=nday_year,ncid=ncid)
     call nc_write_dim(fnm,"hour",x=1._wp,dx=1._wp,nx=24,ncid=ncid)
-    call nc_write_dim(fnm,"zlay",x=zc(1:km),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"zlev",x=zl(1:km),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"zlevw",x=zl(1:kmc),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"plev",x=pl(1:km)*1000._wp,units="hPa",ncid=ncid)
-    call nc_write_dim(fnm,"plevw",x=pl(1:kmc)*1000._wp,units="hPa",ncid=ncid)
+    ! Vertical coordinates: the model levels are fixed fractions pl = p/p0 of the global mean sea
+    ! level pressure p0 (variable p0, it changes with the atmospheric mass over the topography).
+    ! They are written as the nominal pressure 1000 hPa*p/p0; the actual pressure is
+    ! plev*p0/1000 hPa. Their geometric heights are z3 and their geopotential heights zg.
+    call nc_write_dim(fnm,"play",x=exp(-zc(1:km)/hatm)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the layer centres, 1000 hPa*p/p0 (actual pressure: play*p0/1000 hPa)",ncid=ncid)
+    call nc_write_dim(fnm,"plev",x=pl(1:km)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the levels, 1000 hPa*p/p0 (actual pressure: plev*p0/1000 hPa)",ncid=ncid)
+    call nc_write_dim(fnm,"plevw",x=pl(1:kmc)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the levels incl. the top, 1000 hPa*p/p0 (actual pressure: plevw*p0/1000 hPa)",ncid=ncid)
     call nc_write_dim(fnm,"lonu",x=lon0,dx=dlon,nx=imc,ncid=ncid)
     call nc_write_dim(fnm,"latv",x=lat0,dx=dlat,nx=jmc,ncid=ncid)
     call nc_write_dim(fnm,"st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
@@ -2541,6 +2563,8 @@ contains
 
 
     if (ndat.eq.13) then
+      call nc_write(fnm,"p0         ", p0*0.01_wp, dims=["time"],start=[nout],count=[1], &
+        long_name="global mean sea level pressure, reference of the pressure levels (actual pressure = plev*p0/1000 hPa)",units="hPa",ncid=ncid)
 
       call nc_write(fnm,"solar      ", sngl(vars%solar     (:,:,jm:1:-1)), dims=["doy ","hour","lat ","time"], &
         start=[1,1,1,nout],count=[nday_year,24,jm,1],long_name="TOA incoming solar radiation",units="W/m2",ncid=ncid)
@@ -2565,7 +2589,7 @@ contains
         start=[1,1,nout],count=[im,jm,1],long_name="land fraction in grid cell",units="1",ncid=ncid)
       call nc_write(fnm,"frocn      ", sngl(vars%frocn     (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
         start=[1,1,nout],count=[im,jm,1],long_name="ocean fraction in grid cell",units="1",ncid=ncid)
-      call nc_write(fnm,"o3         ", sngl(vars%o3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","time "], &
+      call nc_write(fnm,"o3         ", sngl(vars%o3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","time "], &
         start=[1,1,1,nout],count=[im,jm,kmc,1],long_name="O3 concentration at the atmospheric levels",units="mol/mol",ncid=ncid)
       call nc_write(fnm,"zs         ", sngl(vars%zs        (:,jm:1:-1,:) ), dims=["lon ","lat ","st  ","time"], &
         start=[1,1,1,nout],count=[im,jm,nm,1],long_name="surface elevation for each macro surface type",units="m",ncid=ncid)
@@ -2606,7 +2630,7 @@ contains
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean cross-isobar angle",units="rad",ncid=ncid)
     call nc_write(fnm,"uz850      ", sngl(vars%uz850      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 850 hPa zonal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"u3fz       ", sngl(vars%u3fz       (jm:1:-1,:)), dims=["lat ","zlev","mon ","time"], &
+    call nc_write(fnm,"u3fz       ", sngl(vars%u3fz       (jm:1:-1,:)), dims=["lat ","plev","mon ","time"], &
       start=[1,1,ndat,nout],count=[jm,km,1,1],long_name="zonal mean zonal wind with undamped thermal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"uz500      ", sngl(vars%uz500      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 500 hPa zonal wind",units="m/s",ncid=ncid)
@@ -2741,17 +2765,21 @@ contains
     call nc_write(fnm,"tskin_tam  ", sngl(vars%tskina(:,jm:1:-1)-vars%tam(:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="skin temperature - atmospheric temperature",units="K",ncid=ncid)
 
-    call nc_write(fnm,"t3         ", sngl(vars%t3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"t3         ", sngl(vars%t3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D atmospheric temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"q3         ", sngl(vars%q3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"z3         ", sngl(vars%z3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
+      start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="geometric height of the levels",units="m",ncid=ncid)
+    call nc_write(fnm,"zg         ", sngl(vars%zg        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
+      start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="geopotential height of the levels, z3 - z3(p0) + Rd*T(p0)/g*ln(slp/p0)",units="m",ncid=ncid)
+    call nc_write(fnm,"q3         ", sngl(vars%q3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D specific humidity",units="kg/kg",ncid=ncid)
-    call nc_write(fnm,"r3         ", sngl(vars%r3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"r3         ", sngl(vars%r3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D relative humidity",units="1",ncid=ncid)
-    call nc_write(fnm,"tp         ", sngl(vars%tp        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"tp         ", sngl(vars%tp        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D potential temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"gamma      ", sngl(vars%gamma     (:,jm:1:-1,:) ), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"gamma      ", sngl(vars%gamma     (:,jm:1:-1,:) ), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D atmospheric temperature lapse rate",units="K/m",ncid=ncid)
-    call nc_write(fnm,"rho        ", sngl(vars%rho       (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"rho        ", sngl(vars%rho       (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D atmospheric density",units="kg/m3",ncid=ncid)
 
     call nc_write(fnm,"convdse    ", sngl(vars%convdse    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2807,8 +2835,6 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp1       ", sngl(vars%slp1       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure derived using constant 6.5 K/km lapse rate",units="Pa",ncid=ncid)
-    call nc_write(fnm,"dz500      ", sngl(vars%dz500      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal geopotential height at 500 hPa",units="m",ncid=ncid)
     call nc_write(fnm,"us        ", sngl(vars%us        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="zonal 10m wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"vs        ", sngl(vars%vs        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2914,14 +2940,14 @@ contains
     call nc_write(fnm,"diffy   ", sngl(vars%diffy   (:,jmc:1:-1)), dims=["lon ","latv","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jmc,1,1],long_name="meridional effective macrodiffusivity",units="m2/s",ncid=ncid)
 
-    call nc_write(fnm,"u3         ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","zlev","mon ","time"], &
+    call nc_write(fnm,"u3         ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D zonal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"v3         ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","zlev","mon ","time"], &
+    call nc_write(fnm,"v3         ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D meridional wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"w3         ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"w3         ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D vertical velocity",units="m/s",ncid=ncid)
 
-    call nc_write(fnm,"xz         ", sngl(vars%xz         (jmc:1:-1,:)), dims=["latv ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"xz         ", sngl(vars%xz         (jmc:1:-1,:)), dims=["latv ","plevw","mon  ","time "], &
       start=[1,1,ndat,nout],count=[jmc,kmc,1,1],long_name="mean meridional mass streamfunction",units="10**10 kg/s",ncid=ncid)
 
     call nc_write(fnm,"fayg      ", sngl(vars%fayg      (jmc:1:-1)), dims=["latv","mon ","time"], &
@@ -3016,26 +3042,26 @@ contains
     call nc_write(fnm,"dswd_dz_ir_cld  ", sngl(vars%dswd_dz_ir_cld  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="partial derivative of shortwave surface down radiation wrt surface albedo",units="W/m2",ncid=ncid)
     if (l_output_flx3d) then
-    call nc_write(fnm,"fax       ", sngl(vars%fax       (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"fax       ", sngl(vars%fax       (:,jm:1:-1,:)), dims=["lonu","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"faxo      ", sngl(vars%faxo      (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"faxo      ", sngl(vars%faxo      (:,jm:1:-1,:)), dims=["lonu","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fay       ", sngl(vars%fay       (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
+    call nc_write(fnm,"fay       ", sngl(vars%fay       (:,jmc:1:-1,:)), dims=["lon ","latv","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fayo      ", sngl(vars%fayo      (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
+    call nc_write(fnm,"fayo      ", sngl(vars%fayo      (:,jmc:1:-1,:)), dims=["lon ","latv","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fac       ", sngl(vars%fac       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fac_topo  ", sngl(vars%fac_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="topographic part of the column convergence, -V.grad(p_s), zero unless i_mass_com=1",units="kg/s",ncid=ncid)
       endif
-    call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic zonal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"v3a        ", sngl(vars%va        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"v3a        ", sngl(vars%va        (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic meridional wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"uter       ", sngl(vars%uter       (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"uter       ", sngl(vars%uter       (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="zonal thermal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"vter       ", sngl(vars%vter       (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"vter       ", sngl(vars%vter       (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="meridional thermal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"faxmas    ", sngl(vars%faxmas    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal mass flux",units="",ncid=ncid)
@@ -3090,10 +3116,12 @@ contains
     units="days", ncid=ncid)
     call nc_write_dim(fnm, "lon", x=lon, axis="x", ncid=ncid)
     call nc_write_dim(fnm, "lat", x=lat, axis="y", ncid=ncid)
-    call nc_write_dim(fnm, "lev", x=zl(1:km), units="m", ncid=ncid)
+    call nc_write_dim(fnm, "plev", x=pl(1:km)*1000._wp, units="hPa", &
+      long_name="nominal pressure of the levels, 1000 hPa*p/p0 (actual pressure: plev*p0/1000 hPa)", ncid=ncid)
     call nc_write_dim(fnm, "lonu",x=-180._wp,dx=5._wp,nx=imc,ncid=ncid)
     call nc_write_dim(fnm, "latv",x=-90._wp,dx=5._wp,nx=jmc,ncid=ncid)
-    call nc_write_dim(fnm, "levw",x=zl,units="m",ncid=ncid)
+    call nc_write_dim(fnm, "plevw",x=pl*1000._wp,units="hPa", &
+      long_name="nominal pressure of the levels incl. the top, 1000 hPa*p/p0 (actual pressure: plevw*p0/1000 hPa)", ncid=ncid)
     call nc_write_dim(fnm, "st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
     call nc_close(ncid)
 
@@ -3148,11 +3176,11 @@ contains
     call nc_write(fnm,"flwr_dw_sur_cs         ", sngl(vars%flwr_dw_sur_cs         (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"flwr_dw_sur_cld        ", sngl(vars%flwr_dw_sur_cld        (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
 
-!    call nc_write(fnm,"ua        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"va        ", sngl(vars%va        (:,jmc:1:-1,:)),dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"u3        ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"v3        ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"w3        ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon ","lat ","levw","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"ua        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"va        ", sngl(vars%va        (:,jmc:1:-1,:)),dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"u3        ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"v3        ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"w3        ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","plevw","doy  ","time "],start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="",units="",ncid=ncid)
 
    return
 
@@ -3253,6 +3281,8 @@ contains
     ave%evpa        = 0._wp
     ave%Ri          = 0._wp
     ave%t3          = 0._wp
+    ave%z3          = 0._wp
+    ave%zg          = 0._wp
     ave%q3          = 0._wp
     ave%r3          = 0._wp
     ave%tp          = 0._wp
@@ -3269,7 +3299,6 @@ contains
     ave%aslp_topo   = 0._wp
     ave%aslp_eddy   = 0._wp
     ave%aslp_gill   = 0._wp
-    ave%dz500       = 0._wp
     ave%slp         = 0._wp
     ave%slp1        = 0._wp
     ave%us         = 0._wp
@@ -3477,6 +3506,8 @@ contains
        ave%evpa        = ave%evpa        + d(k)%evpa        / div
        ave%Ri          = ave%Ri          + d(k)%Ri          / div
        ave%t3          = ave%t3          + d(k)%t3          / div
+       ave%z3          = ave%z3          + d(k)%z3          / div
+       ave%zg          = ave%zg          + d(k)%zg          / div
        ave%q3          = ave%q3          + d(k)%q3          / div
        ave%r3          = ave%r3          + d(k)%r3          / div
        ave%tp          = ave%tp          + d(k)%tp          / div
@@ -3495,7 +3526,6 @@ contains
        ave%aslp_topo   = ave%aslp_topo   + d(k)%aslp_topo   / div
        ave%aslp_eddy   = ave%aslp_eddy   + d(k)%aslp_eddy   / div
        ave%aslp_gill   = ave%aslp_gill   + d(k)%aslp_gill   / div
-       ave%dz500       = ave%dz500       + d(k)%dz500       / div
        ave%us         = ave%us         + d(k)%us         / div
        ave%vs         = ave%vs         + d(k)%vs         / div
        ave%usk        = ave%usk        + d(k)%usk        / div

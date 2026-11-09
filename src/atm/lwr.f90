@@ -29,6 +29,7 @@ module lw_radiation_mod
   use constants, only : fqsat, sigma
   use control, only : co2_ref, ch4_ref, n2o_ref
   use atm_params, only : p0, ra, hatm, hpbl, c_hcld_dz_min
+  use constants, only : T0
   use atm_params, only : i_lw_cld, c_lw_clot
   use atm_params, only : ak_co2, beta_co2
   use atm_params, only : ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap, rh_strat
@@ -436,7 +437,7 @@ contains
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  l w r _ c o l u m n
-  !   Purpose    :  derive temperature, humidity and ozone at lwr levels
+  !   Purpose    :  derive temperature, humidity and ozone at lwr levels, returned at z*
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine lwr_column(zsa, zs, htrop, hcld, gams, gamb, gamt, tam, ram, hrm, ttrop, O3, &
       zlwr, tlwr, qlwr, O3lwr, &    
@@ -473,8 +474,9 @@ contains
     integer :: k, kk
     real(wp) :: z_cld_bot, z_cld_top
     real(wp) :: dz_l1, dz_l2, dz_l3, dz_l4
-    real(wp) :: tamz, tlwr_q, rqlwr, qtrop
+    real(wp) :: tamz, tlwr_q, rqlwr, qtrop, zst_q
     real(wp) :: w
+    real(wp) :: zst(size(zlwr))
 
 
     ! Cloud parameters
@@ -516,42 +518,64 @@ contains
       zlwr(k) = zlwr(k-1)+dz_l4
     enddo  
 
-    ! Temperature and humidity at levels
-
-    ! Surface
+    ! Temperature at the levels, from t_prof at their geometric heights
 
     ! tam adjusted for surface elevation difference from the mean
     tamz    = t_prof(zsa, zlwr(1), tam, gams, gamb, gamt, htrop, 0)
     tlwr(1) = tamz 
-    qlwr(1) = fqsat(tlwr(1),p0*exp(-zlwr(1)/hatm))*ram
-
-    ! Troposphere
-
     do k=2,llwr3
       tlwr(k) = t_prof(zs, zlwr(k), tamz, gams, gamb, gamt, htrop, 1)
-      rqlwr   = rh_prof(zs, zlwr(k), ram, hrm, htrop)
-      qlwr(k) = fqsat(tlwr(k),p0*exp(-zlwr(k)/hatm))*rqlwr 
     enddo
-
-    ! Stratosphere      
-
-    qtrop = fqsat(ttrop,p0*exp(-htrop/hatm))*rh_strat
     do k=llwr3+1,llwr4
       tlwr(k) = ttrop
+    enddo
+
+    ! Log-pressure heights z* = -hatm*ln(p/p0) of the levels from the hypsometric equation,
+    ! dz* = (T0/T)*dz, anchored at the surface z* = zs (surface pressure p0*exp(-zs/hatm), as in
+    ! the dynamics); trapezoidal in 1/T, T being smooth between the levels and constant above
+    ! the tropopause. lwr_transfer(_3b) write the absorber amounts with the isothermal
+    ! reference, rho = ra*exp(-z/hatm) and (p/p0)**ak = exp(-ak*z/hatm), which is exact in z*:
+    ! rho(z*)*dz* = -dp/g. The levels are therefore handed to them as z*, and their ra2 is the
+    ! density at z* = zs.
+    zst(1) = zlwr(1)
+    do k=2,llwr4
+      zst(k) = zst(k-1) + (zlwr(k)-zlwr(k-1))*0.5_wp*(T0/tlwr(k-1)+T0/tlwr(k))
+    enddo
+
+    ! Humidity: RH profile at the geometric heights, qsat at the level pressures
+
+    qlwr(1) = fqsat(tlwr(1),p0*exp(-zst(1)/hatm))*ram
+    do k=2,llwr3
+      rqlwr   = rh_prof(zs, zlwr(k), ram, hrm, htrop)
+      qlwr(k) = fqsat(tlwr(k),p0*exp(-zst(k)/hatm))*rqlwr 
+    enddo
+
+    ! Stratosphere, level llwr3 is the tropopause
+    qtrop = fqsat(ttrop,p0*exp(-zst(llwr3)/hatm))*rh_strat
+    do k=llwr3+1,llwr4
       qlwr(k) = qtrop 
     enddo
 
-    ! for feedback analysis, temperature used to compute moisture profile can differ from actual temperature profile
+    ! for feedback analysis, temperature used to compute moisture profile can differ from actual
+    ! temperature profile; the level pressures are those of the actual profile
     if (fb_q) then
       tamz = t_prof(zsa, zlwr(1), tam_q, gams_q, gamb_q, gamt_q, htrop_q, 0)
-      qtrop = FQSAT(ttrop_q,p0*exp(-htrop_q/hatm))*rh_strat
+      zst_q = zst(llwr4)
+      do k=2,llwr4
+        if (zlwr(k).ge.htrop_q) then
+          w = (htrop_q-zlwr(k-1))/max(zlwr(k)-zlwr(k-1),1.e-6_wp)
+          zst_q = zst(k-1) + max(0._wp,min(1._wp,w))*(zst(k)-zst(k-1))
+          exit
+        endif
+      enddo
+      qtrop = fqsat(ttrop_q,p0*exp(-zst_q/hatm))*rh_strat
       do k=2,llwr4
         ! fixme possible problems at tropopause because of non-adaptive layers?
         if (zlwr(k).le.(htrop_q+10.)) then
           ! troposphere
           tlwr_q = t_prof(zs, zlwr(k), tamz, gams_q, gamb_q, gamt_q, htrop_q, 1)
           rqlwr  = rh_prof(zs, zlwr(k), ram, hrm, htrop_q)
-          qlwr(k)= FQSAT(tlwr_q,p0*exp(-zlwr(k)/hatm))*rqlwr 
+          qlwr(k)= fqsat(tlwr_q,p0*exp(-zst(k)/hatm))*rqlwr 
         else
           ! stratosphere
           qlwr(k) = qtrop
@@ -560,19 +584,19 @@ contains
     endif
 
     if (l_o3) then
-      ! interpolate O3 to lwr levels
+      ! interpolate O3, given on the pressure levels zl (z*), to the lwr levels
 
       do k=1,llwr4
-        if (zlwr(k)<=zl(1)) then
-          w = (zlwr(k)-zl(1)) / (zl(2)-zl(1))
+        if (zst(k)<=zl(1)) then
+          w = (zst(k)-zl(1)) / (zl(2)-zl(1))
           o3lwr(k) = (1._wp-w)*o3(1) + w*o3(2)
-        else if (zlwr(k)>=zl(kmc)) then
+        else if (zst(k)>=zl(kmc)) then
           ! above the top atmospheric level (30 km) O3 is kept at its value there
           o3lwr(k) = o3(kmc)
         else
           do kk=2,kmc
-            if (zlwr(k)>=zl(kk-1) .and. zlwr(k)<=zl(kk)) then
-              w = (zlwr(k)-zl(kk-1)) / (zl(kk)-zl(kk-1))
+            if (zst(k)>=zl(kk-1) .and. zst(k)<=zl(kk)) then
+              w = (zst(k)-zl(kk-1)) / (zl(kk)-zl(kk-1))
               o3lwr(k) = (1._wp-w)*o3(kk-1) + w*o3(kk)
               exit
             endif
@@ -583,6 +607,9 @@ contains
     else
       O3lwr(:) = 0._wp
     endif
+
+    ! the transfer routines work in z*
+    zlwr = zst
 
     return
 

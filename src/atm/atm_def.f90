@@ -188,7 +188,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: aslp_eddy
       real(wp), allocatable, dimension(:,:) :: aslp_gill
       real(wp), allocatable, dimension(:,:) :: aslp_temp_slow   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
-      real(wp), allocatable, dimension(:,:) :: dz500
       real(wp), allocatable, dimension(:,:) :: slp
       real(wp), allocatable, dimension(:,:) :: slp_dat
       real(wp), allocatable, dimension(:,:) :: tsl_dat

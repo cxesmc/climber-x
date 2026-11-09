@@ -396,7 +396,6 @@ contains
     real(wp), dimension(:,:), allocatable :: rb_str_control
     real(wp), dimension(:,:), allocatable :: fb_htrop
     real(wp), dimension(:,:), allocatable :: fb_htrop_old
-    real(wp), dimension(:), allocatable :: fb_ptrop
     real(wp), dimension(:,:), allocatable :: fb_ttrop
     real(wp), dimension(:,:,:), allocatable :: fb_flwr_up_sur
 
@@ -435,7 +434,6 @@ contains
     allocate(rb_str_control(im,jm))
     allocate(fb_htrop(im,jm))
     allocate(fb_htrop_old(im,jm))
-    allocate(fb_ptrop(jm))
     allocate(fb_ttrop(im,jm))
     allocate(fb_flwr_up_sur(im,jm,nm))
 
@@ -487,7 +485,7 @@ contains
       rb_str = lwr_top-lwr_tro
       ! one relaxation step towards the control stratospheric radiative balance
       fb_htrop_old = fb_htrop
-      call tropoheight(had_fi, had_width, rb_str, hcld, fb_htrop, fb_ptrop, rb_str_control)
+      call tropoheight(had_fi, had_width, rb_str, hcld, fb_htrop, rb_str_control)
       ! compute ttrop for new tropopause height
       do i=1,im
         do j=1,jm
