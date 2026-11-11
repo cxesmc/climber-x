@@ -158,7 +158,7 @@
     sw_par_frac = 0.5           ! fraction of SW down radiation which is PAR 
     i_ci = 2                    ! parameterisation of ci/ca ratio; 1..Medlyn 2011 optimality, 2..Prentice 2014 optimality
     i_beta = 1                  ! beta parameter for Prentice 2014 optimality (i_ci==2); 0..constant, 1..soil moisture dependence
-    i_vcmax = 2                 ! parameterisation of Vcmax; 1.. LPJ strong optimality after HaxeltinePrentice 1996, 2..CLM temperature-dependent
+    i_vcmax = 1                 ! parameterisation of Vcmax; 1.. LPJ strong optimality after HaxeltinePrentice 1996, 2..CLM temperature-dependent
     i_disc = 2                  ! isotopic discrimination parameterisation; 
 
     !------------------------------------------------------------------------------------

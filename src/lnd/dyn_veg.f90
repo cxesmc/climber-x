@@ -27,7 +27,7 @@ module dyn_veg_mod
 
   use precision, only : wp
   use timer, only : doy, year, day_year, time_eoy_lnd 
-  use constants, only : T0
+  use constants, only : T0, c14_tdec
   use control, only : check_carbon
   use lnd_grid, only : npft, ncarb, nl, nlc, flag_tree, flag_shrub, flag_grass
   use lnd_grid, only : ic_min, ic_peat, ic_shelf, ic_ice, ic_lake
@@ -240,7 +240,14 @@ contains
         endif
 
         ! update vegetation carbon pools based on new balanced LAI
-        leaf_c(n) = lai_bal(n)/sla(n)
+        if (lai_bal(n).eq.pft_par%lai_min(n)) then
+          ! at the LAI floor keep the specific leaf area of the existing leaves (as in the LAI solve above):
+          ! with a changing sla (l_sla_dec) leaf/root carbon would otherwise change at fixed LAI without NPP,
+          ! creating carbon out of nothing when sla decreases
+          leaf_c(n) = lai_bal(n)/sla_old(n)
+        else
+          leaf_c(n) = lai_bal(n)/sla(n)
+        endif
         root_c(n) = leaf_c(n)
         stem_c(n) = pft_par%awl(n)*lai_bal(n)**pft_par%bwl
         veg_c(n)  = leaf_c(n)+root_c(n)+stem_c(n) 
@@ -519,9 +526,18 @@ contains
         litter14_dist_comp(:,n) = max(0._wp,litter14_dist_comp(:,n))
 
         ! update C13 and C14
-        ! implicit scheme
-        veg_c13(n) = (veg_c13(n) + (1._wp-lambda(n))*npp13(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
-        veg_c14(n) = (veg_c14(n) + (1._wp-lambda(n))*npp14(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
+        if (lai_bal(n).eq.pft_par%lai_min(n) .and. veg_c_old(n).gt.0._wp) then
+          ! at the minimum LAI there is no NPP and veg_c changes only through the LAI floor (e.g. via sla);
+          ! carbon created by the floor (litter clipped at 0) must carry the isotopic ratio of the pool,
+          ! otherwise 13C/14C are diluted each time veg_c grows (ratchet towards zero in seed-fraction PFTs)
+          veg_c13(n) = veg_c13_old(n)/veg_c_old(n)*veg_c(n)
+          veg_c14(n) = veg_c14_old(n)/veg_c_old(n)*veg_c(n) / (1._wp + c14_tdec*dt_v)
+        else
+          ! implicit scheme
+          veg_c13(n) = (veg_c13(n) + (1._wp-lambda(n))*npp13(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
+          ! including radioactive decay of 14C
+          veg_c14(n) = (veg_c14(n) + (1._wp-lambda(n))*npp14(n)*dt_v) / (1._wp + (1._wp/veg_c(n)*sum(litter_pft(:,n))+c14_tdec)*dt_v)
+        endif
 
         ! isotope litter
         litter13_pft(:,n)  = veg_c13(n)/veg_c(n)*litter_pft(:,n)
@@ -582,10 +598,12 @@ contains
             !stop
           endif
 
-          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v) .gt. 1.e-10_wp) then
+          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v &
+            + c14_tdec*veg_c14(n)*dt_v) .gt. 1.e-10_wp) then
             print *,''
             print *,year,doy
-            print *,'local carbon 14 balance',n,veg_c14(n)-veg_c14_old(n) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v
+            print *,'local carbon 14 balance',n,veg_c14(n)-veg_c14_old(n) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v &
+              + c14_tdec*veg_c14(n)*dt_v
             print *,'lai',lai_bal(n)
             print *,'lai_old',lai_bal_old(n)
             print *,'dvegc14,lambda*npp14,litter14',veg_c14(n)-veg_c14_old(n),(1._wp-lambda(n))*npp14(n)*dt_v,sum(litter14_pft(:,n))*dt_v
@@ -714,7 +732,8 @@ contains
         carbon14_bal_veg = sum(veg_c14*pft_frac)-sum(veg_c14_old*pft_frac_old) &
           - sum(npp14*pft_frac)*dt_v &
           + sum(litterfall14(:,ic_min))*dt_v &
-          + sum(fire_leaf14(:)+fire_stem14(:)+fire_root14(:))*dt_v
+          + sum(fire_leaf14(:)+fire_stem14(:)+fire_root14(:))*dt_v &
+          + c14_tdec*sum(veg_c14*pft_frac)*dt_v   ! radioactive decay
         if( abs(carbon14_bal_veg) .gt. 1.e-10_wp) then !print *,'vegetation carbon 14 balance',carbon14_bal_veg(i,j),i,j
           print *,' '
           print *,'vegetation carbon 14 balance',carbon14_bal_veg,i,j
