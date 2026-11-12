@@ -28,9 +28,10 @@ module sw_radiation_mod
   use atm_params, only : wp
   use constants, only : T0, frac_vu
   use timer, only : doy
-  use atm_params, only : eps, f_ice_pow, hatm, r_scat, l_sct_0, l_alb_0, a1_w, a2_w, b1_w, b2_w, c_itf_c, c_itf_cc
+  use atm_params, only : eps, f_ice_pow, hatm, r_scat, a1_w, a2_w, b1_w, b2_w, c_itf_c, c_itf_cc
   use atm_params, only : l_so4_de, beta_so4, sigma_so4
   use atm_params, only : i_swr_ray, tau_ray, i_swr_gas, a_gas_vu, b_gas_vu, a_gas_ir, b_gas_ir
+  use atm_params, only : hpbl, c_hcld_dz_min, n_wp, p_cosz_sw
   use atm_grid, only : im ,jm, nm, i_ice
   !$ use omp_lib
 
@@ -46,19 +47,55 @@ module sw_radiation_mod
   real(wp), parameter :: gam_ar_1 = 2.75_wp 
   real(wp), parameter :: gam_ar_2 = 0.636_wp 
   real(wp), parameter :: gl_c = 0.14_wp 
-  real(wp), parameter :: cld_gt = 1000._wp 
   real(wp), parameter :: c_itf_o = 0.98_wp 
 
   private
-  public :: sw_radiation
+  public :: sw_radiation, sw_cosz_eff
 
 contains
-  
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s w _ c o s z _ e f f
+  !   Purpose    :  effective cos z of the single daily SW column: the insolation-weighted power mean
+  !                 (sum_h cosz**(1+p) / sum_h cosz)**(1/p), p = p_cosz_sw, over the hourly cos z of the day.
+  !                 p = -1 is the daytime mean (exact for absorption linear in the path, 1/cosz), p = 1 the
+  !                 insolation-weighted mean (exact for terms linear in cosz); gas/water absorption (~ path**0.3)
+  !                 and the cloud albedo (~ cosz**-p_3) lie in between
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine sw_cosz_eff(cosz_h, coszm, cosz_eff)
+
+    implicit none
+
+    real(wp), intent(in ) :: cosz_h(:,:)   ! (hour, lat) hourly cos z of the day
+    real(wp), intent(in ) :: coszm(:)      ! (lat) daytime-mean cos z, used where no hourly sample is sunlit
+    real(wp), intent(out) :: cosz_eff(:)   ! (lat)
+
+    integer :: j
+    real(wp) :: s1
+
+    do j=1,size(cosz_eff)
+      s1 = sum(cosz_h(:,j), mask=cosz_h(:,j).gt.0._wp)
+      if (s1.gt.0._wp) then
+        if (abs(p_cosz_sw).lt.1.e-6_wp) then
+          cosz_eff(j) = exp(sum(cosz_h(:,j)*log(max(cosz_h(:,j),eps)), mask=cosz_h(:,j).gt.0._wp)/s1)
+        else
+          cosz_eff(j) = (sum(cosz_h(:,j)**(1._wp+p_cosz_sw), mask=cosz_h(:,j).gt.0._wp)/s1)**(1._wp/p_cosz_sw)
+        endif
+      else
+        cosz_eff(j) = coszm(j)
+      endif
+    enddo
+
+    return
+
+  end subroutine sw_cosz_eff
+
+
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  s w _ r a d i a t i o n 
   !   Purpose    :  driver for short-wave radiation at the top and bottom of the atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, &
+  subroutine sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, &
       clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &
       alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, &
       dswd_dalb_vu_cs, dswd_dalb_ir_cs, dswd_dalb_vu_cld, dswd_dalb_ir_cld, dswd_dz_ir_cs, dswd_dz_ir_cld, &
@@ -70,8 +107,8 @@ contains
     real(wp), intent(in ) :: swr_dw_top(:,:)
     real(wp), intent(in ) :: coszm(:,:)
     real(wp), intent(in ) :: cld(:,:)
-    real(wp), intent(in ) :: q2(:,:,:)
-    real(wp), intent(in ) :: ra2(:,:,:)
+    real(wp), intent(in ) :: wcon(:,:)   ! column water vapour (kg/m2), at the grid-cell mean elevation zsa
+    real(wp), intent(in ) :: zsa(:,:)    ! grid-cell mean surface elevation (m)
     real(wp), intent(in ) :: alb_vu_s(:,:,:)
     real(wp), intent(in ) :: alb_vu_c(:,:,:)
     real(wp), intent(in ) :: alb_ir_s(:,:,:)
@@ -102,10 +139,11 @@ contains
     real(wp), intent(out), optional :: swr_dw_sur_nir_cs(:,:)  
     real(wp), intent(out), optional :: swr_dw_sur_vis_cld(:,:) 
     real(wp), intent(out), optional :: swr_dw_sur_nir_cld(:,:) 
-    real(wp), intent(in ), optional :: zs(:,:,:)   ! surface elevation, scales the well-mixed gas path (i_swr_gas==1)
+    real(wp), intent(in ) :: zs(:,:,:)   ! surface elevation of the surface types (m); sets the cloud geometry and
+                                         ! scales the well-mixed gas path (i_swr_gas==1)
 
     integer :: i, j, n
-    real(wp) :: fps
+    real(wp) :: fps, zsn, h_cld_top, h_cld_gt, w_col
     logical :: l_dswd_dalb
     real(wp) :: solar_top_up, solar_top_up_s, solar_top_up_c, solar_sur, solar_sur_s, solar_sur_c
 
@@ -127,7 +165,7 @@ contains
     allocate(fswr_top_cld(nm))
 
     !$omp parallel do collapse(2) private(i,j,n,solar_top_up,solar_sur,solar_top_up_s,solar_top_up_c,solar_sur_s,solar_sur_c) &
-    !$omp private(fst,fswr_top,fswr_top_cs,fswr_top_cld,fps)
+    !$omp private(fst,fswr_top,fswr_top_cs,fswr_top_cld,fps,zsn,h_cld_top,h_cld_gt,w_col)
     do j=1,jm
       do i=1,im
 
@@ -147,11 +185,19 @@ contains
         do n=1,nm
           if (fst(n).gt.0._wp .and. swr_dw_top(i,j).gt.eps) then 
 
-            fps = 1._wp
-            if (present(zs)) fps = exp(-zs(i,j,n)/hatm)
-            call sw_radiation_col(swr_dw_top(i,j), coszm(doy,j), cld(i,j), q2(i,j,n), ra2(i,j,n), &
+            zsn = zs(i,j,n)
+            fps = exp(-zsn/hatm)
+            ! cloud geometry: the cloud reflects at its top, hcld (above sea level, as in the longwave
+            ! column), and fills the layer below it down to the longwave cloud base, hpbl above the
+            ! surface (at least c_hcld_dz_min thick)
+            h_cld_top = max(hcld(i,j)-zsn, 0._wp)
+            h_cld_gt  = max(hcld(i,j)-zsn-hpbl, c_hcld_dz_min)
+            ! water vapour above the surface type: the column wcon (consistent with hqeff = wcon/(ra2a*qam))
+            ! moved from the cell-mean elevation to the elevation of the surface type with the scale height hqeff
+            w_col = wcon(i,j)*exp(-(zsn-zsa(i,j))/hqeff(i,j))
+            call sw_radiation_col(swr_dw_top(i,j), coszm(doy,j), cld(i,j), w_col, &
               alb_vu_s(i,j,n), alb_ir_s(i,j,n), alb_vu_c(i,j,n), alb_ir_c(i,j,n), &
-              aerosol_ot(i,j), aerosol_im(i,j), so4(i,j), clot(i,j), hcld(i,j), hqeff(i,j), &
+              aerosol_ot(i,j), aerosol_im(i,j), so4(i,j), clot(i,j), h_cld_top, hqeff(i,j), h_cld_gt, &
               alb_cld(i,j), solar_top_up, solar_top_up_s, solar_top_up_c, solar_sur, solar_sur_s, solar_sur_c, &
               fps=fps)
 
@@ -188,11 +234,14 @@ contains
         if (l_dswd_dalb) then
           if (swr_dw_top(i,j).gt.eps) then
 
-            fps = 1._wp
-            if (present(zs)) fps = exp(-sum(zs(i,j,:)*fst(:))/hatm)
-            call sw_radiation_col(swr_dw_top(i,j), coszm(doy,j), cld(i,j), sum(q2(i,j,:)*fst(:)), sum(ra2(i,j,:)*fst(:)), &
+            zsn = sum(zs(i,j,:)*fst(:))
+            fps = exp(-zsn/hatm)
+            h_cld_top = max(hcld(i,j)-zsn, 0._wp)
+            h_cld_gt  = max(hcld(i,j)-zsn-hpbl, c_hcld_dz_min)
+            w_col = wcon(i,j)*exp(-(zsn-zsa(i,j))/hqeff(i,j))
+            call sw_radiation_col(swr_dw_top(i,j), coszm(doy,j), cld(i,j), w_col, &
               sum(alb_vu_s(i,j,:)*fst(:)), sum(alb_ir_s(i,j,:)*fst(:)), sum(alb_vu_c(i,j,:)*fst(:)), sum(alb_ir_c(i,j,:)*fst(:)), &
-              aerosol_ot(i,j), aerosol_im(i,j), so4(i,j), clot(i,j), hcld(i,j), hqeff(i,j), &
+              aerosol_ot(i,j), aerosol_im(i,j), so4(i,j), clot(i,j), h_cld_top, hqeff(i,j), h_cld_gt, &
               alb_cld(i,j), solar_top_up, solar_top_up_s, solar_top_up_c, solar_sur, solar_sur_s, solar_sur_c, &  ! out
               dswd_dalb_vu_cs(i,j), dswd_dalb_ir_cs(i,j), dswd_dalb_vu_cld(i,j), dswd_dalb_ir_cld(i,j), dswd_dz_ir_cs(i,j), dswd_dz_ir_cld(i,j), & ! out
               swr_dw_sur_vis_cs(i,j), swr_dw_sur_nir_cs(i,j), swr_dw_sur_vis_cld(i,j), swr_dw_sur_nir_cld(i,j), &
@@ -234,9 +283,9 @@ contains
   !                 of the atmosphere in a single column using two-stream
   !                 approximation
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine sw_radiation_col(solar_top, coszen, cld, q2, ra2, &
+  subroutine sw_radiation_col(solar_top, coszen, cld, w_col, &
       alb_sur_vu_s, alb_sur_ir_s, alb_sur_vu_c, alb_sur_ir_c, &
-      aerosol_ot, aerosol_im, so4, cld_ot, h_c, h_q, &
+      aerosol_ot, aerosol_im, so4, cld_ot, h_c, h_q, cld_gt, &
       alb_cld, solar_top_up, solar_top_up_s, solar_top_up_c, solar_sur, solar_sur_s, solar_sur_c, &
       dswd_dalb_vu_cs, dswd_dalb_ir_cs, dswd_dalb_vu_cld, dswd_dalb_ir_cld, dswd_dz_ir_cs, dswd_dz_ir_cld, &
       swr_dw_sur_vis_cs, swr_dw_sur_nir_cs, swr_dw_sur_vis_cld, swr_dw_sur_nir_cld, fps)
@@ -246,8 +295,7 @@ contains
     real(wp), intent(in ) :: solar_top
     real(wp), intent(in ) :: coszen
     real(wp), intent(in ) :: cld
-    real(wp), intent(in ) :: q2
-    real(wp), intent(in ) :: ra2
+    real(wp), intent(in ) :: w_col    ! column water vapour above the surface (kg/m2)
     real(wp), intent(in ) :: alb_sur_vu_s
     real(wp), intent(in ) :: alb_sur_ir_s
     real(wp), intent(in ) :: alb_sur_vu_c
@@ -256,8 +304,9 @@ contains
     real(wp), intent(in ) :: aerosol_im
     real(wp), intent(in ) :: so4 
     real(wp), intent(in ) :: cld_ot
-    real(wp), intent(in ) :: h_c
-    real(wp), intent(in ) :: h_q
+    real(wp), intent(in ) :: h_c      ! height of the cloud top above the surface (m); the cloud occupies [h_c-cld_gt, h_c]
+    real(wp), intent(in ) :: h_q      ! water vapour scale height (m)
+    real(wp), intent(in ) :: cld_gt   ! geometrical thickness of the cloud (m)
 
     real(wp), intent(out) :: alb_cld
     real(wp), intent(out) :: solar_top_up
@@ -281,7 +330,7 @@ contains
 
     ! local variables
     logical :: l_dswd_dalb
-    real(wp) :: exp_hc_hq
+    real(wp) :: exp_hc_hq, exp_hb_hq
     real(wp) :: fp
     real(wp) :: cos_zen, cos_zen_o
     real(wp) :: f_1, f_2, f_3
@@ -341,8 +390,9 @@ contains
       l_dswd_dalb = .false.
     endif
 
-    ! for efficiency
+    ! fractions of the column water vapour above the cloud top (exp_hc_hq) and above the cloud base (exp_hb_hq)
     exp_hc_hq = exp(-h_c/h_q)
+    exp_hb_hq = exp(-max(h_c-cld_gt,0._wp)/h_q)
 
     fp = 1._wp
     if (present(fps)) fp = fps
@@ -375,13 +425,10 @@ contains
 
     endif
 
-    if (l_alb_0) then
-      alb_sa_vu_0 = alb_sur_vu_c
-      alb_sa_ir_0 = alb_sur_ir_c
-    else
-      alb_sa_vu_0 = alb_sur_vu_s
-      alb_sa_ir_0 = alb_sur_ir_s
-    endif
+    ! albedo of the surface (with sulfate aerosol) for the diffuse, surface-reflected light that the clear
+    ! atmosphere scatters back down: the diffuse surface albedo
+    alb_sa_vu_0 = alb_sa_vu_c
+    alb_sa_ir_0 = alb_sa_ir_c
 
     !-----------------------------------------------
     ! 1) SW flux at the top of atmosphere   
@@ -401,18 +448,17 @@ contains
     alb_sct_vu = 1._wp-(1._wp-r_scat_mu(cos_zen))*exp(-f_1*f_2*f_3)
     alb_sct_ir = 1._wp-exp(-f_1*f_2*f_3)
 
-    if (l_sct_0) then
-      f_1 = cos_zen_o**p_1
-      alb_sct_vu_0 = 1._wp-(1._wp-r_scat_mu(cos_zen_o))*exp(-f_1*f_2*f_3)
-      alb_sct_ir_0 = 1._wp-exp(-f_1*f_2*f_3)
-    else
-      alb_sct_vu_0 = alb_sct_vu
-      alb_sct_ir_0 = alb_sct_ir
-    endif
+    ! albedo of the clear atmosphere for the diffuse light reflected by the surface (from below, at the diffuse angle)
+    f_1 = cos_zen_o**p_1
+    alb_sct_vu_0 = 1._wp-(1._wp-r_scat_mu(cos_zen_o))*exp(-f_1*f_2*f_3)
+    alb_sct_ir_0 = 1._wp-exp(-f_1*f_2*f_3)
 
     ! integral transmission function (ITF) for water
 
-    rqh = 1.e-3_wp*ra2 * q2 * 100._wp*h_q    ! column water content in g/cm2 
+    rqh = 0.1_wp*w_col    ! column water content in g/cm2
+    ! effective water path: x (ps/p0)**n_wp; at fixed column water RRTMG absorbs more SW in columns with a lower
+    ! surface pressure (n_wp < 0, fitted on elevated Antarctic/Greenland/Tibet columns)
+    rqh = rqh*fp**n_wp
     m_w_s = rqh*icos
 
     itf_w_ir_s = a1_w*exp(-b1_w*m_w_s)+a2_w*exp(-b2_w*m_w_s)
@@ -428,16 +474,17 @@ contains
     itf_o_vu_s = itf_gas_vu(icos)
     itf_o_ir_s = itf_gas_ir(fp*(icos))
 
-    ! planetary albedo
+    ! planetary albedo: the (diffuse) light reflected by the surface escapes with 1-alb_sct_*_0 or is scattered
+    ! back down with alb_sct_*_0 onto the diffuse surface albedo (as in the surface flux below)
 
     alb_atm_vu_s = &
-      (alb_sct_vu+(((1._wp-alb_sct_vu)**2)*alb_sa_vu_s)/ &
-      (1._wp-alb_sct_vu*alb_sa_vu_s))* &
+      (alb_sct_vu+(1._wp-alb_sct_vu)*(1._wp-alb_sct_vu_0)*alb_sa_vu_s/ &
+      (1._wp-alb_sct_vu_0*alb_sa_vu_0))* &
       itf_w_vu_s*itf_a_vu_s*itf_o_vu_s
 
     alb_atm_ir_s = &
-      (alb_sct_ir+(((1._wp-alb_sct_ir)**2)*alb_sa_ir_s)/ &
-      (1._wp-alb_sct_ir*alb_sa_ir_s))* &
+      (alb_sct_ir+(1._wp-alb_sct_ir)*(1._wp-alb_sct_ir_0)*alb_sa_ir_s/ &
+      (1._wp-alb_sct_ir_0*alb_sa_ir_0))* &
       itf_w_ir_s*itf_a_ir_s*itf_o_ir_s
 
     ! SW flux at the top of atmosphere, clear sky
@@ -454,15 +501,15 @@ contains
 
     ! integral transmission function (ITF) for water
 
-    m_w_c = rqh*exp_hc_hq*(icos+(1._wp-exp(-cld_gt/h_q)))    
+    ! slant path above the cloud top, plus one vertical path through the cloud layer
+    m_w_c = rqh*(exp_hc_hq*icos+(exp_hb_hq-exp_hc_hq))
 
     itf_w_ir_c = a1_w*exp(-b1_w*m_w_c)+a2_w*exp(-b2_w*m_w_c)
     itf_w_vu_c = 1._wp
 
     ! integral transmission function (ITF) for aerosol
 
-    b_arb = b_ar*exp_hc_hq
-    b_arb = b_arb*(icos+(1._wp-exp(-cld_gt/h_q)))
+    b_arb = b_ar*(exp_hc_hq*icos+(exp_hb_hq-exp_hc_hq))
 
     itf_a_vu_c = exp(-gam_ar_1*b_arb*aerosol_im**gam_ar_2)
     itf_a_ir_c = itf_a_vu_c 
@@ -555,24 +602,29 @@ contains
 
     if (l_dswd_dalb) then
 
-      swr_dw_sur_vis_cs = solar_top*itf_atm_vu_s / (1._wp-alb_sa_vu_s)
-      swr_dw_sur_nir_cs = solar_top*itf_atm_ir_s / (1._wp-alb_sa_ir_s)
+      ! downward flux: transmitted beam plus the surface-reflected light scattered back down
+      swr_dw_sur_vis_cs = solar_top*(1._wp-alb_sct_vu)*(itf_w_vu_s_d1*itf_a_vu_d1*itf_o_vu_d1 &
+        + alb_sa_vu_s*alb_sct_vu_0/(1._wp-alb_sct_vu_0*alb_sa_vu_0)*itf_w_vu_s_d2*itf_a_vu_d2*itf_o_vu_d2)
+      swr_dw_sur_nir_cs = solar_top*(1._wp-alb_sct_ir)*(itf_w_ir_s_d1*itf_a_ir_d1*itf_o_ir_d1 &
+        + alb_sa_ir_s*alb_sct_ir_0/(1._wp-alb_sct_ir_0*alb_sa_ir_0)*itf_w_ir_s_d2*itf_a_ir_d2*itf_o_ir_d2)
 
-      dswd_dalb_vu_cs = solar_top * ((1._wp-alb_sct_vu)*alb_sct_vu_0*(1._wp-alb_sct_vu_0*alb_sa_vu_s) &
-        - (1._wp-alb_sct_vu)*alb_sa_vu_s*alb_sct_vu_0*(-1._wp)*alb_sct_vu_0) / (1._wp-alb_sct_vu_0*alb_sa_vu_s)**2 &
+      ! derivative of the downward flux with respect to the surface albedo (direct and diffuse changed alike)
+      dswd_dalb_vu_cs = solar_top*(1._wp-alb_sct_vu)*alb_sct_vu_0 &
+        * (1._wp/(1._wp-alb_sct_vu_0*alb_sa_vu_0) + alb_sa_vu_s*alb_sct_vu_0/(1._wp-alb_sct_vu_0*alb_sa_vu_0)**2) &
         * itf_w_vu_s_d2*itf_a_vu_d2*itf_o_vu_d2
 
-      dswd_dalb_ir_cs = solar_top * ((1._wp-alb_sct_ir)*alb_sct_ir_0*(1._wp-alb_sct_ir_0*alb_sa_ir_s) &
-        - (1._wp-alb_sct_ir)*alb_sa_ir_s*alb_sct_ir_0*(-1._wp)*alb_sct_ir_0) / (1._wp-alb_sct_ir_0*alb_sa_ir_s)**2 &
+      dswd_dalb_ir_cs = solar_top*(1._wp-alb_sct_ir)*alb_sct_ir_0 &
+        * (1._wp/(1._wp-alb_sct_ir_0*alb_sa_ir_0) + alb_sa_ir_s*alb_sct_ir_0/(1._wp-alb_sct_ir_0*alb_sa_ir_0)**2) &
         * itf_w_ir_s_d2*itf_a_ir_d2*itf_o_ir_d2
 
-      drqh_dz = 1.e-3_wp*100._wp*h_q * (ra2*q2/(-100._wp*h_q) + q2*ra2/(-100._wp*hatm))
+      ! d/dz (per cm) of the water path: w_col ~ exp(-z/h_q), times fp**n_wp ~ exp(-n_wp*z/hatm)
+      drqh_dz = -rqh*(1._wp/h_q + n_wp/hatm)/100._wp
       dm_w_s_d1_dz = 1._wp/cos_zen * drqh_dz 
       dm_w_s_d2_dz = dm_w_s_d1_dz + (1._wp-0.7788008_wp)*2._wp/cos_zen_o * drqh_dz 
       ditf_w_ir_s_d1_dz = a1_w*(-b1_w)*exp(-b1_w*m_w_s_d1)*dm_w_s_d1_dz +a2_w*(-b2_w)*exp(-b2_w*m_w_s_d1)*dm_w_s_d1_dz
       ditf_w_ir_s_d2_dz = a1_w*(-b1_w)*exp(-b1_w*m_w_s_d2)*dm_w_s_d2_dz +a2_w*(-b2_w)*exp(-b2_w*m_w_s_d2)*dm_w_s_d2_dz
-      dswd_dz_ir_cs = solar_top * ((1._wp-alb_sct_ir)*itf_a_vu_d1*itf_o_vu_d1 * ditf_w_ir_s_d1_dz + &
-        (1._wp-alb_sct_ir)*alb_sa_ir_s*alb_sct_ir/(1._wp-alb_sct_ir*alb_sa_ir_s)*itf_a_ir_d2*itf_o_ir_d2 * ditf_w_ir_s_d2_dz)
+      dswd_dz_ir_cs = solar_top * ((1._wp-alb_sct_ir)*itf_a_ir_d1*itf_o_ir_d1 * ditf_w_ir_s_d1_dz + &
+        (1._wp-alb_sct_ir)*alb_sa_ir_s*alb_sct_ir_0/(1._wp-alb_sct_ir_0*alb_sa_ir_0)*itf_a_ir_d2*itf_o_ir_d2 * ditf_w_ir_s_d2_dz)
       dswd_dz_ir_cs = dswd_dz_ir_cs*100._wp  ! convert from W/m2/cm to W/m2/m
 
     endif
@@ -597,8 +649,11 @@ contains
 
     ! integral transmission function (ITF) for water
 
-    exp_1 = exp_hc_hq-exp(-(h_c+cld_gt)/h_q)
-    exp_2 = 1._wp-exp_hc_hq/cos_zen_o
+    ! water in the cloud layer (vertical path)
+    exp_1 = exp_hb_hq-exp_hc_hq
+    ! diffuse path through the water below the cloud base, (1-exp(-h_b/h_q))*1.66; was 1-exp(-h_c/h_q)*1.66
+    ! (operator-precedence typo inherited from CLIMBER-2), which is negative for low clouds
+    exp_2 = (1._wp-exp_hb_hq)/cos_zen_o
 
     m_w_c_d1 = rqh*(exp_hc_hq/cos_zen+exp_1+exp_2)
     m_w_c_d2 = m_w_c_d1+rqh*(2._wp*exp_2+exp_1)
@@ -650,7 +705,8 @@ contains
         - (1._wp-alb_cld_ir)*alb_sa_ir_c*alb_cld_ir*(-1._wp)*alb_cld_ir) / (1._wp-alb_cld_ir*alb_sa_ir_c)**2 &
         * itf_c_ir_d2*itf_w_ir_c_d2*itf_a_ir_d2*itf_o_ir_d2
 
-      drqh_dz = 1.e-3_wp*100._wp*h_q * (ra2*q2/(-100._wp*h_q) + q2*ra2/(-100._wp*hatm))
+      ! d/dz (per cm) of the water path: w_col ~ exp(-z/h_q), times fp**n_wp ~ exp(-n_wp*z/hatm)
+      drqh_dz = -rqh*(1._wp/h_q + n_wp/hatm)/100._wp
       dm_w_c_d1_dz = (exp_hc_hq/cos_zen+exp_1+exp_2) * drqh_dz 
       dm_w_c_d2_dz = dm_w_c_d1_dz + (2._wp*exp_2+exp_1) * drqh_dz 
       ditf_w_ir_c_d1_dz = a1_w*(-b1_w)*exp(-b1_w*m_w_c_d1)*dm_w_c_d1_dz +a2_w*(-b2_w)*exp(-b2_w*m_w_c_d1)*dm_w_c_d1_dz

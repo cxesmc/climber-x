@@ -105,7 +105,7 @@ contains
   !   Purpose    :  derive radiative kernels
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine rad_kernels(rk, frst, zs, zsa, htrop, hcld, ra2, & 
-      gams, gamb, gamt, tam, ram, hrm, hqeff, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
+      gams, gamb, gamt, tam, ram, hrm, hqeff, wcon, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
       swr_dw_top, coszm, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, aerosol_ot, aerosol_im, so4)
 
     implicit none
@@ -135,6 +135,7 @@ contains
     real(wp), dimension(:,:),   intent(in) :: ram
     real(wp), dimension(:,:),   intent(in) :: hrm
     real(wp), dimension(:,:),   intent(in) :: hqeff
+    real(wp), dimension(:,:),   intent(in) :: wcon
     real(wp), dimension(:,:,:), intent(in) :: q2
     real(wp), dimension(:,:),   intent(in) :: aerosol_ot 
     real(wp), dimension(:,:),   intent(in) :: aerosol_im
@@ -244,27 +245,27 @@ contains
     !------------------------
 
     ! control
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_control)    = rk%fswr_top(:,:,i_sw_control)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_control)    = rk%fswr_sur(:,:,i_sw_control)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_control) = rk%fswr_top_cs(:,:,i_sw_control) + swr_top_cs / nday_year
     rk%fswr_sur_cs(:,:,i_sw_control) = rk%fswr_sur_cs(:,:,i_sw_control) + sum(fswr_sur_cs*frst,3) / nday_year
 
     ! water vapor, increase water content corresponding to 1K warming, ~7% from Clausius-Klapeyron
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2*1.07, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon*1.07, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_wv)    = rk%fswr_top(:,:,i_sw_wv)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_wv)    = rk%fswr_sur(:,:,i_sw_wv)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_wv) = rk%fswr_top_cs(:,:,i_sw_wv) + swr_top_cs / nday_year
     rk%fswr_sur_cs(:,:,i_sw_wv) = rk%fswr_sur_cs(:,:,i_sw_wv) + sum(fswr_sur_cs*frst,3) / nday_year
 
     ! albedo, 1% increase
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s+0.01, alb_vu_c+0.01, alb_ir_s+0.01, alb_ir_c+0.01, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_alb)    = rk%fswr_top(:,:,i_sw_alb)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_alb)    = rk%fswr_sur(:,:,i_sw_alb)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_alb) = rk%fswr_top_cs(:,:,i_sw_alb) + swr_top_cs / nday_year

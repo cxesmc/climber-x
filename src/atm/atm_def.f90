@@ -71,6 +71,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: solarm
       real(wp), allocatable, dimension(:,:,:) :: cosz
       real(wp), allocatable, dimension(:,:) :: coszm
+      real(wp), allocatable, dimension(:,:) :: coszm_sw   !! effective cos z of the daily-mean SW column (sw_cosz_eff)
       
       real(wp), allocatable, dimension(:,:) :: cam 
       real(wp), allocatable, dimension(:,:) :: co2flx
@@ -300,9 +301,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: eke
       real(wp), allocatable, dimension(:,:) :: sam
       real(wp), allocatable, dimension(:,:) :: synprod
-      real(wp), allocatable, dimension(:,:) :: syndiss
-      real(wp), allocatable, dimension(:,:) :: synadv
-      real(wp), allocatable, dimension(:,:) :: syndif
       real(wp), allocatable, dimension(:,:,:) :: synsur
       real(wp), allocatable, dimension(:,:) :: cdif     
       real(wp), allocatable, dimension(:,:) :: diffx

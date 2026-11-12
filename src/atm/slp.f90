@@ -40,7 +40,7 @@ module slp_mod
   use atm_params, only : cp
   use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2, i_mmc_geo, c_mmc_edge
   use atm_params, only : i_mmc_itcz, c_mmc_efe
-  use atm_params, only : i_mmc_fer
+  use atm_params, only : i_mmc_fer, i_mmc_fer_shape, c_mmc_fer_q
   use atm_params, only : i_mmc_had, c_mmc_q, q_mmc_ref
   use atm_params, only : c_mmc_dt0, c_mmc_dt1, hdv_mmc_ref, c_mmc_mt, amas
   use atm_params, only : nsmooth_aslp, aslp_polar_lat
@@ -1254,6 +1254,17 @@ contains
 
       vsz(j) = -coc*sin(ff) 
 
+      ! i_mmc_fer_shape = 2: Ferrel branches from the latitude-resolved TEM closure instead of the half-sine with the
+      ! belt-mean amplitude. aferz(j) = c_mmc_fer*|F_eddy|/Ds is the cell's mass flux at this v-point, the velocity of the
+      ! branch scales with 1/cos(lat) (reference 45 deg, absorbed in c_mmc_fer), and |sin(ff)|^c_mmc_fer_q tapers it to
+      ! zero at the cell edges only. F/Ds is much flatter across the cell than sin(ff), which moves pressure gradient
+      ! onto the poleward flank of the westerlies (offline emulator: analysis/ferrel_fds_shape_emulator.jl).
+      if (i_mmc_fer_shape.eq.2) then
+        if ((ff.ge.pi .and. ff.lt.2._wp*pi) .or. (-ff.gt.pi .and. (-ff).le.2._wp*pi)) then
+          vsz(j) = -sign(1._wp,sin(ff)) * aferz(j) * cos(0.25_wp*pi)/max(cos(fiu(j)),0.1_wp) * abs(sin(ff))**c_mmc_fer_q
+        endif
+      endif
+
     enddo
 
     ! Mountain torque
@@ -1440,7 +1451,8 @@ contains
     real(wp) :: ff
 
     real(wp), parameter :: dfi_min = 5._wp*pi/180._wp   !! minimum latitudinal extent of a Hadley cell
-    real(wp) :: hw, fen, fes
+    real(wp), parameter :: dfer_min = 10._wp*pi/180._wp !! minimum latitudinal extent of a Ferrel cell (i_mmc_geo=2)
+    real(wp) :: hw, fen, fes, fpn, fps, fmn, fms
 
     ! i_mmc_geo = 0  The whole pattern is displaced towards the ITCZ by ficz/(1+c_mmc_1*(fi-ficz)**2).
     !                The displacement decays with the distance from the ITCZ, so the summer Hadley edge,
@@ -1452,7 +1464,44 @@ contains
     !                Hadley width, and the phase is linear in latitude within each Hadley cell, so the cell
     !                boundary stays at ficz and the summer cell narrows.  The Ferrel and polar cells keep the
     !                width hw poleward of the edges.
-    if (i_mmc_geo.eq.1) then
+    !
+    ! i_mmc_geo = 2  Hadley edges as in i_mmc_geo = 1.  The Ferrel/polar boundaries sit at fpn/fps = +-2*hw,
+    !                independent of ficz: they follow FORCED changes of the Hadley width (Held scaling) but not the
+    !                seasonal displacement of the Hadley edges.  In CMIP6/PMIP the polar edge stays at ~61-65 deg all
+    !                year while the Hadley edge moves 7-9 deg (the winter Ferrel cell is the wide one), and the
+    !                annual-mean polar edge is ~2x the Hadley edge in every state (|P| = 3.8 + 1.94|H|, rms 3.6 deg over
+    !                aquaplanet, PI, 4xCO2 and LGM; ratio 1.96-2.24).  Within each Ferrel cell the phase is piecewise
+    !                linear: 1.5 pi (maximum of the branch) is reached at hw/2 from the Hadley edge (the mid-point of
+    !                the cell for ficz = 0), kept within the central half of the cell; the polar cells keep the
+    !                angular rate of i_mmc_geo = 1 (pi per hw).
+    if (i_mmc_geo.eq.2) then
+      hw  = pi/(6._wp*hadwidsc)
+      fen = max(hw + c_mmc_edge*ficz, ficz + dfi_min)
+      fes = min(-hw + c_mmc_edge*ficz, ficz - dfi_min)
+      fpn = max( 2._wp*hw, fen + dfer_min)
+      fps = min(-2._wp*hw, fes - dfer_min)
+      ! mid-point of the Ferrel cell (phase 1.5 pi, maximum of the branch) at hw/2 from the Hadley edge,
+      ! kept within the central half of the cell
+      fmn = fen + min(max(0.5_wp*hw, 0.25_wp*(fpn-fen)), 0.75_wp*(fpn-fen))
+      fms = fes - min(max(0.5_wp*hw, 0.25_wp*(fes-fps)), 0.75_wp*(fes-fps))
+      if (fi.ge.fpn) then
+        ff = 2._wp*pi + pi*(fi-fpn)/hw
+      else if (fi.ge.fmn) then
+        ff = 1.5_wp*pi + 0.5_wp*pi*(fi-fmn)/(fpn-fmn)
+      else if (fi.ge.fen) then
+        ff = pi + 0.5_wp*pi*(fi-fen)/(fmn-fen)
+      else if (fi.ge.ficz) then
+        ff = pi*(fi-ficz)/(fen-ficz)
+      else if (fi.ge.fes) then
+        ff = pi*(fi-ficz)/(ficz-fes)
+      else if (fi.ge.fms) then
+        ff = -pi - 0.5_wp*pi*(fes-fi)/(fes-fms)
+      else if (fi.ge.fps) then
+        ff = -1.5_wp*pi - 0.5_wp*pi*(fms-fi)/(fms-fps)
+      else
+        ff = -2._wp*pi + pi*(fi-fps)/hw
+      endif
+    else if (i_mmc_geo.eq.1) then
       hw  = pi/(6._wp*hadwidsc)
       fen = max(hw + c_mmc_edge*ficz, ficz + dfi_min)
       fes = min(-hw + c_mmc_edge*ficz, ficz - dfi_min)

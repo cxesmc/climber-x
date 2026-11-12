@@ -29,7 +29,7 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, l_diff_impl, rh_max_ocn, rh_max_lnd, i_tsl, c_tsl_gam, tsl_gams_min, gams_min, hgams
+  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, rh_max_ocn, rh_max_lnd, i_tsl, c_tsl_gam, tsl_gams_min, gams_min, hgams
   use atm_params, only : z_q2, z_q2_ocn, p0
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr, cheat
@@ -171,15 +171,10 @@ contains
         ! update prognostic atmospheric humidity
         !-------------------------------------
 
-        ! moisture convergence applied to the column-water budget: in implicit-
-        ! diffusion mode the diffusive convergence is already in wcon (from
-        ! diffuse_impl), so only the advective part is added here; in explicit mode
-        ! the diffusion is part of the tendency, so the total convergence is used.
-        if (l_diff_impl) then
-          convwtr_bdg = convwtr_adv(i,j)
-        else
-          convwtr_bdg = convwtr(i,j)
-        endif
+        ! moisture convergence applied to the column-water budget: the diffusive
+        ! convergence is already in wcon (from diffuse_impl), so only the advective
+        ! part is added here.
+        convwtr_bdg = convwtr_adv(i,j)
 
         ! column water content tendency
         dwdt = evpa(i,j)-prc_tmp+convwtr_bdg  ! kg/m2/s

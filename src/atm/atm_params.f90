@@ -39,8 +39,6 @@ module atm_params
   real(wp) :: fcormin
   integer :: i_fcorg
 
-  logical :: l_sct_0
-  logical :: l_alb_0
   real(wp) :: f_ice_pow
   real(wp) :: r_scat
   real(wp) :: a1_w 
@@ -56,6 +54,8 @@ module atm_params
   real(wp) :: b_gas_vu
   real(wp) :: a_gas_ir
   real(wp) :: b_gas_ir
+  real(wp) :: n_wp
+  real(wp) :: p_cosz_sw
 
   logical :: l_so4_de
   logical :: l_so4_ie
@@ -66,6 +66,8 @@ module atm_params
   real(wp) :: N_so4_nat_lnd
 
   integer :: i_mmc_fer
+  integer :: i_mmc_fer_shape    !! shape of the Ferrel lower branch: 0 = half-sine, 2 = local psi_F = aferz(j) (requires i_mmc_fer=2)
+  real(wp) :: c_mmc_fer_q      !! exponent of the edge taper |sin(ff)|^q of the Ferrel branch, used only if i_mmc_fer_shape=2
   integer :: i_mmc_had
   real(wp) :: c_mmc_had
   real(wp) :: c_mmc_q
@@ -196,8 +198,9 @@ module atm_params
   real(wp) :: c_syn_4
   integer  :: i_syn_diss   !! synoptic energy dissipation: 1 = (c_syn_3+c_syn_4*cda)*EKE^1.5, 2 = linear, (c_syn_3+c_syn_4*cda)*sqrt(syn_e0)*EKE
   real(wp) :: syn_e0       !! m2/s2, reference synoptic energy of the linear dissipation (i_syn_diss=2)
-  real(wp) :: c_syn_5      !! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
-  integer  :: i_diff_syn   !! macro-diffusivity closure for the synoptic energy: 1 = c_syn_5*sqrt(EKE), 2 = c_syn_5*EKE
+  real(wp) :: dz_syn_min   !! m, minimum depth of the layer over which the EKE production shear and stability are taken
+  real(wp) :: c_eke_slope  !! sloping-boundary reduction of EKE production: x max(0,1-c_eke_slope*delta), delta = terrain slope / isentrope slope (0 = off)
+  real(wp) :: c_syn_5      !! s, macro-diffusivity factor for the synoptic energy, K = c_syn_5*EKE
   real(wp) :: c_syn_6
   real(wp) :: c_syn_7
   real(wp) :: windmin
@@ -207,16 +210,14 @@ module atm_params
   logical  :: l_tau_stab
   real(wp) :: f_tau_Ri_unstab
   real(wp) :: f_tau_Ri_stab
-  integer  :: i_diff       !! macro-diffusivity closure: 1 = c_diff*sqrt(EKE), 2 = c_diff*EKE
-  real(wp) :: c_diff       !! macro-diffusivity factor: m for i_diff=1, s for i_diff=2
+  real(wp) :: c_diff       !! s, macro-diffusivity factor, K = c_diff*EKE
   real(wp) :: h_diff       !! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983); <=0 = vertically uniform
   integer  :: i_hdiff_ref  !! reference height for h_diff: 1 = local (face) surface, 2 = sea level
-  real(wp) :: c_diff_dse_eq   !! amplification of the ZONAL dry static energy diffusivity at the equator, tapering with latitude; 1 = off
-  real(wp) :: fi_diff_dse_eq  !! deg, e-folding latitude of that amplification
+  real(wp) :: diff_eq     !! m2/s, additional ZONAL macro-diffusivity (all tracers) at the equator, gaussian in latitude; 0 = off
+  real(wp) :: fi_diff_eq  !! deg, e-folding latitude of diff_eq
   integer :: i_adv         !! advection scheme: 1 = first order upstream (donor cell), 2 = flux corrected transport (Zalesak 1979)
   real(wp) :: c_adv_polar  !! zonal inflow-mass Courant threshold (and target per sub-step) for the zonal sub-cycling of the tracer advection in polar rows
   real(wp) :: lat_adv_polar  !! deg, the zonal sub-cycling acts only on rows poleward of this latitude
-  logical :: l_diff_impl   !! use implicit (unconditionally stable ADI) horizontal diffusion? otherwise original explicit
   real(wp) :: c_filt_conv  !! strength [0..1] of the conservative high-order 2dx (Shapiro) filter applied to the convergences (convdse/convwtr) to suppress the grid-scale checkerboard; 0 = off
   integer :: nord_filt_conv !! order (selectivity) of the convergence 2dx filter; higher = more selective (spares resolved scales)
 
@@ -293,6 +294,7 @@ module atm_params
 
   real(wp) :: ars_ot
   real(wp) :: ars_im
+  real(wp) :: h_ars
 
   integer :: nsmooth_cda
   integer :: nsmooth_weff
@@ -361,8 +363,6 @@ contains
     call nml_read(filename,"atm_par","i_fcorg",i_fcorg)
     call nml_read(filename,"atm_par","f_ice_pow",f_ice_pow)
     call nml_read(filename,"atm_par","r_scat",r_scat)
-    call nml_read(filename,"atm_par","l_sct_0",l_sct_0)
-    call nml_read(filename,"atm_par","l_alb_0",l_alb_0)
     call nml_read(filename,"atm_par","a1_w",a1_w)
     a2_w = 1._wp-a1_w
     call nml_read(filename,"atm_par","b1_w",b1_w)
@@ -376,7 +376,12 @@ contains
     call nml_read(filename,"atm_par","b_gas_vu",b_gas_vu)
     call nml_read(filename,"atm_par","a_gas_ir",a_gas_ir)
     call nml_read(filename,"atm_par","b_gas_ir",b_gas_ir)
+    call nml_read(filename,"atm_par","n_wp",n_wp)
+    call nml_read(filename,"atm_par","p_cosz_sw",p_cosz_sw)
     call nml_read(filename,"atm_par","i_mmc_fer",i_mmc_fer)
+    call nml_read(filename,"atm_par","i_mmc_fer_shape",i_mmc_fer_shape)
+    call nml_read(filename,"atm_par","c_mmc_fer_q",c_mmc_fer_q)
+    if (i_mmc_fer_shape.eq.2 .and. i_mmc_fer.ne.2) stop 'ERROR atm_params: i_mmc_fer_shape=2 requires i_mmc_fer=2'
     call nml_read(filename,"atm_par","i_mmc_had",i_mmc_had)
     call nml_read(filename,"atm_par","c_mmc_had",c_mmc_had)
     call nml_read(filename,"atm_par","c_mmc_q",c_mmc_q)
@@ -522,9 +527,10 @@ contains
     call nml_read(filename,"atm_par","c_syn_3",c_syn_3)
     call nml_read(filename,"atm_par","c_syn_4",c_syn_4)
     call nml_read(filename,"atm_par","i_syn_diss",i_syn_diss)
+    call nml_read(filename,"atm_par","c_eke_slope",c_eke_slope)
+    call nml_read(filename,"atm_par","dz_syn_min",dz_syn_min)
     call nml_read(filename,"atm_par","syn_e0",syn_e0)
     call nml_read(filename,"atm_par","c_syn_5",c_syn_5)
-    call nml_read(filename,"atm_par","i_diff_syn",i_diff_syn)
     call nml_read(filename,"atm_par","c_syn_6",c_syn_6)
     call nml_read(filename,"atm_par","c_syn_7",c_syn_7)
     call nml_read(filename,"atm_par","windmin",windmin)
@@ -534,16 +540,14 @@ contains
     call nml_read(filename,"atm_par","l_tau_stab",l_tau_stab)
     call nml_read(filename,"atm_par","f_tau_Ri_unstab",f_tau_Ri_unstab)
     call nml_read(filename,"atm_par","f_tau_Ri_stab",f_tau_Ri_stab)
-    call nml_read(filename,"atm_par","i_diff",i_diff)
     call nml_read(filename,"atm_par","c_diff",c_diff)
     call nml_read(filename,"atm_par","h_diff",h_diff)
     call nml_read(filename,"atm_par","i_hdiff_ref",i_hdiff_ref)
-    call nml_read(filename,"atm_par","c_diff_dse_eq",c_diff_dse_eq)
-    call nml_read(filename,"atm_par","fi_diff_dse_eq",fi_diff_dse_eq)
+    call nml_read(filename,"atm_par","diff_eq",diff_eq)
+    call nml_read(filename,"atm_par","fi_diff_eq",fi_diff_eq)
     call nml_read(filename,"atm_par","i_adv",i_adv)
     call nml_read(filename,"atm_par","c_adv_polar",c_adv_polar)
     call nml_read(filename,"atm_par","lat_adv_polar",lat_adv_polar)
-    call nml_read(filename,"atm_par","l_diff_impl",l_diff_impl)
     call nml_read(filename,"atm_par","c_filt_conv",c_filt_conv)
     call nml_read(filename,"atm_par","nord_filt_conv",nord_filt_conv)
     call nml_read(filename,"atm_par","l_kata_wind",l_kata_wind)
@@ -620,6 +624,7 @@ contains
     call nml_read(filename,"atm_par","N_so4_nat_lnd",N_so4_nat_lnd)
     call nml_read(filename,"atm_par","ars_ot",ars_ot)
     call nml_read(filename,"atm_par","ars_im",ars_im)
+    call nml_read(filename,"atm_par","h_ars",h_ars)
     call nml_read(filename,"atm_par","nsmooth_cda",nsmooth_cda)
     call nml_read(filename,"atm_par","nsmooth_weff",nsmooth_weff)
     call nml_read(filename,"atm_par","nsmooth_aslp",nsmooth_aslp)

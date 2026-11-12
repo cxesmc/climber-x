@@ -51,26 +51,31 @@
   ! zonal mean overturning circulation parameters
   !-----------------------------------------------------------
   i_mmc_fer = 2                 ! Ferrel cell amplitude: 1 = meridional tslz contrast across the cell, 2 = transient eddy DSE flux
+  i_mmc_fer_shape = 2           ! shape of the Ferrel lower branch: 0 = half-sine with the belt-mean amplitude,
+                                ! 2 = local TEM closure, vsz = aferz(j)*cos(45)/cos(lat)*|sin(ff)|^c_mmc_fer_q (requires i_mmc_fer=2;
+                                !     broader branch with more gradient on the poleward flank; needs c_mmc_fer ~0.7x the half-sine value)
+  c_mmc_fer_q = 0.3             ! exponent of the edge taper of the Ferrel branch, used only if i_mmc_fer_shape=2
   i_mmc_had = 1                 ! Hadley cell amplitude: 0 = sea level temperature contrast across the cell only,
                                 !                        1 = the same, additionally scaled by the inverse of the tropical
                                 !                            boundary layer humidity (moisture mass budget of the cell)
   c_mmc_had = 0.25              ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
-  c_mmc_fer = 0.07              ! parameter for strength of Ferrel cells
+  c_mmc_fer = 0.05              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor of the ITCZ displacement of the cell pattern, used only if i_mmc_geo=0
-  i_mmc_geo = 1                 ! meridional cell geometry: 0 = whole pattern displaced towards the ITCZ, decaying as 1/(1+c_mmc_1*(fi-ficz)**2),
+  i_mmc_geo = 2                 ! meridional cell geometry: 0 = whole pattern displaced towards the ITCZ, decaying as 1/(1+c_mmc_1*(fi-ficz)**2),
                                 !                           1 = Hadley edges at +-width/2 + c_mmc_edge*ficz, phase linear within each Hadley cell
-  c_mmc_edge = 0.2              ! displacement of both Hadley edges per degree of ITCZ displacement, used only if i_mmc_geo=1
+                               !                           2 = as 1, Ferrel/polar boundaries fixed at +-2*hw (not displaced by the ITCZ)
+  c_mmc_edge = 0.4              ! displacement of both Hadley edges per degree of ITCZ displacement, used only if i_mmc_geo>=1
   c_mmc_2 = 0.025               ! 1/K, sensitivity of the ITCZ position to interhemispheric temperature gradient
   i_mmc_itcz = 1                ! ITCZ position: 0 = c_mmc_2 x interhemispheric sea level temperature contrast,
                                 !                1 = c_mmc_efe x energy flux equator (efe output)
   c_mmc_efe = 0.85              ! ITCZ latitude per degree of energy flux equator, used only if i_mmc_itcz=1
   c_mmc_dt0 = 62.5              ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
-  c_mmc_dt1 = 0.25              ! exponent of the Held (2000) supercriticality scaling of the Hadley width (tropopause height x bulk dry stability)
+  c_mmc_dt1 = 0.18              ! exponent of the Held (2000) supercriticality scaling of the Hadley width (tropopause height x bulk dry stability)
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity
-  c_mmc_mt = 1.                 ! weight of the mountain torque [p_s dz_s/dx] in the lower-branch momentum budget: only f*M - MT is
+  c_mmc_mt = 0.5                ! weight of the mountain torque [p_s dz_s/dx] in the lower-branch momentum budget: only f*M - MT is
                                 ! balanced by friction and builds the zonal mean SLP; 0 = all of f*M by friction
   pblp = 0.85                   ! pressure level of PBL top at the poles
   pble = 0.8                    ! pressure level of PBL top at the equator
@@ -145,7 +150,7 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 4.0e-3              ! K/m, background lapse rate
+  c_gam_1 = 4.2e-3              ! K/m, background lapse rate
   c_gam_2 = 0.055               ! K/m, moisture dependence of lapse rate
   c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
   i_gamb_q = 0                  ! moisture driving the free tropospheric lapse rate: 0 = local qam, 1 = tropical mean (30S-30N) qam anomaly from q_gam_ref, 2 = moist adiabat of the Hadley-cell mean T, both tapered with Hadley width
@@ -209,10 +214,9 @@
   i_syn_diss = 2                ! synoptic energy dissipation: 1 = (c_syn_3+c_syn_4*cda)*sam^1.5 (steady state sam ~ prod^(2/3)),
                                 ! 2 = linear, (c_syn_3+c_syn_4*cda)*sqrt(syn_e0)*sam, ~1 day damping time (steady state sam ~ prod)
   syn_e0 = 140.                 ! m2/s2, reference synoptic energy of the linear dissipation, used only if i_syn_diss==2
-  i_diff_syn = 2                ! macro-diffusivity closure for the synoptic energy:
-                                ! 1 = c_syn_5*sqrt(EKE), K = c*V' (fixed mixing length)
-                                ! 2 = c_syn_5*EKE,       K = c*V'^2 (fixed eddy time scale, as i_diff=2);
-  c_syn_5 = 1.e4                ! macro-diffusivity factor for the synoptic energy: m for i_diff_syn=1, s for i_diff_syn=2
+  dz_syn_min = 1500.            ! m, EKE production shear and stability from max(z850, zsa+hgams) to max(z500, that + dz_syn_min), interpolated in height
+  c_eke_slope = 1.              ! sloping-boundary stabilisation of EKE production (Blumsack and Gierasch 1972): production x max(0,1-c_eke_slope*delta), delta = terrain slope toward the cold side over the isentrope slope f*dudz over N2; 0 = off, 1 = linear Eady theory
+  c_syn_5 = 1.e4                ! s, macro-diffusivity factor for the synoptic energy, K = c_syn_5*EKE (fixed eddy time scale)
   c_syn_6 = 0.75                ! scaling from synoptic kinetic energy to synoptic wind
   c_syn_7 = 1.6e-3              ! scaling for synoptic vertical velocity at ~700 hPa, wsyn = c_syn_7*sqrt(sam)*S(lat).
   windmin = 5.                  ! m/s, minimum wind speed over the ocean
@@ -222,22 +226,20 @@
   l_tau_stab = T                ! stability dependence of the momentum drag in the wind stress, BATS bulk Richardson factor as for the ocean heat/moisture exchange (sic i_cd_ocn=2)
   f_tau_Ri_unstab = 10.         ! Richardson number factor for unstable stratification, cd*(1-f*Ri), used only if l_tau_stab
   f_tau_Ri_stab = 0.            ! Richardson number factor for stable stratification, cd/(1+f*Ri), used only if l_tau_stab
-  i_diff = 2                    ! macro-diffusivity closure (energy, water, dust):
-                                ! 1 = c_diff*sqrt(EKE), K = c*V'
-                                ! 2 = c_diff*EKE,       K = c*V'^2 (Caballero & Hanley 2012)
-  c_diff = 4.e4                 ! macro-diffusivity factor
+  c_diff = 4.e4                 ! s, macro-diffusivity factor (energy, water, dust), K = c_diff*EKE (Caballero and Hanley 2012)
   h_diff = 3000.                ! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983 vertical structure of the baroclinic eddy flux)
                                 ! <=0 = vertically uniform.
   i_hdiff_ref = 2               ! height reference for h_diff:
                                 ! 1 = height above the local surface
                                 ! 2 = height above sea level
-  c_diff_dse_eq = 3.            ! amplification of the ZONAL dry static energy diffusivity at the equator, tapering as exp(-(lat/fi_diff_dse_eq)^2). 1 = off.
-  fi_diff_dse_eq = 25.          ! deg, e-folding latitude of the above
+  diff_eq = 7.e6                ! m2/s, additional ZONAL macro-diffusivity of all tracers (energy, water, dust, CO2) at the equator,
+                                ! added to c_diff*EKE as diff_eq*exp(-(lat/fi_diff_eq)^2), with the same h_diff vertical profile. 0 = off.
+  fi_diff_eq = 30.              ! deg, e-folding latitude of diff_eq
 
   !-----------------------------------------------------------
   ! advection, diffusion and stability parameters 
   !-----------------------------------------------------------
-  i_adv = 1                     ! advection scheme:
+  i_adv = 2                     ! advection scheme:
                                 ! 1 = first order upstream 
                                 ! 2 = flux corrected transport (Zalesak 1979)
   c_adv_polar = 0.5             ! zonal sub-cycling of the tracer advection in polar rows (|lat| > lat_adv_polar) whose zonal Courant number
@@ -246,15 +248,14 @@
                                 ! and target per sub-step
   lat_adv_polar = 75.           ! deg, the zonal sub-cycling acts only poleward of this latitude (the zonal inflow-mass Courant number is
                                 ! also >1 in thin, topography-cut layers elsewhere, where the FCT upstream fallback copes)
-  l_diff_impl = T               ! use implicit (unconditionally stable ADI) horizontal diffusion?
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr/convdst) to suppress grid-scale checkerboard; 0 = off
   nord_filt_conv = 2            ! order (selectivity) of the convergence 2dx filter
 
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.56                !
-  c_cld_2 = 0.56                !
+  c_cld_1 = 0.555               !
+  c_cld_2 = 0.555               !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
@@ -277,7 +278,7 @@
   !-----------------------------------------------------------
   c_hcld_low = 1500.            ! m, height of the low cloud top above the surface
   c_hcld_dz_min = 1000.         ! m, minimum thickness of the radiating cloud slab in the longwave column (lwr.f90).
-  c_hcld_1 = 2000.              !
+  c_hcld_1 = 2500.              !
   c_hcld_2 = 0.3                !
   c_hcld_3 = 200.               !
   c_hcld_4 = 0.                 !
@@ -289,29 +290,30 @@
   !-----------------------------------------------------------
   c_clot_1 = 5.                 ! 
   c_clot_2 = 30.                !
-  c_clot_3 = 1.5                !
-  c_clot_4 = 0.5                !
-  c_clot_5 = 0.4                ! weight of the dynamical factor fweff in the cloud optical thickness, 0 = off
+  c_clot_3 = 3.25                ! (retuned 2026-11-11 vs CERES + CMIP PI SW CRE, analysis/rad_offline/cloud_retune.jl)
+  c_clot_4 = 0.333                !
+  c_clot_5 = 0.                ! weight of the dynamical factor fweff in the cloud optical thickness, 0 = off
 
   !-----------------------------------------------------------
   ! shortwave radiation parameters
   !-----------------------------------------------------------
-  l_sct_0  = T                  !
-  l_alb_0  = F                  !
   f_ice_pow = 1.                !
-  r_scat   = 0.1542             ! Rayleigh albedo (VU); with i_swr_ray==1 the value at cosz=0.5
-  a1_w     = 0.21               !
-  b1_w     = 6.27               !
-  b2_w     = 0.0267             !
+  r_scat   = 0.1827             ! Rayleigh albedo (VU); with i_swr_ray==1 the value at cosz=0.5
+  a1_w     = 0.223                !
+  b1_w     = 1.863               !
+  b2_w     = 0.01974             !
   c_itf_c  = 0.927              ! cloud ITF, TOA path (0.9 before i_swr_gas)
   c_itf_cc = 0.970              ! cloud ITF, surface path (0.9 before i_swr_gas)
   i_swr_ray = 1                 ! Rayleigh scattering albedo: 0 = constant r_scat, 1 = zenith-angle dependent, r_scat*(1-exp(-tau_ray/mu))/(1-exp(-tau_ray/0.5))
-  tau_ray = 0.222               ! effective Rayleigh optical depth (VU band), used only if i_swr_ray==1
+  tau_ray = 0.2837               ! effective Rayleigh optical depth (VU band), used only if i_swr_ray==1
   i_swr_gas = 1                 ! non-water gas absorption: 0 = constant O3 transmission (VU) 0.98, 1 = path-dependent 1-a*m^b for VU (O3) and IR (O2, CO2, CH4)
-  a_gas_vu = 0.0168             ! used only if i_swr_gas==1
-  b_gas_vu = 0.0091             !
-  a_gas_ir = 0.0454             !
-  b_gas_ir = 0.487              !
+  a_gas_vu = 0.04668            ! used only if i_swr_gas==1
+  b_gas_vu = 0.5624            !
+  a_gas_ir = 0.03407             !
+  b_gas_ir = 0.2794              !
+  n_wp = -2.0                   ! SW water vapour path x (ps/p0)**n_wp (clear-sky refit vs RRTMG incl. elevated columns)
+  p_cosz_sw = -0.4              ! effective cos z of the daily SW column: insolation-weighted power mean (sum cosz**(1+p)/sum cosz)**(1/p)
+                                ! over the hours; -1 = daytime-mean cos z (coszm), 0 = weighted geometric mean, 1 = insolation-weighted cos z.
 
   !-----------------------------------------------------------
   ! longwave radiation parameters
@@ -369,7 +371,8 @@
   c_dust_wet = 0.075            ! scavenging parameter for wet dust deposition (m2/kg), 0.075 in Bauer 2010
   c_dust_dry = 2.5e-3           ! dry dust deposition velocity (m/s), 2.5e-3 in Bauer 2010
   c_dust_mec = 950.             ! dust mass extinction efficiency (m^2/kg)
-  ars_ot = 0.1                  ! dust optical depth for clear sky conditions (at p0; scaled with surface pressure), used only if l_dust==F or l_dust_rad==F
+  ars_ot = 0.106                ! background aerosol optical depth at sea level for clear sky conditions (scaled with exp(-zsa/h_ars)), used only if l_dust==F or l_dust_rad==F (0.1 with h_ars = 8 km)
+  h_ars = 2000.                 ! m, aerosol scale height for the decrease of ars_ot with surface elevation (7990 = hatm, old)
   ars_im = 0.0025               ! imaginary part of dust refractive index for clear-sky conditions (0.0025: global clear-sky atm SW absorption = CERES)
 
   !-----------------------------------------------------------
@@ -381,7 +384,7 @@
   sigma_so4 = 3.5e3             ! m2/kg, scattering efficiency for sulfate aerosols (Bauer et al., 2008)
   r_so4 = 0.17e-6               ! m, sulfate aerosol radius (0.1-0.15 microm in Bauer 2008)
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
-  N_so4_nat_lnd = 75e6          ! m^-3, natural cloud condensation nuclei concentration over land
+  N_so4_nat_lnd = 180e6          ! m^-3, natural cloud condensation nuclei concentration over land
 
   !-----------------------------------------------------------
   ! smoothing options

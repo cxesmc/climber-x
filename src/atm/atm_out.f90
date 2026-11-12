@@ -38,7 +38,6 @@ module atm_out
   dxt, dy, cost, sint, i_ice
   use atm_params, only : l_daily_output
   use atm_params, only : p0, ra, gad, cle, cls, cp, hatm, sigma_so4, c_syn_6, l_co2d
-  use atm_params, only : l_diff_impl
   use atm_params, only : l_output_flx3d, l_output_extended
   use vesta_mod, only : t_prof, rh_prof
   use atm_def, only : atm_class
@@ -403,9 +402,6 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: eke
     real(wp), allocatable, dimension(:,:) :: sam
     real(wp), allocatable, dimension(:,:) :: synprod
-    real(wp), allocatable, dimension(:,:) :: syndiss
-    real(wp), allocatable, dimension(:,:) :: synadv
-    real(wp), allocatable, dimension(:,:) :: syndif
     real(wp), allocatable, dimension(:,:) :: synsur
     real(wp), allocatable, dimension(:,:) :: cdif     
     real(wp), allocatable, dimension(:,:) :: diffx
@@ -692,9 +688,6 @@ contains
      allocate(ann_a%eke(im,jm))
      allocate(ann_a%sam(im,jm))
      allocate(ann_a%synprod(im,jm))
-     allocate(ann_a%syndiss(im,jm))
-     allocate(ann_a%synadv(im,jm))
-     allocate(ann_a%syndif(im,jm))
      allocate(ann_a%synsur(im,jm))
      allocate(ann_a%cdif(im,jm) )    
      allocate(ann_a%diffx(imc,jm))
@@ -929,9 +922,6 @@ contains
      allocate(mon_a(k)%eke(im,jm))
      allocate(mon_a(k)%sam(im,jm))
      allocate(mon_a(k)%synprod(im,jm))
-     allocate(mon_a(k)%syndiss(im,jm))
-     allocate(mon_a(k)%synadv(im,jm))
-     allocate(mon_a(k)%syndif(im,jm))
      allocate(mon_a(k)%synsur(im,jm))
      allocate(mon_a(k)%cdif(im,jm) )    
      allocate(mon_a(k)%diffx(imc,jm))
@@ -1706,9 +1696,6 @@ contains
           mon_a(m)%eke         = 0. 
           mon_a(m)%sam         = 0. 
           mon_a(m)%synprod     = 0. 
-          mon_a(m)%syndiss     = 0. 
-          mon_a(m)%synadv      = 0. 
-          mon_a(m)%syndif      = 0. 
           mon_a(m)%synsur      = 0. 
           mon_a(m)%cdif        = 0. 
           mon_a(m)%xz          = 0. 
@@ -2084,9 +2071,6 @@ contains
       mon_a(mon)%eke         = mon_a(mon)%eke         + mon_avg * atm%eke
       mon_a(mon)%sam         = mon_a(mon)%sam         + mon_avg * atm%sam
       mon_a(mon)%synprod     = mon_a(mon)%synprod     + mon_avg * atm%synprod
-      mon_a(mon)%syndiss     = mon_a(mon)%syndiss     + mon_avg * atm%syndiss
-      mon_a(mon)%synadv      = mon_a(mon)%synadv      + mon_avg * atm%synadv            
-      mon_a(mon)%syndif      = mon_a(mon)%syndif      + mon_avg * atm%syndif
       mon_a(mon)%synsur      = mon_a(mon)%synsur      + mon_avg * sum(atm%synsur*atm%frst,3)
       mon_a(mon)%cdif        = mon_a(mon)%cdif        + mon_avg * atm%cdif           
 
@@ -2925,12 +2909,6 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="eddy kinetic energy",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"ekeprod    ", sngl(vars%synprod    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="production of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekediss    ", sngl(vars%syndiss    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="dissipation of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekeadv     ", sngl(vars%synadv     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="advection of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekedif     ", sngl(vars%syndif     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="diffusion of eddy kinetic energy",units="",ncid=ncid)
     call nc_write(fnm,"wind_syn   ", sngl(vars%synsur     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="synoptic 10m wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"cdif       ", sngl(vars%cdif       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -3408,9 +3386,6 @@ contains
     ave%sam         = 0._wp
     ave%eke         = 0._wp
     ave%synprod     = 0._wp
-    ave%syndiss     = 0._wp
-    ave%synadv      = 0._wp
-    ave%syndif      = 0._wp
     ave%synsur      = 0._wp
     ave%cdif        = 0._wp
     ave%fw_pac_atl  = 0.
@@ -3633,9 +3608,6 @@ contains
        ave%eke         = ave%eke         + d(k)%eke         / div
        ave%sam         = ave%sam         + d(k)%sam         / div
        ave%synprod     = ave%synprod     + d(k)%synprod     / div
-       ave%syndiss     = ave%syndiss     + d(k)%syndiss     / div
-       ave%synadv      = ave%synadv      + d(k)%synadv      / div
-       ave%syndif      = ave%syndif      + d(k)%syndif      / div
        ave%synsur      = ave%synsur      + d(k)%synsur      / div
        ave%cdif        = ave%cdif        + d(k)%cdif        / div
        ave%fw_pac_atl  = ave%fw_pac_atl  + d(k)%fw_pac_atl  / div

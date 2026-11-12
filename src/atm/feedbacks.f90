@@ -67,6 +67,7 @@ module feedbacks_mod
     real(wp), dimension(:,:,:), allocatable :: ram
     real(wp), dimension(:,:,:), allocatable :: hrm
     real(wp), dimension(:,:,:), allocatable :: hqeff
+    real(wp), dimension(:,:,:), allocatable :: wcon
     real(wp), dimension(:,:,:), allocatable :: aerosol_ot 
     real(wp), dimension(:,:,:), allocatable :: aerosol_im
     real(wp), dimension(:,:,:), allocatable :: so4
@@ -135,6 +136,7 @@ contains
     allocate(fb%ram(im,jm,nday_year))
     allocate(fb%hrm(im,jm,nday_year))
     allocate(fb%hqeff(im,jm,nday_year))
+    allocate(fb%wcon(im,jm,nday_year))
     allocate(fb%aerosol_ot(im,jm,nday_year))
     allocate(fb%aerosol_im(im,jm,nday_year))
     allocate(fb%so4(im,jm,nday_year))
@@ -205,7 +207,7 @@ contains
   !   Subroutine :  f e e d b a c k _ s a v e
   !   Purpose    :  save variables needed for feedback analysis
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine feedback_save(co2, tam, cld, hcld, clot, gams, gamb, gamt, htrop, ttrop, ram, hrm, hqeff, q2, aerosol_ot, aerosol_im, so4, &
+  subroutine feedback_save(co2, tam, cld, hcld, clot, gams, gamb, gamt, htrop, ttrop, ram, hrm, hqeff, wcon, q2, aerosol_ot, aerosol_im, so4, &
       frst, tskin, t2, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, flwr_up_sur, &
       fb)
 
@@ -224,6 +226,7 @@ contains
     real(wp), dimension(:,:),   intent(in) :: ram
     real(wp), dimension(:,:),   intent(in) :: hrm
     real(wp), dimension(:,:),   intent(in) :: hqeff
+    real(wp), dimension(:,:),   intent(in) :: wcon
     real(wp), dimension(:,:,:), intent(in) :: q2
     real(wp), dimension(:,:),   intent(in) :: aerosol_ot 
     real(wp), dimension(:,:),   intent(in) :: aerosol_im
@@ -257,6 +260,7 @@ contains
         fb%ram(i,j,doy)           = ram(i,j)
         fb%hrm(i,j,doy)           = hrm(i,j)
         fb%hqeff(i,j,doy)         = hqeff(i,j)
+        fb%wcon(i,j,doy)          = wcon(i,j)
         fb%aerosol_ot(i,j,doy)    = aerosol_ot(i,j)
         fb%aerosol_im(i,j,doy)    = aerosol_im(i,j)
         fb%so4(i,j,doy)           = so4(i,j)
@@ -325,7 +329,7 @@ contains
   !   Purpose    :  perform feedback analysis
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine feedback_analysis(fb, frst, zs, zsa, htrop, hcld, tskin, t2, ra2, & 
-      gams, gamb, gamt, tam, ram, hrm, hqeff, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
+      gams, gamb, gamt, tam, ram, hrm, hqeff, wcon, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
       swr_dw_top, coszm, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, aerosol_ot, aerosol_im, so4, had_fi, had_width)
 
     implicit none
@@ -355,6 +359,7 @@ contains
     real(wp), dimension(:,:),   intent(in) :: ram
     real(wp), dimension(:,:),   intent(in) :: hrm
     real(wp), dimension(:,:),   intent(in) :: hqeff
+    real(wp), dimension(:,:),   intent(in) :: wcon
     real(wp), dimension(:,:,:), intent(in) :: q2
     real(wp), dimension(:,:),   intent(in) :: aerosol_ot 
     real(wp), dimension(:,:),   intent(in) :: aerosol_im
@@ -612,42 +617,42 @@ contains
     !-------------------------------
 
     ! control
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_control) = fb%fswr_top(:,:,i_control) + swr_top/nday_year
 
     ! Planck feedback 
     fb%fswr_top(:,:,i_pl) = fb%fswr_top(:,:,i_control) 
 
     ! water vapor feedback 
-    call sw_radiation(frst, swr_dw_top, coszm, cld, fb%q2(:,:,:,doy), ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, fb%wcon(:,:,doy), zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, fb%hqeff(:,:,doy), aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_wv) = fb%fswr_top(:,:,i_wv) + swr_top/nday_year
 
     ! cloud feedback
-    call sw_radiation(frst, swr_dw_top, coszm, fb%cld(:,:,doy), q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, fb%cld(:,:,doy), wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, fb%clot(:,:,doy), hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_cld) = fb%fswr_top(:,:,i_cld) + swr_top/nday_year
 
     ! cloud fraction feedback
-    call sw_radiation(frst, swr_dw_top, coszm, fb%cld(:,:,doy), q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, fb%cld(:,:,doy), wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_cld_frac) = fb%fswr_top(:,:,i_cld_frac) + swr_top/nday_year
 
     ! cloud optical thickness feedback
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, fb%clot(:,:,doy), hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_cld_clot) = fb%fswr_top(:,:,i_cld_clot) + swr_top/nday_year
 
     ! cloud top height feedback
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, fb%hcld(:,:,doy), hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_cld_hcld) = fb%fswr_top(:,:,i_cld_hcld) + swr_top/nday_year
 
     ! lapse rate feedback
@@ -659,16 +664,16 @@ contains
     fb%fswr_top(:,:,i_temp) = fb%fswr_top(:,:,i_control) 
 
     ! albedo feedback
-    call sw_radiation(fb%frst(:,:,:,doy), swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(fb%frst(:,:,:,doy), swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       fb%alb_vu_s(:,:,:,doy), fb%alb_vu_c(:,:,:,doy), fb%alb_ir_s(:,:,:,doy), fb%alb_ir_c(:,:,:,doy), clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, & ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_alb) = fb%fswr_top(:,:,i_alb) + swr_top/nday_year
 
     ! all SW feedbacks
-    call sw_radiation(fb%frst(:,:,:,doy), swr_dw_top, coszm, fb%cld(:,:,doy), fb%q2(:,:,:,doy), ra2, &    ! in
+    call sw_radiation(fb%frst(:,:,:,doy), swr_dw_top, coszm, fb%cld(:,:,doy), fb%wcon(:,:,doy), zsa, &    ! in
       fb%alb_vu_s(:,:,:,doy), fb%alb_vu_c(:,:,:,doy), fb%alb_ir_s(:,:,:,doy), fb%alb_ir_c(:,:,:,doy), &  ! in
       fb%clot(:,:,doy), fb%hcld(:,:,doy), fb%hqeff(:,:,doy), aerosol_ot, aerosol_im, so4, & ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     fb%fswr_top(:,:,i_all) = fb%fswr_top(:,:,i_all) + swr_top/nday_year
 
 

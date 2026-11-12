@@ -44,7 +44,7 @@ module diffuse_impl_mod
   use atm_params, only : wp
   use atm_params, only : tstep, hatm, ra, cp, l_dust
   use atm_grid, only : im, jm, jmc
-  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat
+  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat, diffx_eq
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   !$ use omp_lib
 
@@ -60,7 +60,8 @@ contains
   !   Purpose    :  implicit diffusion of the prognostic columns
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine diffuse_impl(diffx, diffy, &  ! in
-      ra2a, hdust, fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &      ! in
+      ra2a, hdust, &                                                                      ! in
+      fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &                   ! inout
       tam, wcon, dam, cam, &                                                              ! inout
       convwtr_dif)                                                                        ! out
 
@@ -69,10 +70,12 @@ contains
     real(wp), intent(in   ) :: diffx(:,:), diffy(:,:)
     real(wp), intent(in   ) :: ra2a(:,:)
     real(wp), intent(in   ) :: hdust(:,:)
-    real(wp), intent(in   ) :: fdxdse(:,:), fdydse(:,:)   ! adifa exact DSE diffusive fluxes (zonal/merid)
-    real(wp), intent(in   ) :: fdxwtr(:,:), fdywtr(:,:)   ! adifa exact water diffusive fluxes
-    real(wp), intent(in   ) :: fdxdst(:,:), fdydst(:,:)   ! adifa exact dust diffusive fluxes
-    real(wp), intent(in   ) :: fdxco2(:,:), fdyco2(:,:)   ! adifa exact CO2 diffusive fluxes
+    ! in: adifa's explicit diffusive fluxes of the current state; out: the fluxes actually
+    ! realized by the implicit solve, whose convergence is exactly the applied increment
+    real(wp), intent(inout) :: fdxdse(:,:), fdydse(:,:)   ! DSE diffusive fluxes (zonal/merid)
+    real(wp), intent(inout) :: fdxwtr(:,:), fdywtr(:,:)   ! water diffusive fluxes
+    real(wp), intent(inout) :: fdxdst(:,:), fdydst(:,:)   ! dust diffusive fluxes
+    real(wp), intent(inout) :: fdxco2(:,:), fdyco2(:,:)   ! CO2 diffusive fluxes
 
     real(wp), intent(inout) :: tam(:,:)
     real(wp), intent(inout) :: wcon(:,:)
@@ -98,7 +101,7 @@ contains
     ! dry static energy: dtam = dt * cp/cheat * conv.  The transport carries DSE (cp*T per
     ! unit mass) and the reservoir is the column enthalpy cheat=pzsa*amas*cp, so the ratio
     ! is simply 1/M, M being the local column mass.  Same conversion time_step applies to
-    ! the advective convdse (deba/cheat), so the implicit and explicit diffusion paths and
+    ! the advective convdse (deba/cheat), so the diffusion, the advection and
     ! the column energy budget all use one and the same heat capacity.
     ! column water content: 1
     ! dust: ddam = dt * 1/(heff*ra) * conv_expl
@@ -190,9 +193,9 @@ contains
     real(wp), intent(in   ) :: diffx(:,:)
     real(wp), intent(in   ) :: fac(:,:)
     logical,  intent(in   ) :: mass_weight
-    real(wp), intent(in   ) :: fdx(:,:)   ! (imc,jm) adifa exact zonal diffusive flux
+    real(wp), intent(inout) :: fdx(:,:)   ! (imc,jm) zonal diffusive flux: in explicit (adifa), out realized
 
-    integer :: i, ip
+    integer :: i, ip, imi
     real(wp) :: g
     real(wp) :: dxf(im), wx(im)
     real(wp) :: a(im), b(im), c(im), r(im), sol(im)
@@ -205,7 +208,8 @@ contains
         else
           wx(i) = 1._wp
         endif
-        dxf(i) = diffx(i,j)*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
+        ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq, as in adifa
+        dxf(i) = (diffx(i,j)+diffx_eq(j))*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
       enddo
 
       do i=1,im
@@ -223,6 +227,16 @@ contains
       do i=1,im
         x(i,j) = x(i,j) + sol(i)    ! x + dprog
       enddo
+
+      ! realized flux through face i (west of cell i): the explicit flux plus the implicit
+      ! correction of the LHS operator, F_i = fdx_i + dxf_i*(dprog_{i-1}-dprog_i), so that
+      ! dprog_i = dt*fac*(F_i - F_{i+1})/sqr exactly
+      do i=1,im
+        imi = i-1
+        if (imi.lt.1) imi = im
+        fdx(i,j) = fdx(i,j) + dxf(i)*(sol(imi)-sol(i))
+      enddo
+      fdx(im+1,j) = fdx(1,j)
 
     return
 
@@ -248,7 +262,7 @@ contains
     real(wp), intent(in   ) :: diffy(:,:)
     real(wp), intent(in   ) :: fac(:,:)
     logical,  intent(in   ) :: mass_weight
-    real(wp), intent(in   ) :: fdy(:,:)   ! (im,jmc) adifa exact meridional diffusive flux
+    real(wp), intent(inout) :: fdy(:,:)   ! (im,jmc) meridional diffusive flux: in explicit (adifa), out realized
 
     integer :: j, jp
     real(wp) :: g
@@ -281,6 +295,13 @@ contains
 
       do j=1,jm
         x(i,j) = x(i,j) + sol(j)    ! x + dprog
+      enddo
+
+      ! realized flux through face j (south of cell j, positive towards j-1),
+      ! F_j = fdy_j + dyf_j*(dprog_j-dprog_{j-1}), so that dprog_j = dt*fac*(F_{j+1}-F_j)/sqr
+      ! exactly; dyf(1) = dyf(jm+1) = 0 keeps the pole faces at zero
+      do j=2,jm
+        fdy(i,j) = fdy(i,j) + dyf(j)*(sol(j)-sol(j-1))
       enddo
 
     return

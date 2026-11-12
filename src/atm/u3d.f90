@@ -27,10 +27,10 @@ module u3d_mod
 
   use atm_params, only : wp
   use constants, only : g, T0, r_earth, pi, omega
-  use atm_params, only : amas, ra, dpc, i_dpc, dp_com, ptopdyn
+  use atm_params, only : amas, ra, dpc, i_dpc, dp_com
   use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
   use atm_params, only : c_uter_pol, c_uter_eq, c_uz500_pol
-  use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim
+  use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim, dxtg, ftop
   use atm_grid, only : fcort, cost, sint, cosu, sinu
   use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
 
@@ -214,6 +214,7 @@ contains
     real(wp), intent(out  ) :: fay_psi_topo(:,:,:)
 
     integer :: i, j, k, ipl, imi, jmi, kpl
+    integer :: iop, i_n, j_n, i_s, j_s
     real(wp) :: pzx, pzy, dp_c, pbl_t, pbl_u, dp, pc1, pc2, dp_l, pl1, pl2, fxpbl, fypbl, uabc, vabc, ctv
     real(wp) :: faz, faz_nt, fxw, fxe, fys, fyn
     real(wp) :: fcx, fcy, fcxt, fcyt, fmean, fmean_topo, divbar, ptrx, ptry, ptrj
@@ -221,20 +222,16 @@ contains
     real(wp), dimension(imc,jm) :: fxcol
     real(wp), dimension(im,jmc) :: fycol
     real(wp) :: u_g, v_g, ug_b, vg_b
-    real(wp), dimension(km) :: ftop   ! fraction of each layer below ptopdyn
     real(wp) :: u3k, u3kp1, v3k, v3kp1
     real(wp) :: dplxdy, dplydxu
     real(wp) :: c_damp_eq, c_damp_pol
-    real(wp), dimension(im,jm,km) :: uteru   ! thermal wind in layers without polar damping, for u3f
 
     real(wp), dimension(kmc) :: uteri
     real(wp), dimension(kmc) :: vteri
-    real(wp), dimension(kmc) :: uterif, vterif   ! thermal wind on levels for the EKE production
     real(wp), dimension(kmc) :: uterid           ! zonal thermal wind on levels from the polar damped azonal temperature
     real(wp) :: cdamp_uz
     real(wp), dimension(jm)  :: cdamp            ! polar damping factor, applied to the azonal temperature
     real(wp), dimension(jm,kmc) :: t3z           ! zonal mean temperature on levels
-    real(wp) :: pst
 
 
 
@@ -246,7 +243,7 @@ contains
       enddo
     enddo
 
-    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterif,vterif,uterid,pst,ctv,c_damp_eq,c_damp_pol)
+    !$omp parallel do collapse(2) private(i,j,k,ipl,imi,jmi,iop,i_n,j_n,i_s,j_s,pzx,pzy,dp,pbl_t,pbl_u,pc1,pc2,dp_l,pl1,pl2,fxpbl,fypbl,uabc,vabc,uteri,vteri,uterid,ctv,c_damp_eq,c_damp_pol)
     do j=1,jm
       do i=1,im
 
@@ -319,47 +316,40 @@ contains
         !-------------------------------------------------------
         ! Thermal wind on T-points
 
+        ! thermal wind on levels; zonal differences of cell means with the centroid spacing dxtg
+        i_n = i ; j_n = jmi
+        i_s = i ; j_s = min(j+1,jm)
+        iop = modulo(i-1+im/2,im) + 1
+        if (j.eq.1)  then ; i_n = iop ; j_n = 1  ; endif
+        if (j.eq.jm) then ; i_s = iop ; j_s = jm ; endif
+        uteri(1) = 0._wp
+        vteri(1) = 0._wp
+        uteri(km+1) = 0._wp
+        vteri(km+1) = 0._wp
+        do k=1,km-1
+          ctv = (zl(k+1)-zl(k))*g/(T0*fcort(j)) 
+          uteri(k+1) = uteri(k)-ctv*(t3(i_n,j_n,k)-t3(i_s,j_s,k))/(2._wp*dy)   
+          vteri(k+1) = vteri(k)+ctv*(t3(ipl,j,k)-t3(imi,j,k))/(2._wp*dxtg(j)) 
+        enddo
+
+        c_damp_eq  = min(1._wp, c_uter_eq*sint(j)**2)
+
+        ! thermal wind in layers without polar damping, for the EKE production (synop), u3f and uz500
+        do k=1,km
+          uterf(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * c_damp_eq
+          vterf(i,j,k) = 0.5_wp*(vteri(k)+vteri(k+1)) * c_damp_eq
+        enddo
+
         if (j.eq.1 .or. j.eq.jm) then
 
+          ! no thermal wind in the dynamics on the polar rows
           uter(i,j,:) = 0._wp
           vter(i,j,:) = 0._wp
-          uterf(i,j,:) = 0._wp
-          vterf(i,j,:) = 0._wp
-          uteru(i,j,:) = 0._wp
 
         else
 
-          ! thermal wind on levels
-          uteri(1) = 0._wp
-          vteri(1) = 0._wp
-          uteri(km+1) = 0._wp
-          vteri(km+1) = 0._wp
-          do k=1,km-1
-            ctv = (zl(k+1)-zl(k))*g/(T0*fcort(j)) 
-            uteri(k+1) = uteri(k)-ctv*(t3(i,jmi,k)-t3(i,j+1,k))/(2._wp*dy)   
-            vteri(k+1) = vteri(k)+ctv*(t3(ipl,j,k)-t3(imi,j,k))/(2._wp*dxt(j)) 
-          enddo
-
-          ! thermal wind for the EKE production: a layer adds to the shear only if its centre,
-          ! sqrt(pl(k)*pl(k+1)) = exp(-zc/hatm), is above the highest surface of the gradient stencil
-          pst = min(pzsa(i,j),pzsa(i,jmi),pzsa(i,j+1),pzsa(ipl,j),pzsa(imi,j))
-          uterif(1) = 0._wp
-          vterif(1) = 0._wp
-          uterif(km+1) = 0._wp
-          vterif(km+1) = 0._wp
-          do k=1,km-1
-            if (sqrt(pl(k)*pl(k+1)).gt.pst) then
-              uterif(k+1) = uterif(k)
-              vterif(k+1) = vterif(k)
-            else
-              uterif(k+1) = uterif(k) + (uteri(k+1)-uteri(k))
-              vterif(k+1) = vterif(k) + (vteri(k+1)-vteri(k))
-            endif
-          enddo
-
           ! thermal wind in layers, dampened at equator and poles
           c_damp_pol = min(1._wp,c_uter_pol*cost(j)**2)
-          c_damp_eq  = min(1._wp, c_uter_eq*sint(j)**2)
           ! Polar damping. Scaling the wind by a latitude dependent factor c is the
           ! geostrophic wind of f/c, whose beta, beta*(1+2tan^2) at high latitudes, makes the
           ! flux divergent, and the column mass correction would then return that mass in its
@@ -380,11 +370,6 @@ contains
           do k=1,km
             uter(i,j,k) = 0.5_wp*(uterid(k)+uterid(k+1)) * c_damp_eq
             vter(i,j,k) = 0.5_wp*(vteri(k)+vteri(k+1)) * c_damp_eq * c_damp_pol 
-            ! thermal wind without polar damping needed for EKE production
-            uterf(i,j,k) = 0.5_wp*(uterif(k)+uterif(k+1)) * c_damp_eq 
-            vterf(i,j,k) = 0.5_wp*(vterif(k)+vterif(k+1)) * c_damp_eq
-            ! thermal wind without polar damping for u3f
-            uteru(i,j,k) = 0.5_wp*(uteri(k)+uteri(k+1)) * c_damp_eq
           enddo
 
         endif
@@ -398,11 +383,7 @@ contains
     !-------------------------------------------------------
 
     ! The geostrophic (ugb,vgb) and the thermal wind (uter,vter) components are carried
-    ! up to the top pressure ptopdyn; the layer holding the top carries the part of it
-    ! below the top.
-    do k=1,km
-      ftop(k) = max(0._wp, min(1._wp, (pl(k)-ptopdyn)*rdpl(k)))
-    enddo
+    ! up to the top pressure ptopdyn, through ftop (atm_grid).
 
     !$omp parallel do collapse(2) private(i,j,k,imi,u_g,v_g,dplxdy,dplydxu)
     do k=1,km
@@ -785,7 +766,7 @@ contains
             v3kp1 = 0.5_wp*(va(i,max(j,2),k+1)+va(i,min(j+1,jm),k+1)) + vg_b + vter(i,j,k+1)
             u3(i,j,k+1) = 0.5_wp*(u3k+u3kp1)
             ! the same without the polar damping of the thermal wind
-            u3f(i,j,k+1) = u3(i,j,k+1) + 0.5_wp*(uteru(i,j,k)-uter(i,j,k) + uteru(i,j,k+1)-uter(i,j,k+1))
+            u3f(i,j,k+1) = u3(i,j,k+1) + 0.5_wp*(uterf(i,j,k)-uter(i,j,k) + uterf(i,j,k+1)-uter(i,j,k+1))
             v3(i,j,k+1) = 0.5_wp*(v3k+v3kp1) 
           enddo
 
@@ -844,7 +825,7 @@ contains
         uz500(j) = 0._wp
         do i=1,im
           uz500(j) = uz500(j) + (u3f(i,j,k500) &
-            - (1._wp-cdamp_uz)*0.5_wp*(uteru(i,j,k500-1)+uteru(i,j,k500)))/im
+            - (1._wp-cdamp_uz)*0.5_wp*(uterf(i,j,k500-1)+uterf(i,j,k500)))/im
         enddo
       enddo
 

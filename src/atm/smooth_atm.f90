@@ -30,7 +30,7 @@ module smooth_atm_mod
   implicit none
 
   private
-  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr
+  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr, polar_filter
 
 contains
 
@@ -443,5 +443,60 @@ contains
     return
 
   end subroutine zofil
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p o l a r _ f i l t e r
+  !   Purpose    :  zonal Fourier truncation that keeps the resolution isotropic.
+  !                 Row j keeps the zonal wavenumbers whose half wavelength,
+  !                 pi*R*cos(lat)/m, is not shorter than the meridional spacing
+  !                 dy = pi*R/jm, i.e. m <= jm*cos(lat), with at least m = 1.
+  !                 Rows that resolve all wavenumbers (m_max >= im/2) are untouched.
+  !                 Linear, so it commutes with zonal differences, and it keeps
+  !                 the zonal mean of each row.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine polar_filter(x, cosl)
+
+    implicit none
+
+    real(wp), intent(inout) :: x(:,:)
+    real(wp), intent(in) :: cosl(:)
+
+    integer :: i, j, m, im, jm, mmax
+    real(wp) :: a, b, arg, tpi
+    real(wp), allocatable :: y(:)
+
+    im = size(x,1)
+    jm = size(x,2)
+    tpi = 8._wp*atan(1._wp)
+    allocate(y(im))
+
+    do j=1,jm
+      mmax = max(1, int(real(jm,wp)*cosl(j)))
+      if (2*mmax.ge.im) cycle
+      ! zonal mean
+      y(:) = sum(x(:,j))/real(im,wp)
+      do m=1,mmax
+        a = 0._wp
+        b = 0._wp
+        do i=1,im
+          arg = tpi*real(m*(i-1),wp)/real(im,wp)
+          a = a + x(i,j)*cos(arg)
+          b = b + x(i,j)*sin(arg)
+        enddo
+        a = 2._wp*a/real(im,wp)
+        b = 2._wp*b/real(im,wp)
+        do i=1,im
+          arg = tpi*real(m*(i-1),wp)/real(im,wp)
+          y(i) = y(i) + a*cos(arg) + b*sin(arg)
+        enddo
+      enddo
+      x(:,j) = y(:)
+    enddo
+
+    deallocate(y)
+
+    return
+
+  end subroutine polar_filter
 
 end module smooth_atm_mod

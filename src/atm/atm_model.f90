@@ -39,25 +39,25 @@ module atm_model
     use atm_params, only : atm_params_init
     use atm_params, only : nstep_fast
     use atm_params, only : p0, ra, nsmooth_cda
-    use atm_params, only : ars_ot, ars_im, l_dust, l_dust_rad, hatm
+    use atm_params, only : ars_ot, ars_im, h_ars, l_dust, l_dust_rad
     use atm_params, only : i_swr_gas, a_gas_vu
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
-    use atm_params, only : l_diff_impl, i_adv
+    use atm_params, only : i_adv
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, nm, cost, pl, zl
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
-    use atm_grid, only : dxt, dy, fit, sqr, dplt
+    use atm_grid, only : dxt, dy, fit, sqr, dplt, diffx_eq
     use atm_params, only : tstep
     use constants, only : pi
     use atm_def, only : atm_class
     use adv_fct_mod, only : fct_acc, fct_diag_reset
 
     use lw_radiation_mod, only : lw_radiation
-    use sw_radiation_mod, only : sw_radiation
+    use sw_radiation_mod, only : sw_radiation, sw_cosz_eff
     use wvel_mod, only : wvel
     use clouds_mod, only : clouds
     use vesta_mod, only : hscales, vesta, tropoheight, tropopause_pressure
@@ -154,8 +154,8 @@ contains
     if (flag_dust .and. l_dust .and. l_dust_rad) then
       atm%aerosol_ot(:,:) = atm%dust_ot(:,:)
     else
-      ! background aerosol optical depth scaled with the surface pressure of the grid cell
-      atm%aerosol_ot(:,:) = ars_ot*exp(-atm%zsa(:,:)/hatm)
+      ! background aerosol optical depth, decreasing with surface elevation with the aerosol scale height h_ars
+      atm%aerosol_ot(:,:) = ars_ot*exp(-atm%zsa(:,:)/h_ars)
     endif
     atm%aerosol_im(:,:) = ars_im
 
@@ -163,7 +163,9 @@ contains
     ! shortwave radiation
     !-------------------------------------------------
     !$ time1 = omp_get_wtime()
-    call sw_radiation(atm%frst, atm%swr_dw_top, atm%coszm, atm%cld, atm%q2, atm%ra2, &    ! in
+    ! effective cos z of the daily SW column for the current day (from the hourly cos z)
+    call sw_cosz_eff(atm%cosz(doy,:,:), atm%coszm(doy,:), atm%coszm_sw(doy,:))
+    call sw_radiation(atm%frst, atm%swr_dw_top, atm%coszm_sw, atm%cld, atm%wcon, atm%zsa, &    ! in
       atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%hcld, atm%hqeff, atm%aerosol_ot, atm%aerosol_im, atm%so4, &    ! in
       atm%alb_cld, atm%swr_top, atm%swr_top_cs, atm%swr_top_cld, atm%swr_sur, atm%fswr_sur, atm%fswr_sur_cs, atm%fswr_sur_cld, & ! out
       atm%dswd_dalb_vu_cs, atm%dswd_dalb_ir_cs, atm%dswd_dalb_vu_cld, atm%dswd_dalb_ir_cld, atm%dswd_dz_ir_cs, atm%dswd_dz_ir_cld, &  ! out
@@ -215,15 +217,15 @@ contains
     if (l_feedbacks .and. time_feedback_analysis) then 
       ! feedback analysis
       call feedback_analysis(fb, atm%frst, atm%zs, atm%zsa, atm%htrop, atm%hcld, atm%tskin, atm%t2, atm%ra2, & 
-        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
+        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%wcon, atm%q2, atm%ttrop, atm%cld, &
         atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%o3, atm%flwr_up_sur, &  
-        atm%swr_dw_top, atm%coszm, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
+        atm%swr_dw_top, atm%coszm_sw, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
         atm%had_fi, atm%had_width)
       ! radiative kernels 
       call rad_kernels(rk, atm%frst, atm%zs, atm%zsa, atm%htrop, atm%hcld, atm%ra2, & 
-        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%ttrop, atm%cld, &
+        atm%gams, atm%gamb, atm%gamt, atm%tam, atm%ram, atm%hrm, atm%hqeff, atm%wcon, atm%q2, atm%ttrop, atm%cld, &
         atm%co2, atm%ch4, atm%n2o, atm%cfc11, atm%cfc12, atm%o3, atm%flwr_up_sur, &  
-        atm%swr_dw_top, atm%coszm, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4)
+        atm%swr_dw_top, atm%coszm_sw, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%aerosol_ot, atm%aerosol_im, atm%so4)
       if (time_eoy_atm) then
         call feedback_write(fb)
         call rad_kernels_write(rk)
@@ -368,7 +370,7 @@ contains
         call synop(atm%frst, atm%zs, atm%uterf, atm%vterf, atm%u3(:,:,k500), atm%v3(:,:,k500), atm%us, atm%vs, atm%tp, &    ! in
           atm%zsa, atm%cda, atm%cd, atm%epsa, atm%tskin, atm%t2, &    ! in
           atm%sam, atm%cdif, &    ! inout
-          atm%synprod, atm%syndiss, atm%synadv, atm%syndif, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
+          atm%synprod, atm%synsur, atm%winda, atm%wind, atm%taux, atm%tauy, &  ! out 
           atm%diffx, atm%diffy, atm%wsyn)    ! out
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'synop',time2-time1
@@ -382,7 +384,7 @@ contains
         atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, &   ! in
         atm%tp, atm%q3, atm%d3, atm%cam, &
         atm%diffx, atm%diffy, &   ! in
-        atm%convdse, atm%convwtr_adv, atm%convwtr_dif, atm%convdst, atm%convco2, &   ! out 
+        atm%convdse, atm%convwtr_adv, atm%convdst, atm%convco2, &   ! out 
         atm%faxdse, atm%faxwtr, atm%faxdst, atm%faxco2, &  ! out
         atm%faydse, atm%faywtr, atm%faydst, atm%fayco2, &  ! out
         atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &  ! out
@@ -396,13 +398,12 @@ contains
       ! diffusion of the prognostic columns - zonal and meridional
       !-------------------------------------------------
       !$ time1 = omp_get_wtime()
-      if (l_diff_impl) then
-        call diffuse_impl(atm%diffx, atm%diffy, &   ! in
-          atm%ra2a, atm%hdust, atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &                                  ! in
-          atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &                                                       ! in
-          atm%tam, atm%wcon, atm%dam, atm%cam, &                                                                  ! inout
-          atm%convwtr_dif)                                                                                        ! out
-      endif
+      call diffuse_impl(atm%diffx, atm%diffy, &   ! in
+        atm%ra2a, atm%hdust, &                                                                                  ! in
+        atm%fdxdse, atm%fdxwtr, atm%fdxdst, atm%fdxco2, &                                                       ! inout, explicit -> realized
+        atm%fdydse, atm%fdywtr, atm%fdydst, atm%fdyco2, &                                                       ! inout, explicit -> realized
+        atm%tam, atm%wcon, atm%dam, atm%cam, &                                                                  ! inout
+        atm%convwtr_dif)                                                                                        ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'diffuse_impl',(time2-time1)*nstep_fast
 
@@ -416,25 +417,15 @@ contains
         call shapiro2dx(atm%convdse_psi, sqr, c_filt_conv, nord_filt_conv)
         call shapiro2dx(atm%convdse_psi_topo, sqr, c_filt_conv, nord_filt_conv)
       endif
-      if (l_diff_impl) then
-        ! implicit: filter the advective convergence AND the implicit diffusive convergence. 
-        if (c_filt_conv.gt.0._wp) then
-          convwtr_raw = atm%convwtr_adv
-          call shapiro2dx(atm%convwtr_adv, sqr, c_filt_conv, nord_filt_conv)
-          call shapiro2dx(atm%convwtr_dif, sqr, c_filt_conv, nord_filt_conv)
-          ! the advective part is what drains the column water in time_step: keep the filter from emptying it
-          call limit_filt_wtr(atm%convwtr_adv, convwtr_raw, sqr, atm%wcon, atm%W_strat+wfrac_filt_min*atm%A_trop, atm%evpa, tstep, nord_filt_conv)
-        endif
-        atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
-      else
-        ! explicit: advection and diffusion both enter the budget tendency, so form the total convergence and filter that 
-        atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
-        if (c_filt_conv.gt.0._wp) then
-          convwtr_raw = atm%convwtr
-          call shapiro2dx(atm%convwtr, sqr, c_filt_conv, nord_filt_conv)
-          call limit_filt_wtr(atm%convwtr, convwtr_raw, sqr, atm%wcon, atm%W_strat+wfrac_filt_min*atm%A_trop, atm%evpa, tstep, nord_filt_conv)
-        endif
+      ! filter the advective convergence AND the implicit diffusive convergence.
+      if (c_filt_conv.gt.0._wp) then
+        convwtr_raw = atm%convwtr_adv
+        call shapiro2dx(atm%convwtr_adv, sqr, c_filt_conv, nord_filt_conv)
+        call shapiro2dx(atm%convwtr_dif, sqr, c_filt_conv, nord_filt_conv)
+        ! the advective part is what drains the column water in time_step: keep the filter from emptying it
+        call limit_filt_wtr(atm%convwtr_adv, convwtr_raw, sqr, atm%wcon, atm%W_strat+wfrac_filt_min*atm%A_trop, atm%evpa, tstep, nord_filt_conv)
       endif
+      atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
       ! dust: same treatment as convdse (the implicit diffusive increment is already in dam).
       if (l_dust .and. c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdst, sqr, c_filt_conv, nord_filt_conv)
 
@@ -481,7 +472,7 @@ contains
     if (l_feedbacks .and. time_feedback_save) then
       ! save fields needed for feedback analysis in derived type fb
       call feedback_save(atm%co2, atm%tam, atm%cld, atm%hcld, atm%clot, atm%gams, atm%gamb, atm%gamt, &
-        atm%htrop, atm%ttrop, atm%ram, atm%hrm, atm%hqeff, atm%q2, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
+        atm%htrop, atm%ttrop, atm%ram, atm%hrm, atm%hqeff, atm%wcon, atm%q2, atm%aerosol_ot, atm%aerosol_im, atm%so4, &
         atm%frst, atm%tskin, atm%t2, atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%flwr_up_sur, &
         fb)
     endif
@@ -543,7 +534,7 @@ contains
         enddo
       enddo
       do i=1,im
-        dxmax = max(dxmax, diffx(i,j))   ! worst diffusivity over tracers
+        dxmax = max(dxmax, diffx(i,j)+diffx_eq(j))   ! worst diffusivity over tracers
         dymax = max(dymax, diffy(i,j))
       enddo
       cx_max(j) = max(cx_max(j), umax*tstep/dxt(j))
@@ -601,7 +592,8 @@ contains
 
     print *
     print '(a,es10.3,a)', ' ===== atm CFL / diffusion stability (running max over run), tstep =',tstep,' s ====='
-    print '(a)',          '   donor-cell advection stable if Courant < 1 ; explicit diffusion stable if (Dx+Dy) < 0.5'
+    print '(a)',          '   donor-cell advection stable if Courant < 1 ; diffusion numbers Dx+Dy > 0.5 would be unstable'
+    print '(a)',          '   explicitly, the implicit ADI solve is not limited by them (they show how strongly it damps)'
     print '(a)',          '   C_in is the condition the FCT limiter needs; C_out is shown only to expose the'
     print '(a)',          '   per-level horizontal mass divergence, which is balanced by the vertical mass flux.'
     print '(a)',          '   r_dse, r_wtr = share of the available antidiffusion admitted (1 = centred, 0 = upstream),'
@@ -830,6 +822,7 @@ contains
      allocate(atm%solarm(nday_year,jm))
      allocate(atm%cosz(nday_year,24,jm))
      allocate(atm%coszm(nday_year,jm))
+     allocate(atm%coszm_sw(nday_year,jm)); atm%coszm_sw = 0._wp
 
      allocate(atm%cam(im,jm))  
      allocate(atm%co2flx(im,jm))
@@ -1075,9 +1068,6 @@ contains
      allocate(atm%eke(im,jm))
      allocate(atm%sam(im,jm))
      allocate(atm%synprod(im,jm))
-     allocate(atm%syndiss(im,jm))
-     allocate(atm%synadv(im,jm))
-     allocate(atm%syndif(im,jm))
      allocate(atm%synsur(im,jm,nm))
      allocate(atm%cdif(im,jm) )    
      allocate(atm%diffx(imc,jm))
@@ -1121,6 +1111,7 @@ contains
      deallocate(atm%solarm)
      deallocate(atm%cosz)
      deallocate(atm%coszm)
+     deallocate(atm%coszm_sw)
 
      deallocate(atm%cam)  
      deallocate(atm%co2flx)
@@ -1352,9 +1343,6 @@ contains
      deallocate(atm%eke)
      deallocate(atm%sam)
      deallocate(atm%synprod)
-     deallocate(atm%syndiss)
-     deallocate(atm%synadv)
-     deallocate(atm%syndif)
      deallocate(atm%synsur)
      deallocate(atm%cdif)    
 

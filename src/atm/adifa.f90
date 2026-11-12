@@ -29,10 +29,10 @@ module adifa_mod
   use atm_params, only : wp
   use atm_params, only : cp
   use atm_params, only : tstep
-  use atm_params, only : l_diff_impl, l_dust, i_adv, c_adv_polar, lat_adv_polar
+  use atm_params, only : l_dust, i_adv, c_adv_polar, lat_adv_polar
   use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit
+  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit, diffx_eq
   use constants, only : pi
   use adv_fct_mod, only : fct_level, fct_diag_add
   !$ use omp_lib
@@ -58,7 +58,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine adifa(fax, fay, fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, &
     tp, q3, d3, cam, diffx, diffy, &
-    convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
+    convdse, convwtr_adv, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
     fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &
     convdse_psi, convdse_psi_topo)
 
@@ -80,7 +80,6 @@ contains
     
     real(wp), intent(inout) :: convdse(:,:)
     real(wp), intent(inout) :: convwtr_adv(:,:)   ! advective moisture convergence
-    real(wp), intent(  out) :: convwtr_dif(:,:)   ! explicit diffusive moisture convergence (0 when l_diff_impl, then set by diffuse_impl)
     real(wp), intent(inout) :: convdst(:,:)
     real(wp), intent(inout) :: convco2(:,:)
 
@@ -108,13 +107,12 @@ contains
 
     integer :: i, j, k, imi, jmi
     real(wp) :: tpup, qup, dup, cup
-    real(wp) :: dpl_x, dpl_y
+    real(wp) :: dpl_x, dpl_y, kx
     real(wp) :: tp_ijk, tp_i1jk, tp_ij1k
     real(wp) :: q3_ijk, q3_i1jk, q3_ij1k
     real(wp) :: d3_ijk, d3_i1jk, d3_ij1k
     real(wp) :: c3_ij, c3_i1j, c3_ij1
     real(wp) :: fax_ijk, fay_ijk
-    real(wp) :: fdivdse, fdivwtr, fdivdst, fdivco2
     real(wp) :: cmass, ctp, mc_psi, mc_psi_topo, m_k
     integer :: ipl
     integer :: idg_dse, idg_wtr
@@ -207,7 +205,7 @@ contains
     endif
 
 
-    !$omp parallel do collapse(2) private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
+    !$omp parallel do collapse(2) private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y, kx) &
     !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk) &
     !$omp private (ipl, cmass, ctp, m_k) 
     do j=1,jm
@@ -350,12 +348,14 @@ contains
           if (k.le.km-2) then   ! limit to troposphere
 
             !-----------------------------------
-            ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff)
+            ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff).
+            ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq
             dpl_x = dplx_dif(i,j,k)
-            fdxdse(i,j) = fdxdse(i,j) + diffx(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
-            fdxwtr(i,j) = fdxwtr(i,j) + diffx(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
-            fdxdst(i,j) = fdxdst(i,j) + diffx(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
-            fdxco2(i,j) = fdxco2(i,j) + diffx(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
+            kx = diffx(i,j)+diffx_eq(j)
+            fdxdse(i,j) = fdxdse(i,j) + kx*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
+            fdxwtr(i,j) = fdxwtr(i,j) + kx*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
+            fdxdst(i,j) = fdxdst(i,j) + kx*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
+            fdxco2(i,j) = fdxco2(i,j) + kx*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
 
             !-----------------------------------
             ! meridional diffusive fluxes
@@ -407,29 +407,15 @@ contains
     ! fluxes convergency
     !-----------------------------------
 
-    !$omp parallel do collapse(2) private(i,j,k,fdivdse,fdivwtr,fdivdst,fdivco2,mc_psi,mc_psi_topo)
+    !$omp parallel do collapse(2) private(i,j,k,mc_psi,mc_psi_topo)
     do j=1,jm
       do i=1,im
 
-        ! Diffusive flux divergence, only added if l_diff_impl==false
-        if (l_diff_impl) then
-          fdivdse = 0._wp
-          fdivwtr = 0._wp
-          fdivdst = 0._wp
-          fdivco2 = 0._wp
-        else
-          fdivdse = fdxdse(i,j)-fdxdse(i+1,j) + fdydse(i,j+1)-fdydse(i,j)
-          fdivwtr = fdxwtr(i,j)-fdxwtr(i+1,j) + fdywtr(i,j+1)-fdywtr(i,j)
-          fdivdst = fdxdst(i,j)-fdxdst(i+1,j) + fdydst(i,j+1)-fdydst(i,j)
-          fdivco2 = fdxco2(i,j)-fdxco2(i+1,j) + fdyco2(i,j+1)-fdyco2(i,j)
-        endif
-
         !-----------------------------------
-        ! dry static energy (advection [+ explicit diffusion])
+        ! dry static energy (advection only; the diffusion is applied implicitly by diffuse_impl)
         convdse(i,j)= &
                        (faxdse(i,j)  -faxdse(i+1,j) &
-                       +faydse(i,j+1)-faydse(i,j) &
-                       +fdivdse) &
+                       +faydse(i,j+1)-faydse(i,j)) &
                        /sqr(i,j) * cp  ! K * kg/s / m2 * J/kg/K = J/m2/s = W/m2
 
         ! The part of it carried by each half of the column mass correction.
@@ -484,26 +470,23 @@ contains
                        /sqr(i,j) * cp
 
         !-----------------------------------
-        ! water (advection [+ explicit diffusion])
+        ! water (advection only)
         convwtr_adv(i,j)= (faxwtr(i,j)  -faxwtr(i+1,j) &
                           +faywtr(i,j+1)-faywtr(i,j)) &
                           /sqr(i,j)       ! kg/kg * kg/s / m2 = kg/m2/s
-        convwtr_dif(i,j)= fdivwtr/sqr(i,j)
 
         !-----------------------------------
-        ! dust (advection [+ explicit diffusion])
+        ! dust (advection only)
         convdst(i,j)= &
                        (faxdst(i,j)  -faxdst(i+1,j) &
-                       +faydst(i,j+1)-faydst(i,j) &
-                       +fdivdst) &
+                       +faydst(i,j+1)-faydst(i,j)) &
                        /sqr(i,j)
 
         !-----------------------------------
-        ! carbon (advection [+ explicit diffusion])
+        ! carbon (advection only)
         convco2(i,j)= &
                        (faxco2(i,j)  -faxco2(i+1,j) &
-                       +fayco2(i,j+1)-fayco2(i,j) &
-                       +fdivco2) &
+                       +fayco2(i,j+1)-fayco2(i,j)) &
                        /sqr(i,j)        ! kgCO2/s/m2
 
       enddo

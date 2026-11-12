@@ -537,7 +537,10 @@ contains
     ! p0*exp(-zs/hatm) (the surface of the layer masses), upward to the levels above it and
     ! downward, along the sub-surface extrapolation of t_prof, to those below it. Targets are
     ! the interfaces zl and the layer centres zc, i.e. ln(p/p0) = -zl/hatm and -zc/hatm.
-    ! Midpoint (RK2) steps of at most dlnp_max; T is constant above the tropopause.
+    ! Midpoint (RK2) steps of at most dlnp_max. Above the tropopause T = t_prof(htrop) is
+    ! constant and the upward integration there is exact, z1 = z0 - (lnp1-lnp0)*Rd*ttrop/g.
+    ! dlnp_max = 0.05 keeps the error within ~1 m of an RK4 reference (offline test,
+    ! analysis/hypso_accuracy); 0.1/0.2 give 5/9 m for only ~25% fewer t_prof calls.
 
     implicit none
 
@@ -547,7 +550,9 @@ contains
 
     real(wp), parameter :: dlnp_max = 0.05_wp
     integer :: k, n, n0, nt
-    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), z, lnp, lnps
+    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), z, lnp, lnps, ttrop
+
+    ttrop = t_prof(zs, htrop, tam, gams, gamb, gamt, htrop, 1)
 
     ! targets from the bottom up: interface 1, centre 1, interface 2, ..., interface kmc
     nt = 2*km+1
@@ -601,6 +606,11 @@ contains
       h = (lnp1-lnp0)/real(ns,wp)
       z1 = z0
       do s=1,ns
+        if (h.lt.0._wp .and. z1.ge.htrop) then
+          ! upward in the isothermal stratosphere: exact for the rest of the interval
+          z1 = z1 - (lnp1-(lnp0+real(s-1,wp)*h))*Rd*ttrop/g
+          return
+        endif
         zm = z1 - 0.5_wp*h*Rd*t_prof(zs, z1, tam, gams, gamb, gamt, htrop, 1)/g
         z1 = z1 - h*Rd*t_prof(zs, zm, tam, gams, gamb, gamt, htrop, 1)/g
       enddo
@@ -632,6 +642,7 @@ contains
     integer :: i, j, n, ns
     real(wp) :: h, s
 
+    !$omp parallel do private(i,j,n,ns,h,s)
     do j=1,jm
       ptrop(j) = 0._wp
       do i=1,im
