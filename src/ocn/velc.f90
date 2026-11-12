@@ -29,6 +29,7 @@
 module velc_mod
 
   use precision, only : wp
+  use ocn_params, only : f_face_dyn
   use ocn_grid, only : maxi, maxj, maxk, k1, f_ek, c, rc, cv, rcv, rdsv, rds2, rdphi, dx, dxv, dy, dz, dza, rh, R_earth
   use ocn_params, only : fcor, fcorv, drag, drag_bcl, drag_par, rho0, rtv, rtv3, urelax, dt
   use constants, only : g, omega, pi
@@ -195,13 +196,13 @@ contains
         ! add barotropic part and relax
         do k = k1(i,j),maxk
           if (k1(ip1,j).le.k) then
-            u1(1,k) = u1(1,k) - tsum(1)*rh(1,i,j) + ub(1,i,j)  ! m/s
+            u1(1,k) = (u1(1,k) - tsum(1)*rh(1,i,j))*f_face_dyn(1,i,j) + ub(1,i,j)  ! m/s
             u(1,i,j,k) = urelax*u_old(1,k) + (1._wp - urelax)*u1(1,k)
           else 
             u(1,i,j,k) = 0._wp
           endif
           if (k1(i,j+1).le.k) then
-            u1(2,k) = u1(2,k) - tsum(2)*rh(2,i,j) + ub(2,i,j)
+            u1(2,k) = (u1(2,k) - tsum(2)*rh(2,i,j))*f_face_dyn(2,i,j) + ub(2,i,j)
             u(2,i,j,k) = urelax*u_old(2,k) + (1._wp - urelax)*u1(2,k)
           else
             u(2,i,j,k) = 0._wp 

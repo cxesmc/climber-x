@@ -32,6 +32,8 @@ module convection_mod
   ! dconv is the maximum depth of convection
   ! kven is the integer depth of ventilation from the surface 
   ! dven is the depth of ventilation from the surface
+  ! dconv_int is the depth of the top of the shallowest interior mixed region (not connected to the surface)
+  ! hconv_int is the total thickness of the interior mixed regions
 
   use precision, only : wp
   use ocn_grid
@@ -49,7 +51,7 @@ contains
   !   Subroutine :  c o n v e c t i o n
   !   Purpose    :  convection code suitable for arbitrary functions rho(T,S)
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,i,j)
+  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,dconv_int,hconv_int,i,j)
 
     implicit none
 
@@ -60,6 +62,7 @@ contains
     integer, intent(in) :: mask_coast
     integer, intent(inout) :: kven, nconv
     real(wp), intent(inout) :: dven, dconv
+    real(wp), intent(inout) :: dconv_int, hconv_int
     integer, intent(in) :: i, j
 
     real(wp), dimension(3) :: tmx, tsm
@@ -74,6 +77,8 @@ contains
     kven  = maxk
     dconv = 0._wp
     dven  = 0._wp
+    dconv_int = 0._wp
+    hconv_int = 0._wp
 
     !----------------------------------------------
     ! optional shuffle convection to mix directly down to density level
@@ -189,9 +194,13 @@ contains
 
         ! convection diagnostics
         nconv = nconv + kt - kb    ! number of mixed layers
-        dconv = min(dconv,zw(kb-1))  ! maximum depth of convection
+        dconv = max(dconv,-zw(kb-1))  ! maximum depth of convection (positive downward)
         if (kt .eq. maxk) then
           kven = min(kven,kb)   ! deepest level of ventilation from the surface
+        else
+          ! interior mixed region, not connected to the surface (regions are found top-down, so the first is the shallowest)
+          if (hconv_int.eq.0._wp) dconv_int = -zw(kt)   ! depth of the top of the shallowest interior mixed region
+          hconv_int = hconv_int + zsm                   ! total thickness of interior mixed regions
         endif
 
         kt = kb - 1
@@ -205,7 +214,7 @@ contains
 
     enddo   ! while (kt > kbo)
 
-    dven = zw(kven-1) ! maximum depth of ventilation from the surface
+    dven = -zw(kven-1) ! maximum depth of ventilation from the surface (positive downward)
 
    return
   

@@ -88,6 +88,7 @@ module ocn_params
      type drag_par_type
        real(wp) :: adrag           !! background drag of the barotropic and baroclinic velocities (namelist in days)
        real(wp) :: drag_frac       !! partial-cell drag rate at f_ocn=0 (namelist in days, 0 = off), times max(0,1-f_face/f_frac_crit)
+       integer  :: i_frac_dyn      !! partial cells: 0 = linear drag_frac ramp, 2 = barotropic drag r/f^2, baroclinic velocity and lateral diffusion scaled with f; TEMPORARY test: 3 = 2 with velocity scaling only, 4 = 2 with diffusion scaling only, 5 = 4 and baroclinic background drag divided by f^2
        real(wp) :: f_frac_crit     !! ocean fraction of a face above which there is no partial-cell drag
        real(wp) :: cd_bot          !! bottom drag coefficient, 0 = no bottom friction
        real(wp) :: u_bot           !! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic bottom drag
@@ -125,10 +126,20 @@ module ocn_params
      real(wp) :: slope_width    !! width of the tanh taper, used only if i_taper==2 []
      real(wp) :: drho_hbl       !! potential density threshold relative to 10 m for the boundary layer depth [kg/m3]
      real(wp) :: diff_gm
+     logical  :: l_mle         !! mixed-layer eddy restratification (Fox-Kemper et al. 2008, 2011)?
+     real(wp) :: c_mle         !! MLE efficiency coefficient Ce []
+     real(wp) :: mle_fac       !! MLE front-scale factor, the effective Delta_s/L_f of Fox-Kemper et al. 2011 []
+     real(wp) :: tau_mle       !! MLE equatorial regularisation time scale, f -> sqrt(f^2+1/tau^2) [days]
+     real(wp) :: h_mle_max     !! MLE maximum mixed layer depth H used in the streamfunction [m]
+     real(wp) :: cfl_mle       !! MLE maximum Courant number of the face and induced vertical velocities []
      real(wp) :: tau_sst, tau_sss
      integer :: n_cells_dist_runoff
      integer :: n_cells_dist_calving
      integer :: n_cells_dist_weath
+     integer :: i_runoff_dist      !! spreading of runoff/calving/weathering: 1 = n_cells_dist_* coastal cells, 2 = fixed ocean area A_dist_*
+     real(wp) :: A_dist_runoff     !! ocean area over which runoff and basal melt are spread, i_runoff_dist==2 [m2]
+     real(wp) :: A_dist_calving    !! ocean area over which calving is spread, i_runoff_dist==2 [m2]
+     real(wp) :: A_dist_weath      !! ocean area over which weathering fluxes are spread, i_runoff_dist==2 [m2]
      logical :: l_fw_corr
      logical :: l_fw_melt_ice_sep
      integer :: i_fw
@@ -204,6 +215,8 @@ module ocn_params
      real(wp), dimension(:), allocatable :: fcor, fcorv
      real(wp), dimension(:,:,:), allocatable :: drag
      real(wp), dimension(:,:,:), allocatable :: drag_bcl
+     real(wp), dimension(:,:,:), allocatable :: f_face_dyn  !! scaling of baroclinic velocity on faces (u/v,i,j)
+     real(wp), dimension(:,:,:), allocatable :: f_face_dif  !! scaling of lateral diffusion on faces (u/v,i,j)
 
      real(wp), dimension(:), allocatable :: mlddec, mlddecd
 
@@ -287,6 +300,8 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
     call nml_read(filename,"ocn_par","drag_frac",drag_par%drag_frac)
+    call nml_read(filename,"ocn_par","i_frac_dyn",drag_par%i_frac_dyn)
+    if (.not.any(drag_par%i_frac_dyn.eq.[0,2,3,4,5])) stop 'ERROR in ocn_par_load: i_frac_dyn must be 0, 2, 3, 4 or 5'
     call nml_read(filename,"ocn_par","f_frac_crit",drag_par%f_frac_crit)
     call nml_read(filename,"ocn_par","cd_bot",drag_par%cd_bot)
     call nml_read(filename,"ocn_par","u_bot",drag_par%u_bot)
@@ -331,6 +346,12 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","slope_width",slope_width)
     call nml_read(filename,"ocn_par","drho_hbl",drho_hbl)
     call nml_read(filename,"ocn_par","diff_gm",diff_gm)
+    call nml_read(filename,"ocn_par","l_mle",l_mle)
+    call nml_read(filename,"ocn_par","c_mle",c_mle)
+    call nml_read(filename,"ocn_par","mle_fac",mle_fac)
+    call nml_read(filename,"ocn_par","tau_mle",tau_mle)
+    call nml_read(filename,"ocn_par","h_mle_max",h_mle_max)
+    call nml_read(filename,"ocn_par","cfl_mle",cfl_mle)
 
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)
     call nml_read(filename,"ocn_par","l_conv_shuffle_passive",l_conv_shuffle_passive)
@@ -359,6 +380,10 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","n_cells_dist_runoff",n_cells_dist_runoff)
     call nml_read(filename,"ocn_par","n_cells_dist_calving",n_cells_dist_calving)
     call nml_read(filename,"ocn_par","n_cells_dist_weath",n_cells_dist_weath)
+    call nml_read(filename,"ocn_par","i_runoff_dist",i_runoff_dist)
+    call nml_read(filename,"ocn_par","A_dist_runoff",A_dist_runoff)
+    call nml_read(filename,"ocn_par","A_dist_calving",A_dist_calving)
+    call nml_read(filename,"ocn_par","A_dist_weath",A_dist_weath)
     call nml_read(filename,"ocn_par","l_fw_corr",l_fw_corr)
     call nml_read(filename,"ocn_par","l_fw_melt_ice_sep",l_fw_melt_ice_sep)
     call nml_read(filename,"ocn_par","i_fw",i_fw)

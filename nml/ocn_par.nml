@@ -85,6 +85,9 @@
  drag_frac = 4.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
                               ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
                               ! is mostly land is squeezed into a narrow passage. 1/drag_frac is the extra drag of a closing face
+ i_frac_dyn = 0               ! dynamics of partial cells, f = smaller ocean fraction of the two cells of a face:
+                              ! 0 = linear partial-cell drag (drag_frac, f_frac_crit); 2 = barotropic drag (adrag+bottom friction)/f^2, baroclinic
+                              ! velocity and lateral diffusion scaled with f, drag_frac and f_frac_crit not used
  f_frac_crit = 0.5            ! ocean fraction of a face above which there is no partial-cell drag
  cd_bot = 2.5e-3              ! bottom drag coefficient (2.5e-3), 0 = off. Linearised bottom friction on the depth-mean flow, added:
                               ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells
@@ -98,7 +101,7 @@
                               ! adrag at the equator (regularises f -> 0) and relaxes to adrag_bcl poleward,
                               ! r = r_bcl + (r_adrag - r_bcl)*exp(-(lat/lat_drag_bcl)^2)
  lat_drag_bcl = 15.           ! deg, e-folding latitude of the equatorial baroclinic drag
- i_fric_ret = 0               ! return flow of the barotropic friction (r*ub/f): 0 = uniform over the column (as the depth-mean
+ i_fric_ret = 1               ! return flow of the barotropic friction (r*ub/f): 0 = uniform over the column (as the depth-mean
                               ! velocity), 1 = in the bottom level of the face (bottom Ekman layer), column transport and psi unchanged
  lat_fric_ret = 5.            ! deg, i_fric_ret=1 only: 1/f -> f/(f^2+f0^2) with f0 = f(lat_fric_ret), removes the return near the equator
 
@@ -110,8 +113,15 @@
  !-------------------------------------------------------------------------------------------
  ! diffusion settings
  !-------------------------------------------------------------------------------------------
- diff_iso = 750               ! m2/s, isopycnal diffusivity (horizontal in years with a large change in ocean volume)
+ diff_iso = 1000              ! m2/s, isopycnal diffusivity (horizontal in years with a large change in ocean volume)
  diff_gm = 750                ! m2/s, Gent-McWilliams eddy diffusion
+ l_mle = F                    ! mixed-layer eddy (submesoscale) restratification, Fox-Kemper et al. 2008/2011: eddy-induced
+                              ! overturning psi = c_mle*mle_fac*H^2*grad(b_ML)/sqrt(f^2+1/tau_mle^2)*mu(z) within the Kraus-Turner mixed layer H, added to the advection velocity
+ c_mle = 0.06                 ! MLE efficiency coefficient Ce (0.06-0.08)
+ mle_fac = 20.                ! MLE front-scale factor, effective Delta_s/L_f (grid scale / front length)
+ tau_mle = 5.                 ! days, MLE equatorial regularisation, f -> sqrt(f^2+1/tau_mle^2)
+ h_mle_max = 500.             ! m, MLE maximum mixed layer depth H
+ cfl_mle = 0.25               ! MLE Courant limit per face (horizontal and induced vertical velocity); mle_fac is also scaled by min(dx,dy)/dy
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
                               ! 0 = uniform with value diff_dia_min
                               ! 1 = tuned Bryan-Lewis type profile
@@ -126,7 +136,7 @@
  alpha_strat = 1.0            ! exponent of Brunt-Vaisala frequency dependence for stratification dependent vertical diffusivity
  brunt_vaisala_ref = 7.e-3    ! 1/s, reference Brunt-Vaisala frequency for stratification dependent vertical diffusivity.  (~drho/dz=-5e-3 kg/m3 /m)
  slope_max = 1e-2             ! maximum slope of isoentropic surface for isoneutral diffusion
- i_taper = 2                  ! taper of the isoneutral diffusion and GM tensor for slopes above slope_max:
+ i_taper = 1                  ! taper of the isoneutral diffusion and GM tensor for slopes above slope_max:
                               ! 1 = (slope_max/S)^2 (Gerdes et al 1991); A33 stays at diff_iso*slope_max^2 however steep the
                               !     slope, i.e. a vertical diffusivity in all near-neutral columns
                               ! 2 = 0.5*(1+tanh((slope_max-S)/slope_width)) (Danabasoglu and McWilliams 1995), all terms -> 0 for S >> slope_max
@@ -176,7 +186,7 @@
  !-------------------------------------------------------------------------------------------
  ! equation of state 
  !-------------------------------------------------------------------------------------------
- i_eos = 3                    ! choice of equation of state:
+ i_eos = 4                    ! choice of equation of state:
                               ! 0 = temperature and salinity dependence only
                               ! 1 = with thermobaricity
                               ! 2 = as in CLIMBER-2
@@ -197,6 +207,12 @@
  !-------------------------------------------------------------------------------------------
  ! salinity/runoff settings 
  !-------------------------------------------------------------------------------------------
+ i_runoff_dist = 2            ! spreading of runoff, calving and weathering fluxes over the ocean:
+                              ! 1 = over n_cells_dist_* coastal cells
+                              ! 2 = over a fixed ocean area A_dist_* around the river mouth, ordered by distance through the ocean
+ A_dist_runoff = 5.e11        ! m2, ocean area over which to distribute runoff and basal melt, used only if i_runoff_dist==2
+ A_dist_calving = 5.e12       ! m2, ocean area over which to distribute calving, used only if i_runoff_dist==2
+ A_dist_weath = 5.e11         ! m2, ocean area over which to distribute weathering fluxes, used only if i_runoff_dist==2
  n_cells_dist_runoff = 5      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
  n_cells_dist_calving = 5     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
  n_cells_dist_weath = 5       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)

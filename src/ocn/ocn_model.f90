@@ -470,7 +470,7 @@ contains
       !$ time1 = omp_get_wtime()
       call transport(ocn%l_tracers_trans, &
                     ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
-                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe,ocn%fds,ocn%zds, &
+                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%dconv_int,ocn%hconv_int,ocn%conv_pe,ocn%fds,ocn%zds, &
                     ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
       !$ time2 = omp_get_wtime()
       !$ if(print_omp) print *,'transport',time2-time1
@@ -856,6 +856,8 @@ contains
         ocn%kven(i,j) = 0
         ocn%dconv(i,j) = 0._wp
         ocn%dven(i,j) = 0._wp
+        ocn%dconv_int(i,j) = 0._wp
+        ocn%hconv_int(i,j) = 0._wp
         ocn%z_brines(i,j) = 0._wp
         ocn%conv_pe(i,j) = 0._wp
         ocn%fds(i,j) = 0._wp
@@ -1004,6 +1006,8 @@ contains
     allocate(ocn%kven(maxi,maxj))
     allocate(ocn%dconv(maxi,maxj))
     allocate(ocn%dven(maxi,maxj))
+    allocate(ocn%dconv_int(maxi,maxj))
+    allocate(ocn%hconv_int(maxi,maxj))
     allocate(ocn%z_brines(maxi,maxj))
     allocate(ocn%conv_pe(maxi,maxj))
     allocate(ocn%fds(maxi,maxj))
@@ -1168,6 +1172,8 @@ contains
     deallocate(ocn%kven)
     deallocate(ocn%dconv)
     deallocate(ocn%dven)
+    deallocate(ocn%dconv_int)
+    deallocate(ocn%hconv_int)
     deallocate(ocn%z_brines)
     deallocate(ocn%conv_pe)
     deallocate(ocn%fds)

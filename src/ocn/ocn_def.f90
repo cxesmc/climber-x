@@ -129,6 +129,8 @@ module ocn_def
      real(wp), allocatable :: mld(:,:)      !! mixed layer depth [m]
      real(wp), allocatable :: dconv(:,:)    !! depth of convection [m]
      real(wp), allocatable :: dven(:,:)     !! depth of ventilation [m]
+     real(wp), allocatable :: dconv_int(:,:)  !! depth of the top of the shallowest interior (not surface-connected) convective region [m]
+     real(wp), allocatable :: hconv_int(:,:)  !! total thickness of interior (not surface-connected) convective regions [m]
      real(wp), allocatable :: z_brines(:,:) !! brine neutral-buoyancy penetration depth [m]
      real(wp), allocatable :: conv_pe(:,:)     !! potential energy released by convection [J/m2]
      real(wp), allocatable :: fds(:,:)     !! downslope volume flux of dense shelf water out of the cell [m3/s]

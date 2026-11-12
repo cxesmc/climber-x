@@ -128,13 +128,11 @@ contains
     real(wp), dimension(:,:), intent(in) :: f_ocn
     real(wp), intent(out) :: ssh(:,:)
 
-    logical, save :: first_call = .true.
-
     integer, allocatable :: id(:,:), f1(:), f2(:)
     real(wp), allocatable :: pbc(:,:,:), w(:), b(:)
     real(wp), allocatable :: x(:), area(:), eta_mean(:)
     integer :: i, j, k, ip1, n, nf, l
-    real(wp) :: cor, fcb, len, force, dp, flx, misfit, target_norm
+    real(wp) :: cor, fcb, len, force, dp, flx
 
 
     ! wet cells
@@ -251,18 +249,6 @@ contains
         endif
       enddo
     enddo
-
-    if (first_call) then
-      ! share of the face differences that is not a pure gradient
-      misfit = 0._wp
-      target_norm = 0._wp
-      do l=1,nf
-        misfit = misfit + w(l)*(x(f2(l))-x(f1(l))-b(l))**2
-        target_norm = target_norm + w(l)*b(l)**2
-      enddo
-      print *,'ssh_dynamic: cells, faces, basins, gradient misfit ',n,nf,nbasin,sqrt(misfit/target_norm)
-      first_call = .false.
-    endif
 
     return
   end subroutine ssh_dynamic

@@ -159,7 +159,7 @@ obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) )
 ########################################################################
 # main climber source files
 dir_main = $(srcdir)/main/
-files_main = constants.f90 control.f90 timer.f90 climber_grid.f90 
+files_main = constants.f90 control.f90 timer.f90 climber_grid.f90 runoff_dist.f90 
 tmp_main = $(patsubst %.f90, %.o, $(files_main) )
 obj_main = $(patsubst %, $(objdir)/%, $(tmp_main) ) $(objdir)/coupler.o $(objdir)/cmn_out.o $(objdir)/climber.o
 obj_main_clim = $(patsubst %, $(objdir)/%, $(tmp_main) ) $(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o $(objdir)/climber_clim.o
@@ -282,14 +282,14 @@ $(objdir)/coupler.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
 	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o \
 	$(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/runoff_dist.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/coupler_nobgc.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
 	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o \
 	$(objdir)/.bgc_params.o $(objdir)/.bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/runoff_dist.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/cmn_out.o : $(dir_main)cmn_out.f90 $(objdir)/coupler.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/precision.o
@@ -299,6 +299,9 @@ $(objdir)/cmn_out_nobgc.o : $(dir_main)cmn_out.f90 $(objdir)/coupler_nobgc.o $(o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/timer.o : $(dir_main)timer.f90 $(objdir)/control.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/runoff_dist.o : $(dir_main)runoff_dist.f90 $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/climber_grid.o : $(dir_main)climber_grid.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o

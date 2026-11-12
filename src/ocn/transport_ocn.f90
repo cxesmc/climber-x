@@ -35,14 +35,15 @@ module transport_ocn_mod
   use timer, only : year, doy, time_soy_ocn
   use control, only: out_dir
   use climber_grid, only : lon, lat
-  use constants, only : g, pi
+  use constants, only : g, pi, fcoriolis
   use ocn_grid, only : mask_ocn, mask_c, mask_u, mask_v, mask_w, k1
   use ocn_grid, only : maxi, maxj, maxk, mask_v, mask_w
-  use ocn_grid, only : zro, zw, dz, rdza, z2dzg, depth, dx, dxv, rdx, dy, rdy
+  use ocn_grid, only : zro, zw, dz, rdza, z2dzg, depth, dx, dxv, rdx, dy, rdy, s, sv
   use ocn_params, only : dt, rho0
   use ocn_params, only : n_tracers_tot, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
   use ocn_params, only : i_diff_dia
   use ocn_params, only : diff_iso, diff_gm
+  use ocn_params, only : l_mle, c_mle, mle_fac, tau_mle, h_mle_max, cfl_mle
   use ocn_params, only : diff_dia_ref, diff_dia, diff_dia_zref, diff_dia_min, diff_dia_max
   use ocn_params, only : l_diff_dia_strat, brunt_vaisala_ref, alpha_strat
   use ocn_params, only : slope_max, slope_crit, drho_hbl
@@ -61,11 +62,12 @@ module transport_ocn_mod
 
   real(wp), dimension(:,:,:), allocatable :: drho_dx, drho_dy, drho_dz, Ri
   real(wp), dimension(:,:,:), allocatable :: v_gm   !! Gent-McWilliams eddy-induced meridional velocity on the v-grid, diagnostic only [m/s]
+  real(wp), dimension(:,:,:), allocatable :: u_mle, v_mle, w_mle   !! mixed-layer eddy (Fox-Kemper) velocities on the u-, v- and w-grid [m/s]
   real(wp), dimension(:,:), allocatable :: hbl     !! surface boundary layer depth for the isoneutral diffusion and GM (positive) [m]
   real(wp), dimension(:,:), allocatable :: sx_bl, sy_bl   !! tapered isoneutral slopes at the base of the boundary layer []
 
   private
-  public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri, v_gm
+  public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri, v_gm, v_mle
 
 contains
 
@@ -76,7 +78,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine transport(l_tracers_trans, &
                       u,ke_tau,flx_sur,flx_bot,f_ocn,mask_coast,z_ocn_max, &
-                      ts,rho,nconv,dconv,kven,dven,conv_pe,fds,zds, &
+                      ts,rho,nconv,dconv,kven,dven,dconv_int,hconv_int,conv_pe,fds,zds, &
                       mld,fdx,fdy,fdz,fax,fay,faz,dts_dt_adv,dts_dt_diff, error)
 
     !$ use omp_lib
@@ -96,6 +98,7 @@ contains
     real(wp), dimension(:,:,:,:), intent(inout) :: ts
     integer, dimension(:,:), intent(inout) :: kven, nconv
     real(wp), dimension(:,:), intent(inout) :: dven, dconv
+    real(wp), dimension(:,:), intent(inout) :: dconv_int, hconv_int
     real(wp), dimension(:,:), intent(inout) :: conv_pe
     real(wp), dimension(:,:), intent(inout) :: fds
     real(wp), dimension(:,:), intent(inout) :: zds
@@ -115,6 +118,7 @@ contains
     integer :: i, j, k, l, ll, ip1, k1_max
     logical :: par_tracers
     integer, allocatable, dimension(:,:) :: mldk
+    real(wp), allocatable, dimension(:,:,:,:) :: uadv   ! advection velocity: resolved + mixed-layer eddy (Fox-Kemper)
     real(wp), dimension(maxk) :: rho_old
     real(wp), allocatable, dimension(:,:) :: pe_layer1
     real(wp) :: pe_conv, pe_buoy, e_mix
@@ -277,11 +281,25 @@ contains
       ! eddy-induced meridional velocity, needed only for the overturning and heat transport diagnostics
       call eddy_induced_velocity
 
+      ! mixed-layer eddy restratification (Fox-Kemper et al. 2008, 2011), from the Kraus-Turner mixed layer of the
+      ! previous step and the density gradients above
+      if (l_mle) call mle_velocity(mld)
+
       ! tracer-independent coefficients of the diffusion, shared by all tracers
       call diffusion_coef(diff_iso,diff_dia,drho_dx,drho_dy,drho_dz,slope_crit,hbl,sx_bl,sy_bl)
 
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'transport: diffini ',time2-time1
+
+    ! advection velocity: resolved + mixed-layer eddy velocities (divergence-free, zero net transport per column face)
+    allocate(uadv(3,0:maxi,0:maxj,maxk))
+    uadv = u
+    if (l_mle) then
+      uadv(1,1:maxi,1:maxj,:) = uadv(1,1:maxi,1:maxj,:) + u_mle
+      uadv(2,1:maxi,1:maxj,:) = uadv(2,1:maxi,1:maxj,:) + v_mle
+      uadv(3,1:maxi,1:maxj,:) = uadv(3,1:maxi,1:maxj,:) + w_mle
+      uadv(1,0,:,:) = uadv(1,maxi,:,:)
+    endif
 
     ! tracer loop; parallel over tracers if there are enough of them to keep the threads busy (e.g. with BGC),
     ! otherwise serial with advection and diffusion parallel over the grid
@@ -335,7 +353,7 @@ contains
             endif
           enddo
           k1_max = max(k1_max,k1(i,j))
-          call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),i,j) 
+          call convection(l_tracers_trans,ts(i,j,:,:),rho(i,j,:),k1(i,j),k1_max,mask_coast(i,j),nconv(i,j),dconv(i,j),kven(i,j),dven(i,j),dconv_int(i,j),hconv_int(i,j),i,j) 
           ! calculate potential energy released by convection (only layers that are ventilated by the surface!)
           pe_conv = 0._wp
           do k=kven(i,j),maxk 
@@ -412,6 +430,7 @@ contains
     endif
 
     deallocate(mldk)
+    deallocate(uadv)
     deallocate(pe_layer1)
 
    return
@@ -429,7 +448,7 @@ contains
 
 
        ! advection, flux corrected transport scheme following Zalesak 1979
-       call advection_fct(f_ocn,u(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
+       call advection_fct(f_ocn,uadv(:,1:maxi,1:maxj,1:maxk),ts(:,:,:,l),flx_sur(:,:,l),flx_bot(:,:,l), &
                          fax(:,:,:,l), fay(:,:,:,l), faz(:,:,:,l), dts_dt_adv(:,:,:,l))
 
        ! diffusion
@@ -533,6 +552,151 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  m l e _ v e l o c i t y
+  !   Purpose    :  mixed-layer eddy (submesoscale) restratification, Fox-Kemper et al. (2008, 2011).
+  !                 On each u- and v-face the eddy-induced streamfunction
+  !                   psi = c_mle*mle_fac * H^2 * db/dx_ML / sqrt(f^2+1/tau_mle^2) * mu(z)
+  !                 (db/dy_ML on v-faces) is defined on the w-levels inside the mixed layer H, with
+  !                   mu(z) = [1-(2z/H+1)^2]*[1+5/21*(2z/H+1)^2],  zero at the surface and at z = -H,
+  !                 and the face velocity is d(psi)/dz (z upward), so that it integrates to zero over the
+  !                 column of each face (no net transport); w follows from continuity as in velc.f90.
+  !                 Light water moves towards the dense side at the top of the mixed layer and dense water
+  !                 under it: always restratifying. H is the Kraus-Turner mixed layer depth averaged over the
+  !                 two cells of the face and capped at h_mle_max, db/dx_ML = -g/rho0 * thickness-mean of drho_dx over the face levels
+  !                 whose centre lies within H (at least the top level). mle_fac is the effective
+  !                 Delta_s/L_f of Fox-Kemper et al. (2011) at 5 deg resolution, scaled with the local grid
+  !                 spacing Delta_s = min(dx,dy) of the face relative to dy (FK11), so that it shrinks in the
+  !                 narrow polar cells. Each face profile is then limited to the Courant number cfl_mle
+  !                 (horizontal velocity and the vertical velocity it induces in the adjacent cells).
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine mle_velocity(mld)
+
+    implicit none
+
+    real(wp), dimension(:,:), intent(in) :: mld   ! Kraus-Turner mixed layer depth (negative) [m]
+
+    integer :: i, j, k, ip1, im1
+    real(wp) :: h, gsum, hsum, coef, fe, sk, tv, tv1, tv2
+    real(wp) :: psi(0:maxk)
+    real(wp) :: rtau2
+
+    rtau2 = 1._wp/(tau_mle*86400._wp)**2
+
+    !$omp parallel do collapse(2) private(i,j,k,ip1,h,gsum,hsum,coef,fe,sk,psi)
+    do j=1,maxj
+      do i=1,maxi
+
+        ! zonal face between i and i+1
+        u_mle(i,j,:) = 0._wp
+        ip1 = modulo(i,maxi) + 1
+        if (mask_u(i,j,maxk).eq.1) then
+          h = min(h_mle_max, max(0._wp, -0.5_wp*(mld(i,j)+mld(ip1,j))))
+          if (h.gt.0._wp) then
+            gsum = 0._wp
+            hsum = 0._wp
+            do k=maxk,1,-1
+              if (mask_u(i,j,k).eq.0) exit
+              if (k.lt.maxk .and. zro(k).lt.-h) exit
+              gsum = gsum + drho_dx(i,j,k)*dz(k)
+              hsum = hsum + dz(k)
+            enddo
+            fe = sqrt((fcoriolis*s(j))**2 + rtau2)
+            coef = c_mle*mle_fac*min(dx(j),dy)/dy * h**2 * (-g/rho0*gsum/hsum) / fe   ! m2/s
+            psi(:) = 0._wp
+            do k=1,maxk-1   ! w-level zw(k) = interface between levels k and k+1
+              if (mask_u(i,j,k).eq.1 .and. mask_u(i,j,k+1).eq.1 .and. zw(k).gt.-h) then
+                sk = 2._wp*zw(k)/h + 1._wp
+                psi(k) = coef*(1._wp-sk**2)*(1._wp+5._wp/21._wp*sk**2)
+              endif
+            enddo
+            call mle_cfl_limit(psi, dx(j), dx(j))
+            do k=1,maxk
+              if (mask_u(i,j,k).eq.1) u_mle(i,j,k) = (psi(k)-psi(k-1))/dz(k)   ! m/s
+            enddo
+          endif
+        endif
+
+        ! meridional face between j and j+1
+        v_mle(i,j,:) = 0._wp
+        if (j.lt.maxj) then
+          if (mask_v(i,j,maxk).eq.1) then
+            h = min(h_mle_max, max(0._wp, -0.5_wp*(mld(i,j)+mld(i,j+1))))
+            if (h.gt.0._wp) then
+              gsum = 0._wp
+              hsum = 0._wp
+              do k=maxk,1,-1
+                if (mask_v(i,j,k).eq.0) exit
+                if (k.lt.maxk .and. zro(k).lt.-h) exit
+                gsum = gsum + drho_dy(i,j,k)*dz(k)
+                hsum = hsum + dz(k)
+              enddo
+              fe = sqrt((fcoriolis*sv(j))**2 + rtau2)
+              coef = c_mle*mle_fac*min(dxv(j),dy)/dy * h**2 * (-g/rho0*gsum/hsum) / fe   ! m2/s
+              psi(:) = 0._wp
+              do k=1,maxk-1
+                if (mask_v(i,j,k).eq.1 .and. mask_v(i,j,k+1).eq.1 .and. zw(k).gt.-h) then
+                  sk = 2._wp*zw(k)/h + 1._wp
+                  psi(k) = coef*(1._wp-sk**2)*(1._wp+5._wp/21._wp*sk**2)
+                endif
+              enddo
+              call mle_cfl_limit(psi, dy, min(dx(j),dx(j+1))*dy/dxv(j))
+              do k=1,maxk
+                if (mask_v(i,j,k).eq.1) v_mle(i,j,k) = (psi(k)-psi(k-1))/dz(k)   ! m/s
+              enddo
+            endif
+          endif
+        endif
+
+      enddo
+    enddo
+    !$omp end parallel do
+
+    ! vertical velocity from continuity, integrated up from the bottom as in velc.f90
+    !$omp parallel do collapse(2) private(i,j,k,im1,tv,tv1,tv2)
+    do j=1,maxj
+      do i=1,maxi
+        w_mle(i,j,:) = 0._wp
+        im1 = modulo(i-2,maxi) + 1
+        tv = 0._wp
+        do k=k1(i,j),maxk
+          tv1 = (u_mle(i,j,k) - u_mle(im1,j,k))*dy*dz(k)
+          tv2 = v_mle(i,j,k)*dxv(j)*dz(k)
+          if (j.gt.1) tv2 = tv2 - v_mle(i,j-1,k)*dxv(j-1)*dz(k)
+          w_mle(i,j,k) = tv - (tv1 + tv2)/(dx(j)*dy)
+          tv = w_mle(i,j,k)
+        enddo
+      enddo
+    enddo
+    !$omp end parallel do
+
+  end subroutine mle_velocity
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  m l e _ c f l _ l i m i t
+  !   Purpose    :  scale the MLE streamfunction of one face so that the face velocity d(psi)/dz satisfies
+  !                 |u|*dt/dl <= cfl_mle and the vertical velocity it induces in an adjacent cell,
+  !                 |psi|/dlc, satisfies |w|*dt/dz <= cfl_mle on both levels around each w-level.
+  !                 dl is the grid spacing normal to the face, dlc = cell area / face length.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine mle_cfl_limit(psi, dl, dlc)
+    implicit none
+    real(wp), intent(inout) :: psi(0:)
+    real(wp), intent(in) :: dl, dlc
+    integer :: k
+    real(wp) :: r
+    r = 0._wp
+    do k=1,maxk
+      r = max(r, abs(psi(k)-psi(k-1))/dz(k)*dt/dl)
+    enddo
+    do k=1,maxk-1
+      r = max(r, abs(psi(k))/dlc*dt/min(dz(k),dz(k+1)))
+    enddo
+    if (r.gt.cfl_mle) psi = psi*cfl_mle/r
+  end subroutine mle_cfl_limit
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Function :  h b l _ d e n s i t y
   !   Purpose  :  boundary layer depth from a potential density criterion: depth where potential density
   !               is drho above its value at 10 m, linear interpolation between layer centres, minimum 10 m,
@@ -607,6 +771,9 @@ contains
     allocate(drho_dz(maxi,maxj,maxk))
     allocate(Ri(maxi,maxj,maxk))
     allocate(v_gm(maxi,maxj,maxk))
+    allocate(u_mle(maxi,maxj,maxk), source=0._wp)
+    allocate(v_mle(maxi,maxj,maxk), source=0._wp)
+    allocate(w_mle(maxi,maxj,maxk), source=0._wp)
     allocate(hbl(maxi,maxj), source=1._wp)
     allocate(sx_bl(maxi,maxj), source=0._wp)
     allocate(sy_bl(maxi,maxj), source=0._wp)

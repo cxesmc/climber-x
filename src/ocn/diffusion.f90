@@ -29,6 +29,7 @@
 module diffusion_mod
 
   use precision, only : wp
+  use ocn_params, only : f_face_dif, drag_par
   use ocn_params, only : dt, diff_gm, diffx_max, diffy_max, i_taper, slope_width, slope_max
   use ocn_grid, only : k1, maxi, maxj, maxk, mask_c, mask_u, mask_v, mask_w, dx, dxv, dy, dz, dza, rdx, rdy, rdza, zw, ocn_area
 
@@ -113,7 +114,7 @@ contains
             enddo
             taper = 1._wp
             if (tap_n.gt.0._wp) taper = tap_sum/tap_n
-            cfx(i,j,k) = rdx(j) * taper * min(diffx_max(j),diff_iso) * dy*dz(k)*dt
+            cfx(i,j,k) = rdx(j) * taper * min(diffx_max(j),diff_iso) * dy*dz(k)*dt * f_face_dif(1,i,j)
             if (diff_iso.ne.diff_gm) then
               dkx = min(diffx_max(j),diff_iso)-min(diffx_max(j),diff_gm)
               do knp=0,1
@@ -129,7 +130,7 @@ contains
                     taper = slope_taper(slope_x**2,slope_crit(j,k))
                   endif
                   ! mask_w as a multiply (0 on closed face)
-                  cex(1+nnp+2*knp,i,j,k) = 0.25_wp*real(mask_w(i0,j,kc),wp) * taper*dkx*slope_x*rdza(kc) *dy*dz(k)*dt
+                  cex(1+nnp+2*knp,i,j,k) = 0.25_wp*real(mask_w(i0,j,kc),wp) * taper*dkx*slope_x*rdza(kc) *dy*dz(k)*dt * f_face_dif(1,i,j)
                 enddo
               enddo
             endif
@@ -158,7 +159,7 @@ contains
             enddo
             taper = 1._wp
             if (tap_n.gt.0._wp) taper = tap_sum/tap_n
-            cfy(i,j,k) = rdy * taper * min(diffy_max(j),diff_iso) * dxv(j)*dz(k)*dt
+            cfy(i,j,k) = rdy * taper * min(diffy_max(j),diff_iso) * dxv(j)*dz(k)*dt * f_face_dif(2,i,j)
             if (diff_iso.ne.diff_gm) then
               dky = min(diffy_max(j),diff_iso)-min(diffy_max(j),diff_gm)
               do knp=0,1
@@ -174,7 +175,7 @@ contains
                     taper = slope_taper(slope_y**2,slope_crit(j0,k))
                   endif
                   ! mask_w as a multiply (0 on closed face)
-                  cey(1+nnp+2*knp,i,j,k) = 0.25_wp*real(mask_w(i,j0,kc),wp) * taper*dky*slope_y*rdza(kc) *dxv(j)*dz(k)*dt
+                  cey(1+nnp+2*knp,i,j,k) = 0.25_wp*real(mask_w(i,j0,kc),wp) * taper*dky*slope_y*rdza(kc) *dxv(j)*dz(k)*dt * f_face_dif(2,i,j)
                 enddo
               enddo
             endif
@@ -219,8 +220,15 @@ contains
                   taper = slope_taper(slope2,slope_crit(j,k))
                 endif
                 ! cross terms, applied to the corner tracer differences in diffusion (mask factors folded in)
-                czx(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_x*mc_x*rdx(j) *ocn_area(i,j)*dt
-                czy(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_y*yfac*rdy *ocn_area(i,j)*dt
+                ! with i_frac_dyn=2 the area of the vertical cross flux is set by the face it pairs with, so that the
+                ! tensor keeps the symmetry between the lateral and the vertical cross terms
+                if (drag_par%i_frac_dyn.eq.2 .or. drag_par%i_frac_dyn.ge.4) then
+                  czx(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_x*mc_x*rdx(j) *dx(j)*dy*f_face_dif(1,i1,j)*dt
+                  czy(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_y*yfac*rdy *dx(j)*dy*f_face_dif(2,i,jm)*dt
+                else
+                  czx(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_x*mc_x*rdx(j) *ocn_area(i,j)*dt
+                  czy(1+nnp+2*knp,i,j,k) = 0.25_wp*(diff_iso+diff_gm)*taper*slope_y*yfac*rdy *ocn_area(i,j)*dt
+                endif
                 ! A33 term, solved implicitly
                 a33 = a33 + diff_iso*taper*slope2
               enddo

@@ -163,7 +163,7 @@ contains
       else
         mldtadd = 2._wp*em/(g*zw(k)*(rhol-rhou))
       endif
-      if (-mldtadd.gt.(dzg(k,k)+1.e-3_wp)) then
+      if (-mldtadd.gt.(dzg(k,k)*(1._wp+1.e-3_wp))) then
         print *
         print*,'Warning: inconsistent result in mixed layer scheme partmixed layer: see krausturner.f'
         print *,-mldtadd,dzg(k,k),k,em,eneed

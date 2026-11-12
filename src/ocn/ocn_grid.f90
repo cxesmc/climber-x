@@ -49,6 +49,7 @@ module ocn_grid
   integer :: maxj     !! number of gridcells in latitudinal direction []
   integer :: maxk     !! number of gridcells in vertical direction []
   integer, parameter :: maxisles = 10     !! maximum allowed number of islands []
+  integer, parameter :: maxislet = 20  !! maximum number of landmasses attached to islands
   integer :: n_isles   !! actual number of islands []
   integer :: mpi 
   integer :: mpxi 
@@ -571,8 +572,6 @@ contains
 
     integer :: i, j, k, kk, ip1, jp1, ncells, n
     integer :: spole, npole
-    integer :: flag, sum1, sum2
-    integer :: flagi, sum1i, sum2i
     logical :: is_mainland
     logical :: is_island
     real(wp) :: isl_area
@@ -581,6 +580,11 @@ contains
     integer, dimension(maxisles) :: perm, newlab   ! perm(rk)=old label of rk-th largest; newlab(old)=new label
     real(wp), dimension(maxisles) :: a_isl         ! landmass area per label
     integer, allocatable :: map_edge_tmp(:,:,:)
+    integer :: n_islet, n1                                           ! landmasses attached to an island
+    integer, dimension(maxi,maxj,maxislet) :: islet_edge
+    integer, dimension(maxislet) :: islet_label
+    integer, dimension(mpi) :: ip_tmp, jp_tmp, lp_tmp
+    integer, dimension(maxi,maxj) :: map_path_tmp
     real(dp) :: ocn_vol_tot_1000
     real(dp) :: ocn_vol_tot_old
 
@@ -1030,7 +1034,7 @@ contains
     endif
 
     ! Land that belongs to no island (too small, or not selected) is attached to the closest island if it sits within a couple grid cells from it
-    call attach_small_landmasses(map_isles)
+    call attach_small_landmasses(map_isles, n_islet, islet_edge, islet_label)
     where (map_isles.eq.-2) map_isles = 1
 
     ! number of isles, remove the mainland
@@ -1058,28 +1062,10 @@ contains
     !--------------------------------------------------------
 
     do i=1,n_isles+1
-      flag = 0
-      do while (flag==0)
-        sum1 = sum(map_edge(:,:,i))
-        flagi = 0
-        ! get rid of dangling edge points with only one neighbor in its four cell neighborhood
-        do while (flagi==0)
-          sum1i = sum(map_edge(:,:,i))
-          call lonely_cell_edge(map_edge(:,:,i))
-          sum2i = sum(map_edge(:,:,i))
-          if (sum2i==sum1i) flagi = 1
-        enddo
-        flagi = 0
-        ! clean edge, fix cells with too many neighbors
-        do while (flagi==0)
-          sum1i = sum(map_edge(:,:,i))
-          call clean_edge(map_edge(:,:,i))
-          sum2i = sum(map_edge(:,:,i))
-          if (sum2i==sum1i) flagi = 1
-        enddo
-        sum2 = sum(map_edge(:,:,i))
-        if (sum2==sum1) flag = 1
-      enddo
+      call process_edge(map_edge(:,:,i))
+    enddo
+    do n=1,n_islet
+      call process_edge(islet_edge(:,:,n))
     enddo
 
     !--------------------------------------------------------
@@ -1088,6 +1074,25 @@ contains
 
     do i = 2,n_isles+1
       call create_path(map_edge(:,:,i), npi(i-1), ipisl(:,i-1), jpisl(:,i-1), lpisl(:,i-1), map_path(:,:,i))
+    enddo
+
+    ! A landmass attached to an island shares its streamfunction constant, so its loop belongs to the constraint of
+    ! that island: the single constant is determined by the sum of the path integrals around all its landmasses. A
+    ! landmass whose surrounding cells are not all wet has no closed loop and is left out of the constraint.
+    do n=1,n_islet
+      if (sum(islet_edge(:,:,n)).eq.0) then
+        print *,'WARNING: no closed path around the landmass attached to island',islet_label(n)
+        cycle
+      endif
+      i = islet_label(n)
+      call create_path(islet_edge(:,:,n), n1, ip_tmp, jp_tmp, lp_tmp, map_path_tmp)
+      if (npi(i-1)+n1.gt.mpi) stop 'ERROR in ocn_grid_update: path around island and attached landmasses too long'
+      ipisl(npi(i-1)+1:npi(i-1)+n1,i-1) = ip_tmp(1:n1)
+      jpisl(npi(i-1)+1:npi(i-1)+n1,i-1) = jp_tmp(1:n1)
+      lpisl(npi(i-1)+1:npi(i-1)+n1,i-1) = lp_tmp(1:n1)
+      where (map_path_tmp.gt.0) map_path(:,:,i) = map_path_tmp+npi(i-1)
+      where (islet_edge(:,:,n).eq.1) map_edge(:,:,i) = 1
+      npi(i-1) = npi(i-1)+n1
     enddo
 
     do i=1,n_isles
@@ -1627,11 +1632,14 @@ contains
   !               instead of being pinned to the mainland value psi = 0.
   !               Land further away from any island keeps its -2 marker and is tied to the mainland.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine attach_small_landmasses(map_isles)
+  subroutine attach_small_landmasses(map_isles, n_islet, islet_edge, islet_label)
 
     implicit none
 
     integer, intent(inout) :: map_isles(:,:)
+    integer, intent(out) :: n_islet                    !! number of attached landmasses
+    integer, intent(out) :: islet_edge(:,:,:)          !! edge map of each attached landmass
+    integer, intent(out) :: islet_label(:)             !! label of the island each one is attached to
 
     integer, allocatable :: map_new(:,:)
     integer :: i, j, ii, jj, iii, r, isl
@@ -1671,11 +1679,74 @@ contains
       enddo
     enddo
 
+    ! a landmass carries a single streamfunction constant: label it as a whole, and store its edge for the island
+    ! constraint. Labels of the cells attached above are >=2 in map_new only, map_isles still holds -2 there.
+    n_islet = 0
+    islet_edge = 0
+    islet_label = 0
+    do j=1,maxj
+      do i=1,maxi
+        if (map_isles(i,j).eq.-2 .and. map_new(i,j).ge.2) then
+          isl = map_new(i,j)
+          islands = 0
+          edge = 0
+          call fill_island(i,j)
+          where (islands.eq.1)
+            map_isles = isl
+            map_new = isl
+          endwhere
+          n_islet = n_islet+1
+          if (n_islet.gt.size(islet_label)) stop 'ERROR in attach_small_landmasses: too many landmasses attached to islands'
+          islet_edge(:,:,n_islet) = edge
+          islet_label(n_islet) = isl
+        endif
+      enddo
+    enddo
+
     map_isles = map_new
 
     deallocate(map_new)
 
   end subroutine attach_small_landmasses
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  p r o c e s s _ e d g e
+  ! Purpose    :  remove dangling edge points and points with too many neighbours from an island edge
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine process_edge(map_edge)
+
+    implicit none
+
+    integer, intent(inout) :: map_edge(:,:)
+
+    integer :: flag, flagi, sum1, sum2, sum1i, sum2i
+
+
+    flag = 0
+    do while (flag==0)
+      sum1 = sum(map_edge)
+      flagi = 0
+      ! get rid of dangling edge points with only one neighbor in its four cell neighborhood
+      do while (flagi==0)
+        sum1i = sum(map_edge)
+        call lonely_cell_edge(map_edge)
+        sum2i = sum(map_edge)
+        if (sum2i==sum1i) flagi = 1
+      enddo
+      flagi = 0
+      ! clean edge, fix cells with too many neighbors
+      do while (flagi==0)
+        sum1i = sum(map_edge)
+        call clean_edge(map_edge)
+        sum2i = sum(map_edge)
+        if (sum2i==sum1i) flagi = 1
+      enddo
+      sum2 = sum(map_edge)
+      if (sum2==sum1) flag = 1
+    enddo
+
+  end subroutine process_edge
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

@@ -76,7 +76,7 @@ module constants
 
   real(wp), parameter :: z_sfl = 10._wp        !! surface layer height (m) 
 
-  real(wp), parameter :: frac_vu = 0.45_wp      !! fraction of solar spectrum in visible and ultraviolet
+  real(wp), parameter :: frac_vu = 0.468_wp     !! fraction of solar spectrum in visible and ultraviolet (< 0.7 um; RRTMG solar spectrum)
 
   interface fqsat
     module procedure fqsat_sp
