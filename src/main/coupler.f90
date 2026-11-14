@@ -3888,6 +3888,14 @@ contains
     type(cmn_class) :: cmn
 
     integer :: i, j, ir, jr, n
+    logical :: lake_cal_run
+    ! source fluxes summed per destination cell (ir,jr) before spreading: the spreading is linear, so each
+    ! destination is spread once instead of once per source cell (~10x fewer updates with i_runoff_dist=2)
+    ! 1 runoff_veg, 2 calving_veg, 3 runoff_ice, 4 melt_ice, 5 bmelt_grd, 6 bmelt_flt, 7 fw_dhdt_ice,
+    ! 8 calving_ice, 9 runoff_lake, 10 calving_lake
+    integer, parameter :: nfld = 10
+    real(wp) :: acc(nfld,ni,nj)
+    logical :: ldst(ni,nj)
 
 
     ! initialize
@@ -3902,6 +3910,9 @@ contains
     cmn%bmelt_flt_o    = 0._wp
     cmn%fw_dhdt_ice_o  = 0._wp
 
+    acc  = 0._wp
+    ldst = .false.
+
     do j=1,nj
       do i=1,ni
 
@@ -3910,9 +3921,10 @@ contains
           ! index of runoff destination cells (i,j) -> (ir,jr)
           ir = cmn%i_runoff_veg(i,j)
           jr = cmn%j_runoff_veg(i,j)
-          ! transfer runoff and 'calving' to ocean domain, kg/m2/s
-          call dist_add(cmn%runoff_veg_o,  cmn%dist_runoff(ir,jr),  cmn%runoff_veg(i,j) * cmn%f_drain_veg(0,i,j))
-          call dist_add(cmn%calving_veg_o, cmn%dist_calving(ir,jr), cmn%calving_veg(i,j) * cmn%f_drain_veg(0,i,j))
+          ldst(ir,jr) = .true.
+          ! kg/m2/s
+          acc(1,ir,jr) = acc(1,ir,jr) + cmn%runoff_veg(i,j)  * cmn%f_drain_veg(0,i,j)
+          acc(2,ir,jr) = acc(2,ir,jr) + cmn%calving_veg(i,j) * cmn%f_drain_veg(0,i,j)
         endif
 
         ! runoff and calving from ice-sheets
@@ -3920,42 +3932,68 @@ contains
           ! index of runoff destination cells (i,j) -> (ir,jr)
           ir = cmn%i_runoff_ice(i,j)
           jr = cmn%j_runoff_ice(i,j)
-          ! transfer runoff and basal melt to ocean domain, kg/m2/s
-          call dist_add(cmn%runoff_ice_o,  cmn%dist_runoff(ir,jr), cmn%runoff_ice(i,j) * cmn%f_drain_ice(0,i,j))
-          call dist_add(cmn%melt_ice_o,    cmn%dist_runoff(ir,jr), cmn%melt_ice(i,j) * cmn%f_drain_ice(0,i,j))
-          call dist_add(cmn%bmelt_grd_o,   cmn%dist_runoff(ir,jr), cmn%bmelt_grd(i,j) * cmn%f_drain_ice(0,i,j))
-          call dist_add(cmn%bmelt_flt_o,   cmn%dist_runoff(ir,jr), cmn%bmelt_flt(i,j) * cmn%f_drain_ice(0,i,j))
-          call dist_add(cmn%fw_dhdt_ice_o, cmn%dist_runoff(ir,jr), cmn%fw_dhdt_ice(i,j) * cmn%f_drain_ice(0,i,j))
-          ! transfer calving to ocean domain, kg/m2/s
-          call dist_add(cmn%calving_ice_o, cmn%dist_calving(ir,jr), cmn%calving_ice(i,j) * cmn%f_drain_ice(0,i,j))
+          ldst(ir,jr) = .true.
+          ! runoff, melt and basal melt, kg/m2/s
+          acc(3,ir,jr) = acc(3,ir,jr) + cmn%runoff_ice(i,j)  * cmn%f_drain_ice(0,i,j)
+          acc(4,ir,jr) = acc(4,ir,jr) + cmn%melt_ice(i,j)    * cmn%f_drain_ice(0,i,j)
+          acc(5,ir,jr) = acc(5,ir,jr) + cmn%bmelt_grd(i,j)   * cmn%f_drain_ice(0,i,j)
+          acc(6,ir,jr) = acc(6,ir,jr) + cmn%bmelt_flt(i,j)   * cmn%f_drain_ice(0,i,j)
+          acc(7,ir,jr) = acc(7,ir,jr) + cmn%fw_dhdt_ice(i,j) * cmn%f_drain_ice(0,i,j)
+          ! calving, kg/m2/s
+          acc(8,ir,jr) = acc(8,ir,jr) + cmn%calving_ice(i,j) * cmn%f_drain_ice(0,i,j)
         endif
       enddo
     enddo
 
     ! runoff and 'calving' from lakes
     if (flag_lakes) then
+      ! lake calving is spread like runoff
+      lake_cal_run = .true.
       do n=1,cmn%n_lakes
         ! index of runoff destination cells (lake n) -> (ir,jr)
         ir = cmn%lake(n)%i_runoff
         jr = cmn%lake(n)%j_runoff
-        ! transfer runoff and calving to ocean domain, kg/m2/s
-        call dist_add(cmn%runoff_lake_o,  cmn%dist_runoff(ir,jr), cmn%lake(n)%runoff)
-        call dist_add(cmn%calving_lake_o, cmn%dist_runoff(ir,jr), cmn%lake(n)%calving)
+        ldst(ir,jr) = .true.
+        acc(9,ir,jr)  = acc(9,ir,jr)  + cmn%lake(n)%runoff
+        acc(10,ir,jr) = acc(10,ir,jr) + cmn%lake(n)%calving
       enddo
     else
       ! interactive lakes off: route the per-cell lake surface water balance through the
       ! cell's veg drainage map so the global water cycle still closes
+      lake_cal_run = .false.
       do j=1,nj
         do i=1,ni
           if (cmn%f_drain_veg(0,i,j) > 0._wp .and. cmn%f_lake(i,j) > 0._wp) then
             ir = cmn%i_runoff_veg(i,j)
             jr = cmn%j_runoff_veg(i,j)
-            call dist_add(cmn%runoff_lake_o,  cmn%dist_runoff(ir,jr),  cmn%runoff_lake(i,j) * cmn%f_drain_veg(0,i,j))
-            call dist_add(cmn%calving_lake_o, cmn%dist_calving(ir,jr), cmn%calving_lake(i,j) * cmn%f_drain_veg(0,i,j))
+            ldst(ir,jr) = .true.
+            acc(9,ir,jr)  = acc(9,ir,jr)  + cmn%runoff_lake(i,j)  * cmn%f_drain_veg(0,i,j)
+            acc(10,ir,jr) = acc(10,ir,jr) + cmn%calving_lake(i,j) * cmn%f_drain_veg(0,i,j)
           endif
         enddo
       enddo
     endif
+
+    ! spread the summed fluxes of each destination cell over its receiving ocean cells
+    do jr=1,nj
+      do ir=1,ni
+        if (.not.ldst(ir,jr)) cycle
+        call dist_add(cmn%runoff_veg_o,  cmn%dist_runoff(ir,jr),  acc(1,ir,jr))
+        call dist_add(cmn%calving_veg_o, cmn%dist_calving(ir,jr), acc(2,ir,jr))
+        call dist_add(cmn%runoff_ice_o,  cmn%dist_runoff(ir,jr),  acc(3,ir,jr))
+        call dist_add(cmn%melt_ice_o,    cmn%dist_runoff(ir,jr),  acc(4,ir,jr))
+        call dist_add(cmn%bmelt_grd_o,   cmn%dist_runoff(ir,jr),  acc(5,ir,jr))
+        call dist_add(cmn%bmelt_flt_o,   cmn%dist_runoff(ir,jr),  acc(6,ir,jr))
+        call dist_add(cmn%fw_dhdt_ice_o, cmn%dist_runoff(ir,jr),  acc(7,ir,jr))
+        call dist_add(cmn%calving_ice_o, cmn%dist_calving(ir,jr), acc(8,ir,jr))
+        call dist_add(cmn%runoff_lake_o, cmn%dist_runoff(ir,jr),  acc(9,ir,jr))
+        if (lake_cal_run) then
+          call dist_add(cmn%calving_lake_o, cmn%dist_runoff(ir,jr),  acc(10,ir,jr))
+        else
+          call dist_add(cmn%calving_lake_o, cmn%dist_calving(ir,jr), acc(10,ir,jr))
+        endif
+      enddo
+    enddo
     
     cmn%runoff_o  = cmn%runoff_veg_o  + cmn%runoff_ice_o  + cmn%runoff_lake_o
     cmn%calving_o = cmn%calving_veg_o + cmn%calving_ice_o + cmn%calving_lake_o

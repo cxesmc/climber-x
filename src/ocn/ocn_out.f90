@@ -2512,11 +2512,10 @@ contains
     enddo
     sst_pacN30 = sst_pacN30/area_pacN30
     sss_pacN30 = sss_pacN30/area_pacN30
+    !$omp end parallel sections
 
-    !$omp section
     ! overturning streamfunctions in sigma2 coordinates (resolved + GM + mixed-layer eddy-induced, CMIP msftmrho)
     call opsi_sigma2(ocn, opsi_sig2, opsia_sig2, opsiip_sig2)
-    !$omp end parallel sections
 
     ! combine MOC/gyre freshwater transports (both contributions computed in the sections above)
     fov = fovs-fovn
@@ -3767,24 +3766,30 @@ contains
     real(wp) :: vt, sig_v
     real(wp), parameter :: z_p2000 = -1976.5347_wp   ! m, pressure(z_p2000) = 200 bar (eos_mod)
 
-    ! sigma2 of tracer cells (heap array: this runs inside an OpenMP section): model eos at z_p2000, the depth
+    ! sigma2 of tracer cells: model eos at z_p2000, the depth
     ! where the model pressure(z) is exactly 2000 dbar (pressure(-2000 m) = 202.4 bar would add ~+0.11 kg/m3).
     ! With i_eos=4 (full EOS-80 secant modulus) this is UNESCO sigma2, the CMIP definition, to 0.0005 kg/m3;
     ! i_eos=3 is off by up to 0.38 kg/m3 (+0.035 for deep water)
     allocate(sig2(maxi,maxj,maxk))
-    sig2 = 0._wp
-    do k=1,maxk
-      do j=1,maxj
-        do i=1,maxi
-          if (mask_c(i,j,k).eq.1) sig2(i,j,k) = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),z_p2000) - 1000._wp
-        enddo
-      enddo
-    enddo
 
     psi_g  = 0._wp
     psi_a  = 0._wp
     psi_ip = 0._wp
 
+    !$omp parallel private(i,j,k,l,lo,hi,mid,trp_g,trp_a,trp_ip,vt,sig_v)
+    !$omp do collapse(2)
+    do k=1,maxk
+      do j=1,maxj
+        do i=1,maxi
+          sig2(i,j,k) = 0._wp
+          if (mask_c(i,j,k).eq.1) sig2(i,j,k) = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),z_p2000) - 1000._wp
+        enddo
+      enddo
+    enddo
+    !$omp end do
+
+    ! rows are independent: each thread bins and integrates its own latitudes
+    !$omp do schedule(dynamic)
     do j=1,maxj-1
       trp_g  = 0._wp
       trp_a  = 0._wp
@@ -3822,6 +3827,8 @@ contains
         psi_ip(j,l) = psi_ip(j,l+1) - trp_ip(l)
       enddo
     enddo
+    !$omp end do
+    !$omp end parallel
 
     deallocate(sig2)
 

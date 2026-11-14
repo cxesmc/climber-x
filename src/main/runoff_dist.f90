@@ -304,6 +304,8 @@ contains
 
     integer :: n
 
+    if (flux.eq.0._wp) return
+
     do n=1,d%n
       fld(d%i(n),d%j(n)) = fld(d%i(n),d%j(n)) + flux*d%r(n)/d%A_sum
     enddo
