@@ -252,6 +252,25 @@ contains
 
     end subroutine ocn_params_init
 
+    subroutine ocn_runoff_dist_par_load(filename)
+    ! read only the runoff/calving/weathering spreading parameters, needed by the coupler also when flag_ocn=F
+
+    implicit none
+
+    character (len=*) :: filename
+
+    call nml_read(filename,"ocn_par","n_cells_dist_runoff",n_cells_dist_runoff)
+    call nml_read(filename,"ocn_par","n_cells_dist_calving",n_cells_dist_calving)
+    call nml_read(filename,"ocn_par","n_cells_dist_weath",n_cells_dist_weath)
+    call nml_read(filename,"ocn_par","i_runoff_dist",i_runoff_dist)
+    call nml_read(filename,"ocn_par","A_dist_runoff",A_dist_runoff)
+    call nml_read(filename,"ocn_par","A_dist_calving",A_dist_calving)
+    call nml_read(filename,"ocn_par","A_dist_weath",A_dist_weath)
+
+    return
+
+    end subroutine ocn_runoff_dist_par_load
+
 subroutine ocn_par_load(filename)
 
     implicit none

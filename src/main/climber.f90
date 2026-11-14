@@ -74,6 +74,7 @@ program climber
   use ocn_def, only: ocn_class
   use ocn_out, only: ocn_diag, ocn_diag_init
   use ocn_params, only: n_tracers_tot, n_tracers_bgc, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
+  use ocn_params, only: ocn_runoff_dist_par_load
 
   use bgc_model, only: bgc_ini, bgc_update, bgc_end, bgc_write_restart
   use bgc_def, only : bgc_class, bgc_ntra
@@ -254,6 +255,9 @@ program climber
        endif
        call ocn_init(ocn,geo%f_ocn,geo_z_ocn(geo),geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
        call ocn_diag_init
+    else
+       ! runoff/calving/weathering spreading is set up by the coupler also without the ocean model
+       call ocn_runoff_dist_par_load(trim(out_dir)//"/ocn_par.nml")
     endif
 
     ! initialize ocean biogeochemistry model
