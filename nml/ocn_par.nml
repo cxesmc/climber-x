@@ -85,9 +85,6 @@
  drag_frac = 4.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
                               ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
                               ! is mostly land is squeezed into a narrow passage. 1/drag_frac is the extra drag of a closing face
- i_frac_dyn = 0               ! dynamics of partial cells, f = smaller ocean fraction of the two cells of a face:
-                              ! 0 = linear partial-cell drag (drag_frac, f_frac_crit); 2 = barotropic drag (adrag+bottom friction)/f^2, baroclinic
-                              ! velocity and lateral diffusion scaled with f, drag_frac and f_frac_crit not used
  f_frac_crit = 0.5            ! ocean fraction of a face above which there is no partial-cell drag
  cd_bot = 2.5e-3              ! bottom drag coefficient (2.5e-3), 0 = off. Linearised bottom friction on the depth-mean flow, added:
                               ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells

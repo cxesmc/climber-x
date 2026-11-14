@@ -88,7 +88,6 @@ module ocn_params
      type drag_par_type
        real(wp) :: adrag           !! background drag of the barotropic and baroclinic velocities (namelist in days)
        real(wp) :: drag_frac       !! partial-cell drag rate at f_ocn=0 (namelist in days, 0 = off), times max(0,1-f_face/f_frac_crit)
-       integer  :: i_frac_dyn      !! partial cells: 0 = linear drag_frac ramp, 2 = barotropic drag r/f^2, baroclinic velocity and lateral diffusion scaled with f; TEMPORARY test: 3 = 2 with velocity scaling only, 4 = 2 with diffusion scaling only, 5 = 4 and baroclinic background drag divided by f^2
        real(wp) :: f_frac_crit     !! ocean fraction of a face above which there is no partial-cell drag
        real(wp) :: cd_bot          !! bottom drag coefficient, 0 = no bottom friction
        real(wp) :: u_bot           !! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic bottom drag
@@ -215,8 +214,6 @@ module ocn_params
      real(wp), dimension(:), allocatable :: fcor, fcorv
      real(wp), dimension(:,:,:), allocatable :: drag
      real(wp), dimension(:,:,:), allocatable :: drag_bcl
-     real(wp), dimension(:,:,:), allocatable :: f_face_dyn  !! scaling of baroclinic velocity on faces (u/v,i,j)
-     real(wp), dimension(:,:,:), allocatable :: f_face_dif  !! scaling of lateral diffusion on faces (u/v,i,j)
 
      real(wp), dimension(:), allocatable :: mlddec, mlddecd
 
@@ -319,8 +316,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
     call nml_read(filename,"ocn_par","drag_frac",drag_par%drag_frac)
-    call nml_read(filename,"ocn_par","i_frac_dyn",drag_par%i_frac_dyn)
-    if (.not.any(drag_par%i_frac_dyn.eq.[0,2,3,4,5])) stop 'ERROR in ocn_par_load: i_frac_dyn must be 0, 2, 3, 4 or 5'
     call nml_read(filename,"ocn_par","f_frac_crit",drag_par%f_frac_crit)
     call nml_read(filename,"ocn_par","cd_bot",drag_par%cd_bot)
     call nml_read(filename,"ocn_par","u_bot",drag_par%u_bot)

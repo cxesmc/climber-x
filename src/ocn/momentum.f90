@@ -36,7 +36,6 @@ module momentum_mod
   use timer, only : time_soy_ocn, doy, year
   use control, only : out_dir
   use climber_grid, only : lon
-  use ocn_params, only : f_face_dyn, f_face_dif
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
   use ocn_params, only : bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix, rho0
@@ -253,23 +252,15 @@ contains
         drag(1,i,j) = drag_par%adrag
         if (rh(1,i,j).gt.0._wp) then
           f_face = min(f_ocn(i,j),f_ocn(ip1,j))
-          if (drag_par%i_frac_dyn.eq.0) then
-            drag(1,i,j) = drag(1,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
-                                      + drag_par%cd_bot*drag_par%u_bot*rh(1,i,j)
-          else
-            drag(1,i,j) = (drag(1,i,j) + drag_par%cd_bot*drag_par%u_bot*rh(1,i,j))/f_face**2
-          endif
+          drag(1,i,j) = drag(1,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(1,i,j)
         endif
         ! v-grid, north face of cell (i,j)
         drag(2,i,j) = drag_par%adrag
         if (j.lt.maxj .and. rh(2,i,j).gt.0._wp) then
           f_face = min(f_ocn(i,j),f_ocn(i,j+1))
-          if (drag_par%i_frac_dyn.eq.0) then
-            drag(2,i,j) = drag(2,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
-                                      + drag_par%cd_bot*drag_par%u_bot*rh(2,i,j)
-          else
-            drag(2,i,j) = (drag(2,i,j) + drag_par%cd_bot*drag_par%u_bot*rh(2,i,j))/f_face**2
-          endif
+          drag(2,i,j) = drag(2,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(2,i,j)
         endif
       enddo
     enddo
@@ -279,27 +270,6 @@ contains
        drag(2,maxi+1,j) = drag(2,1,j)
     enddo
 
-    ! i_frac_dyn=2: transport and exchange of a partial cell scale with its ocean fraction, like its volume, so that
-    ! the time step limit of a small cell is that of a full cell. The baroclinic velocity has zero depth mean, so the
-    ! scaling does not affect continuity.
-    f_face_dyn = 1._wp
-    f_face_dif = 1._wp
-    if (drag_par%i_frac_dyn.ge.2) then
-      do j=1,maxj
-        do i=1,maxi
-          ip1 = modulo(i,maxi) + 1
-          if (rh(1,i,j).gt.0._wp) then
-            if (drag_par%i_frac_dyn.le.3) f_face_dyn(1,i,j) = min(f_ocn(i,j),f_ocn(ip1,j))
-            if (drag_par%i_frac_dyn.ne.3) f_face_dif(1,i,j) = min(f_ocn(i,j),f_ocn(ip1,j))
-          endif
-          if (j.lt.maxj .and. rh(2,i,j).gt.0._wp) then
-            if (drag_par%i_frac_dyn.le.3) f_face_dyn(2,i,j) = min(f_ocn(i,j),f_ocn(i,j+1))
-            if (drag_par%i_frac_dyn.ne.3) f_face_dif(2,i,j) = min(f_ocn(i,j),f_ocn(i,j+1))
-          endif
-        enddo
-      enddo
-    endif
-
     ! baroclinic velocities: background drag only, adrag at the equator (regularises f -> 0) relaxing to adrag_bcl
     ! poleward with e-folding latitude lat_drag_bcl; identical to adrag everywhere if adrag_bcl = adrag
     do j=1,maxj
@@ -308,18 +278,6 @@ contains
       drag_bcl(2,:,j) = drag_par%adrag_bcl + (drag_par%adrag-drag_par%adrag_bcl) &
                         * exp(-(asin(sv(j))*180._wp/pi/drag_par%lat_drag_bcl)**2)
     enddo
-
-    ! i_frac_dyn=5 (temporary test): same increase of the drag on partial faces as for the barotropic velocity
-    if (drag_par%i_frac_dyn.eq.5) then
-      do j=1,maxj
-        do i=1,maxi
-          ip1 = modulo(i,maxi) + 1
-          if (rh(1,i,j).gt.0._wp) drag_bcl(1,i,j) = drag_bcl(1,i,j)/min(f_ocn(i,j),f_ocn(ip1,j))**2
-          if (j.lt.maxj .and. rh(2,i,j).gt.0._wp) drag_bcl(2,i,j) = drag_bcl(2,i,j)/min(f_ocn(i,j),f_ocn(i,j+1))**2
-        enddo
-        drag_bcl(:,maxi+1,j) = drag_bcl(:,1,j)
-      enddo
-    endif
 
     ! on rows where the Coriolis parameter is set to zero (|f| < fcormin, see momentum_init) add drag instead,
     ! r_eff = r + fcormin^2/r, so that r_eff/(0+r_eff^2) = r/(fcormin^2+r^2)
@@ -604,10 +562,6 @@ contains
     psi_fix(:) = 0._wp
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))
-    allocate(f_face_dyn(2,maxi,maxj))
-    f_face_dyn = 1._wp
-    allocate(f_face_dif(2,maxi,maxj))
-    f_face_dif = 1._wp
     allocate(fcor(0:maxj+1))
     allocate(fcorv(0:maxj+1))
     allocate(rtv(maxi,maxj))
