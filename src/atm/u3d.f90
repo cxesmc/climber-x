@@ -27,12 +27,12 @@ module u3d_mod
 
   use atm_params, only : wp
   use constants, only : g, T0, r_earth, pi, omega
-  use atm_params, only : amas, ra, dpc, i_dpc, dp_com
+  use atm_params, only : amas, ra, dpc, i_dpc, dp_com, pbl
   use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
   use atm_params, only : c_uter_pol, c_uter_eq, c_uz500_pol
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim, dxtg, ftop
   use atm_grid, only : fcort, cost, sint, cosu, sinu
-  use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply, pblt, pblu
+  use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply
 
   implicit none
   
@@ -258,7 +258,7 @@ contains
 
         ! velocity in the PBL
         pzx = 0.5_wp*(pzsa(i,j)+pzsa(imi,j))
-        pbl_t = pzx+pblt(j)-1._wp
+        pbl_t = pzx+pbl-1._wp
         do k=1,km
           dp = (pl(k)-pbl_t)*rdpl(k)
           dp = min(1._wp,dp)
@@ -267,7 +267,7 @@ contains
         enddo
 
         ! compensatory velocity in the upper troposphere
-        fxpbl = uab(i,j)*(1._wp-pblt(j))
+        fxpbl = uab(i,j)*(1._wp-pbl)
         pc2 = ptrop(j)
         if (i_dpc.eq.1) then
           ! fraction dpc of the troposphere in pressure, from sea level to the zonal mean tropopause
@@ -288,7 +288,7 @@ contains
 
         ! velocity in the PBL
         pzy = 0.5_wp*(pzsa(i,j)+pzsa(i,jmi))
-        pbl_u = pzy+pblu(j)-1._wp
+        pbl_u = pzy+pbl-1._wp
         do k=1,km
           dp = (pl(k)-pbl_u)*rdpl(k)
           dp = min(1._wp,dp)
@@ -297,7 +297,7 @@ contains
         enddo
 
         ! compensatory velocity in the upper troposphere
-        fypbl = vab(i,j)*(1._wp-pblu(j))
+        fypbl = vab(i,j)*(1._wp-pbl)
         pc2 = 0.5_wp*(ptrop(j)+ptrop(jmi))
         if (i_dpc.eq.1) then
           pc1 = pc2+dpc*(1._wp-pc2)
@@ -560,7 +560,7 @@ contains
     !$omp end parallel do
 
     ! zonal component of the corrective flux, on u-points
-    !$omp parallel do private(i,j,k,imi,fcx,fcxt,dfx,dp_c,pc1,pc2,pl1,pl2,dp_l,ptrx)
+    !$omp parallel do collapse(2) private(i,j,k,imi,fcx,fcxt,dfx,dp_c,pc1,pc2,pl1,pl2,dp_l,ptrx)
     do j=1,jm
       do i=1,im
         imi = modulo(i - 2, im) + 1
@@ -647,14 +647,16 @@ contains
           endif
         endif
       enddo
-      ! periodic boundary condition
-      do k=1,km
+    enddo
+    !$omp end parallel do
+    ! periodic boundary condition, outside the loop so that it can run over (j,i) pairs
+    do k=1,km
+      do j=1,jm
         fax(imc,j,k) = fax(1,j,k)
         fax_psi(imc,j,k) = fax_psi(1,j,k)
         fax_psi_topo(imc,j,k) = fax_psi_topo(1,j,k)
       enddo
     enddo
-    !$omp end parallel do
 
     ! meridional component, on v-points; no flux through the poles
     !$omp parallel do collapse(2) private(i,j,k,fcy,fcyt,dfy,dp_c,pc1,pc2,pl1,pl2,dp_l,ptry,ptrj)

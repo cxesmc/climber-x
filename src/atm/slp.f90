@@ -27,8 +27,8 @@ module slp_mod
 
   use atm_params, only : wp, dp
   use constants, only : pi, r_earth, omega, g, Rd, T0, Le
-  use atm_params, only : ra, p0, hatm
-  use atm_params, only : c_slp_1, c_slp_2, c_slp_4, c_slp_5
+  use atm_params, only : ra, p0, hatm, pbl
+  use atm_params, only : c_slp_1, c_slp_2, c_slp_4, c_slp_5, i_aslp_eq, c_aslp_eq_hb, c_aslp_eq_lat0
   use atm_params, only : c_slp_trop_f, c_slp_trop_tau, c_slp_trop_lat0, c_slp_trop_lat1
   use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
   use atm_params, only : l_aslp_topo, c_aslp_sw_amp, c_aslp_sw_tau, c_aslp_sw_h, c_aslp_sw_umin, c_aslp_sw_lateq, n_aslp_sw
@@ -45,7 +45,7 @@ module slp_mod
   use atm_params, only : c_mmc_dt0, c_mmc_dt1, hdv_mmc_ref, c_mmc_mt, amas
   use atm_params, only : nsmooth_aslp, aslp_polar_lat
   use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, k850, k300, i_ice
-  use atm_grid, only : fcorua, sint, cost, fiu, fit, dxt, pblu
+  use atm_grid, only : fcorua, sint, cost, fiu, fit, dxt
   use atm_grid, only : z3, k_dse_lo, k_dse_up
   use smooth_atm_mod, only : smooth2_m, zona
   !$ use omp_lib
@@ -101,7 +101,7 @@ contains
     type(C_PTR) :: plan_r2c_temp, plan_c2r_temp
     real(wp) :: aslp_frc(im,jm)
     real(wp) :: aslp_gill_new(im,jm), cgill
-    real(wp) :: cslow, ftrop, wtrop, alat
+    real(wp) :: cslow, ftrop, wtrop, alat, weq
     real(dp), dimension(im) :: aslp_temp_dp
     complex(dp), dimension(im/2+1) :: aslp_temp_fft
 
@@ -128,7 +128,7 @@ contains
     ! temperature related azonal sea level pressure 
     !------------------------------------------------
 
-    !$omp parallel do private(i,j)
+    !$omp parallel do private(i,j,weq)
     do j=1,jm
 
       do i=1,im
@@ -149,6 +149,17 @@ contains
 
       ! ensure zero zonal mean
       aslp_temp(:,j) = aslp_temp(:,j) - sum(aslp_temp(:,j))*aim
+
+      ! i_aslp_eq=1: equatorial taper of the thermal forcing only. In the deep tropics the free troposphere
+      ! is held at weak temperature gradients, so an azonal surface temperature anomaly builds pressure only
+      ! through the boundary layer (Lindzen & Nigam 1987), not through the full column depth of eq. (17).
+      ! ERA-Interim azonal msl regressed on the components wants a weight ~0.1 on aslp_temp in 15S-20N,
+      ! rising poleward (analysis/aslp_eq_damping/regress_rows.jl). Tapering the forcing, not the relaxed
+      ! state, gives the equilibrium exactly weq*forcing and a latitude-independent relaxation time.
+      if (i_aslp_eq.eq.1) then
+        weq = c_aslp_eq_hb + (1._wp-c_aslp_eq_hb)*sint(j)**2/(sint(j)**2+sin(c_aslp_eq_lat0*pi/180._wp)**2)
+        aslp_temp(:,j) = weq*aslp_temp(:,j)
+      endif
 
     enddo
     !$omp end parallel do
@@ -297,6 +308,15 @@ contains
         aslp_frc(i,j) = aslp_temp(i,j)+aslp_topo(i,j)+aslp_gill(i,j)
       enddo
     enddo
+    ! i_aslp_eq=2: smooth equatorial taper of the TOTAL forcing, 1-(1-c_aslp_eq_hb)*exp(-(lat/c_aslp_eq_lat0)^2).
+    ! Same equatorial amplitude range as the old state damping (i_aslp_eq=0) but applied before the relaxation,
+    ! so it does not accumulate into a cliff and leaves the relaxation time latitude-independent.
+    if (i_aslp_eq.eq.2) then
+      do j=1,jm
+        weq = 1._wp - (1._wp-c_aslp_eq_hb)*exp(-(asin(sint(j))*180._wp/pi/c_aslp_eq_lat0)**2)
+        aslp_frc(:,j) = weq*aslp_frc(:,j)
+      enddo
+    endif
     call vorticity_taper(aslp_frc)
     do j=1,jm
       do i=1,im
@@ -308,12 +328,16 @@ contains
     ! smooth in space
     call smooth2_m(aslp,nsmooth_aslp)
 
-    ! equatorial damping
-    do j=1,jm
-      do i=1,im
-        aslp(i,j) = aslp(i,j) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
+    ! equatorial damping of the state (i_aslp_eq=0). It acts after the relaxation at every call, so the
+    ! equilibrium factor is c_slp_2*S/(1-(1-c_slp_2)*S): 0.03/0.06/0.16/1 at 2.5/7.5/12.5/17.5 deg for
+    ! c_slp_4=9, c_slp_5=0.25, a factor-6 cliff in one row (analysis/aslp_eq_damping/osc_diag.jl).
+    if (i_aslp_eq.eq.0) then
+      do j=1,jm
+        do i=1,im
+          aslp(i,j) = aslp(i,j) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
+        enddo
       enddo
-    enddo
+    endif
 
 
     return
@@ -1279,7 +1303,7 @@ contains
     ! exactly [p_s dz_s/dx]/f.  The zonal part of the SLP drops out of the zonal integral, and with
     ! p_s = slp*pzsa, z_s = -hatm*ln(pzsa),
     !   [p_s dz_s/dx] = hatm*[pzsa d(aslp)/dx].
-    ! The friction (Ekman) part of the branch is vsz - MT/(f*M_pbl), with M_pbl = (1-pblu)*amas the mass of
+    ! The friction (Ekman) part of the branch is vsz - MT/(f*M_pbl), with M_pbl = (1-pbl)*amas the mass of
     ! the PBL that carries the zonal mean ageostrophic flux in u3d.  In the SLP increment below f cancels,
     ! so the torque term needs no regularisation at the equator.
     do j=1,jm
@@ -1305,7 +1329,7 @@ contains
       else
         sgnf = 0._wp
       endif
-      psz(j) = psz(j-1) + (vsz(j)*fcorua(j) - c_mmc_mt*sgnf*mtu/((1._wp-pblu(j))*amas))*ra/acbarz(j) * dy
+      psz(j) = psz(j-1) + (vsz(j)*fcorua(j) - c_mmc_mt*sgnf*mtu/((1._wp-pbl)*amas))*ra/acbarz(j) * dy
     enddo
 
     ! SLP = zonal+azonal

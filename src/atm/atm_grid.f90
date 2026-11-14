@@ -31,7 +31,7 @@ module atm_grid
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
   use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref, diff_eq, fi_diff_eq
-  use atm_params, only : l_p0_var, p0, ps0, pble, pblp, cp, ptopdyn
+  use atm_params, only : l_p0_var, p0, ps0, cp, ptopdyn
   use smooth_atm_mod, only : smooth2
 
   implicit none
@@ -98,8 +98,6 @@ module atm_grid
   real(wp) :: ply(im,jmc)
   real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass
   real(wp) :: ply_dif(im,jmc)    !! tropospheric meridional column mass weighted by the vertical profile of the diffusivity, for implicit meridional diffusion
-  real(wp) :: pblt(jm)      !! planetary boundary height in t-points
-  real(wp) :: pblu(jmc)     !! planetary boundary height in u-points
   integer :: k1(im,jm)  
   integer :: kweff(im,jm)  !! k-index for effective vertical velocity leve (w-grid)
   integer :: k1000
@@ -285,11 +283,6 @@ contains
       fcorua(j) = max(ABS(fcorup),fcormin)
     enddo
 
-    ! PBL thickness
-    do j=1,jm
-      pblt(j) = pblp-(pblp-pble)*cost(j)**2      
-      pblu(j) = pblp-(pblp-pble)*cosu(j)**2 
-    enddo       
 
     ! pressure levels
 

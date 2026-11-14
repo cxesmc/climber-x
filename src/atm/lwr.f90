@@ -30,7 +30,7 @@ module lw_radiation_mod
   use control, only : co2_ref, ch4_ref, n2o_ref
   use atm_params, only : p0, ra, hatm, hpbl, c_hcld_dz_min
   use constants, only : T0
-  use atm_params, only : i_lw_cld, c_lw_clot
+  use atm_params, only : i_lw_cld, c_lw_clot, i_lw_cld_ice, c_lw_clot_ice, T_lw_ice
   use atm_params, only : ak_co2, beta_co2
   use atm_params, only : ak_wv, a_vap, beta_vap, a2_vap, beta2_vap, a3_vap, rh_strat
   use atm_params, only : l_o3
@@ -641,6 +641,7 @@ contains
     ! size of these arrays has to be larger than llwr!
     real(wp), dimension(20) :: expc
     real(wp), dimension(20) :: am_cld
+    real(wp) :: c_lw
     real(wp), dimension(20) :: am_o3
     real(wp), dimension(20) :: am_wv
     real(wp), dimension(20) :: am_co2
@@ -724,6 +725,22 @@ contains
       endif
 
     enddo
+
+    ! LW absorption coefficient of the cloud optical thickness (d_cld = exp(-c_lw*clot)):
+    ! i_lw_cld_ice=0: constant c_lw_clot
+    ! i_lw_cld_ice=1: per cloud layer, at the layer mean temperature T, c_lw_clot for liquid (warm) clouds,
+    !   c_lw_clot_ice for ice clouds, linear in T between T_lw_ice and the freezing point (liquid-fraction-like ramp);
+    !   the layer coefficient is folded into am_cld and c_lw=1. SW (clot) untouched.
+    ! Kept out of the layer loop above so that the default stays bit-identical.
+    if (i_lw_cld_ice.eq.1) then
+      c_lw = 1._wp
+      do k=llwr1,llwr2-1
+        am_cld(k) = am_cld(k) * (c_lw_clot_ice + (c_lw_clot-c_lw_clot_ice) &
+          * min(1._wp,max(0._wp,(0.5_wp*(tlwr(k)+tlwr(k+1))-T_lw_ice)/(T0-T_lw_ice))))
+      enddo
+    else
+      c_lw = c_lw_clot
+    endif
    
     ! 3) Calculation of the integral transmision functions
 
@@ -765,7 +782,7 @@ contains
         d_co2 = (1._wp-min(0.2_wp,0.1_wp*(am_co2_kl/1000._wp)**2))*(1._wp+a0_co2*a1_co2*((beta0*am_co2_kl)**beta_co2))/(1._wp+a0_co2*((beta0*am_co2_kl)**beta_co2))
 
         ! clouds, using optical thickness
-        d_cld = exp(-c_lw_clot*am_cld_kl)
+        d_cld = exp(-c_lw*am_cld_kl)
 
         ! clear sky transmission function
         DCS(l,k) = d_vap*d_co2*d_o3
@@ -903,6 +920,7 @@ contains
 
     real(wp), dimension(20) :: expc
     real(wp), dimension(20) :: am_cld, am_o3, am_wv, am_co2, am_cnt, am_wvw
+    real(wp) :: c_lw
     real(wp), dimension(190) :: cum_cld, cum_o3, cum_wv, cum_co2, cum_cnt, cum_wvw
     real(wp), dimension(190) :: d_win, d_co2, d_wvr, d_cld
     real(wp), dimension(nband) :: pf
@@ -976,6 +994,22 @@ contains
       endif
 
     enddo
+
+    ! LW absorption coefficient of the cloud optical thickness (d_cld = exp(-c_lw*clot)):
+    ! i_lw_cld_ice=0: constant c_lw_clot
+    ! i_lw_cld_ice=1: per cloud layer, at the layer mean temperature T, c_lw_clot for liquid (warm) clouds,
+    !   c_lw_clot_ice for ice clouds, linear in T between T_lw_ice and the freezing point (liquid-fraction-like ramp);
+    !   the layer coefficient is folded into am_cld and c_lw=1. SW (clot) untouched.
+    ! Kept out of the layer loop above so that the default stays bit-identical.
+    if (i_lw_cld_ice.eq.1) then
+      c_lw = 1._wp
+      do k=llwr1,llwr2-1
+        am_cld(k) = am_cld(k) * (c_lw_clot_ice + (c_lw_clot-c_lw_clot_ice) &
+          * min(1._wp,max(0._wp,(0.5_wp*(tlwr(k)+tlwr(k+1))-T_lw_ice)/(T0-T_lw_ice))))
+      enddo
+    else
+      c_lw = c_lw_clot
+    endif
    
     ! 3) absorber amounts between all pairs of levels k<l
     np = 0
@@ -1032,7 +1066,7 @@ contains
       d_wvr(ip) = exp(-k_co2r*pw_co2)/(1.0_wp+e1_wv+e2_wv+e3_wv)
 
       ! clouds, band independent
-      d_cld(ip) = exp(-c_lw_clot*cum_cld(ip))
+      d_cld(ip) = exp(-c_lw*cum_cld(ip))
 
     enddo
 

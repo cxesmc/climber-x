@@ -26,11 +26,19 @@
 module smooth_atm_mod
 
   use atm_params, only : wp
+  use, intrinsic :: iso_c_binding
 
   implicit none
 
+  ! include FFTW3 library for Fourier Transform (https://www.fftw.org/), polar_filter
+  include 'fftw3.f03'
+
   private
-  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr, polar_filter
+  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr, polar_filter, polar_filter3
+
+  ! FFTW plans of polar_filter, made on the first call
+  integer :: n_pf_plan = 0
+  type(C_PTR) :: plan_pf_r2c, plan_pf_c2r
 
 contains
 
@@ -461,42 +469,100 @@ contains
     real(wp), intent(inout) :: x(:,:)
     real(wp), intent(in) :: cosl(:)
 
-    integer :: i, j, m, im, jm, mmax
-    real(wp) :: a, b, arg, tpi
-    real(wp), allocatable :: y(:)
+    integer :: j
 
-    im = size(x,1)
-    jm = size(x,2)
-    tpi = 8._wp*atan(1._wp)
-    allocate(y(im))
+    call polar_filter_plan(size(x,1))
 
-    do j=1,jm
-      mmax = max(1, int(real(jm,wp)*cosl(j)))
-      if (2*mmax.ge.im) cycle
-      ! zonal mean
-      y(:) = sum(x(:,j))/real(im,wp)
-      do m=1,mmax
-        a = 0._wp
-        b = 0._wp
-        do i=1,im
-          arg = tpi*real(m*(i-1),wp)/real(im,wp)
-          a = a + x(i,j)*cos(arg)
-          b = b + x(i,j)*sin(arg)
-        enddo
-        a = 2._wp*a/real(im,wp)
-        b = 2._wp*b/real(im,wp)
-        do i=1,im
-          arg = tpi*real(m*(i-1),wp)/real(im,wp)
-          y(i) = y(i) + a*cos(arg) + b*sin(arg)
-        enddo
-      enddo
-      x(:,j) = y(:)
+    !$omp parallel do private(j)
+    do j=1,size(x,2)
+      call polar_filter_row(x(:,j), size(x,2), cosl(j))
     enddo
-
-    deallocate(y)
+    !$omp end parallel do
 
     return
 
   end subroutine polar_filter
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p o l a r _ f i l t e r 3
+  !   Purpose    :  polar_filter on every level of a 3D field, (level,row) in parallel
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine polar_filter3(x, cosl)
+
+    implicit none
+
+    real(wp), intent(inout) :: x(:,:,:)
+    real(wp), intent(in) :: cosl(:)
+
+    integer :: j, k
+
+    call polar_filter_plan(size(x,1))
+
+    !$omp parallel do collapse(2) private(j,k)
+    do k=1,size(x,3)
+      do j=1,size(x,2)
+        call polar_filter_row(x(:,j,k), size(x,2), cosl(j))
+      enddo
+    enddo
+    !$omp end parallel do
+
+    return
+
+  end subroutine polar_filter3
+
+
+  ! FFTW plans for rows of length n, made once. The planner is not thread safe, so this is
+  ! called outside the parallel loops; the rows are then transformed with the new-array execute
+  ! interface (thread safe), FFTW_UNALIGNED because the row buffers are thread-private.
+  subroutine polar_filter_plan(n)
+
+    implicit none
+
+    integer, intent(in) :: n
+
+    real(C_DOUBLE) :: rowr(n)
+    complex(C_DOUBLE_COMPLEX) :: rowc(n/2+1)
+
+    !$omp critical (polar_filter_planner)
+    if (n_pf_plan.ne.n) then
+      if (n_pf_plan.gt.0) then
+        call fftw_destroy_plan(plan_pf_r2c)
+        call fftw_destroy_plan(plan_pf_c2r)
+      endif
+      plan_pf_r2c = fftw_plan_dft_r2c_1d(n, rowr, rowc, ior(FFTW_ESTIMATE,FFTW_UNALIGNED))
+      plan_pf_c2r = fftw_plan_dft_c2r_1d(n, rowc, rowr, ior(FFTW_ESTIMATE,FFTW_UNALIGNED))
+      n_pf_plan = n
+    endif
+    !$omp end critical (polar_filter_planner)
+
+  end subroutine polar_filter_plan
+
+
+  ! one row: keep the zonal wavenumbers 0..m_max, m_max = max(1, int(jm*cos(lat)))
+  subroutine polar_filter_row(xr, jm, cosl)
+
+    implicit none
+
+    real(wp), intent(inout) :: xr(:)
+    integer, intent(in) :: jm
+    real(wp), intent(in) :: cosl
+
+    integer :: n, mmax
+    real(C_DOUBLE) :: rowr(size(xr))
+    complex(C_DOUBLE_COMPLEX) :: rowc(size(xr)/2+1)
+
+    n = size(xr)
+    mmax = max(1, int(real(jm,wp)*cosl))
+    if (2*mmax.ge.n) return
+
+    rowr = xr
+    call fftw_execute_dft_r2c(plan_pf_r2c, rowr, rowc)
+    ! wavenumber m is rowc(m+1)
+    rowc(mmax+2:) = (0._C_DOUBLE, 0._C_DOUBLE)
+    call fftw_execute_dft_c2r(plan_pf_c2r, rowc, rowr)
+    xr = rowr/real(n,wp)   ! FFTW is unnormalised
+
+  end subroutine polar_filter_row
 
 end module smooth_atm_mod

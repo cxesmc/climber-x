@@ -20,7 +20,6 @@
   ! Coriolis
   !-----------------------------------------------------------
   fcormin  = 1e-5               ! 1/s, minimum Coriolis parameter
-
   i_fcorg  = 1                  ! how the equatorial singularity of the geostrophic PBL wind is handled.
                                 ! u2d.f90 forms ugb = -dpdy*fcorg/ra, vgb = dpdx*fcorg/ra, and
                                 !   0   fcorg = 1/fcort, the original. fcort is floored in MAGNITUDE at fcormin but keeps its sign
@@ -58,7 +57,7 @@
   i_mmc_had = 1                 ! Hadley cell amplitude: 0 = sea level temperature contrast across the cell only,
                                 !                        1 = the same, additionally scaled by the inverse of the tropical
                                 !                            boundary layer humidity (moisture mass budget of the cell)
-  c_mmc_had = 0.25              ! parameter for strength of Hadley cells
+  c_mmc_had = 0.23              ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
   c_mmc_fer = 0.05              ! parameter for strength of Ferrel cells
@@ -72,13 +71,12 @@
   i_mmc_itcz = 1                ! ITCZ position: 0 = c_mmc_2 x interhemispheric sea level temperature contrast,
                                 !                1 = c_mmc_efe x energy flux equator (efe output)
   c_mmc_efe = 0.85              ! ITCZ latitude per degree of energy flux equator, used only if i_mmc_itcz=1
-  c_mmc_dt0 = 62.5              ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
+  c_mmc_dt0 = 64.0              ! deg, total Hadley width at the reference tropical H*Delta_v (hdv_mmc_ref)
   c_mmc_dt1 = 0.18              ! exponent of the Held (2000) supercriticality scaling of the Hadley width (tropopause height x bulk dry stability)
   hdv_mmc_ref = 2390.           ! m, tropical H*Delta_v at which the supercriticality scaling is unity
   c_mmc_mt = 0.5                ! weight of the mountain torque [p_s dz_s/dx] in the lower-branch momentum budget: only f*M - MT is
                                 ! balanced by friction and builds the zonal mean SLP; 0 = all of f*M by friction
-  pblp = 0.85                   ! pressure level of PBL top at the poles
-  pble = 0.8                    ! pressure level of PBL top at the equator
+  pbl = 0.85                    ! relative pressure (p/ps) of the PBL top, uniform in latitude
   i_dpc = 1                     ! layer below the tropopause in which the PBL ageostrophic wind is compensated:
                                 ! 0 = slab of relative pressure depth dpc
                                 ! 1 = fraction dpc of the troposphere in pressure, from sea level to the zonal mean tropopause
@@ -93,6 +91,11 @@
   c_slp_2 = 0.1                 ! time-relaxation parameter for azonal sea level pressure
   c_slp_4 = 9.                  ! parameter for equatorial damping of azonal sea level pressure
   c_slp_5 = 0.25                ! parameter for equatorial damping of azonal sea level pressure
+  i_aslp_eq = 0                 ! equatorial reduction of azonal SLP: 0 = damp the total aslp state by min(1,c_slp_5+c_slp_4*(sin2-sin2eq)) every call (accumulates through c_slp_2),
+                                ! 1 = taper only the aslp_temp forcing by c_aslp_eq_hb+(1-c_aslp_eq_hb)*sin2/(sin2+sin2(c_aslp_eq_lat0)); Gill and topo undamped
+                                ! 2 = taper the total forcing (temp+topo+gill) by 1-(1-c_aslp_eq_hb)*exp(-(lat/c_aslp_eq_lat0)^2)
+  c_aslp_eq_hb = 0.1            ! i_aslp_eq=1,2: equatorial floor of the taper (boundary-layer depth / column depth of the thermal pressure)
+  c_aslp_eq_lat0 = 25.          ! deg, i_aslp_eq=1: sin2 half point; i_aslp_eq=2: e-folding latitude of the taper
   c_slp_trop_f = 0.35           ! fraction of the fast (sub-seasonal) part of the temperature related azonal SLP kept equatorward of c_slp_trop_lat0 (1 = off)
   c_slp_trop_tau = 10.          ! days, relaxation time of the slow part of the temperature related azonal SLP, used only if c_slp_trop_f<1
   c_slp_trop_lat0 = 25.         ! deg, c_slp_trop_f applies equatorward of c_slp_trop_lat0 ...
@@ -150,23 +153,14 @@
   !-----------------------------------------------------------
   ! lapse rate parameters
   !-----------------------------------------------------------
-  c_gam_1 = 4.2e-3              ! K/m, background lapse rate
+  c_gam_1 = 4.0e-3              ! K/m, background lapse rate
   c_gam_2 = 0.055               ! K/m, moisture dependence of lapse rate
-  c_gam_3 = 6.e-3               ! K/m, increase on background lapse rate at top of troposphere
-  i_gamb_q = 0                  ! moisture driving the free tropospheric lapse rate: 0 = local qam, 1 = tropical mean (30S-30N) qam anomaly from q_gam_ref, 2 = moist adiabat of the Hadley-cell mean T, both tapered with Hadley width
-  q_gam_ref = 0.01317           ! kg/kg, reference tropical mean qam for i_gamb_q = 1 (PI, output/gamq)
-  c_gam_w = 0.8                 ! i_gamb_q = 2: weight of the Hadley-cell moist adiabat on the tropical gamb (0 = c_gam_1, 1 = moist adiabat)
-  c_gam_twid = 1.0              ! i_gamb_q = 2: taper half-width in units of had_width/2
-  ! The surface layer lapse rate closure: one tanh in the grid mean sensible heat flux, used for
-  ! every surface type. gams_min and gams_max are its stable and well mixed asymptotes, so they
-  ! also act as the bounds, and sh_gams is the flux scale over which it changes regime. A second
-  ! tanh centred at sh_gams_conv lifts the upper bound to gams_max_conv in very unstable layers.
-  gams_min = -10.e-3            ! K/m, surface lapse rate in the strongly stable limit
+  c_gam_3 = 7.e-3               ! K/m, increase on background lapse rate at top of troposphere
+  gams_min = -7.5e-3            ! K/m, surface lapse rate in the strongly stable limit
   gams_max = 7.5e-3             ! K/m, surface lapse rate in the well mixed limit
-  sh_gams = 10.                 ! W/m2, sensible heat flux scale over which the surface layer changes regime
-  gams_max_conv = 7.5e-3        ! K/m, surface lapse rate in the very unstable limit (set = gams_max to switch off)
-  sh_gams_conv = 60.            ! W/m2, sensible heat flux at which the transition to gams_max_conv is centred
-  dsh_gams_conv = 15.           ! W/m2, flux width of the transition to gams_max_conv
+  sh_gams_pos = 10.             ! W/m2, sensible heat flux scale over which the surface layer changes regime (unstable side)
+  sh_gams_0 = 0.                ! W/m2, sensible heat flux at the centre of the tanh (gams = 0 there if gams_min = -gams_max)
+  sh_gams_neg = 5.              ! W/m2, flux scale on the stable side (sha < sh_gams_0); <= 0: same as sh_gams_pos
   c_gam_tau = 25.               ! days, relaxation time of the lapse rates gams, gamb, gamt
   c_hrm_tau = 1.25              ! days, relaxation time of the relative humidity height scale hrm
   i_tsl = 3                     ! sea level temperature used for the azonal sea level pressure,
@@ -187,7 +181,7 @@
                                 ! 2 = include also solar radiation absorbtion by stratospheric O3
   c_trop_1 = 100.               ! m3/W
   c_trop_2 = 26.                ! W/m2
-  c_trop_3 = 0.85               ! with c_trop_2=30, c_gam_3=4e-3: htrop ~ERA-1 km at poles/tropics, ~ERA at midlat (output/radtrop4)
+  c_trop_3 = 0.85               ! 
 
   !-----------------------------------------------------------
   ! relative humidity height scale parameters
@@ -234,7 +228,7 @@
                                 ! 2 = height above sea level
   diff_eq = 7.e6                ! m2/s, additional ZONAL macro-diffusivity of all tracers (energy, water, dust, CO2) at the equator,
                                 ! added to c_diff*EKE as diff_eq*exp(-(lat/fi_diff_eq)^2), with the same h_diff vertical profile. 0 = off.
-  fi_diff_eq = 30.              ! deg, e-folding latitude of diff_eq
+  fi_diff_eq = 100.             ! deg, e-folding latitude of diff_eq
 
   !-----------------------------------------------------------
   ! advection, diffusion and stability parameters 
@@ -254,8 +248,8 @@
   !-----------------------------------------------------------
   ! cloud fraction parameters
   !-----------------------------------------------------------
-  c_cld_1 = 0.555               !
-  c_cld_2 = 0.555               !
+  c_cld_1 = 0.56                !
+  c_cld_2 = 0.54                !
   c_cld_3 = 160.                ! 1/(m/s), sensitivity of fweff=tanh(c_cld_3*weff) to the effective vertical velocity.
   c_cld_4 = 1.5                 !
   i_cld_low = 4                 ! low cloud scheme: 1=inversion only, 2=*ram, 3=*min(1,q_cld_low/qsat(t2a)), 4=*exp(-max(0,qam-c_cld_8)/c_cld_9)
@@ -279,7 +273,7 @@
   c_hcld_low = 1500.            ! m, height of the low cloud top above the surface
   c_hcld_dz_min = 1000.         ! m, minimum thickness of the radiating cloud slab in the longwave column (lwr.f90).
   c_hcld_1 = 2500.              !
-  c_hcld_2 = 0.3                !
+  c_hcld_2 = 0.5                ! 
   c_hcld_3 = 200.               !
   c_hcld_4 = 0.                 !
 
@@ -290,27 +284,27 @@
   !-----------------------------------------------------------
   c_clot_1 = 5.                 ! 
   c_clot_2 = 30.                !
-  c_clot_3 = 3.25                ! (retuned 2026-11-11 vs CERES + CMIP PI SW CRE, analysis/rad_offline/cloud_retune.jl)
-  c_clot_4 = 0.333                !
-  c_clot_5 = 0.                ! weight of the dynamical factor fweff in the cloud optical thickness, 0 = off
+  c_clot_3 = 2.56               ! 
+  c_clot_4 = 0.447              !
+  c_clot_5 = 0.                 ! weight of the dynamical factor fweff in the cloud optical thickness, 0 = off
 
   !-----------------------------------------------------------
   ! shortwave radiation parameters
   !-----------------------------------------------------------
   f_ice_pow = 1.                !
-  r_scat   = 0.1827             ! Rayleigh albedo (VU); with i_swr_ray==1 the value at cosz=0.5
-  a1_w     = 0.223                !
-  b1_w     = 1.863               !
-  b2_w     = 0.01974             !
+  r_scat   = 0.175              ! Rayleigh albedo (VU); with i_swr_ray==1 the value at cosz=0.5
+  a1_w     = 0.223              !
+  b1_w     = 1.863              !
+  b2_w     = 0.01974            !
   c_itf_c  = 0.927              ! cloud ITF, TOA path (0.9 before i_swr_gas)
   c_itf_cc = 0.970              ! cloud ITF, surface path (0.9 before i_swr_gas)
   i_swr_ray = 1                 ! Rayleigh scattering albedo: 0 = constant r_scat, 1 = zenith-angle dependent, r_scat*(1-exp(-tau_ray/mu))/(1-exp(-tau_ray/0.5))
-  tau_ray = 0.2837               ! effective Rayleigh optical depth (VU band), used only if i_swr_ray==1
+  tau_ray = 0.2837              ! effective Rayleigh optical depth (VU band), used only if i_swr_ray==1
   i_swr_gas = 1                 ! non-water gas absorption: 0 = constant O3 transmission (VU) 0.98, 1 = path-dependent 1-a*m^b for VU (O3) and IR (O2, CO2, CH4)
   a_gas_vu = 0.04668            ! used only if i_swr_gas==1
-  b_gas_vu = 0.5624            !
-  a_gas_ir = 0.03407             !
-  b_gas_ir = 0.2794              !
+  b_gas_vu = 0.5624             !
+  a_gas_ir = 0.03407            !
+  b_gas_ir = 0.2794             !
   n_wp = -2.0                   ! SW water vapour path x (ps/p0)**n_wp (clear-sky refit vs RRTMG incl. elevated columns)
   p_cosz_sw = -0.4              ! effective cos z of the daily SW column: insolation-weighted power mean (sum cosz**(1+p)/sum cosz)**(1/p)
                                 ! over the hours; -1 = daytime-mean cos z (coszm), 0 = weighted geometric mean, 1 = insolation-weighted cos z.
@@ -319,7 +313,10 @@
   ! longwave radiation parameters
   !-----------------------------------------------------------
   i_lw_cld = 2                  !
-  c_lw_clot = 0.7               !
+  c_lw_clot = 0.55              ! LW absorption coefficient of the cloud optical thickness; of liquid (warm) clouds if i_lw_cld_ice==1
+  i_lw_cld_ice = 1              ! temperature-dependent LW cloud absorption coefficient per cloud layer (i_lw_cld=2 only): 0 = off, 1 = on
+  c_lw_clot_ice = 0.3           ! LW absorption coefficient of ice clouds, used only if i_lw_cld_ice==1
+  T_lw_ice = 251.               ! K, all-ice temperature; coefficient linear in T from c_lw_clot_ice at T_lw_ice to c_lw_clot at T0, used only if i_lw_cld_ice==1
   ak_co2 = 0.8                  !
   beta_co2 = 0.45               !
   ak_wv = 1.                    !
@@ -384,7 +381,7 @@
   sigma_so4 = 3.5e3             ! m2/kg, scattering efficiency for sulfate aerosols (Bauer et al., 2008)
   r_so4 = 0.17e-6               ! m, sulfate aerosol radius (0.1-0.15 microm in Bauer 2008)
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
-  N_so4_nat_lnd = 180e6          ! m^-3, natural cloud condensation nuclei concentration over land
+  N_so4_nat_lnd = 150e6         ! m^-3, natural cloud condensation nuclei concentration over land
 
   !-----------------------------------------------------------
   ! smoothing options

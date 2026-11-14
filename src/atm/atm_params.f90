@@ -84,8 +84,7 @@ module atm_params
   real(wp) :: c_mmc_dt1
   real(wp) :: hdv_mmc_ref
   real(wp) :: c_mmc_mt        !! weight of the mountain torque in the lower-branch momentum budget of zslp (0 = off)
-  real(wp) :: pblp 
-  real(wp) :: pble
+  real(wp) :: pbl             !! relative pressure of the PBL top (p/ps), uniform in latitude
 
   real(wp) :: c_uter_pol
   real(wp) :: c_uter_eq
@@ -97,6 +96,9 @@ module atm_params
   real(wp) :: c_slp_2
   real(wp) :: c_slp_4
   real(wp) :: c_slp_5
+  integer  :: i_aslp_eq
+  real(wp) :: c_aslp_eq_hb
+  real(wp) :: c_aslp_eq_lat0
   real(wp) :: c_slp_trop_f
   real(wp) :: c_slp_trop_tau
   real(wp) :: c_slp_trop_lat0
@@ -136,6 +138,9 @@ module atm_params
   real(wp) :: hcld_base
   integer :: i_lw_cld
   real(wp) :: c_lw_clot
+  integer :: i_lw_cld_ice
+  real(wp) :: c_lw_clot_ice
+  real(wp) :: T_lw_ice
   real(wp) :: ak_co2
   real(wp) :: beta_co2
   real(wp) :: ak_wv
@@ -159,16 +164,11 @@ module atm_params
   real(wp) :: c_gam_1   
   real(wp) :: c_gam_2
   real(wp) :: c_gam_3
-  integer  :: i_gamb_q
-  real(wp) :: q_gam_ref
-  real(wp) :: c_gam_w
-  real(wp) :: c_gam_twid
   real(wp) :: gams_min
   real(wp) :: gams_max
-  real(wp) :: sh_gams
-  real(wp) :: gams_max_conv
-  real(wp) :: sh_gams_conv
-  real(wp) :: dsh_gams_conv
+  real(wp) :: sh_gams_pos
+  real(wp) :: sh_gams_0
+  real(wp) :: sh_gams_neg
   real(wp) :: hgams
   real(wp) :: hgamt
   integer :: nsmooth_gam
@@ -409,6 +409,9 @@ contains
     call nml_read(filename,"atm_par","c_slp_2",c_slp_2)
     call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
     call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
+    call nml_read(filename,"atm_par","i_aslp_eq",i_aslp_eq)
+    call nml_read(filename,"atm_par","c_aslp_eq_hb",c_aslp_eq_hb)
+    call nml_read(filename,"atm_par","c_aslp_eq_lat0",c_aslp_eq_lat0)
     call nml_read(filename,"atm_par","c_slp_trop_f",c_slp_trop_f)
     call nml_read(filename,"atm_par","c_slp_trop_tau",c_slp_trop_tau)
     call nml_read(filename,"atm_par","c_slp_trop_lat0",c_slp_trop_lat0)
@@ -445,21 +448,16 @@ contains
     call nml_read(filename,"atm_par","dp_com",dp_com)
     call nml_read(filename,"atm_par","dps_com",dps_com)
     call nml_read(filename,"atm_par","ptopdyn",ptopdyn)
-    call nml_read(filename,"atm_par","pblp",pblp)
-    call nml_read(filename,"atm_par","pble",pble)
+    call nml_read(filename,"atm_par","pbl",pbl)
     call nml_read(filename,"atm_par","c_gam_1",c_gam_1)
     call nml_read(filename,"atm_par","c_gam_2",c_gam_2)
     call nml_read(filename,"atm_par","c_gam_3",c_gam_3)
-    call nml_read(filename,"atm_par","i_gamb_q",i_gamb_q)
-    call nml_read(filename,"atm_par","q_gam_ref",q_gam_ref)
-    call nml_read(filename,"atm_par","c_gam_w",c_gam_w)
-    call nml_read(filename,"atm_par","c_gam_twid",c_gam_twid)
     call nml_read(filename,"atm_par","gams_min",gams_min)
     call nml_read(filename,"atm_par","gams_max",gams_max)
-    call nml_read(filename,"atm_par","sh_gams",sh_gams)
-    call nml_read(filename,"atm_par","gams_max_conv",gams_max_conv)
-    call nml_read(filename,"atm_par","sh_gams_conv",sh_gams_conv)
-    call nml_read(filename,"atm_par","dsh_gams_conv",dsh_gams_conv)
+    call nml_read(filename,"atm_par","sh_gams_pos",sh_gams_pos)
+    call nml_read(filename,"atm_par","sh_gams_0",sh_gams_0)
+    call nml_read(filename,"atm_par","sh_gams_neg",sh_gams_neg)
+    if (sh_gams_neg.le.0._wp) sh_gams_neg = sh_gams_pos
     call nml_read(filename,"atm_par","hgams",hgams)
     call nml_read(filename,"atm_par","hgamt",hgamt)
     call nml_read(filename,"atm_par","c_gam_tau",c_gam_tau)
@@ -472,6 +470,9 @@ contains
     call nml_read(filename,"atm_par","hcld_base",hcld_base)
     call nml_read(filename,"atm_par","i_lw_cld",i_lw_cld)
     call nml_read(filename,"atm_par","c_lw_clot",c_lw_clot)
+    call nml_read(filename,"atm_par","i_lw_cld_ice",i_lw_cld_ice)
+    call nml_read(filename,"atm_par","c_lw_clot_ice",c_lw_clot_ice)
+    call nml_read(filename,"atm_par","T_lw_ice",T_lw_ice)
     call nml_read(filename,"atm_par","ak_co2",ak_co2)
     call nml_read(filename,"atm_par","beta_co2",beta_co2)
     call nml_read(filename,"atm_par","ak_wv",ak_wv)

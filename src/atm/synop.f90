@@ -33,7 +33,7 @@ module synop_mod
   use atm_params, only : i_syn_diss, syn_e0, c_eke_slope, hgams, dz_syn_min
   use atm_params, only : tau_fac, c_tau_syn, l_tau_stab, f_tau_Ri_unstab, f_tau_Ri_stab
   use atm_params, only : c_diff
-  use smooth_atm_mod, only : polar_filter
+  use smooth_atm_mod, only : polar_filter, polar_filter3
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   use timer, only : dt_atm
   !$ use omp_lib
@@ -100,6 +100,7 @@ contains
     real(wp) :: zb, zt         ! m, bottom and top heights of the shear layer
     real(wp) :: f_depth        ! depth of the shear layer relative to z500-z850
     real(wp) :: zsf(im,jm)     ! terrain height for the slope term [m]
+    real(wp), allocatable, save :: zsf_save(:,:), zsa_save(:,:)  ! filtered terrain and the zsa it was made from
     real(wp) :: kdif(im,jm)    ! macro-diffusivity at cell centres [m2/s]
     ! implicit (ADI) solve of the synoptic-energy (sam) equation
     real(wp) :: kdiss(im,jm), samx(im,jm)
@@ -116,13 +117,20 @@ contains
     ! zonal terrain gradient, whose grid-scale part is amplified by 1/cos(lat) toward the poles.
     ! The polar filter truncates both to the zonal wavenumbers resolved at the meridional spacing
     ! (smooth_atm), on the layers that can enter the shear.
+    ! The terrain only changes with the geography, so its filtered field is kept until zsa changes.
     vtf = 0._wp
-    do k=k850,km
-      vtf(:,:,k) = vt3f(:,:,k)
-      call polar_filter(vtf(:,:,k), cost)
-    enddo
-    zsf  = zsa
-    call polar_filter(zsf, cost)
+    vtf(:,:,k850:km) = vt3f(:,:,k850:km)
+    call polar_filter3(vtf(:,:,k850:km), cost)
+    if (.not.allocated(zsf_save)) then
+      allocate(zsf_save(im,jm), zsa_save(im,jm))
+      zsa_save = zsa + 1._wp
+    endif
+    if (any(zsa.ne.zsa_save)) then
+      zsa_save = zsa
+      zsf_save = zsa
+      call polar_filter(zsf_save, cost)
+    endif
+    zsf = zsf_save
 
     !$omp parallel do collapse(2) private(i, j, k, zb, zt, f_depth, ugrad, dudz, dvdz, Nfreq, dz58, f_slope, N2, ipl, imi, dzsdx, dzsdy, s_b, s_th, iop, i_n, j_n, i_s, j_s)
     do i=1,im

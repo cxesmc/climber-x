@@ -203,9 +203,9 @@ contains
           wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
 
-        ! underflow: cap qam at 1e-6
-        if (qam(i,j).lt.1.e-6_wp) then
-          qam(i,j) = 1.e-6_wp
+        ! underflow: cap qam at 1e-7
+        if (qam(i,j).lt.1.e-7_wp) then
+          qam(i,j) = 1.e-7_wp
           if (qsat.gt.0._wp) ram(i,j) = qam(i,j)/qsat
           wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif

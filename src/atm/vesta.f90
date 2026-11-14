@@ -26,11 +26,10 @@
 module vesta_mod
 
   use atm_params, only : wp
-  use constants, only : fqsat, pi, Le, Rd, Rv, g
+  use constants, only : fqsat, pi, Rd, g
   use atm_params, only : cp, gad, hatm, p0, ra, zmax
-  use atm_params, only : i_gamb_q, q_gam_ref, c_gam_w, c_gam_twid
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
-  use atm_params, only : gams_min, gams_max, sh_gams, gams_max_conv, sh_gams_conv, dsh_gams_conv
+  use atm_params, only : gams_min, gams_max, sh_gams_pos, sh_gams_0, sh_gams_neg
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
@@ -78,62 +77,18 @@ contains
 
     integer :: i, j
     real(wp) :: hrs, fi, f_trop, cgam, chrm
-    real(wp) :: qtrp, wtrp, dq_gam, x_gam
-    real(wp) :: t1had, p1, qs1, gm_had, w_had, dlat, f_gam
+    real(wp) :: sh_w
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
     real(wp), parameter :: hrs_min = 1.e3_wp
     real(wp), parameter :: hrs_max = 10.e3_wp
-    real(wp), parameter :: lat_gam_trop = 30._wp*pi/180._wp
-    real(wp), parameter :: x1_gam = asin(0.1_wp**(1._wp/8._wp))
 
 
     ! time relaxation weights per fast step, hscales is called every fast step
     cgam = min(1._wp, tstep/(c_gam_tau*sec_day))
     chrm = min(1._wp, tstep/(c_hrm_tau*sec_day))
 
-    ! tropical mean (30S-30N) qam, which drives the free tropospheric lapse rate for i_gamb_q = 1
-    qtrp = 0._wp
-    wtrp = 0._wp
-    if (i_gamb_q.eq.1) then
-      do j=1,jm
-        if (abs(fit(j)).lt.lat_gam_trop) then
-          do i=1,im
-            qtrp = qtrp + qam(i,j)*cost(j)
-            wtrp = wtrp + cost(j)
-          enddo
-        endif
-      enddo
-      qtrp = qtrp/wtrp
-    endif
-
-    ! i_gamb_q = 2: moist adiabatic lapse rate of the mean state over the Hadley cells.
-    ! T1 is the mean temperature at the top of the surface layer (tam - gams*hgams), averaged
-    ! between the two Hadley cell edges (had_fi -/+ had_width/2, edge rows by their fractional
-    ! overlap), so the averaging region follows the circulation through the season and across
-    ! climates. Gamma_m is evaluated at T1 and at p(z*=hgams), in K per geometric metre like t_prof.
-    ! No reference state enters.
-    gm_had = 0._wp
-    if (i_gamb_q.eq.2) then
-      dlat = abs(fit(2)-fit(1))
-      t1had = 0._wp
-      wtrp = 0._wp
-      do j=1,jm
-        w_had = cost(j)*max(0._wp,min(1._wp,(0.5_wp*had_width-abs(fit(j)-had_fi))/dlat+0.5_wp))
-        if (w_had.gt.0._wp) then
-          do i=1,im
-            t1had = t1had + (tam(i,j)-gams(i,j)*hgams)*w_had
-            wtrp = wtrp + w_had
-          enddo
-        endif
-      enddo
-      t1had = t1had/wtrp
-      p1 = p0*exp(-hgams/hatm)
-      qs1 = fqsat(t1had,p1)
-      gm_had = g/cp*(1._wp+Le*qs1/(Rd*t1had)) / (1._wp+Le**2*qs1*(Rd/Rv)/(cp*Rd*t1had**2))
-    endif
-
-    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,dq_gam,x_gam,f_gam)
+    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,sh_w)
     do j=1,jm
       do i=1,im
 
@@ -144,44 +99,23 @@ contains
         ! One tanh in the grid-mean sensible heat flux replaces the per-surface-type branching
         ! (9 constants and a switch over ocean / land / lake / ice). sha > 0 is an unstable
         ! surface layer and drives gam_s towards the well mixed limit gams_max; sha < 0 is a
-        ! stable, decoupled surface layer and drives it towards gams_min. sh_gams sets the flux
-        ! scale over which the surface layer changes regime.
-        ! A second tanh, centred at the much larger flux sh_gams_conv, raises the ceiling from
-        ! gams_max to gams_max_conv only in very unstable (strongly convective) surface layers,
-        ! leaving the curve unchanged at moderate fluxes.
-        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) &
-                   + (gams_max_conv-gams_max)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_conv)/dsh_gams_conv))
-
-        if (i_gamb_q.eq.1) then
-          ! The tropical free troposphere follows the moist adiabat of the convecting regions and
-          ! weak temperature gradients spread it, so the lapse rate responds to the tropical mean
-          ! moisture anomaly, not to the local humidity. The anomaly vanishes in the reference
-          ! climate, so c_gam_1 and c_gam_3 set the mean state and c_gam_2 the feedback alone.
-          ! Same latitude taper as the stratospheric heating in tropoheight.
-          x_gam = x1_gam/(0.5_wp*had_width)*(fit(j)-had_fi)
-          x_gam = max(-pi/2._wp,min(pi/2._wp,x_gam))
-          dq_gam = (1._wp-sin(x_gam)**8)*(qtrp-q_gam_ref)
+        ! stable, decoupled surface layer and drives it towards gams_min. 
+        ! The tanh is centred at sh_gams_0 (with gams_min = -gams_max this is where gam_s = 0) and has
+        ! the width sh_gams_pos on the unstable side and sh_gams_neg on the stable side. A narrow stable
+        ! width saturates calm, weakly cooled (decoupled) surfaces at gams_min, while the floor
+        ! gams_min caps the inversion of strongly cooled, wind-mixed surfaces (katabatic ice sheets).
+        if (sha(i,j).ge.sh_gams_0) then
+          sh_w = sh_gams_pos
         else
-          dq_gam = qam(i,j)
+          sh_w = sh_gams_neg
         endif
+        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
 
-        if (i_gamb_q.eq.2) then
-          ! bottom: relax c_gam_1 towards the moist adiabat of the Hadley cells, by a fraction
-          ! c_gam_w in the tropics, tapered to 0 outside them (taper as tropoheight, half-width
-          ! scaled by c_gam_twid). top: same relation as the moisture closure below, with
-          ! c_gam_2*q replaced by c_gam_1-gam_b.
-          x_gam = x1_gam/(c_gam_twid*0.5_wp*had_width)*(fit(j)-had_fi)
-          x_gam = max(-pi/2._wp,min(pi/2._wp,x_gam))
-          f_gam = 1._wp-sin(x_gam)**8
-          gam_b(i,j) = c_gam_1 + c_gam_w*f_gam*(gm_had-c_gam_1)
-          gam_t(i,j) = 2._wp*gam_b(i,j) - c_gam_1 + c_gam_3
-        else
-          ! bottom
-          gam_b(i,j) = c_gam_1 - c_gam_2*dq_gam
+        ! bottom
+        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j)
 
-          ! top
-          gam_t(i,j) = gam_b(i,j) - c_gam_2*dq_gam + c_gam_3
-        endif
+        ! top
+        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
 
         !----------------------------------------------
         ! height scale for relative humidity       
@@ -533,14 +467,24 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   pure subroutine hypso_column(zs, tam, gams, gamb, gamt, htrop, zc_geo, zl_geo)
 
-    ! Integrates dz/dlnp = -Rd*T(z)/g with T = t_prof(z) from the surface, at pressure
+    ! Solves dz/dlnp = -Rd*T(z)/g with T = t_prof(z) exactly, from the surface, at pressure
     ! p0*exp(-zs/hatm) (the surface of the layer masses), upward to the levels above it and
     ! downward, along the sub-surface extrapolation of t_prof, to those below it. Targets are
     ! the interfaces zl and the layer centres zc, i.e. ln(p/p0) = -zl/hatm and -zc/hatm.
-    ! Midpoint (RK2) steps of at most dlnp_max. Above the tropopause T = t_prof(htrop) is
-    ! constant and the upward integration there is exact, z1 = z0 - (lnp1-lnp0)*Rd*ttrop/g.
-    ! dlnp_max = 0.05 keeps the error within ~1 m of an RK4 reference (offline test,
-    ! analysis/hypso_accuracy); 0.1/0.2 give 5/9 m for only ~25% fewer t_prof calls.
+    ! Within each segment of t_prof (0: below zs, 1: surface layer zs..zs+hgams, 2: free
+    ! troposphere up to htrop) T is quadratic in z, T(z0+u) = T0 - (gam+2*qq*z0)*u - qq*u**2 with
+    ! qq = (gamt-gamb)/(2*hgamt), so in l = ln(p/p0) the equation is a constant-coefficient Riccati
+    ! equation du/dl = a + b*u + c*u**2, a = -kz*T0, b = kz*(gam+2*qq*z0), c = kz*qq, kz = Rd/g,
+    ! with the solution u(0) = 0
+    !   u = a*S/(C - b/2*S),  C = cosh(r*dl), S = sinh(r*dl)/r,  r**2 = b**2/4 - a*c
+    ! (cos/sin for r**2 < 0; both are the same power series in x = r**2*dl**2, summed here to x**9,
+    ! exact to roundoff for |x| < 2, while |x| < 0.4 for any tropospheric segment). The pressure
+    ! at the top of a segment follows from the inverse, dl = rho*atanh(r*rho)/(r*rho) with
+    ! rho = u/(a + b*u/2) (atan for r**2 < 0). Above htrop T = t_prof(htrop) and
+    ! z = htrop - (l - l_trop)*kz*ttrop. Every level is solved from the base of its segment, so the
+    ! level loop has no dependency and vectorises. Agrees with an RK4 reference (dlnp 1e-5) to
+    ! 5e-8 m, against ~1 m for the former RK2 with dlnp_max = 0.05, at 1/4.6 of the cost
+    ! (analysis/hypso_accuracy/hypso_exact_test.f90).
 
     implicit none
 
@@ -548,11 +492,30 @@ contains
     real(wp), intent(out) :: zc_geo(:)
     real(wp), intent(out) :: zl_geo(:)
 
-    real(wp), parameter :: dlnp_max = 0.05_wp
-    integer :: k, n, n0, nt
-    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), z, lnp, lnps, ttrop
+    integer :: k, n, nt
+    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), lnps, ttrop, qq, kz, zbl, ztr, lnp_bl, lnp_tr
+    real(wp) :: a0, b0, a1, b1, a2, b2, c, t_bl
+    real(wp) :: a, b, z0, l0, dl, x, cc, sl
 
+    kz = Rd/g
+    qq = (gamt-gamb)/(2._wp*hgamt)
+    c  = kz*qq
+    ztr = max(htrop,zs)
+    zbl = min(zs+hgams, ztr)
+    lnps = -zs/hatm
     ttrop = t_prof(zs, htrop, tam, gams, gamb, gamt, htrop, 1)
+
+    ! segments 0 (below ground) and 1 (surface layer), from the surface
+    a0 = -kz*tam
+    b0 = kz*(gamb + 2._wp*qq*zs)
+    a1 = a0
+    b1 = kz*(gams + 2._wp*qq*zs)
+    lnp_bl = lnps + ric_dl(a1, b1, c, zbl-zs)
+    ! segment 2 (free troposphere), from the top of the surface layer
+    t_bl = tam - gams*(zbl-zs) - qq*(zbl**2-zs**2)
+    a2 = -kz*t_bl
+    b2 = kz*(gamb + 2._wp*qq*zbl)
+    lnp_tr = lnp_bl + ric_dl(a2, b2, c, ztr-zbl)
 
     ! targets from the bottom up: interface 1, centre 1, interface 2, ..., interface kmc
     nt = 2*km+1
@@ -561,33 +524,28 @@ contains
       lnp_t(2*k)   = -zc(k)/hatm
     enddo
     lnp_t(nt) = -zl(kmc)/hatm
-    lnps = -zs/hatm
 
-    ! first target at or above the surface
-    n0 = nt+1
+    !$omp simd private(a,b,z0,l0,dl,x,cc,sl)
     do n=1,nt
-      if (lnp_t(n).le.lnps) then
-        n0 = n
-        exit
+      if (lnp_t(n).ge.lnps) then
+        a = a0 ; b = b0 ; z0 = zs  ; l0 = lnps
+      else if (lnp_t(n).ge.lnp_bl) then
+        a = a1 ; b = b1 ; z0 = zs  ; l0 = lnps
+      else
+        a = a2 ; b = b2 ; z0 = zbl ; l0 = lnp_bl
       endif
-    enddo
-
-    ! upward from the surface
-    z = zs
-    lnp = lnps
-    do n=n0,nt
-      z = hypso_dz(z, lnp, lnp_t(n))
-      lnp = lnp_t(n)
-      z_t(n) = z
-    enddo
-
-    ! downward from the surface, below ground
-    z = zs
-    lnp = lnps
-    do n=n0-1,1,-1
-      z = hypso_dz(z, lnp, lnp_t(n))
-      lnp = lnp_t(n)
-      z_t(n) = z
+      dl = lnp_t(n)-l0
+      x = (0.25_wp*b*b - a*c)*dl*dl
+      ! C = sum x^m/(2m)!, S/dl = sum x^m/(2m+1)!
+      cc = 1._wp+x*(1._wp/2._wp+x*(1._wp/24._wp+x*(1._wp/720._wp+x*(1._wp/40320._wp+x*(1._wp/3628800._wp &
+         + x*(1._wp/479001600._wp+x*(1._wp/87178291200._wp+x*(1._wp/20922789888000._wp &
+         + x*(1._wp/6402373705728000._wp)))))))))
+      sl = 1._wp+x*(1._wp/6._wp+x*(1._wp/120._wp+x*(1._wp/5040._wp+x*(1._wp/362880._wp+x*(1._wp/39916800._wp &
+         + x*(1._wp/6227020800._wp+x*(1._wp/1307674368000._wp+x*(1._wp/355687428096000._wp &
+         + x*(1._wp/121645100408832000._wp)))))))))
+      z_t(n) = z0 + a*sl*dl/(cc - 0.5_wp*b*sl*dl)
+      ! isothermal stratosphere
+      if (lnp_t(n).lt.lnp_tr) z_t(n) = ztr - (lnp_t(n)-lnp_tr)*kz*ttrop
     enddo
 
     do k=1,km
@@ -598,23 +556,23 @@ contains
 
   contains
 
-    pure function hypso_dz(z0, lnp0, lnp1) result(z1)
-      real(wp), intent(in) :: z0, lnp0, lnp1
-      real(wp) :: z1, h, zm
-      integer :: ns, s
-      ns = max(1,ceiling(abs(lnp1-lnp0)/dlnp_max))
-      h = (lnp1-lnp0)/real(ns,wp)
-      z1 = z0
-      do s=1,ns
-        if (h.lt.0._wp .and. z1.ge.htrop) then
-          ! upward in the isothermal stratosphere: exact for the rest of the interval
-          z1 = z1 - (lnp1-(lnp0+real(s-1,wp)*h))*Rd*ttrop/g
-          return
-        endif
-        zm = z1 - 0.5_wp*h*Rd*t_prof(zs, z1, tam, gams, gamb, gamt, htrop, 1)/g
-        z1 = z1 - h*Rd*t_prof(zs, zm, tam, gams, gamb, gamt, htrop, 1)/g
-      enddo
-    end function hypso_dz
+    ! dl at which du/dl = a + b*u + c*u**2, u(0) = 0, reaches u
+    pure function ric_dl(a, b, c, u) result(dl)
+      real(wp), intent(in) :: a, b, c, u
+      real(wp) :: dl, rho, y, f, rr
+      rho = u/(a + 0.5_wp*b*u)
+      y = (0.25_wp*b*b - a*c)*rho*rho
+      if (abs(y).lt.1.e-8_wp) then
+        f = 1._wp + y/3._wp
+      else if (y.gt.0._wp) then
+        rr = sqrt(y)
+        f = atanh(rr)/rr
+      else
+        rr = sqrt(-y)
+        f = atan(rr)/rr
+      endif
+      dl = rho*f
+    end function ric_dl
 
   end subroutine hypso_column
 
