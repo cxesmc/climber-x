@@ -60,7 +60,7 @@
   c_mmc_had = 0.23              ! parameter for strength of Hadley cells
   c_mmc_q = 0.7                 ! exponent of the humidity scaling of the Hadley amplitude, used only if i_mmc_had=1
   q_mmc_ref = 0.0132            ! kg/kg, tropical boundary layer specific humidity at which the humidity scaling is unity, used only if i_mmc_had=1
-  c_mmc_fer = 0.05              ! parameter for strength of Ferrel cells
+  c_mmc_fer = 0.06              ! parameter for strength of Ferrel cells
   c_mmc_pol = 0.005             ! parameter for strength of Polar cells
   c_mmc_1 = 5.                  ! shape factor of the ITCZ displacement of the cell pattern, used only if i_mmc_geo=0
   i_mmc_geo = 2                 ! meridional cell geometry: 0 = whole pattern displaced towards the ITCZ, decaying as 1/(1+c_mmc_1*(fi-ficz)**2),

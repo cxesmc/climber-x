@@ -82,7 +82,10 @@ contains
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &    ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &     ! out
       gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q, & ! optional input arguments for feedback analysis
-      lwr_tro_cs) ! optional output, clear-sky flux at the tropopause
+      lwr_tro_cs, & ! optional output, clear-sky flux at the tropopause
+      tam_p, gams_p, gamb_p, gamt_p, dt_p, & ! optional, feedback analysis: temperature perturbation at fixed pressure
+      tam_c, gams_c, gamb_c, gamt_c, & ! optional, feedback analysis: temperature profile for the cloud ice/liquid LW ramp
+      dt_q) ! optional, radiative kernels: tropospheric moisture of a warming dt_q at fixed pressure and relative humidity
 
     implicit none
 
@@ -132,10 +135,30 @@ contains
     ! optional output needed to diagnose the clear-sky radiative forcing at the tropopause
     real(wp), intent(out), optional :: lwr_tro_cs(:,:)
 
+    ! optional arguments for the feedback analysis, temperature perturbations at fixed pressure:
+    ! the level pressures are those of the reference profile (tam_p, gams_p, gamb_p, gamt_p), and
+    ! each tropospheric level gets the temperature that the actual profile (tam, gams, gamb, gamt)
+    ! has at that pressure, plus dt_p. The stratosphere (ttrop) is not perturbed.
+    real(wp), intent(in ), optional :: tam_p(:,:)
+    real(wp), intent(in ), optional :: gams_p(:,:)
+    real(wp), intent(in ), optional :: gamb_p(:,:)
+    real(wp), intent(in ), optional :: gamt_p(:,:)
+    real(wp), intent(in ), optional :: dt_p(:,:)
+    ! optional, temperature profile (at the level pressures) that sets the ice/liquid LW absorption
+    ! coefficient of the cloud layers (i_lw_cld_ice=1); default is the actual profile
+    real(wp), intent(in ), optional :: tam_c(:,:)
+    real(wp), intent(in ), optional :: gams_c(:,:)
+    real(wp), intent(in ), optional :: gamb_c(:,:)
+    real(wp), intent(in ), optional :: gamt_c(:,:)
+    ! optional, radiative kernels: the tropospheric specific humidity is computed for the level temperatures
+    ! plus dt_q (at the level pressures, unchanged relative humidity), the temperatures themselves unchanged
+    real(wp), intent(in ), optional :: dt_q(:,:)
+
     ! local variables
     integer :: i, j, n
     real(wp), allocatable, dimension(:) :: zlwr
     real(wp), allocatable, dimension(:) :: tlwr
+    real(wp), allocatable, dimension(:) :: tice
     real(wp), allocatable, dimension(:) :: qlwr
     real(wp), allocatable, dimension(:) :: O3lwr
     real(wp), allocatable, dimension(:,:) :: DCS
@@ -157,6 +180,8 @@ contains
     real(wp), dimension(nband) :: pf_sur
     integer :: n_col
     logical :: l_new_col
+    logical :: l_p, l_c
+    real(wp) :: prof_p(5), prof_c(4), dtq
 
     real(wp), dimension(nm) :: fst
     real(wp), dimension(nm) :: flwr_sur
@@ -193,9 +218,16 @@ contains
       fb_q = .false.
     endif
 
+    l_p = present(tam_p)
+    l_c = present(tam_c)
+    prof_p = 0._wp
+    prof_c = 0._wp
+    dtq = 0._wp
+
     ! allocate
     allocate(zlwr(llwr))
     allocate(tlwr(llwr))
+    allocate(tice(llwr))
     allocate(qlwr(llwr))
     allocate(O3lwr(llwr))
     allocate(DCS(llwr,llwr))
@@ -240,11 +272,16 @@ contains
     ! convert from ppm to mass mixing ratio
     q_co2 = co2e*1.e-6_wp * 44.0095_wp/28.97_wp ! kg/kg
 
-    !$omp parallel do collapse(2) private(i, j, n, zlwr, tlwr, qlwr, O3lwr, DCS, DCL, BSB, fcl_up, fcl_dw, fcs_up, fcs_dw) &
+    !$omp parallel do collapse(2) private(i, j, n, zlwr, tlwr, tice, qlwr, O3lwr, DCS, DCL, BSB, fcl_up, fcl_dw, fcs_up, fcs_dw) &
     !$omp private (fst, flwr_sur, flwr_top, flwr_top_cs, flwr_top_cld, flwr_tro, flwr_tro_cs, flwr_cld) &
-    !$omp private (fbl_up, fbl_dw, fbs_up, fbs_dw, BSB3, DCS3, DCL3, ib, tsur_eff, pf_sur, n_col, l_new_col)
+    !$omp private (fbl_up, fbl_dw, fbs_up, fbs_dw, BSB3, DCS3, DCL3, ib, tsur_eff, pf_sur, n_col, l_new_col) &
+    !$omp firstprivate (prof_p, prof_c, dtq)
     do i=1,im
       do j=1,jm 
+
+        if (l_p) prof_p = [tam_p(i,j), gams_p(i,j), gamb_p(i,j), gamt_p(i,j), dt_p(i,j)]
+        if (l_c) prof_c = [tam_c(i,j), gams_c(i,j), gamb_c(i,j), gamt_c(i,j)]
+        if (present(dt_q)) dtq = dt_q(i,j)
 
         n_col = 0   ! last surface type for which the column and the transmission functions were computed
         do n=1,nm
@@ -264,11 +301,13 @@ contains
             else if (.not.fb_q) then
               call lwr_column(zsa(i,j), zs(i,j,n), htrop(i,j), hcld(i,j), &    ! in
                 gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), ttrop(i,j), o3(i,j,:), &   ! in
-                zlwr, tlwr, qlwr, O3lwr)    ! out
+                l_p, prof_p, l_c, prof_c, dtq, &   ! in
+                zlwr, tlwr, qlwr, O3lwr, tice)    ! out
             else
               call lwr_column(zsa(i,j), zs(i,j,n), htrop(i,j), hcld(i,j), &    ! in
                 gams(i,j), gamb(i,j), gamt(i,j), tam(i,j), ram(i,j), hrm(i,j), ttrop(i,j), o3(i,j,:), &   ! in
-                zlwr, tlwr, qlwr, O3lwr, &    ! out
+                l_p, prof_p, l_c, prof_c, dtq, &   ! in
+                zlwr, tlwr, qlwr, O3lwr, tice, &    ! out
                 gams_q(i,j), gamb_q(i,j), gamt_q(i,j), tam_q(i,j), ttrop_q(i,j), htrop_q(i,j)) ! optional input arguments for feedback analysis
             endif
 
@@ -276,7 +315,7 @@ contains
 
               !-----------------------------------------------------------
               ! Computation of clear-sky and cloudy LWR transmission functions
-              if (l_new_col) call lwr_transfer(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, &
+              if (l_new_col) call lwr_transfer(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, tice, &
                 BSB, DCS, DCL)
 
               !-----------------------------------------------------------
@@ -296,7 +335,7 @@ contains
               ! the surface emission is split with the Planck fraction at the surface radiative temperature
               tsur_eff = (flwr_up_sur(i,j,n)/sigma)**0.25_wp
               call pfrac3(tsur_eff, pf_sur)
-              if (l_new_col) call lwr_transfer_3b(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, &
+              if (l_new_col) call lwr_transfer_3b(ra2(i,j,n), clot(i,j), zlwr, tlwr, qlwr, O3lwr, tice, &
                 BSB3, DCS3, DCL3)
               fcs_up = 0._wp
               fcs_dw = 0._wp
@@ -352,6 +391,7 @@ contains
 
     deallocate(zlwr)
     deallocate(tlwr)
+    deallocate(tice)
     deallocate(qlwr)
     deallocate(O3lwr)
     deallocate(DCS)
@@ -440,7 +480,8 @@ contains
   !   Purpose    :  derive temperature, humidity and ozone at lwr levels, returned at z*
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine lwr_column(zsa, zs, htrop, hcld, gams, gamb, gamt, tam, ram, hrm, ttrop, O3, &
-      zlwr, tlwr, qlwr, O3lwr, &    
+      l_p, prof_p, l_c, prof_c, dtq, &
+      zlwr, tlwr, qlwr, O3lwr, tice, &    
       gams_q, gamb_q, gamt_q, tam_q, ttrop_q, htrop_q) ! optional input arguments for feedback analysis
     
     implicit none
@@ -457,11 +498,21 @@ contains
     real(wp), intent(in ) :: hrm
     real(wp), intent(in ) :: ttrop
     real(wp), intent(in ) :: O3(:)
+    ! feedback analysis: l_p, perturbation at fixed pressure, prof_p = reference profile
+    ! (tam, gams, gamb, gamt) that sets the level pressures + temperature offset dt;
+    ! l_c, prof_c = profile (tam, gams, gamb, gamt) for the cloud ice/liquid LW coefficient
+    logical,  intent(in ) :: l_p
+    real(wp), intent(in ) :: prof_p(5)
+    logical,  intent(in ) :: l_c
+    real(wp), intent(in ) :: prof_c(4)
+    ! radiative kernels: tropospheric moisture for the level temperatures + dtq (0 = actual)
+    real(wp), intent(in ) :: dtq
 
     real(wp), intent(out), dimension(:) :: zlwr
     real(wp), intent(out), dimension(:) :: tlwr
     real(wp), intent(out), dimension(:) :: qlwr
     real(wp), intent(out), dimension(:) :: O3lwr
+    real(wp), intent(out), dimension(:) :: tice
 
     ! optional arguments needed for feedback analysis
     real(wp), intent(in), optional :: gams_q
@@ -474,9 +525,10 @@ contains
     integer :: k, kk
     real(wp) :: z_cld_bot, z_cld_top
     real(wp) :: dz_l1, dz_l2, dz_l3, dz_l4
-    real(wp) :: tamz, tlwr_q, rqlwr, qtrop, zst_q
+    real(wp) :: tamz, rqlwr, qtrop, zst_q
     real(wp) :: w
     real(wp) :: zst(size(zlwr))
+    real(wp) :: zst_r(size(zlwr)), t_r(size(zlwr)), t_a(size(zlwr)), zp_q(size(zlwr))
 
 
     ! Cloud parameters
@@ -542,12 +594,41 @@ contains
       zst(k) = zst(k-1) + (zlwr(k)-zlwr(k-1))*0.5_wp*(T0/tlwr(k-1)+T0/tlwr(k))
     enddo
 
+    ! Feedback analysis, temperature perturbation at FIXED PRESSURE (as radiative kernels).
+    ! The level pressures are those of the reference profile prof_p (the control climate), and each
+    ! tropospheric level gets the temperature that the actual profile has at that pressure (found
+    ! through the actual profile's own hypsometry), plus the offset prof_p(5). Without this, a
+    ! perturbation of tam is uniform in geometric height, and since the warmer column lifts every
+    ! pressure level, it is smaller than tam's change at fixed pressure. The stratosphere (ttrop)
+    ! is not perturbed.
+    if (l_p) then
+      call t_levels(zsa, zs, zlwr, htrop, ttrop, prof_p(1), prof_p(2), prof_p(3), prof_p(4), t_r)
+      call zst_levels(zlwr, t_r, zst_r)
+      call t_at_zst(zs, zlwr, htrop, ttrop, tlwr(1), gams, gamb, gamt, zst, zst_r, t_a)
+      tlwr(1) = tlwr(1) + prof_p(5)
+      do k=2,llwr3
+        tlwr(k) = t_a(k) + prof_p(5)
+      enddo
+      zst = zst_r
+    endif
+
+    ! Temperature that sets the ice/liquid LW absorption coefficient of the cloud layers: the actual
+    ! one, or (feedback analysis) that of profile prof_c at the level pressures, so that the cloud
+    ! phase change can be attributed to the cloud feedback rather than to the temperature feedbacks
+    if (l_c) then
+      call t_levels(zsa, zs, zlwr, htrop, ttrop, prof_c(1), prof_c(2), prof_c(3), prof_c(4), t_r)
+      call zst_levels(zlwr, t_r, zst_r)
+      call t_at_zst(zs, zlwr, htrop, ttrop, t_r(1), prof_c(2), prof_c(3), prof_c(4), zst_r, zst, tice)
+    else
+      tice = tlwr
+    endif
+
     ! Humidity: RH profile at the geometric heights, qsat at the level pressures
 
-    qlwr(1) = fqsat(tlwr(1),p0*exp(-zst(1)/hatm))*ram
+    qlwr(1) = fqsat(tlwr(1)+dtq,p0*exp(-zst(1)/hatm))*ram
     do k=2,llwr3
       rqlwr   = rh_prof(zs, zlwr(k), ram, hrm, htrop)
-      qlwr(k) = fqsat(tlwr(k),p0*exp(-zst(k)/hatm))*rqlwr 
+      qlwr(k) = fqsat(tlwr(k)+dtq,p0*exp(-zst(k)/hatm))*rqlwr 
     enddo
 
     ! Stratosphere, level llwr3 is the tropopause
@@ -558,26 +639,34 @@ contains
 
     ! for feedback analysis, temperature used to compute moisture profile can differ from actual
     ! temperature profile; the level pressures are those of the actual profile
+    ! The moisture is that of the q-profile column AT THE LEVEL PRESSURES (as radiative kernels): each level
+    ! gets the temperature, and the relative humidity of the height, that the q-profile column has where its
+    ! own log-pressure height (hypsometry of its own temperature profile) equals zst(k). When the q-profile
+    ! is the actual profile this is the identity.
     if (fb_q) then
-      tamz = t_prof(zsa, zlwr(1), tam_q, gams_q, gamb_q, gamt_q, htrop_q, 0)
-      zst_q = zst(llwr4)
+      call t_levels(zsa, zs, zlwr, htrop_q, ttrop_q, tam_q, gams_q, gamb_q, gamt_q, t_r)
+      call zst_levels(zlwr, t_r, zst_r)
+      call t_at_zst(zs, zlwr, htrop_q, ttrop_q, t_r(1), gams_q, gamb_q, gamt_q, zst_r, zst, t_a, zp_q)
+      qlwr(1) = fqsat(t_r(1),p0*exp(-zst(1)/hatm))*ram
+      ! log-pressure height of the q-profile tropopause, in the q-profile column
+      zst_q = zst_r(llwr4)
       do k=2,llwr4
         if (zlwr(k).ge.htrop_q) then
           w = (htrop_q-zlwr(k-1))/max(zlwr(k)-zlwr(k-1),1.e-6_wp)
-          zst_q = zst(k-1) + max(0._wp,min(1._wp,w))*(zst(k)-zst(k-1))
+          zst_q = zst_r(k-1) + max(0._wp,min(1._wp,w))*(zst_r(k)-zst_r(k-1))
           exit
         endif
       enddo
       qtrop = fqsat(ttrop_q,p0*exp(-zst_q/hatm))*rh_strat
+      ! The levels below the q-profile tropopause height are tropospheric. In a warmer q-profile column
+      ! the top ones map above its tropopause (the pressure levels rise): there the temperature is
+      ! capped at the tropopause value (t_prof) and the relative humidity is taken at the tropopause,
+      ! as for the temperature terms (classifying by zp_q instead would dry the whole top layer)
       do k=2,llwr4
-        ! fixme possible problems at tropopause because of non-adaptive layers?
         if (zlwr(k).le.(htrop_q+10.)) then
-          ! troposphere
-          tlwr_q = t_prof(zs, zlwr(k), tamz, gams_q, gamb_q, gamt_q, htrop_q, 1)
-          rqlwr  = rh_prof(zs, zlwr(k), ram, hrm, htrop_q)
-          qlwr(k)= fqsat(tlwr_q,p0*exp(-zst(k)/hatm))*rqlwr 
+          rqlwr  = rh_prof(zs, min(zp_q(k),htrop_q), ram, hrm, htrop_q)
+          qlwr(k)= fqsat(t_a(k),p0*exp(-zst(k)/hatm))*rqlwr 
         else
-          ! stratosphere
           qlwr(k) = qtrop
         endif
       enddo
@@ -617,10 +706,105 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t _ l e v e l s
+  !   Purpose    :  temperature profile at the geometric heights of the lwr levels
+  !                 (same expressions as in lwr_column)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure subroutine t_levels(zsa, zs, zgeo, htrop, ttrop, tam, gams, gamb, gamt, tz)
+
+    implicit none
+
+    real(wp), intent(in) :: zsa, zs, htrop, ttrop, tam, gams, gamb, gamt
+    real(wp), intent(in) :: zgeo(:)
+    real(wp), intent(out) :: tz(:)
+
+    integer :: k
+    real(wp) :: tamz
+
+    tamz  = t_prof(zsa, zgeo(1), tam, gams, gamb, gamt, htrop, 0)
+    tz(1) = tamz
+    do k=2,llwr3
+      tz(k) = t_prof(zs, zgeo(k), tamz, gams, gamb, gamt, htrop, 1)
+    enddo
+    do k=llwr3+1,llwr4
+      tz(k) = ttrop
+    enddo
+
+  end subroutine t_levels
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  z s t _ l e v e l s
+  !   Purpose    :  log-pressure heights of the levels from the hypsometric equation
+  !                 (same expressions as in lwr_column)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure subroutine zst_levels(zgeo, tz, zst)
+
+    implicit none
+
+    real(wp), intent(in) :: zgeo(:), tz(:)
+    real(wp), intent(out) :: zst(:)
+
+    integer :: k
+
+    zst(1) = zgeo(1)
+    do k=2,llwr4
+      zst(k) = zst(k-1) + (zgeo(k)-zgeo(k-1))*0.5_wp*(T0/tz(k-1)+T0/tz(k))
+    enddo
+
+  end subroutine zst_levels
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t _ a t _ z s t
+  !   Purpose    :  temperature of a profile (surface temperature tamz, lapse rates gams, gamb,
+  !                 gamt, own log-pressure heights zst_own at the geometric levels zgeo) at the
+  !                 log-pressure heights zst_t of the levels (temperature for the tropospheric ones). The geometric height of
+  !                 each target is interpolated between the levels (z* is trapezoidal in 1/T, so
+  !                 ~linear in z within a layer) and the profile is evaluated there analytically.
+  !                 Level 1 is the surface; levels above the tropopause get ttrop.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure subroutine t_at_zst(zs, zgeo, htrop, ttrop, tamz, gams, gamb, gamt, zst_own, zst_t, t_out, zp_out)
+
+    implicit none
+
+    real(wp), intent(in) :: zs, htrop, ttrop, tamz, gams, gamb, gamt
+    real(wp), intent(in) :: zgeo(:), zst_own(:), zst_t(:)
+    real(wp), intent(out) :: t_out(:)
+    real(wp), intent(out), optional :: zp_out(:)   ! geometric heights of the targets in this column, all levels
+
+    integer :: k, l
+    real(wp) :: zp, w
+
+    t_out(1) = tamz
+    if (present(zp_out)) zp_out(1) = zgeo(1)
+    do k=2,llwr4
+      if (zst_t(k).ge.zst_own(llwr4)) then
+        ! above the top level: isothermal at ttrop
+        zp = zgeo(llwr4) + (zst_t(k)-zst_own(llwr4))*ttrop/T0
+      else
+        l = 2
+        do while (l.lt.llwr4 .and. zst_own(l).lt.zst_t(k))
+          l = l+1
+        enddo
+        w  = (zst_t(k)-zst_own(l-1))/max(zst_own(l)-zst_own(l-1),1.e-6_wp)
+        w  = max(0._wp,min(1._wp,w))
+        zp = zgeo(l-1) + w*(zgeo(l)-zgeo(l-1))
+      endif
+      if (present(zp_out)) zp_out(k) = zp
+      ! t_prof caps the height at htrop, so a target above this profile's tropopause gets its
+      ! tropopause temperature (callers use only the tropospheric levels, or the cloud layers)
+      t_out(k) = t_prof(zs, zp, tamz, gams, gamb, gamt, htrop, 1)
+    enddo
+
+  end subroutine t_at_zst
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  l w r _ t r a n s f e r
   !   Purpose    :  computation of tranfer functions for lwr
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lwr_transfer(ra2, clot, zlwr, tlwr, qlwr, O3lwr, &
+  subroutine lwr_transfer(ra2, clot, zlwr, tlwr, qlwr, O3lwr, tice, &
       BSB, DCS, DCL)
 
     implicit none
@@ -631,6 +815,7 @@ contains
     real(wp), intent(in) :: tlwr(:)
     real(wp), intent(in) :: qlwr(:)
     real(wp), intent(in) :: O3lwr(:)
+    real(wp), intent(in) :: tice(:)   ! temperature at the levels for the cloud ice/liquid LW coefficient
 
     real(wp), intent(out) :: BSB(:)
     real(wp), intent(out) :: DCS(:,:)
@@ -736,7 +921,7 @@ contains
       c_lw = 1._wp
       do k=llwr1,llwr2-1
         am_cld(k) = am_cld(k) * (c_lw_clot_ice + (c_lw_clot-c_lw_clot_ice) &
-          * min(1._wp,max(0._wp,(0.5_wp*(tlwr(k)+tlwr(k+1))-T_lw_ice)/(T0-T_lw_ice))))
+          * min(1._wp,max(0._wp,(0.5_wp*(tice(k)+tice(k+1))-T_lw_ice)/(T0-T_lw_ice))))
       enddo
     else
       c_lw = c_lw_clot
@@ -900,7 +1085,7 @@ contains
   !                 as exp(b*log(u)) with one log per absorber shared by all bands, and the
   !                 cloud transmission is band independent
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lwr_transfer_3b(ra2, clot, zlwr, tlwr, qlwr, O3lwr, &
+  subroutine lwr_transfer_3b(ra2, clot, zlwr, tlwr, qlwr, O3lwr, tice, &
       BSB, DCS, DCL)
 
     implicit none
@@ -911,6 +1096,7 @@ contains
     real(wp), intent(in) :: tlwr(:)
     real(wp), intent(in) :: qlwr(:)
     real(wp), intent(in) :: O3lwr(:)
+    real(wp), intent(in) :: tice(:)   ! temperature at the levels for the cloud ice/liquid LW coefficient
 
     real(wp), intent(out) :: BSB(:,:)
     real(wp), intent(out) :: DCS(:,:,:)
@@ -1005,7 +1191,7 @@ contains
       c_lw = 1._wp
       do k=llwr1,llwr2-1
         am_cld(k) = am_cld(k) * (c_lw_clot_ice + (c_lw_clot-c_lw_clot_ice) &
-          * min(1._wp,max(0._wp,(0.5_wp*(tlwr(k)+tlwr(k+1))-T_lw_ice)/(T0-T_lw_ice))))
+          * min(1._wp,max(0._wp,(0.5_wp*(tice(k)+tice(k+1))-T_lw_ice)/(T0-T_lw_ice))))
       enddo
     else
       c_lw = c_lw_clot

@@ -26,7 +26,7 @@
 module feedbacks_mod
 
   use atm_params, only : wp
-  use constants, only : sigma
+  use constants, only : sigma, T0
   use control, only : out_dir
   use timer, only : doy, nday_year, time_eoy_atm, nyear_feedback_avg
   use climber_grid, only : lon, lat
@@ -403,6 +403,8 @@ contains
     real(wp), dimension(:,:), allocatable :: fb_htrop_old
     real(wp), dimension(:,:), allocatable :: fb_ttrop
     real(wp), dimension(:,:,:), allocatable :: fb_flwr_up_sur
+    real(wp), dimension(:,:), allocatable :: dt2, dt0
+    real(wp), dimension(:,:), allocatable :: fb_hcld_p
 
     integer :: i, j, n
     real(wp) :: co2e
@@ -441,6 +443,9 @@ contains
     allocate(fb_htrop_old(im,jm))
     allocate(fb_ttrop(im,jm))
     allocate(fb_flwr_up_sur(im,jm,nm))
+    allocate(dt2(im,jm))
+    allocate(fb_hcld_p(im,jm))
+    allocate(dt0(im,jm))
 
     !-------------------------------
     ! longwave radiation
@@ -518,14 +523,36 @@ contains
     ! to rf_trop. Any difference measures how far the iteration above is from convergence.
     fb%rf_top_adj(:,:) = fb%rf_top_adj(:,:) + (lwr_top-flwr_top_control)/nday_year
 
+    ! Temperature feedbacks (Planck, lapse rate and their sum) are perturbations AT FIXED PRESSURE,
+    ! as in radiative kernels: the level pressures are those of the control profile (tam_p...), the
+    ! temperature at each tropospheric level is that of the swapped profile at that pressure plus
+    ! dt_p, and the stratosphere is not perturbed. The specific humidity stays at its control value
+    ! (moisture arguments) and so does the cloud ice/liquid LW coefficient (tam_c...), whose change
+    ! with warming is part of the cloud (optical thickness) feedback.
+    ! near-surface air warming, the uniform warming of the Planck feedback
+    dt2 = sum((fb%t2(:,:,:,doy)-t2)*frst,3)
+    dt0 = 0._wp
+    ! Cloud top of the 2x state AT FIXED PRESSURE: the height in the control column that has the
+    ! pressure the 2x cloud top has in the 2x column, so that the cloud height feedback measures the
+    ! change of the cloud-top pressure, consistently with the temperature and water vapour terms
+    do j=1,jm
+      do i=1,im
+        fb_hcld_p(i,j) = z_same_p(zsa(i,j), fb%hcld(i,j,doy), &
+          fb%tam(i,j,doy), fb%gams(i,j,doy), fb%gamb(i,j,doy), fb%gamt(i,j,doy), fb%htrop(i,j,doy), &
+          tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j))
+      enddo
+    enddo
+
     ! Planck feedback
     fb_flwr_up_sur = sigma*((flwr_up_sur/sigma)**0.25 + (fb%tskin(:,:,:,doy)-tskin))**4
-    ! uniform tropospheric warming (same warming as near surface air)
+    ! uniform tropospheric warming at fixed pressure (same warming as near surface air)
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      gams, gamb, gamt, tam+sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, &  ! in
+      gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, fb_flwr_up_sur, &  ! in, account also for surface emission changes
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback (moisture)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=dt2, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     fb%flwr_top(:,:,i_pl) = fb%flwr_top(:,:,i_pl) + lwr_top/nday_year
 
     ! water vapor feedback
@@ -536,11 +563,12 @@ contains
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy), ttrop, htrop) ! optional input arguments for feedback (moisture)
     fb%flwr_top(:,:,i_wv) = fb%flwr_top(:,:,i_wv) + lwr_top/nday_year
 
-    ! cloud feedback
-    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
+    ! cloud feedback, including the change of the ice/liquid LW coefficient with warming
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb_hcld_p, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, fb%cld(:,:,doy), fb%clot(:,:,doy), &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
-      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
+      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
+      tam_c=fb%tam(:,:,doy), gams_c=fb%gams(:,:,doy), gamb_c=fb%gamb(:,:,doy), gamt_c=fb%gamt(:,:,doy))
     fb%flwr_top(:,:,i_cld) = fb%flwr_top(:,:,i_cld) + lwr_top/nday_year
 
     ! cloud fraction feedback
@@ -550,40 +578,50 @@ contains
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld_frac) = fb%flwr_top(:,:,i_cld_frac) + lwr_top/nday_year
 
-    ! cloud top height feedback
-    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb%hcld(:,:,doy), ra2, &   ! in
+    ! cloud top height feedback (cloud-top pressure change)
+    call lw_radiation(1._wp, frst, zsa, zs, htrop, fb_hcld_p, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
     fb%flwr_top(:,:,i_cld_hcld) = fb%flwr_top(:,:,i_cld_hcld) + lwr_top/nday_year
 
-    ! cloud optical thickness feedback
+    ! cloud optical thickness feedback, including the change of the ice/liquid LW coefficient
+    ! (cloud phase) with warming
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, fb%clot(:,:,doy), &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
-      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld)    ! out
+      lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
+      tam_c=fb%tam(:,:,doy), gams_c=fb%gams(:,:,doy), gamb_c=fb%gamb(:,:,doy), gamt_c=fb%gamt(:,:,doy))
     fb%flwr_top(:,:,i_cld_clot) = fb%flwr_top(:,:,i_cld_clot) + lwr_top/nday_year
 
-    ! lapse rate feedback
+    ! lapse rate feedback: 2x profile at fixed pressure minus the near-surface warming
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy)-sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, & ! in
+      fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy), ram, hrm, ttrop, cld, clot, & ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback analysis (moisture profile)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=-dt2, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     fb%flwr_top(:,:,i_lr) = fb%flwr_top(:,:,i_lr) + lwr_top/nday_year
 
+    ! lapse rate feedback from the change of the lapse rates (shape) only
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), tam, ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback analysis (moisture profile)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=dt0, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     fb%flwr_top(:,:,i_lr_gam) = fb%flwr_top(:,:,i_lr_gam) + lwr_top/nday_year
 
+    ! lapse rate feedback from the change of tam relative to the near-surface warming only
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      gams, gamb, gamt, fb%tam(:,:,doy)-sum((fb%t2(:,:,:,doy)-t2)*frst,3), ram, hrm, ttrop, cld, clot, &  ! in
+      gams, gamb, gamt, fb%tam(:,:,doy), ram, hrm, ttrop, cld, clot, &  ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback analysis (moisture profile)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=-dt2, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     fb%flwr_top(:,:,i_lr_tam) = fb%flwr_top(:,:,i_lr_tam) + lwr_top/nday_year
 
     ! total temperature feedback
@@ -592,7 +630,9 @@ contains
       fb%gams(:,:,doy), fb%gamb(:,:,doy), fb%gamt(:,:,doy), fb%tam(:,:,doy), ram, hrm, ttrop, cld, clot, &    ! in
       co2, ch4, n2o, cfc11, cfc12, co2e, o3, fb_flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, &    ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback analysis (moisture profile)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback analysis (moisture profile)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=dt0, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     fb%flwr_top(:,:,i_temp) = fb%flwr_top(:,:,i_temp) + lwr_top/nday_year
 
     ! albedo feedback
@@ -738,6 +778,9 @@ contains
     deallocate(fb_htrop)
     deallocate(fb_htrop_old)
     deallocate(fb_ttrop)
+    deallocate(dt2)
+    deallocate(fb_hcld_p)
+    deallocate(dt0)
 
     return
 
@@ -880,6 +923,53 @@ contains
     return
 
   end subroutine feedback_write
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function   :  z _ s a m e _ p
+  !   Purpose    :  geometric height in column 1 (tam1, gams1, ...) at the pressure that height h2
+  !                 has in column 2 (tam2, gams2, ...), both anchored at the surface zsa with the
+  !                 same surface pressure; log-pressure heights from the hypsometric equation
+  !                 dz* = (T0/T) dz, integrated with the midpoint rule
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure function z_same_p(zsa, h2, tam2, gams2, gamb2, gamt2, htrop2, tam1, gams1, gamb1, gamt1, htrop1) result(z1)
+
+    implicit none
+
+    real(wp), intent(in) :: zsa, h2, tam2, gams2, gamb2, gamt2, htrop2, tam1, gams1, gamb1, gamt1, htrop1
+    real(wp) :: z1
+
+    integer, parameter :: nstep = 100
+    integer :: n
+    real(wp) :: dz, zst2, zst1, dzst, zm, t
+
+    if (h2.le.zsa) then
+      z1 = h2
+      return
+    endif
+    dz = (h2-zsa)/real(nstep,wp)
+    ! log-pressure height of h2 in column 2
+    zst2 = 0._wp
+    do n=1,nstep
+      zm = zsa + (real(n,wp)-0.5_wp)*dz
+      zst2 = zst2 + dz*T0/t_prof(zsa, zm, tam2, gams2, gamb2, gamt2, htrop2, 1)
+    enddo
+    ! march up column 1 until its log-pressure height reaches zst2
+    zst1 = 0._wp
+    z1 = zsa
+    do n=1,4*nstep
+      zm = z1 + 0.5_wp*dz
+      t = t_prof(zsa, zm, tam1, gams1, gamb1, gamt1, htrop1, 1)
+      dzst = dz*T0/t
+      if (zst1+dzst.ge.zst2) then
+        z1 = z1 + (zst2-zst1)*t/T0
+        return
+      endif
+      zst1 = zst1 + dzst
+      z1 = z1 + dz
+    enddo
+
+  end function z_same_p
 
 end module feedbacks_mod
 

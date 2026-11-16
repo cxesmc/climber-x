@@ -165,6 +165,7 @@ contains
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cs
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cld
     real(wp), dimension(:,:,:), allocatable :: rk_flwr_up_sur
+    real(wp), dimension(:,:), allocatable :: dt1
 
     real(wp) :: co2e
 
@@ -186,6 +187,8 @@ contains
     allocate(fswr_sur_cs (im,jm,nm))
     allocate(fswr_sur_cld (im,jm,nm))
     allocate(rk_flwr_up_sur(im,jm,nm))
+    allocate(dt1(im,jm))
+    dt1 = 1._wp
 
     !------------------------
     ! longwave radiation
@@ -200,21 +203,27 @@ contains
     rk%flwr_top_cs(:,:,i_lw_control) = rk%flwr_top_cs(:,:,i_lw_control) + lwr_top_cs / nday_year
     rk%flwr_sur_cs(:,:,i_lw_control) = rk%flwr_sur_cs(:,:,i_lw_control) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
-    ! water vapor, increase corresponding to 1K temperature increase
+    ! water vapor, tropospheric specific humidity increase of a 1 K warming at fixed pressure and
+    ! relative humidity (temperatures unchanged)
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
-      gams, gamb, gamt, tam+1._wp, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      dt_q=dt1)
     rk%flwr_top(:,:,i_lw_wv)    = rk%flwr_top(:,:,i_lw_wv)    + lwr_top  / nday_year
     rk%flwr_sur(:,:,i_lw_wv)    = rk%flwr_sur(:,:,i_lw_wv)    + lwr_sur   / nday_year
     rk%flwr_top_cs(:,:,i_lw_wv) = rk%flwr_top_cs(:,:,i_lw_wv) + lwr_top_cs / nday_year
     rk%flwr_sur_cs(:,:,i_lw_wv) = rk%flwr_sur_cs(:,:,i_lw_wv) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
-    ! air temperature, 1 K temperature increase
+    ! air temperature, uniform 1 K tropospheric warming at fixed pressure (as standard radiative kernels;
+    ! a warming of tam is uniform at fixed geometric height, which is less at fixed pressure since the
+    ! warmer column lifts the pressure levels). Specific humidity, stratosphere and the temperature of the
+    ! cloud ice/liquid LW coefficient unchanged.
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      gams, gamb, gamt, tam+1._wp, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
+      gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback (moisture)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=dt1, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     rk%flwr_top(:,:,i_lw_Ta)    = rk%flwr_top(:,:,i_lw_Ta)    + lwr_top  / nday_year
     rk%flwr_sur(:,:,i_lw_Ta)    = rk%flwr_sur(:,:,i_lw_Ta)    + lwr_sur   / nday_year
     rk%flwr_top_cs(:,:,i_lw_Ta) = rk%flwr_top_cs(:,:,i_lw_Ta) + lwr_top_cs / nday_year
@@ -287,6 +296,7 @@ contains
     deallocate(swr_sur   )
     deallocate(fswr_sur   )
     deallocate(rk_flwr_up_sur)
+    deallocate(dt1)
 
     return
 
