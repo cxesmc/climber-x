@@ -247,7 +247,7 @@ contains
     call nc_write(fnm,"dC13volc_dt",  vars%dC13volc_dt, dim1=dim_time,start=[ndat],count=[y],long_name="volcaninc CO2 13 degassing",units="GtC/yr",ncid=ncid)  
     call nc_write(fnm,"dC14dec_dt",  vars%dC14dec_dt, dim1=dim_time,start=[ndat],count=[y],long_name="C14 decay",units="kgC/yr",ncid=ncid)  
     call nc_write(fnm,"dC14prod_dt",  vars%dC14prod_dt, dim1=dim_time,start=[ndat],count=[y],long_name="C14 production rate",units="kgC/yr",ncid=ncid)  
-    call nc_write(fnm,"dCH4_dt  ",  vars%dCH4_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="carbon flux to atmosphere due to oxidation of anthropogenic CH4",units="GtC/yr",ncid=ncid)  
+    call nc_write(fnm,"dCH4_dt  ",  vars%dCH4_dt  , dim1=dim_time,start=[ndat],count=[y],long_name="carbon flux to atmosphere due to oxidation of anthropogenic and ocean (hydrate) CH4",units="GtC/yr",ncid=ncid)  
     call nc_close(ncid)
 
    return

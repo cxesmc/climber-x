@@ -248,6 +248,30 @@
     deep_res_d14c      = -1000.0   ! permil, Delta14C (radiocarbon-dead) of material drawn from deep reservoir
 
     !----------------------------------------------------------------------------
+    ! methane hydrates (reduced-form inventory per sediment depth class, see hydrate.f90)
+    !----------------------------------------------------------------------------
+    l_hydrates = F          ! marine methane hydrate inventory model? one bulk hydrate + free-gas pool per sediment depth class, stepped once a year
+    i_hyd_poc = 1           ! POC supply to methanogenesis: 1 = net POC burial flux out of the active sediment column (carbon conserving, needs l_sediments=T)
+                            !                               2 = POC rain to the seafloor x f_bur_eff (external carbon source, works without the sediment model)
+    f_bur_eff = 0.1         ! burial efficiency of the POC rain, only for i_hyd_poc=2
+    i_hyd_init = 1          ! 0 = start from zero (or from the restart when hydrate fields are present)
+                            ! 1 = initialise each class at its local steady state at the end of the first year (skipped when read from restart)
+    i_hyd_dry = 0           ! hydrate under seafloor that emerges when sea level falls: 0 = keep in a dormant store and restore on re-flooding (needs l_burial_preserve=T), 1 = release to the atmosphere
+    i_ch4_esc = 1           ! fate of the CH4 crossing the seafloor: 0 = all oxidised to DIC in the bottom water, 1 = fraction exp(-z_w/z_ox_ch4) escapes to the atmosphere, 2 = all to the atmosphere
+    k_sed_hyd = 1.0         ! W/m/K, thermal conductivity of the sediment (geothermal gradient = q_geo/k_sed_hyd)
+    dT_hyd_sal = 0.032      ! K/psu, salinity depression of the hydrate equilibrium temperature (Dickens and Quinby-Hunt 1994 seawater curve, defined at 35 psu)
+    z_hyd_max = 2000.       ! m, maximum depth below the seafloor searched for the base of the stability zone
+    f_meth = 0.2            ! fraction of the buried POC carbon converted to CH4 (2*f_meth of the POC is consumed, the other half is returned as DIC); <= 0.5
+    h_meth = 200.           ! m, e-folding depth of methanogenesis below the seafloor (fraction inside the GHSZ = 1-exp(-h_ghsz/h_meth))
+    k_dis_hyd = 1.e-5       ! 1/yr, slow dissolution/AOM loss rate of hydrate (sets the steady-state inventory together with the burial loss w_sed/h_ghsz)
+    f_aom = 0.9             ! fraction of the dissolution leak oxidised anaerobically inside the sediment (-> DIC), the rest crosses the seafloor as CH4
+    tau_gas = 500.          ! yr, time scale on which free gas below the stability zone escapes to the seafloor
+    f_retrap = 0.5          ! fraction of the escaping gas re-trapped as hydrate when passing through a fully developed stability zone
+    por_deep = 0.5          ! porosity of the consolidated sediment used to convert the buried solid volume into a sedimentation rate
+    z_ox_ch4 = 150.         ! m, e-folding water depth of CH4 oxidation in the water column (i_ch4_esc=1)
+    eps_meth = -60.         ! permil, 13C fractionation of methanogenesis (delta13C of the CH4 relative to the POC)
+
+    !----------------------------------------------------------------------------
     ! preformed tracers
     !----------------------------------------------------------------------------
     l_preformed_tracers = T     ! enable preformed tracers
