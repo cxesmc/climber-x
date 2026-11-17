@@ -66,6 +66,8 @@ module dim_name
   character(len=len), parameter :: dim_nocetra = "nocetra" 
   character(len=len), parameter :: dim_npowtra = "npowtra"
   character(len=len), parameter :: dim_nsedtra = "nsedtra"
+  character(len=len), parameter :: dim_nmonwet = "nmonwet"
+  character(len=len), parameter :: dim_wiso = "wiso"
 
 end module
 
