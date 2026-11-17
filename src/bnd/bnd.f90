@@ -224,7 +224,7 @@ contains
       endif
 
       ! update atmospheric O3 concentration if required
-      if( io3.eq.1) then
+      if( io3.ge.1) then
         call o3_update(io3, real(year_now,kind=wp), bnd%o3)     
       endif
 
@@ -448,17 +448,22 @@ contains
     endif
 
     ! initialize atmospheric O3
-    bnd%o3_pl = (/1._wp,0.9_wp,0.8_wp,0.7_wp,0.6_wp,0.5_wp,0.4_wp,0.3_wp,0.2_wp,0.1_wp,0._wp/)  ! pressure levels for 3D O3 field
+    ! the pressure levels of the 3D O3 field are those of the input file (o3_pl from o3_init)
     if (io3.eq.0) then
+      allocate(bnd%o3_pl(2))
+      allocate(bnd%o3(ni,nj,2))
+      bnd%o3_pl = (/1._wp,0._wp/)
       bnd%o3(:,:,:) = o3_const
-    elseif (io3.eq.1) then
+    else
       ! read o3 file
-      call o3_init(io3, o3_file_const)
-      ! get initial o3 value
-      call o3_update(io3,real(year_ini,kind=wp),bnd%o3)
-    elseif (io3.eq.2) then
-      ! read o3 file
-      call o3_init(io3, o3_file_var)
+      if (io3.eq.1) then
+        call o3_init(io3, o3_file_const)
+      elseif (io3.eq.2) then
+        call o3_init(io3, o3_file_var)
+      endif
+      allocate(bnd%o3_pl(size(o3_pl)))
+      allocate(bnd%o3(ni,nj,size(o3_pl)))
+      bnd%o3_pl = o3_pl
       ! get initial o3 value
       call o3_update(io3,real(year_ini,kind=wp),bnd%o3)
     endif
@@ -580,8 +585,6 @@ contains
     allocate(bnd%daylength(nday_year,nj))
 
     allocate(bnd%so4(ni,nj))
-    allocate(bnd%o3_pl(11))
-    allocate(bnd%o3(ni,nj,11))
 
     allocate(bnd%f_crop(ni,nj))
     allocate(bnd%f_pasture(ni,nj))

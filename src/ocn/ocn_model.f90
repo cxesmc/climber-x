@@ -47,7 +47,7 @@ module ocn_model
     use ocn_params, only : l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
     use ocn_params, only : l_ocn_input_fix, i_ocn_input_fix, l_ocn_input_fix_write, ocn_input_fix_file
     use ocn_params, only : l_noise_fw, l_noise_flx
-    use ocn_params, only : tau_scale, ke_tau_coeff
+    use ocn_params, only : tau_scale, tau_scale_bcl, ke_tau_coeff
     use ocn_params, only : l_bering_flow
     use ocn_def, only : ocn_class
     use ocn_check, only : check_vel
@@ -127,6 +127,17 @@ contains
       !------------------------------------------------------------------------
       call ocn_grid_update_state(ocn%grid,ocn%ts,ocn%u)
 
+      ! recompute density from the updated tracers: newly wet cells were just filled from their neighbours, while
+      ! ocn%rho still holds the density of the old state (from the restart at the first step, with T=S=0 in cells that
+      ! were land there), which the momentum balance of the first step would otherwise use
+      do k=1,maxk
+        do j=1,maxj
+          do i=1,maxi
+            ocn%rho(i,j,k) = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),zro(k))
+          enddo
+        enddo
+      enddo
+
       ! update flux adjustment to account for changes in ocean fraction
       if (l_flux_adj_atl .or. l_flux_adj_ant .or. l_flux_adj_pac) then
         call flux_adj_update(ocn%f_ocn, ocn%fw_flux_adj)
@@ -191,14 +202,14 @@ contains
         if (mask_ocn(i,j).eq.1) then
           ocn%tau(1,i,j) = tau_scale*ocn%stressxu(i,j)  ! N/m2
           ocn%tau(2,i,j) = tau_scale*ocn%stressyv(i,j)  ! N/m2
-          ocn%dtau_dz2(1,i,j) = 2._wp*ocn%stressxu(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtau_dz2(2,i,j) = 2._wp*ocn%stressyu(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtav_dz2(1,i,j) = 2._wp*ocn%stressxv(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtav_dz2(2,i,j) = 2._wp*ocn%stressyv(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtau_dz2(1,i,j) = tau_scale_bcl*2._wp*ocn%stressxu(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtau_dz2(2,i,j) = tau_scale_bcl*2._wp*ocn%stressyu(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtav_dz2(1,i,j) = tau_scale_bcl*2._wp*ocn%stressxv(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtav_dz2(2,i,j) = tau_scale_bcl*2._wp*ocn%stressyv(i,j)/dbl**2 !dzz  ! N/m4
           ! compute wind stress from magnitude of surface wind: tau = Cd*rho_a*V^2
           tau = 1.3e-3_wp*1.3_wp*ocn%wind(i,j)**2
           ! kinetic energy input into the ocean by wind stress, proportional to tau^(3/2), only over ice-free fraction
-          ocn%ke_tau(i,j) = ocn%f_ocn2(i,j)/ocn%f_ocn(i,j)*(1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
+          ocn%ke_tau(i,j) = (1._wp-ocn%f_sic(i,j))*ke_tau_coeff*tau**1.5_wp / sqrt(rho0) * dt  ! J/m2 or kg/s2
         else
           ocn%tau(1,i,j) = 0._wp
           ocn%tau(2,i,j) = 0._wp
@@ -468,9 +479,9 @@ contains
       ! tracer transport (advection+diffusion+convection)
       !------------------------------------------------------------------------
       !$ time1 = omp_get_wtime()
-      call transport(ocn%l_tracers_trans,ocn%l_tracers_isodiff,ocn%grid%l_large_vol_change, &
+      call transport(ocn%l_tracers_trans, &
                     ocn%u,ocn%ke_tau,ocn%flx_sur,ocn%flx_bot,ocn%f_ocn,ocn%mask_coast,ocn%z_ocn_max, &
-                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%conv_pe,ocn%fds,ocn%zds, &
+                    ocn%ts,ocn%rho,ocn%nconv,ocn%dconv,ocn%kven,ocn%dven,ocn%dconv_int,ocn%hconv_int,ocn%conv_pe,ocn%fds,ocn%zds, &
                     ocn%mld,ocn%fdx,ocn%fdy,ocn%fdz,ocn%fax,ocn%fay,ocn%faz,ocn%dts_dt_adv,ocn%dts_dt_diff, ocn%error)
       !$ time2 = omp_get_wtime()
       !$ if(print_omp) print *,'transport',time2-time1
@@ -530,7 +541,7 @@ contains
     ! diagnose free surface elevation, needed by sea ice 
     !------------------------------------------------------------------------
     !$ time1 = omp_get_wtime()
-    call free_surface(ocn%rho, ocn%ssh, ocn%error)
+    call free_surface(ocn%rho, ocn%ub, ocn%psi, ocn%tau, ocn%f_ocn, ocn%ssh)
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'free surface',time2-time1
 
@@ -573,7 +584,7 @@ contains
     implicit none
 
     type(ocn_class), intent(out) :: ocn
-    real(wp), dimension(:,:), intent(in) :: f_ocn   !! ocean fraction including floating ice
+    real(wp), dimension(:,:), intent(in) :: f_ocn   !! ocean fraction
     real(wp), dimension(:,:), intent(in) :: z_ocn   !! 'real' ocean bathymetry [m]
     real(wp), dimension(:,:), intent(in) :: z_ocn_max   !! 'real' ocean bathymetry [m]
     integer, dimension(:,:), intent(in) :: mask_coast   !! 'real' ocean bathymetry [m]
@@ -642,8 +653,6 @@ contains
     ! default is to transport all tracers, can be changed by bgc
     ocn%l_tracers_trans = .true.
     allocate(idx_tracers_trans(n_tracers_tot))
-    ! default is to apply isopycnal diffusion to all tracers, can be changed by bgc
-    ocn%l_tracers_isodiff = .true.
     
 
     !------------------------------------------------------------------------
@@ -858,6 +867,8 @@ contains
         ocn%kven(i,j) = 0
         ocn%dconv(i,j) = 0._wp
         ocn%dven(i,j) = 0._wp
+        ocn%dconv_int(i,j) = 0._wp
+        ocn%hconv_int(i,j) = 0._wp
         ocn%z_brines(i,j) = 0._wp
         ocn%conv_pe(i,j) = 0._wp
         ocn%fds(i,j) = 0._wp
@@ -946,12 +957,10 @@ contains
 
 
     allocate(ocn%l_tracers_trans(n_tracers_tot))
-    allocate(ocn%l_tracers_isodiff(n_tracers_tot))
 
     allocate(ocn%z_ocn_max(maxi,maxj))
     allocate(ocn%z_ocn(maxi,maxj))
     allocate(ocn%f_ocn(maxi,maxj))
-    allocate(ocn%f_ocn2(maxi,maxj))
     allocate(ocn%f_sic(maxi,maxj))
     allocate(ocn%mask_coast(maxi,maxj))
 
@@ -1003,11 +1012,13 @@ contains
     allocate(ocn%flx_noise(maxi,maxj))
     allocate(ocn%psi(0:maxi,0:maxj))
     allocate(ocn%ke_tau(maxi,maxj))
-    allocate(ocn%mld(maxi,maxj))
+    allocate(ocn%mld(maxi,maxj), source=0._wp)
     allocate(ocn%nconv(maxi,maxj))
     allocate(ocn%kven(maxi,maxj))
     allocate(ocn%dconv(maxi,maxj))
     allocate(ocn%dven(maxi,maxj))
+    allocate(ocn%dconv_int(maxi,maxj))
+    allocate(ocn%hconv_int(maxi,maxj))
     allocate(ocn%z_brines(maxi,maxj))
     allocate(ocn%conv_pe(maxi,maxj))
     allocate(ocn%fds(maxi,maxj))
@@ -1128,7 +1139,6 @@ contains
     deallocate(ocn%z_ocn_max)
     deallocate(ocn%z_ocn)
     deallocate(ocn%f_ocn)
-    deallocate(ocn%f_ocn2)
     deallocate(ocn%f_sic)
     deallocate(ocn%mask_coast)
 
@@ -1173,6 +1183,8 @@ contains
     deallocate(ocn%kven)
     deallocate(ocn%dconv)
     deallocate(ocn%dven)
+    deallocate(ocn%dconv_int)
+    deallocate(ocn%hconv_int)
     deallocate(ocn%z_brines)
     deallocate(ocn%conv_pe)
     deallocate(ocn%fds)
@@ -1227,11 +1239,12 @@ contains
     if (age_tracer) then
       call nc_write(fnm,"age",    ocn%ts(:,:,:,i_age),  dims=["lon ","lat ","zro "],long_name="age tracer fields",units="/")
     endif
-    if (age_tracer) then
+    if (dye_tracer) then
       call nc_write(fnm,"dye",    ocn%ts(:,:,:,i_dye),  dims=["lon ","lat ","zro "],long_name="dye tracer fields",units="/")
     endif
 
     call nc_write(fnm,"fw_glob", ocn%fw_glob,   dims=["c"],long_name="net ocean freshwater flux",units="kg/m2/s")
+    call nc_write(fnm,"mld", ocn%mld,   dims=["lon  ","lat  "],long_name="mixed layer depth from the mixed layer scheme (boundary layer of the diffusion at the next step)",units="m")
 
    return
 
@@ -1277,6 +1290,12 @@ contains
     endif
 
     call nc_read(fnm,"fw_glob",   ocn%fw_glob)
+
+    if (nc_exists_var(fnm,"mld")) then
+      call nc_read(fnm,"mld",   ocn%mld)
+    else
+      ocn%mld = 0._wp   ! older restart files: no boundary layer at the first step
+    endif
 
     print *,'read restart file ',fnm
 

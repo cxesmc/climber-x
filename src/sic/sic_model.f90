@@ -34,15 +34,17 @@ module sic_model
     use sic_grid, only: maxi, maxj, area, area_old, dx, dy
     use sic_grid, only : sic_grid_init, sic_grid_update
     use sic_params, only : sic_params_init
+    use sic_params, only : Cde0, Cdh0
     use sic_params, only: f_sic_min, h_sic_max, h_sic_min, h_snow_max, h_snow_min
-    use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, rho_sic, rho_snow, dt
+    use sic_params, only : l_adv_on_area, l_snow_ice, dyn_par, l_lead_shear, c_lead_shear, g_star_lead
+    use sic_params, only : i_fsic, f_sic_max, f_sic_pow, h0, c_lead_h, c_lead_melt, h_sic_min, rho_sic, rho_snow, dt
     use sic_def, only : sic_class
 
     use ebal_sic_mod, only : ebal_sic
     use ebal_ocn_mod, only : ebal_ocn
     use surface_par_sic
     use sic_dyn_mod, only : sic_dyn
-    use transport_sic_mod, only : transport
+    use transport_sic_mod, only : transport, transport_on_area
     use ncio
 
     !$use omp_lib
@@ -68,6 +70,10 @@ contains
     integer :: i, j
     real(wp) :: t_freeze
     real(wp), dimension(maxi,maxj) :: flx_sic_cut, fw_sic_cut
+    real(wp), dimension(maxi,maxj) :: f_sic_old
+    real(wp) :: dm_snow_ice, g_ow
+    real(wp), dimension(0:maxi,maxj) :: fax_f, fdx_f
+    real(wp), dimension(maxi,0:maxj) :: fay_f, fdy_f
 
     ! per-cell + global water-budget check (only used when check_water is on)
     real(wp), dimension(maxi,maxj) :: water_mass_old, fw_ocn_pre_redist
@@ -195,7 +201,7 @@ contains
         sic%fw_ocn(i,j)  = (sic%f_sic(i,j)*sic%fw_ocn_sic(i,j)  + (1._wp-sic%f_sic(i,j))*sic%fw_ocn_ocn(i,j))   ! kg/m2/s
 
         ! update sea ice fraction, thermodynamic contribution only
-        if (i_fsic.eq.2 .or. i_fsic.eq.3) then
+        if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
           ! prognostic sea ice fraction following Fichefet et al, 1997, and MPIOMv1.1 manual
           if (sic%f_ocn(i,j).gt.0._wp) then
             if (sic%dh_sic_ocn(i,j).gt.0._wp) then
@@ -204,12 +210,20 @@ contains
                 sic%f_sic(i,j) = sic%f_sic(i,j) + sqrt(1._wp-sic%f_sic(i,j)**2)*(1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j)/h0
               else if (i_fsic.eq.3) then
                 sic%f_sic(i,j) = sic%f_sic(i,j) + (1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j)/h0
+              else if (i_fsic.eq.4) then
+                ! MPI-ESM1.2 (MPIOM growth.f90): lead closing thickness h0 for thin ice, (h0+c_lead_h*h_sic)/(1+c_lead_h) for h_sic>h0
+                sic%f_sic(i,j) = sic%f_sic(i,j) + (1._wp-sic%f_sic(i,j)) * sic%dh_sic_ocn(i,j) &
+                  * (1._wp+c_lead_h)/(h0+c_lead_h*max(h0,sic%h_sic(i,j)))
               endif
             endif
             if (sic%h_sic(i,j).gt.0._wp .and. sic%dh_sic_sic(i,j).lt.0._wp) then
               ! melting sea ice, fraction reduction assuming that ice thickness is
               ! distributed (linearly) between 0 and 2*h_sic
-              sic%f_sic(i,j) = sic%f_sic(i,j) + sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/(2._wp*sic%h_sic(i,j))
+              if (i_fsic.eq.4) then
+                sic%f_sic(i,j) = sic%f_sic(i,j) + c_lead_melt*sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/max(sic%h_sic(i,j),h_sic_min)
+              else
+                sic%f_sic(i,j) = sic%f_sic(i,j) + sic%f_sic(i,j)*(sic%dh_sic_sic(i,j))/(2._wp*sic%h_sic(i,j))
+              endif
             endif
             sic%f_sic(i,j) = max(0._wp,sic%f_sic(i,j))
             sic%f_sic(i,j) = min(f_sic_max,sic%f_sic(i,j))
@@ -226,42 +240,74 @@ contains
     call sic_dyn(dt, sic%f_sic, sic%h_sic_mean, sic%h_snow_mean, sic%uo, sic%vo, sic%tauxa, sic%tauya, sic%ssh, &   ! in
       sic%u, sic%v, sic%str_d, sic%str_t, sic%str_s, &        ! inout
       sic%tauxo, sic%tauyo, sic%PFu, sic%PFv, sic%Cor_u, sic%Cor_v, & ! out
-      sic%fxic, sic%fxic_d, sic%fxic_t, sic%fxic_s, sic%fyic, sic%fyic_d, sic%fyic_t, sic%fyic_s) ! out
+      sic%fxic, sic%fxic_d, sic%fxic_t, sic%fxic_s, sic%fyic, sic%fyic_d, sic%fyic_t, sic%fyic_s, & ! out
+      sic%r_open_shear) ! out
 
     ! integrate advection-diffusion equation for sea ice thickness, snow thickness and sea ice concentration
 
-    !$omp parallel sections
-    !$omp section
-    ! transport sea ice thickness
-    call transport(sic%u,sic%v,sic%f_ocn, &
-      sic%h_sic_mean,sic%dh_sic_dt_dyn, &
-      sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
-    !$omp section
-    ! transport snow thickness
-    call transport(sic%u,sic%v,sic%f_ocn, &
-      sic%h_snow_mean,sic%dh_snow_dt_dyn, &
-      sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
-    !$omp section
-    if (i_fsic.eq.2 .or. i_fsic.eq.3) then
-      ! transport sea ice concentration
-      call transport(sic%u,sic%v,sic%f_ocn, &
-        sic%f_sic)
-    endif
-    !$omp end parallel sections
+    if (l_adv_on_area .and. (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4)) then
 
-    !$omp parallel do collapse(2) private(i,j) 
+      ! transport sea ice concentration, keeping the sea ice area fluxes
+      f_sic_old = sic%f_sic
+      call transport(sic%u,sic%v,sic%f_ocn, &
+        sic%f_sic, fax=fax_f, fay=fay_f, fdx=fdx_f, fdy=fdy_f)
+
+      ! transport sea ice and snow volume as tracers on sea ice area
+      !$omp parallel sections
+      !$omp section
+      call transport_on_area(sic%f_ocn, f_sic_old, fax_f, fay_f, fdx_f, fdy_f, &
+        sic%h_sic_mean,sic%dh_sic_dt_dyn, &
+        sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
+      !$omp section
+      call transport_on_area(sic%f_ocn, f_sic_old, fax_f, fay_f, fdx_f, fdy_f, &
+        sic%h_snow_mean,sic%dh_snow_dt_dyn, &
+        sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
+      !$omp end parallel sections
+
+    else
+
+      !$omp parallel sections
+      !$omp section
+      ! transport sea ice thickness
+      call transport(sic%u,sic%v,sic%f_ocn, &
+        sic%h_sic_mean,sic%dh_sic_dt_dyn, &
+        sic%fax_sic,sic%fay_sic,sic%fdx_sic,sic%fdy_sic)
+      !$omp section
+      ! transport snow thickness
+      call transport(sic%u,sic%v,sic%f_ocn, &
+        sic%h_snow_mean,sic%dh_snow_dt_dyn, &
+        sic%fax_snow,sic%fay_snow,sic%fdx_snow,sic%fdy_snow)
+      !$omp section
+      if (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) then
+        ! transport sea ice concentration
+        call transport(sic%u,sic%v,sic%f_ocn, &
+          sic%f_sic)
+      endif
+      !$omp end parallel sections
+
+    endif
+
+    !$omp parallel do collapse(2) private(i,j,dm_snow_ice,g_ow) 
     do j=1,maxj
       do i=1,maxi
 
         flx_sic_cut(i,j) = 0._wp
         fw_sic_cut(i,j) = 0._wp
 
+        ! open leads by shear deformation: ridging removes ice area at constant ice volume (Flato & Hibler 1995, CICE),
+        ! reduced by the participation of open water in ridging (linear participation function, Thorndike et al. 1975)
+        sic%df_sic_shear(i,j) = 0._wp
+        if (l_lead_shear .and. (i_fsic.eq.2 .or. i_fsic.eq.3 .or. i_fsic.eq.4) .and. sic%f_sic(i,j).gt.0._wp) then
+          g_ow = min(1._wp, max(0._wp,1._wp-sic%f_sic(i,j))/g_star_lead)
+          sic%df_sic_shear(i,j) = -min(sic%f_sic(i,j)/dt, &
+            c_lead_shear*sic%r_open_shear(i,j)*(1._wp-g_ow*(2._wp-g_ow)))
+          sic%f_sic(i,j) = sic%f_sic(i,j) + sic%df_sic_shear(i,j)*dt
+        endif
+
         ! limit sea ice concentration
         sic%f_sic(i,j) = max(0._wp,sic%f_sic(i,j))
         sic%f_sic(i,j) = min(f_sic_max,sic%f_sic(i,j))
 
-        ! set sea ice concentration to 1 when threshold thickness crossed
-        if (sic%h_sic_mean(i,j)>h_sic_max/2._wp) sic%f_sic(i,j) = 1._wp 
 
         ! snow to ice conversion: when snow on ice exceeds h_snow_max, convert
         ! the excess (per ice area) into sea ice. 
@@ -269,6 +315,18 @@ contains
           sic%h_sic_mean(i,j)  = sic%h_sic_mean(i,j) &
             + (sic%h_snow_mean(i,j) - sic%f_sic(i,j)*h_snow_max)*rho_snow/rho_sic
           sic%h_snow_mean(i,j) = sic%f_sic(i,j)*h_snow_max
+        endif
+
+        ! snow-ice formation: when the snow load pushes the ice surface below the waterline,
+        ! convert snow into ice until the freeboard is zero (mass-conserving, no seawater added)
+        if (l_snow_ice .and. sic%f_sic(i,j).gt.0._wp .and. sic%h_snow_mean(i,j).gt.0._wp) then
+          dm_snow_ice = rho_sic/dyn_par%Rho_ocean &
+            * (rho_snow*sic%h_snow_mean(i,j) - (dyn_par%Rho_ocean-rho_sic)*sic%h_sic_mean(i,j))  ! kg/m2
+          if (dm_snow_ice.gt.0._wp) then
+            dm_snow_ice = min(dm_snow_ice, rho_snow*sic%h_snow_mean(i,j))
+            sic%h_sic_mean(i,j)  = sic%h_sic_mean(i,j)  + dm_snow_ice/rho_sic
+            sic%h_snow_mean(i,j) = sic%h_snow_mean(i,j) - dm_snow_ice/rho_snow
+          endif
         endif
 
         ! warn for unphysically large negative grid-mean thicknesses
@@ -643,6 +701,8 @@ contains
 
     ! other initialisations
     sic%dh_sic_dt_dyn = 0._wp
+    sic%r_open_shear = 0._wp
+    sic%df_sic_shear = 0._wp
     sic%dh_sic_dt_therm = 0._wp
     sic%dh_sic_sic = 0._wp
     sic%dh_sic_ocn = 0._wp
@@ -731,6 +791,8 @@ contains
     allocate(sic%h_sic(maxi,maxj))
     allocate(sic%f_sic(maxi,maxj))
     allocate(sic%dh_sic_dt_dyn(maxi,maxj))
+    allocate(sic%r_open_shear(maxi,maxj))
+    allocate(sic%df_sic_shear(maxi,maxj))
     allocate(sic%dh_sic_dt_therm(maxi,maxj))
     allocate(sic%dh_sic_sic(maxi,maxj))
     allocate(sic%dh_sic_ocn(maxi,maxj))
@@ -861,6 +923,8 @@ contains
     deallocate(sic%h_sic)
     deallocate(sic%f_sic)
     deallocate(sic%dh_sic_dt_dyn)
+    deallocate(sic%r_open_shear)
+    deallocate(sic%df_sic_shear)
     deallocate(sic%dh_sic_dt_therm)
     deallocate(sic%dh_sic_sic)
     deallocate(sic%dh_sic_ocn)
@@ -996,6 +1060,8 @@ contains
     call nc_write(fnm,"rough_h_sic", sic%rough_h_sic, dims=["lon","lat"],long_name="roughness length for heat/moisture over sea ice",units="m")
     call nc_write(fnm,"Cdh_ocn", sic%Cdh_ocn, dims=["lon","lat"],long_name="drag coefficient for heat/moisture over ocean",units="m")
     call nc_write(fnm,"Cdh_sic", sic%Cdh_sic, dims=["lon","lat"],long_name="drag coefficient for heat/moisture over sea ice",units="m")
+    call nc_write(fnm,"Cde_ocn", sic%Cde_ocn, dims=["lon","lat"],long_name="exchange coefficient for moisture over ocean",units="/")
+    call nc_write(fnm,"Cde_sic", sic%Cde_sic, dims=["lon","lat"],long_name="exchange coefficient for moisture over sea ice",units="/")
     call nc_write(fnm,"flx_sh",  sic%flx_sh,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
     call nc_write(fnm,"flx_sh_ocn",  sic%flx_sh_ocn,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
     call nc_write(fnm,"flx_sh_sic",  sic%flx_sh_sic,  dims=["lon","lat"],long_name="sensible heat flux",units="W/m2")
@@ -1058,6 +1124,16 @@ contains
     call nc_read(fnm,"rough_h_sic", sic%rough_h_sic)
     call nc_read(fnm,"Cdh_ocn", sic%Cdh_ocn)
     call nc_read(fnm,"Cdh_sic", sic%Cdh_sic)
+    ! Cde goes to the atmosphere through the coupler before the first sic step and sets the
+    ! ventilation of q2 there, so it has to be restarted too
+    if (nc_exists_var(fnm,"Cde_ocn")) then
+      call nc_read(fnm,"Cde_ocn", sic%Cde_ocn)
+      call nc_read(fnm,"Cde_sic", sic%Cde_sic)
+    else
+      ! older restart files: cdrag sets Cde_sic = Cdh_sic, and Cde_ocn/Cdh_ocn = Cde0/Cdh0 for i_cd_ocn=0,2
+      sic%Cde_ocn = sic%Cdh_ocn*Cde0/Cdh0
+      sic%Cde_sic = sic%Cdh_sic
+    endif
     call nc_read(fnm,"flx_sh",      sic%flx_sh)
     call nc_read(fnm,"flx_sh_ocn",  sic%flx_sh_ocn)
     call nc_read(fnm,"flx_sh_sic",  sic%flx_sh_sic)

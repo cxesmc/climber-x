@@ -36,7 +36,6 @@ module clouds_mod
   use atm_params, only : l_so4_ie, r_so4, N_so4_nat, N_so4_nat_lnd
   use atm_grid, only : im, jm, i_ice, i_ocn, i_sic, i_lnd, i_lake
   use smooth_atm_mod, only : smooth2
-  use vesta_mod, only : t_prof
   !$ use omp_lib
 
   implicit none
@@ -86,7 +85,7 @@ contains
     integer :: i, j
     real(wp) :: dr, fr, f_freezedry, f1, c_cld_60, f_warm, f_sc, c5_eff
     real(wp) :: cldn, hcldl, clotl, tcldm, ftemp, fdyn
-    real(wp) :: f_rh, a_rh, a_low, t_rh, t_low, t_eff
+    real(wp) :: f_rh, a_rh, a_low
     real(wp) :: L_so4_ant, N_so4_ant_0, N_so4, f_mod
 
     real(wp), parameter :: cld_min=0.1_wp          ! minimum cloud fraction
@@ -219,7 +218,7 @@ contains
 
     call smooth2(cld_low,nsmooth_cld)
 
-    !$omp parallel do collapse(2) private(i, j, cldn, hcldl, f_rh, a_rh, a_low, t_rh, t_low, t_eff)
+    !$omp parallel do collapse(2) private(i, j, cldn, hcldl, f_rh, a_rh, a_low)
     do j=1,jm
       do i=1,im
         ! total cloud fraction
@@ -233,19 +232,20 @@ contains
         !--------------------------------------------
 
         ! The two cloud types share one optical thickness and therefore one emissivity, so the
-        ! (1-eps) clear-sky terms of the two cloudy skies recombine with their areas exactly and
-        ! only the emission has to be matched:
-        !   cld*T_eff^4 = a_rh*T_rh^4 + a_low*T_low^4
-        ! The areas are the random overlap that cld = 1-(1-cld_rh)*(1-cld_low) already implies,
-        ! with the low cloud radiatively visible only where there is no high cloud above it.
+        ! (1-eps) clear-sky terms recombine with their areas exactly and only the emission
+        ! cld*T_eff^4 = a_rh*T_rh^4 + a_low*T_low^4 has to be matched. The areas are the random
+        ! overlap that cld = 1-(1-cld_rh)*(1-cld_low) already implies, with the low cloud
+        ! radiatively visible only where there is no high cloud above it. T^4 is close to linear
+        ! in height between the two tops, so the area-weighted mean height gives the same top
+        ! as inverting the temperature profile at T_eff (within a few m) wherever the profile
+        ! decreases with height, but it stays between hcld_low and hcld_rh for any lapse rate.
+        ! The inversion collapsed the top to the surface under surface inversions (gams<0, ice
+        ! sheets and sea ice in winter), where T(zs) is colder than both cloud tops.
         f_rh  = min(1._wp,max(0._wp,cld_rh(i,j)))
         a_rh  = f_rh
         a_low = min(1._wp,max(0._wp,cld_low(i,j)))*(1._wp-f_rh)
         if ((a_rh+a_low).gt.1.e-10_wp) then
-          t_rh  = t_prof(zsa(i,j), hcld_rh(i,j),  tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1)
-          t_low = t_prof(zsa(i,j), hcld_low(i,j), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1)
-          t_eff = ((a_rh*t_rh**4 + a_low*t_low**4)/(a_rh+a_low))**0.25_wp
-          hcldl = z_of_tprof(t_eff, zsa(i,j), tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j))
+          hcldl = (a_rh*hcld_rh(i,j) + a_low*hcld_low(i,j))/(a_rh+a_low)
         else
           hcldl = hcld_rh(i,j)
         endif
@@ -263,59 +263,5 @@ contains
 
   end subroutine clouds
 
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Function   :  z _ o f _ t p r o f
-  !   Purpose    :  height at which the temperature profile equals a given temperature
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Inverse of t_prof, needed to turn the effective radiating temperature of the merged
-  ! cloud back into the cloud top height the radiation expects. t_prof is piecewise in the
-  ! surface layer, so it is inverted by bisection rather than analytically; the profile
-  ! decreases monotonically with height, and 30 bisections resolve the whole troposphere to
-  ! well below a metre. Temperatures outside the profile range return the corresponding end.
-  pure function z_of_tprof(t, zs, tam, gams, gamb, gamt, htrop)
-
-    implicit none
-
-    real(wp), intent(in) :: t
-    real(wp), intent(in) :: zs
-    real(wp), intent(in) :: tam
-    real(wp), intent(in) :: gams
-    real(wp), intent(in) :: gamb
-    real(wp), intent(in) :: gamt
-    real(wp), intent(in) :: htrop
-
-    real(wp) :: z_of_tprof
-
-    integer :: n
-    real(wp) :: za, zb, zm, ta, tb
-
-    integer, parameter :: n_iter = 30
-
-
-    za = zs
-    zb = max(htrop,zs)
-    ta = t_prof(zs, za, tam, gams, gamb, gamt, htrop, 1)
-    tb = t_prof(zs, zb, tam, gams, gamb, gamt, htrop, 1)
-
-    if (t.ge.ta .or. (ta-tb).lt.1.e-10_wp) then
-      z_of_tprof = za
-    else if (t.le.tb) then
-      z_of_tprof = zb
-    else
-      do n=1,n_iter
-        zm = 0.5_wp*(za+zb)
-        if (t_prof(zs, zm, tam, gams, gamb, gamt, htrop, 1).gt.t) then
-          za = zm
-        else
-          zb = zm
-        endif
-      enddo
-      z_of_tprof = 0.5_wp*(za+zb)
-    endif
-
-    return
-
-  end function z_of_tprof
 
 end module clouds_mod

@@ -178,9 +178,9 @@ contains
 
           ! update canopy snow
           if( t_skin(n) .lt. T0 ) then
-            tau_s = 10._wp*hydro_par%tau_s
+            tau_s = hydro_par%tau_s_dry
           else
-            tau_s = 1._wp*hydro_par%tau_s
+            tau_s = hydro_par%tau_s_wet
           endif
           s_can(n) = (fac_i_s*snow(n) + s_can(n)*rdt) / (1._wp*rdt + fac_e_s/s_can_max + 1._wp/tau_s)
           if( s_can(n) .lt. 1.e-20_wp ) s_can(n) = 0._wp
@@ -289,7 +289,7 @@ contains
   !   Subroutine :  s u r f a c e _ h y d r o l o g y
   !   Purpose    :  surface hydrology
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine surface_hydrology(frac_surf,mask_snow,evap_surface,rain_ground,snow_ground,snowmelt,icemelt,icesub,et, &
+  subroutine surface_hydrology(frac_surf,mask_snow,f_sub_soil,evap_surface,rain_ground,snow_ground,snowmelt,icemelt,icesub,et, &
                               k_sat,cap_soil,cap_lake, &
                               cti_mean, cti_cdf, &
                               w_snow_old,w_snow,w_snow_max,w_w,w_i,w_table_cum,f_wet_cum,t_soil,t_lake, &
@@ -302,6 +302,7 @@ contains
     implicit none
 
     integer, dimension(:), intent(inout) :: mask_snow
+    real(wp), intent(in) :: f_sub_soil   ! share of the soil-surface evaporation sublimated from a thin snow pack (mask_snow=0)
     real(wp), dimension(:), intent(inout) :: evap_surface
     real(wp), dimension(:), intent(in) :: frac_surf, snow_ground
     real(wp), dimension(:), intent(inout) :: rain_ground
@@ -373,6 +374,18 @@ contains
             if (l_wiso) then
               do iso=1,nwiso
                 sublimation_iso(iso) = sublimation_iso(iso) + evap_surface_iso(n,iso)*frac_surf(n)/f_veg
+              enddo
+            endif
+          endif
+        enddo
+      else
+        do n=1,nveg
+          ! sublimation from a thin snow pack, the rest of the surface evaporation is taken from the top soil layer in soil_hydro
+          if (frac_surf(n).gt.0._wp) then
+            sublimation = sublimation + f_sub_soil*evap_surface(n)*frac_surf(n)/f_veg  ! kg/m2/s
+            if (l_wiso) then
+              do iso=1,nwiso
+                sublimation_iso(iso) = sublimation_iso(iso) + f_sub_soil*evap_surface_iso(n,iso)*frac_surf(n)/f_veg
               enddo
             endif
           endif

@@ -107,7 +107,8 @@ module lnd_params
     real(wp) :: can_max_w      ! kg/m2, canopy interception capacity parameter Verseghy 1991
     real(wp) :: can_max_s      ! kg/m2, canopy interception capacity parameter for snow
     real(wp) :: tau_w       ! s, removal time scale of water from canopy
-    real(wp) :: tau_s       ! s, removal time scale of snow from canopy
+    real(wp) :: tau_s_wet   ! s, removal time scale of snow from canopy when T>0°C
+    real(wp) :: tau_s_dry   ! s, removal time scale of snow from canopy when T<0°C
     real(wp) :: f_ice_perch   ! ice fraction of the pore space defining the frost table
     real(wp) :: f_drain_perch ! 1/m, TOPMODEL transmissivity decay factor of the perched zone
     real(wp) :: cti_min
@@ -134,6 +135,7 @@ module lnd_params
     real(wp) :: alb_snow_nir_dif_new = 0.65_wp
     real(wp) :: snow_grain_fresh
     real(wp) :: snow_grain_old
+    real(wp) :: tau_snow_grain
     real(wp) :: f_age_t 
     real(wp) :: snow_0
     real(wp) :: snow_1
@@ -262,6 +264,8 @@ module lnd_params
     real(wp) :: delta_lai_conv  !! critical LAI difference for convergence in iterative solver
     logical :: lroot_frac   !! adjust vertical root distribution so that all roots in active layer?
     real(wp) :: gamma_phen  !! leaf senescenece rate [1/s]
+    logical :: l_sla_dec    !! blend specific leaf area of trees and shrubs between evergreen and deciduous with f_deciduous?
+    real(wp) :: c_sla_dec   !! ratio of deciduous to evergreen specific leaf area of trees and shrubs []
     real(wp) :: gamma_luc   !! disturbance rate for land use change [1/s]
     real(wp) :: gamma_ice   !! disturbance rate from ice sheets [1/s]
     real(wp) :: z_veg_std_crit !! critical sub-grid topography standard deviation for disturbance rate from ice sheets [m]
@@ -778,6 +782,7 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","l_snow_dust",snow_par%l_snow_dust)
     call nml_read(filename,"lnd_par","snow_grain_fresh" ,snow_par%snow_grain_fresh )
     call nml_read(filename,"lnd_par","snow_grain_old" ,snow_par%snow_grain_old )
+    call nml_read(filename,"lnd_par","tau_snow_grain" ,snow_par%tau_snow_grain )
     call nml_read(filename,"lnd_par","f_age_t" ,snow_par%f_age_t)
     call nml_read(filename,"lnd_par","snow_0" ,snow_par%snow_0 )
     snow_par%snow_0 = snow_par%snow_0/sec_day
@@ -829,9 +834,11 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","can_max_w",hydro_par%can_max_w  )
     call nml_read(filename,"lnd_par","can_max_s",hydro_par%can_max_s  )
     call nml_read(filename,"lnd_par","tau_w",hydro_par%tau_w)
-    call nml_read(filename,"lnd_par","tau_s",hydro_par%tau_s)
+    call nml_read(filename,"lnd_par","tau_s_wet",hydro_par%tau_s_wet)
+    call nml_read(filename,"lnd_par","tau_s_dry",hydro_par%tau_s_dry)
     hydro_par%tau_w = hydro_par%tau_w*sec_day
-    hydro_par%tau_s = hydro_par%tau_s*sec_day
+    hydro_par%tau_s_wet = hydro_par%tau_s_wet*sec_day
+    hydro_par%tau_s_dry = hydro_par%tau_s_dry*sec_day
 
     ! water isotopes master switch (phase 1: passive tracer, land-only)
     call nml_read(filename,"lnd_par","l_wiso",l_wiso)
@@ -899,6 +906,8 @@ subroutine lnd_par_load
     call nml_read(filename,"lnd_par","lroot_frac",veg_par%lroot_frac)
     call nml_read(filename,"lnd_par","gamma_phen",veg_par%gamma_phen)
     veg_par%gamma_phen = 1._wp/veg_par%gamma_phen / sec_day
+    call nml_read(filename,"lnd_par","l_sla_dec",veg_par%l_sla_dec)
+    call nml_read(filename,"lnd_par","c_sla_dec",veg_par%c_sla_dec)
     call nml_read(filename,"lnd_par","gdd5_phen",pft_par%gdd5_phen)
     call nml_read(filename,"lnd_par","t_base_phen",pft_par%t_base_phen)
     call nml_read(filename,"lnd_par","t_cmon_phen",pft_par%t_cmon_phen)

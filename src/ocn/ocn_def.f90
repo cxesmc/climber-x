@@ -73,12 +73,10 @@ module ocn_def
      real(wp) :: A_bering              !! Bering Strait cross-sectional area [m2]     
      real(wp) :: buoy_sic_NA(6)   !! buoyancy flux from sea ice export over North Atlantic [N]
      logical, allocatable :: l_tracers_trans(:)    !! flags for bgc tracer transport
-     logical, allocatable :: l_tracers_isodiff(:)    !! flags for isopycnal diffusion of tracers
      real(wp), allocatable :: z_ocn_max(:,:)    !! ocean floor elevation [m]
      real(wp), allocatable :: z_ocn(:,:)    !! ocean-model bathymetry (= grid-cell bedrock elevation geo%z_bed), relative to sea level [m]
-     real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell, including floating ice [1]
+     real(wp), allocatable :: f_ocn(:,:)    !! ocean fraction in grid cell [1]
      real(wp), allocatable :: f_ocn_old(:,:)    !! old ocean fraction in grid cell [1]
-     real(wp), allocatable :: f_ocn2(:,:)    !! ocean fraction in grid cell, excluding floating ice [1]
      integer, allocatable :: mask_coast(:,:)    !! mask of coastal cells []
 
      real(wp), allocatable :: f_sic(:,:)    !! sea ice fraction (of ocean fraction) [1]
@@ -131,6 +129,8 @@ module ocn_def
      real(wp), allocatable :: mld(:,:)      !! mixed layer depth [m]
      real(wp), allocatable :: dconv(:,:)    !! depth of convection [m]
      real(wp), allocatable :: dven(:,:)     !! depth of ventilation [m]
+     real(wp), allocatable :: dconv_int(:,:)  !! depth of the top of the shallowest interior (not surface-connected) convective region [m]
+     real(wp), allocatable :: hconv_int(:,:)  !! total thickness of interior (not surface-connected) convective regions [m]
      real(wp), allocatable :: z_brines(:,:) !! brine neutral-buoyancy penetration depth [m]
      real(wp), allocatable :: conv_pe(:,:)     !! potential energy released by convection [J/m2]
      real(wp), allocatable :: fds(:,:)     !! downslope volume flux of dense shelf water out of the cell [m3/s]

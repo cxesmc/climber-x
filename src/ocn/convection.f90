@@ -32,10 +32,12 @@ module convection_mod
   ! dconv is the maximum depth of convection
   ! kven is the integer depth of ventilation from the surface 
   ! dven is the depth of ventilation from the surface
+  ! dconv_int is the depth of the top of the shallowest interior mixed region (not connected to the surface)
+  ! hconv_int is the total thickness of the interior mixed regions
 
   use precision, only : wp
   use ocn_grid
-  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, l_mix_bgc_all, n_tracers_tot, n_tracers_ocn
+  use ocn_params, only : i_conv_shuffle, l_conv_shuffle_passive, n_tracers_tot, n_tracers_ocn, drho_conv
   use eos_mod
 
   implicit none
@@ -49,7 +51,7 @@ contains
   !   Subroutine :  c o n v e c t i o n
   !   Purpose    :  convection code suitable for arbitrary functions rho(T,S)
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,i,j)
+  subroutine convection(l_trans_tracers,ts,rho,kbo,kbov,mask_coast,nconv,dconv,kven,dven,dconv_int,hconv_int,i,j)
 
     implicit none
 
@@ -60,6 +62,7 @@ contains
     integer, intent(in) :: mask_coast
     integer, intent(inout) :: kven, nconv
     real(wp), intent(inout) :: dven, dconv
+    real(wp), intent(inout) :: dconv_int, hconv_int
     integer, intent(in) :: i, j
 
     real(wp), dimension(3) :: tmx, tsm
@@ -74,6 +77,8 @@ contains
     kven  = maxk
     dconv = 0._wp
     dven  = 0._wp
+    dconv_int = 0._wp
+    hconv_int = 0._wp
 
     !----------------------------------------------
     ! optional shuffle convection to mix directly down to density level
@@ -110,8 +115,9 @@ contains
       ru = eos(ts(kt,1),ts(kt,2),zw(kb))
       rl = eos(ts(kb,1),ts(kb,2),zw(kb))
 
-      ! sum the first pair found in an unstable region
-      if (ru > rl) then
+      ! sum the first pair found in an unstable region (unstable by more than drho_conv, so that layers already
+      ! mixed to neutral are not mixed again by round-off level changes)
+      if (ru > rl+drho_conv) then
         chk_la = .true.
         chk_lb = .true.
         zsm    = dz(kt) + dz(kb)
@@ -130,7 +136,7 @@ contains
             ru = eos(tmx(1),tmx(2),zw(lb))
             rl = eos(ts(lb,1),ts(lb,2),zw(lb))
 
-            if (ru > rl) then
+            if (ru > rl+drho_conv) then
               ! add new level to sums
               kb     = lb
               zsm    = zsm + dz(kb)
@@ -152,7 +158,7 @@ contains
             ru = eos(ts(la,1),ts(la,2),zw(kt))
             rl = eos(tmx(1),tmx(2),zw(kt))
 
-            if (ru > rl) then
+            if (ru > rl+drho_conv) then
               ! add new level to sums
               kt     = la
               zsm    = zsm + dz(kt)
@@ -174,34 +180,27 @@ contains
           ts(kk,2) = tmx(2)
           rho(kk) = eos(tmx(1),tmx(2),zro(kk))   ! update density of mixed layers
         enddo
-        ! mix tracers other than temperature and salinity
+        ! mix tracers other than temperature and salinity (all tracers, including non-transported bgc tracers)
         do l=3,n_tracers_tot
-          if (l_mix_bgc_all) then
-            tsm(3) = 0.0
-            do kk=kt,kb
-              tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
-            enddo
-            tmx(3) = tsm(3)/zsm 
-            do kk=kt,kb
-              ts(kk,l) = tmx(3)
-            enddo
-          else if (l_trans_tracers(l)) then
-            tsm(3) = 0.0
-            do kk=kt,kb
-              tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
-            enddo
-            tmx(3) = tsm(3)/zsm 
-            do kk=kt,kb
-              ts(kk,l) = tmx(3)
-            enddo
-          endif
+          tsm(3) = 0.0
+          do kk=kb,kt
+            tsm(3) = tsm(3) + ts(kk,l)*dz(kk) 
+          enddo
+          tmx(3) = tsm(3)/zsm 
+          do kk=kb,kt
+            ts(kk,l) = tmx(3)
+          enddo
         enddo
 
         ! convection diagnostics
         nconv = nconv + kt - kb    ! number of mixed layers
-        dconv = min(dconv,zw(kb-1))  ! maximum depth of convection
+        dconv = max(dconv,-zw(kb-1))  ! maximum depth of convection (positive downward)
         if (kt .eq. maxk) then
           kven = min(kven,kb)   ! deepest level of ventilation from the surface
+        else
+          ! interior mixed region, not connected to the surface (regions are found top-down, so the first is the shallowest)
+          if (hconv_int.eq.0._wp) dconv_int = -zw(kt)   ! depth of the top of the shallowest interior mixed region
+          hconv_int = hconv_int + zsm                   ! total thickness of interior mixed regions
         endif
 
         kt = kb - 1
@@ -215,7 +214,7 @@ contains
 
     enddo   ! while (kt > kbo)
 
-    dven = zw(kven-1) ! maximum depth of ventilation from the surface
+    dven = -zw(kven-1) ! maximum depth of ventilation from the surface (positive downward)
 
    return
   

@@ -89,8 +89,8 @@
                         ! 1 = yearly varying bedrock elevation from fake_geo_var_file
                         ! 2 = constant bedrock elevation closest to year_ini read from fake_geo_var_file
  fake_geo_const_file  = "input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc"
- fake_geo_var_file    = "input/geo_ice_tarasov_lgc.nc"
- fake_geo_ref_file    = "input/geo_ice_tarasov_lgc_0ka.nc"
+ fake_geo_var_file    = "input/geo_ice_tarasov122k_lgc.nc"
+ fake_geo_ref_file    = "input/geo_ice_tarasov122k_0ka.nc"
 
  !-------------------------------------------------------
  ! atmospheric CO2 for simulations with flag_co2==false
@@ -365,7 +365,7 @@
                         !     interactive ice sheets (flag_ice==T) will overwrite the fake ice sheet thickness, but only over the ice model domain(s)
                         ! 2 = constant ice thickness closest to year_ini read from fake_ice_var_file
  fake_ice_const_file  = "input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc"
- fake_ice_var_file    = "input/geo_ice_tarasov_lgc.nc" 
+ fake_ice_var_file    = "input/geo_ice_tarasov122k_lgc.nc" 
 
  !-------------------------------------------------------
  ! output control

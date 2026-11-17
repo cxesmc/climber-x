@@ -55,6 +55,10 @@ module atm_def
 
       real(wp) :: had_fi   !! ITCZ position latitude (radians)
       real(wp) :: had_width   !! width of Hadley cell (radians)
+      real(wp) :: aht_eq   !! diagnostic: northward atmospheric energy transport across the equator from boundary fluxes (PW)
+      real(wp) :: efe      !! diagnostic: energy flux equator, zero crossing of the implied transport (deg)
+      real(wp) :: ficz     !! ITCZ latitude of the meridional cell geometry (radians)
+      real(wp), allocatable, dimension(:) :: mtz  !! zonal mean mountain torque [p_s dz_s/dx] (N/m2), from zslp
 
       real(wp) :: eccentricity
       real(wp) :: precession
@@ -67,6 +71,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: solarm
       real(wp), allocatable, dimension(:,:,:) :: cosz
       real(wp), allocatable, dimension(:,:) :: coszm
+      real(wp), allocatable, dimension(:,:) :: coszm_sw   !! effective cos z of the daily-mean SW column (sw_cosz_eff)
       
       real(wp), allocatable, dimension(:,:) :: cam 
       real(wp), allocatable, dimension(:,:) :: co2flx
@@ -103,6 +108,8 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: W_strat    !! stratospheric column water intercept (kg m-2), from vesta
       real(wp), allocatable, dimension(:,:) :: dtcol      !! <t_prof>_mass - tam (K), the column shape offset, from vesta
       real(wp), allocatable, dimension(:,:) :: dtcol_prev !! dtcol at the previous thermodynamic update (K)
+      real(wp), allocatable, dimension(:,:) :: tcol_prev  !! column temperature tam+dtcol at the previous efe_diag call (K)
+      real(wp), allocatable, dimension(:,:) :: wcon_prev  !! column water wcon at the previous efe_diag call (kg m-2)
       real(wp), allocatable, dimension(:,:) :: cld_rh        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld_low        !! cloud fraction (.)
       real(wp), allocatable, dimension(:,:) :: cld        !! cloud fraction (.)
@@ -179,7 +186,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: aslp
       real(wp), allocatable, dimension(:,:) :: aslp_temp
       real(wp), allocatable, dimension(:,:) :: aslp_topo
-      real(wp), allocatable, dimension(:,:) :: dz500
+      real(wp), allocatable, dimension(:,:) :: aslp_eddy
+      real(wp), allocatable, dimension(:,:) :: aslp_gill
+      real(wp), allocatable, dimension(:,:) :: aslp_temp_slow   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
       real(wp), allocatable, dimension(:,:) :: slp
       real(wp), allocatable, dimension(:,:) :: slp_dat
       real(wp), allocatable, dimension(:,:) :: tsl_dat
@@ -205,6 +214,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: ua
       real(wp), allocatable, dimension(:,:,:) :: va
       real(wp), allocatable, dimension(:,:,:) :: u3
+      real(wp), allocatable, dimension(:,:,:) :: u3f    !! as u3, without the polar damping of the thermal wind, for the stationary waves
       real(wp), allocatable, dimension(:,:,:) :: v3
       real(wp), allocatable, dimension(:,:,:) :: uter
       real(wp), allocatable, dimension(:,:,:) :: vter
@@ -291,9 +301,6 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: eke
       real(wp), allocatable, dimension(:,:) :: sam
       real(wp), allocatable, dimension(:,:) :: synprod
-      real(wp), allocatable, dimension(:,:) :: syndiss
-      real(wp), allocatable, dimension(:,:) :: synadv
-      real(wp), allocatable, dimension(:,:) :: syndif
       real(wp), allocatable, dimension(:,:,:) :: synsur
       real(wp), allocatable, dimension(:,:) :: cdif     
       real(wp), allocatable, dimension(:,:) :: diffx

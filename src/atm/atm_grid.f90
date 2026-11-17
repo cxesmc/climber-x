@@ -30,8 +30,8 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref
-  use atm_params, only : l_p0_var, p0, ps0, pble, pblp, cp
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref, diff_eq, fi_diff_eq
+  use atm_params, only : l_p0_var, p0, ps0, cp, ptopdyn
   use smooth_atm_mod, only : smooth2
 
   implicit none
@@ -68,6 +68,7 @@ module atm_grid
   integer :: llwr4
       
   real(wp) :: fit(jm)
+  real(wp) :: diffx_eq(jm)   !! m2/s, additional zonal macro-diffusivity, diff_eq*exp(-(lat/fi_diff_eq)^2)
   real(wp) :: fiu(jmc)
   real(wp) :: thetat(jm)
   real(wp) :: cost(jm)
@@ -78,6 +79,7 @@ module atm_grid
   real(wp) :: cosu(jmc)
   real(wp) :: sinu(jmc)      
   real(wp) :: dxt(jm)
+  real(wp) :: dxtg(jm)    !! m, zonal spacing of cell means for gradients (area-mean cos(lat) of the row)
   real(wp) :: dxu(jmc)
   real(wp) :: sqr(im,jm)
   real(wp) :: esqr      !! Earth surface area
@@ -96,8 +98,6 @@ module atm_grid
   real(wp) :: ply(im,jmc)
   real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass
   real(wp) :: ply_dif(im,jmc)    !! tropospheric meridional column mass weighted by the vertical profile of the diffusivity, for implicit meridional diffusion
-  real(wp) :: pblt(jm)      !! planetary boundary height in t-points
-  real(wp) :: pblu(jmc)     !! planetary boundary height in u-points
   integer :: k1(im,jm)  
   integer :: kweff(im,jm)  !! k-index for effective vertical velocity leve (w-grid)
   integer :: k1000
@@ -111,8 +111,12 @@ module atm_grid
 
   real(wp), allocatable :: pl(:)
   real(wp), allocatable :: dpl(:)
+  real(wp), allocatable :: rdpl(:)   ! 1/dpl
+  real(wp), allocatable :: ftop(:)   !! fraction of each layer below ptopdyn, the top of the geostrophic and thermal wind mass fluxes
   real(wp), allocatable :: zl(:)
   real(wp), allocatable :: zc(:)
+  real(wp), allocatable :: z3(:,:,:)    !! m, geometric height of the layer centres (pressure exp(-zc/hatm)*p0) from the hypsometric equation, set by vesta
+  real(wp), allocatable :: z3l(:,:,:)   !! m, the same for the level interfaces zl (kmc levels)
   real(wp), allocatable :: cheat(:,:)    !! column heat capacity, J/m2/K; see atm_grid_update
   real(wp), allocatable :: dplt(:,:,:)   !! layer mass at T-points, kg/m2 (dplx/dply are face quantities); used as the cell mass by the FCT advection
   real(wp), allocatable :: dplx(:,:,:)
@@ -136,7 +140,7 @@ contains
     implicit none
 
     integer :: i, j, k
-    real(wp) :: fcortp, fcorup
+    real(wp) :: fcortp, fcorup, cosm
     character(len=256) :: fnm
 
 
@@ -151,8 +155,12 @@ contains
     ! allocate
     allocate(pl(kmc))
     allocate(dpl(km))
+    allocate(rdpl(km))
+    allocate(ftop(km))
     allocate(zl(kmc))
     allocate(zc(km))
+    allocate(z3(im,jm,km))
+    allocate(z3l(im,jm,kmc))
     allocate(cheat(im,jm))
     allocate(dplt(im,jm,km))
     allocate(dplx(im,jm,km))
@@ -200,6 +208,8 @@ contains
       costhetat(j) = cos(thetat(j))
       sinthetat(j) = sin(thetat(j))
       dxt(j) = dy*cost(j)
+      ! additional tropical zonal macro-diffusivity, added to diffx in the diffusion of all tracers
+      diffx_eq(j) = diff_eq*exp(-(fit(j)*180._wp/pi/fi_diff_eq)**2)
     enddo
 
     do j=1,jmc
@@ -207,6 +217,18 @@ contains
       cosu(j) = cos(fiu(j))
       sinu(j) = sin(fiu(j))       
       dxu(j) = dy*cosu(j)
+    enddo
+
+    ! Grid spacing for gradients of cell means. The mean of a field that is linear across the pole,
+    ! T = a*R*cos(lat)*cos(lon), over a row is a*R*<cos(lat)>*cos(lon), with <cos(lat)> the area mean
+    ! of cos(lat) over the row (the distance of the row centroid from the axis), not cos at the cell
+    ! centre. A zonal difference of cell means therefore has to be divided by dy*<cos(lat)>, which is
+    ! 1.33x dxt on the polar rows, 1.04x on the next rows and 1 elsewhere.
+    ! dxt itself stays the geometric cell width used for areas, face lengths and fluxes.
+    do j=1,jm
+      ! <cos(lat)> = int cos^2 dlat / int cos dlat over the row
+      cosm = ((fiu(j)-fiu(j+1))/2._wp + (sin(2._wp*fiu(j))-sin(2._wp*fiu(j+1)))/4._wp) / (sinu(j)-sinu(j+1))
+      dxtg(j) = dy*cosm
     enddo
 
     do j=1,jm
@@ -261,11 +283,6 @@ contains
       fcorua(j) = max(ABS(fcorup),fcormin)
     enddo
 
-    ! PBL thickness
-    do j=1,jm
-      pblt(j) = pblp-(pblp-pble)*cost(j)**2      
-      pblu(j) = pblp-(pblp-pble)*cosu(j)**2 
-    enddo       
 
     ! pressure levels
 
@@ -275,6 +292,13 @@ contains
    
     do k=1,km
       dpl(k) = pl(k)-pl(k+1)
+      rdpl(k) = 1._wp/dpl(k)
+    enddo
+
+    ! The geostrophic (ugb,vgb) and the thermal wind (uter,vter) mass fluxes are carried up to the
+    ! top pressure ptopdyn; the layer holding the top carries the part of it below the top.
+    do k=1,km
+      ftop(k) = max(0._wp, min(1._wp, (pl(k)-ptopdyn)*rdpl(k)))
     enddo
 
     ! model z-levels
@@ -288,6 +312,14 @@ contains
     do k=1,km
       zc(k) = 0.5_wp*(zl(k+1)+zl(k))
       exp_zc(k) = exp(-zc(k)/hatm)
+    enddo
+
+    ! geometric heights of the levels, z* until the first call of vesta
+    do k=1,km
+      z3(:,:,k) = zc(k)
+    enddo
+    do k=1,kmc
+      z3l(:,:,k) = zl(k)
     enddo
 
     ! k-index of selected pressure levels
@@ -346,7 +378,7 @@ contains
     real(wp), intent(out  ) :: ps(:,:,:)
 
     integer :: i, j, k, n, imi, ipl
-    real(wp) :: dp, px, py
+    real(wp) :: dp, px, py, pxd, pyd, dpld
 
 
     zs = zsa_scale * zs
@@ -456,6 +488,10 @@ contains
         if (imi.lt.1) imi=im 
 
         px = (pzsa(i,j)+pzsa(imi,j))*0.5_wp
+        ! face surface pressure of the diffusive fluxes: the higher of the two surfaces, so that
+        ! only layers with air on both sides diffuse (below it one column has only its
+        ! extrapolated sub-surface profile)
+        pxd = min(pzsa(i,j),pzsa(imi,j))
 
         plx(i,j) = 0._wp
         plx_trop(i,j) = 0._wp
@@ -484,15 +520,16 @@ contains
           endif
           plx(i,j) = plx(i,j)+dplx(i,j,k)
           ! face layer mass weighted by the vertical profile of the macro-diffusivity,
-          ! decaying with height above the face surface (-hatm*log(px)) or above sea level
+          ! decaying with height above the face surface (-hatm*log(pxd)) or above sea level
+          dpld = max(0._wp,min(pl(k),pxd)-pl(k+1))*amas
           if (h_diff.gt.0._wp) then
             if (i_hdiff_ref.eq.1) then
-              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(px))/h_diff)
+              dplx_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k)+hatm*log(pxd))/h_diff)
             else
-              dplx_dif(i,j,k) = dplx(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+              dplx_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k))/h_diff)
             endif
           else
-            dplx_dif(i,j,k) = dplx(i,j,k)
+            dplx_dif(i,j,k) = dpld
           endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) then
@@ -516,6 +553,7 @@ contains
       do j=2,jm
 
         py = (pzsa(i,j)+pzsa(i,j-1))*0.5_wp
+        pyd = min(pzsa(i,j),pzsa(i,j-1))
 
         ply(i,j) = 0._wp
         ply_trop(i,j) = 0._wp
@@ -530,14 +568,15 @@ contains
             dply(i,j,k) = (pl(k)-pl(k+1))*amas
           endif
           ply(i,j) = ply(i,j)+dply(i,j,k)
+          dpld = max(0._wp,min(pl(k),pyd)-pl(k+1))*amas
           if (h_diff.gt.0._wp) then
             if (i_hdiff_ref.eq.1) then
-              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k)+hatm*log(py))/h_diff)
+              dply_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k)+hatm*log(pyd))/h_diff)
             else
-              dply_dif(i,j,k) = dply(i,j,k)*exp(-max(0._wp,zc(k))/h_diff)
+              dply_dif(i,j,k) = dpld*exp(-max(0._wp,zc(k))/h_diff)
             endif
           else
-            dply_dif(i,j,k) = dply(i,j,k)
+            dply_dif(i,j,k) = dpld
           endif
           ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
           if (k.le.km-2) then

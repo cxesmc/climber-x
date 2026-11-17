@@ -54,7 +54,7 @@ program climber
     &                ice_to_smb, ice_to_cmn, smb_to_ice, &
     &                bmb_to_cmn, cmn_to_bmb, &
     &                ice_to_bmb, bmb_to_ice, &
-    &                cmn_to_geo, geo_to_cmn, &
+    &                cmn_to_geo, geo_to_cmn, geo_z_ocn, &
     &                ice_to_geo, bnd_to_geo, geo_to_ice, &
     &                geo_to_smb, geo_to_bmb, &
     &                co2_to_cmn, cmn_to_co2, &
@@ -74,6 +74,7 @@ program climber
   use ocn_def, only: ocn_class
   use ocn_out, only: ocn_diag, ocn_diag_init
   use ocn_params, only: n_tracers_tot, n_tracers_bgc, n_tracers_ocn, n_tracers_trans, idx_tracers_trans
+  use ocn_params, only: ocn_runoff_dist_par_load
 
   use bgc_model, only: bgc_ini, bgc_update, bgc_end, bgc_write_restart
   use bgc_def, only : bgc_class, bgc_ntra
@@ -252,8 +253,11 @@ program climber
        else
          n_tracers_bgc = 0
        endif
-       call ocn_init(ocn,geo%f_ocn,geo%z_bed,geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
+       call ocn_init(ocn,geo%f_ocn,geo_z_ocn(geo),geo%z_ocn_max_q,geo%mask_coast2,geo%ocn_vol_tot,geo%A_bering,l_daily_input_save_ocn)
        call ocn_diag_init
+    else
+       ! runoff/calving/weathering spreading is set up by the coupler also without the ocean model
+       call ocn_runoff_dist_par_load(trim(out_dir)//"/ocn_par.nml")
     endif
 
     ! initialize ocean biogeochemistry model
@@ -265,7 +269,6 @@ program climber
       call bgc_diag_init(ocn%grid%ni, ocn%grid%nj, ocn%grid%nk, ocn%grid%zro)
       ! flag for bgc tracers transport
       ocn%l_tracers_trans(n_tracers_ocn+1:) = bgc%l_trans_tracers
-      ocn%l_tracers_isodiff(n_tracers_ocn+1:) = bgc%l_isodiff_tracers
     endif
 
     ! index of transported tracers
@@ -281,9 +284,9 @@ program climber
     ! Initialise sea ice model
     if (flag_sic) then
        if (allocated(ocn%grid%dz)) then
-         call sic_init(sic,geo%f_ocn2,ocn%grid%dz(ocn%grid%nk))
+         call sic_init(sic,geo%f_ocn,ocn%grid%dz(ocn%grid%nk))
        else
-         call sic_init(sic,geo%f_ocn2,10._wp)
+         call sic_init(sic,geo%f_ocn,10._wp)
        endif
        call sic_diag_init
     endif
@@ -529,12 +532,12 @@ program climber
         if (l_debug_main_loop) print*, 'update lnd model'
         call cmn_to_lnd(cmn,lnd)
         call lnd_update_wrapper(lnd)
+        call lnd_diag(lnd%l2d,lnd%l0d)
+        call lnd_to_cmn(lnd,cmn)
         call runoff_merge(cmn)
         if (flag_lakes) then
           call lakes_update(cmn)
         endif
-        call lnd_diag(lnd%l2d,lnd%l0d)
-        call lnd_to_cmn(lnd,cmn)
         !$ time_end = omp_get_wtime()
         !$ time_lnd = time_lnd + (time_end-time_ini)
       endif

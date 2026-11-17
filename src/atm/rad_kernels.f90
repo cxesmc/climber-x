@@ -105,7 +105,7 @@ contains
   !   Purpose    :  derive radiative kernels
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine rad_kernels(rk, frst, zs, zsa, htrop, hcld, ra2, & 
-      gams, gamb, gamt, tam, ram, hrm, hqeff, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
+      gams, gamb, gamt, tam, ram, hrm, hqeff, wcon, q2, ttrop, cld, co2, ch4, n2o, cfc11, cfc12, o3, flwr_up_sur, &  
       swr_dw_top, coszm, alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, aerosol_ot, aerosol_im, so4)
 
     implicit none
@@ -135,6 +135,7 @@ contains
     real(wp), dimension(:,:),   intent(in) :: ram
     real(wp), dimension(:,:),   intent(in) :: hrm
     real(wp), dimension(:,:),   intent(in) :: hqeff
+    real(wp), dimension(:,:),   intent(in) :: wcon
     real(wp), dimension(:,:,:), intent(in) :: q2
     real(wp), dimension(:,:),   intent(in) :: aerosol_ot 
     real(wp), dimension(:,:),   intent(in) :: aerosol_im
@@ -164,6 +165,7 @@ contains
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cs
     real(wp), dimension(:,:,:), allocatable :: fswr_sur_cld
     real(wp), dimension(:,:,:), allocatable :: rk_flwr_up_sur
+    real(wp), dimension(:,:), allocatable :: dt1
 
     real(wp) :: co2e
 
@@ -185,6 +187,8 @@ contains
     allocate(fswr_sur_cs (im,jm,nm))
     allocate(fswr_sur_cld (im,jm,nm))
     allocate(rk_flwr_up_sur(im,jm,nm))
+    allocate(dt1(im,jm))
+    dt1 = 1._wp
 
     !------------------------
     ! longwave radiation
@@ -199,21 +203,27 @@ contains
     rk%flwr_top_cs(:,:,i_lw_control) = rk%flwr_top_cs(:,:,i_lw_control) + lwr_top_cs / nday_year
     rk%flwr_sur_cs(:,:,i_lw_control) = rk%flwr_sur_cs(:,:,i_lw_control) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
-    ! water vapor, increase corresponding to 1K temperature increase
+    ! water vapor, tropospheric specific humidity increase of a 1 K warming at fixed pressure and
+    ! relative humidity (temperatures unchanged)
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
       gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
-      gams, gamb, gamt, tam+1._wp, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      dt_q=dt1)
     rk%flwr_top(:,:,i_lw_wv)    = rk%flwr_top(:,:,i_lw_wv)    + lwr_top  / nday_year
     rk%flwr_sur(:,:,i_lw_wv)    = rk%flwr_sur(:,:,i_lw_wv)    + lwr_sur   / nday_year
     rk%flwr_top_cs(:,:,i_lw_wv) = rk%flwr_top_cs(:,:,i_lw_wv) + lwr_top_cs / nday_year
     rk%flwr_sur_cs(:,:,i_lw_wv) = rk%flwr_sur_cs(:,:,i_lw_wv) + sum((flwr_dw_sur_cs-flwr_up_sur)*frst,3) / nday_year
 
-    ! air temperature, 1 K temperature increase
+    ! air temperature, uniform 1 K tropospheric warming at fixed pressure (as standard radiative kernels;
+    ! a warming of tam is uniform at fixed geometric height, which is less at fixed pressure since the
+    ! warmer column lifts the pressure levels). Specific humidity, stratosphere and the temperature of the
+    ! cloud ice/liquid LW coefficient unchanged.
     call lw_radiation(1._wp, frst, zsa, zs, htrop, hcld, ra2, &   ! in
-      gams, gamb, gamt, tam+1._wp, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
+      gams, gamb, gamt, tam, ram, hrm, ttrop, cld, clot, co2, ch4, n2o, cfc11, cfc12, co2e, o3, flwr_up_sur, &  ! in
       lwr_sur, flwr_dw_sur, flwr_dw_sur_cs, flwr_dw_sur_cld, lwr_top, lwr_top_cs, lwr_top_cld, lwr_tro, lwr_cld, & ! out
-      gams, gamb, gamt, tam, ttrop, htrop) ! optional input arguments for feedback (moisture)
+      gams, gamb, gamt, tam, ttrop, htrop, & ! optional input arguments for feedback (moisture)
+      tam_p=tam, gams_p=gams, gamb_p=gamb, gamt_p=gamt, dt_p=dt1, &
+      tam_c=tam, gams_c=gams, gamb_c=gamb, gamt_c=gamt)
     rk%flwr_top(:,:,i_lw_Ta)    = rk%flwr_top(:,:,i_lw_Ta)    + lwr_top  / nday_year
     rk%flwr_sur(:,:,i_lw_Ta)    = rk%flwr_sur(:,:,i_lw_Ta)    + lwr_sur   / nday_year
     rk%flwr_top_cs(:,:,i_lw_Ta) = rk%flwr_top_cs(:,:,i_lw_Ta) + lwr_top_cs / nday_year
@@ -244,27 +254,27 @@ contains
     !------------------------
 
     ! control
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_control)    = rk%fswr_top(:,:,i_sw_control)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_control)    = rk%fswr_sur(:,:,i_sw_control)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_control) = rk%fswr_top_cs(:,:,i_sw_control) + swr_top_cs / nday_year
     rk%fswr_sur_cs(:,:,i_sw_control) = rk%fswr_sur_cs(:,:,i_sw_control) + sum(fswr_sur_cs*frst,3) / nday_year
 
     ! water vapor, increase water content corresponding to 1K warming, ~7% from Clausius-Klapeyron
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2*1.07, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon*1.07, zsa, &    ! in
       alb_vu_s, alb_vu_c, alb_ir_s, alb_ir_c, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_wv)    = rk%fswr_top(:,:,i_sw_wv)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_wv)    = rk%fswr_sur(:,:,i_sw_wv)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_wv) = rk%fswr_top_cs(:,:,i_sw_wv) + swr_top_cs / nday_year
     rk%fswr_sur_cs(:,:,i_sw_wv) = rk%fswr_sur_cs(:,:,i_sw_wv) + sum(fswr_sur_cs*frst,3) / nday_year
 
     ! albedo, 1% increase
-    call sw_radiation(frst, swr_dw_top, coszm, cld, q2, ra2, &    ! in
+    call sw_radiation(frst, swr_dw_top, coszm, cld, wcon, zsa, &    ! in
       alb_vu_s+0.01, alb_vu_c+0.01, alb_ir_s+0.01, alb_ir_c+0.01, clot, hcld, hqeff, aerosol_ot, aerosol_im, so4, &    ! in
-      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld) ! out
+      alb_cld, swr_top, swr_top_cs, swr_top_cld, swr_sur, fswr_sur, fswr_sur_cs, fswr_sur_cld, zs=zs) ! out
     rk%fswr_top(:,:,i_sw_alb)    = rk%fswr_top(:,:,i_sw_alb)    + swr_top   / nday_year
     rk%fswr_sur(:,:,i_sw_alb)    = rk%fswr_sur(:,:,i_sw_alb)    + sum(fswr_sur*frst,3)   / nday_year
     rk%fswr_top_cs(:,:,i_sw_alb) = rk%fswr_top_cs(:,:,i_sw_alb) + swr_top_cs / nday_year
@@ -286,6 +296,7 @@ contains
     deallocate(swr_sur   )
     deallocate(fswr_sur   )
     deallocate(rk_flwr_up_sur)
+    deallocate(dt1)
 
     return
 

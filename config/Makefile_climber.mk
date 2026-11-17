@@ -87,7 +87,7 @@ obj_co2 = $(patsubst %, $(objdir)/%, $(tmp_co2) )
 # geo source files
 dir_geo = $(srcdir)/geo/
 files_geo = geo_params.f90 geo_grid.f90 geo_def.f90 runoff_routing.f90 lakes.f90 fill_ocean.f90 topo_filter.f90 topo_fill.f90 \
-						connect_ocn.f90 vilma.f90 fastearth.f90 gia.f90 q_geo.f90 sed.f90 \
+						ocn_topology.f90 ocn_mask.f90 vilma.f90 fastearth.f90 gia.f90 q_geo.f90 sed.f90 \
 						hypso_topo.f90 fix_runoff.f90 hires_to_lowres.f90 coast_cells.f90 drainage_basins.f90 geo.f90 geo_out.f90
 tmp_geo = $(patsubst %.f90, %.o, $(files_geo) )
 obj_geo = $(patsubst %, $(objdir)/%, $(tmp_geo) )
@@ -159,7 +159,7 @@ obj_lndvc = $(patsubst %, $(objdir)/%, $(tmp_lndvc) )
 ########################################################################
 # main climber source files
 dir_main = $(srcdir)/main/
-files_main = constants.f90 control.f90 timer.f90 climber_grid.f90 
+files_main = constants.f90 control.f90 timer.f90 climber_grid.f90 runoff_dist.f90 
 tmp_main = $(patsubst %.f90, %.o, $(files_main) )
 obj_main = $(patsubst %, $(objdir)/%, $(tmp_main) ) $(objdir)/coupler.o $(objdir)/cmn_out.o $(objdir)/climber.o
 obj_main_clim = $(patsubst %, $(objdir)/%, $(tmp_main) ) $(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o $(objdir)/climber_clim.o
@@ -239,7 +239,7 @@ $(objdir)/climber.o : $(dir_main)climber.f90 \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
 	$(objdir)/bgc_out.o $(objdir)/co2_out.o $(objdir)/ch4_out.o $(objdir)/n2o_out.o \
 	$(objdir)/smb_out.o $(objdir)/bmb_out.o $(objdir)/geo_out.o \
-	$(objdir)/coupler.o $(objdir)/cmn_out.o 
+	$(objdir)/coupler.o $(objdir)/cmn_out.o $(objdir)/atm_def.o $(objdir)/bgc_def.o $(objdir)/bgc_params.o $(objdir)/bmb_def.o $(objdir)/ch4_def.o $(objdir)/co2_def.o $(objdir)/geo_def.o $(objdir)/ice_def.o $(objdir)/lnd_def.o $(objdir)/n2o_def.o $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/sic_def.o $(objdir)/smb_def.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/climber_clim.o : $(dir_main)climber.f90 \
@@ -251,7 +251,7 @@ $(objdir)/climber_clim.o : $(dir_main)climber.f90 \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
 	$(objdir)/.bgc_out.o $(objdir)/co2_out.o $(objdir)/ch4_out.o $(objdir)/n2o_out.o \
 	$(objdir)/.smb_out_dummy.o $(objdir)/.bmb_out_dummy.o $(objdir)/geo_out.o \
-	$(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o 
+	$(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o $(objdir)/.bgc_def.o $(objdir)/.bgc_params.o $(objdir)/atm_def.o $(objdir)/bmb_def.o $(objdir)/ch4_def.o $(objdir)/co2_def.o $(objdir)/geo_def.o $(objdir)/ice_def.o $(objdir)/lnd_def.o $(objdir)/n2o_def.o $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/sic_def.o $(objdir)/smb_def.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/climber_clim_bgc.o : $(dir_main)climber.f90 \
@@ -263,7 +263,7 @@ $(objdir)/climber_clim_bgc.o : $(dir_main)climber.f90 \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
 	$(objdir)/bgc_out.o $(objdir)/co2_out.o $(objdir)/ch4_out.o $(objdir)/n2o_out.o \
 	$(objdir)/.smb_out_dummy.o $(objdir)/.bmb_out_dummy.o $(objdir)/geo_out.o \
-	$(objdir)/coupler.o $(objdir)/cmn_out.o 
+	$(objdir)/coupler.o $(objdir)/cmn_out.o $(objdir)/atm_def.o $(objdir)/bgc_def.o $(objdir)/bgc_params.o $(objdir)/bmb_def.o $(objdir)/ch4_def.o $(objdir)/co2_def.o $(objdir)/geo_def.o $(objdir)/ice_def.o $(objdir)/lnd_def.o $(objdir)/n2o_def.o $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/sic_def.o $(objdir)/smb_def.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/climber_clim_ice.o : $(dir_main)climber.f90 \
@@ -275,36 +275,39 @@ $(objdir)/climber_clim_ice.o : $(dir_main)climber.f90 \
 	$(objdir)/atm_out.o $(objdir)/ocn_out.o $(objdir)/sic_out.o $(objdir)/lnd_out.o \
 	$(objdir)/.bgc_out.o $(objdir)/co2_out.o $(objdir)/ch4_out.o $(objdir)/n2o_out.o \
 	$(objdir)/smb_out.o $(objdir)/bmb_out.o $(objdir)/geo_out.o \
-	$(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o 
+	$(objdir)/coupler_nobgc.o $(objdir)/cmn_out_nobgc.o $(objdir)/.bgc_def.o $(objdir)/.bgc_params.o $(objdir)/atm_def.o $(objdir)/bmb_def.o $(objdir)/ch4_def.o $(objdir)/co2_def.o $(objdir)/geo_def.o $(objdir)/ice_def.o $(objdir)/lnd_def.o $(objdir)/n2o_def.o $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/sic_def.o $(objdir)/smb_def.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/coupler.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
-	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/wiso_params.o \
+	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o \
 	$(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/runoff_dist.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/coupler_nobgc.o : $(dir_main)coupler.f90 \
 	$(objdir)/control.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/bnd.o \
-	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/wiso_params.o \
+	$(objdir)/atm_def.o $(objdir)/ocn_def.o $(objdir)/sic_def.o $(objdir)/lnd_def.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o \
 	$(objdir)/.bgc_params.o $(objdir)/.bgc_def.o $(objdir)/co2_def.o $(objdir)/ch4_def.o $(objdir)/n2o_def.o \
-	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o
+	$(objdir)/ice_def.o $(objdir)/smb_def.o $(objdir)/bmb_def.o $(objdir)/geo_def.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/constants.o $(objdir)/filter.o $(objdir)/geo_params.o $(objdir)/hypso_topo.o $(objdir)/lakes.o $(objdir)/lnd_grid.o $(objdir)/ocn_grid.o $(objdir)/ocn_params.o $(objdir)/precision.o $(objdir)/runoff_dist.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/cmn_out.o : $(dir_main)cmn_out.f90 $(objdir)/coupler.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/cmn_out.o : $(dir_main)cmn_out.f90 $(objdir)/coupler.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/cmn_out_nobgc.o : $(dir_main)cmn_out.f90 $(objdir)/coupler_nobgc.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/cmn_out_nobgc.o : $(dir_main)cmn_out.f90 $(objdir)/coupler_nobgc.o $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/timer.o : $(dir_main)timer.f90 $(objdir)/control.o
+$(objdir)/timer.o : $(dir_main)timer.f90 $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/climber_grid.o : $(dir_main)climber_grid.f90
+$(objdir)/runoff_dist.o : $(dir_main)runoff_dist.f90 $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/control.o : $(dir_main)control.f90 $(objdir)/constants.o
+$(objdir)/climber_grid.o : $(dir_main)climber_grid.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/control.o : $(dir_main)control.f90 $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/constants.o : $(dir_main)constants.f90 $(objdir)/precision.o
@@ -318,23 +321,26 @@ $(objdir)/precision.o : $(dir_utils)precision.f90
 $(objdir)/%.o : $(dir_utils)%.f90
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
+# prerequisites of the objects built by the pattern rule above
+$(objdir)/filter.o $(objdir)/tridiag.o : $(objdir)/precision.o
+
 #######################
 # atmosphere rules ####
 $(objdir)/atm_model.o : $(dir_atm)atm_model.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/adifa.o $(objdir)/adv_fct.o \
 	$(objdir)/diffuse_impl.o \
 	$(objdir)/synop.o $(objdir)/smooth_atm.o $(objdir)/wvel.o $(objdir)/clouds.o $(objdir)/vesta.o \
 	$(objdir)/crisa.o $(objdir)/slp.o $(objdir)/u2d.o $(objdir)/u3d.o $(objdir)/time_step.o \
-	$(objdir)/lwr.o $(objdir)/swr.o $(objdir)/feedbacks.o $(objdir)/rad_kernels.o $(objdir)/dust.o
+	$(objdir)/lwr.o $(objdir)/swr.o $(objdir)/feedbacks.o $(objdir)/rad_kernels.o $(objdir)/dust.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 						
-$(objdir)/smooth_atm.o : $(dir_atm)smooth_atm.f90 
+$(objdir)/smooth_atm.o : $(dir_atm)smooth_atm.f90 $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/atm_grid.o : $(dir_atm)atm_grid.f90 $(objdir)/climber_grid.o $(objdir)/constants.o \
 					   $(objdir)/control.o $(objdir)/smooth_atm.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/atm_params.o : $(dir_atm)atm_params.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o
+$(objdir)/atm_params.o : $(dir_atm)atm_params.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/atm_def.o : $(dir_atm)atm_def.f90 $(objdir)/atm_params.o $(objdir)/atm_grid.o 
@@ -343,28 +349,28 @@ $(objdir)/atm_def.o : $(dir_atm)atm_def.f90 $(objdir)/atm_params.o $(objdir)/atm
 $(objdir)/adv_fct.o : $(dir_atm)adv_fct.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/adv_fct.o
+$(objdir)/adifa.o : $(dir_atm)adifa.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/adv_fct.o $(objdir)/constants.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/diffuse_impl.o : $(dir_atm)diffuse_impl.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o
+$(objdir)/synop.o : $(dir_atm)synop.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/tridiag.o $(objdir)/smooth_atm.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/wvel.o : $(dir_atm)wvel.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/wvel.o : $(dir_atm)wvel.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/vesta.o
+$(objdir)/clouds.o : $(dir_atm)clouds.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/vesta.o $(objdir)/smooth_atm.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/vesta.o : $(dir_atm)vesta.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/vesta.o : $(dir_atm)vesta.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/crisa.o : $(dir_atm)crisa.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/slp.o : $(dir_atm)slp.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o
+$(objdir)/slp.o : $(dir_atm)slp.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/u2d.o : $(dir_atm)u2d.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
@@ -373,25 +379,25 @@ $(objdir)/u2d.o : $(dir_atm)u2d.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $
 $(objdir)/u3d.o : $(dir_atm)u3d.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/time_step.o : $(dir_atm)time_step.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o
+$(objdir)/time_step.o : $(dir_atm)time_step.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/smooth_atm.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lwr.o : $(dir_atm)lwr.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/lwr.o : $(dir_atm)lwr.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/control.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/swr.o : $(dir_atm)swr.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o
+$(objdir)/swr.o : $(dir_atm)swr.f90 $(objdir)/constants.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/feedbacks.o : $(dir_atm)feedbacks.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/lwr.o $(objdir)/swr.o
+$(objdir)/feedbacks.o : $(dir_atm)feedbacks.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/lwr.o $(objdir)/swr.o $(objdir)/climber_grid.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/rad_kernels.o : $(dir_atm)rad_kernels.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/lwr.o $(objdir)/swr.o
+$(objdir)/rad_kernels.o : $(dir_atm)rad_kernels.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/lwr.o $(objdir)/swr.o $(objdir)/climber_grid.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/dust.o : $(dir_atm)dust.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/atm_out.o : $(dir_atm)atm_out.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/dim_name.o
+$(objdir)/atm_out.o : $(dir_atm)atm_out.f90 $(objdir)/atm_grid.o $(objdir)/atm_params.o $(objdir)/atm_def.o $(objdir)/dim_name.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o $(objdir)/vesta.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ##################
@@ -399,127 +405,127 @@ $(objdir)/atm_out.o : $(dir_atm)atm_out.f90 $(objdir)/atm_grid.o $(objdir)/atm_p
 $(objdir)/ocn_model.o : $(dir_ocn)ocn_model.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/ocn_def.o $(objdir)/ocn_check.o \
 	$(objdir)/momentum.o $(objdir)/transport_ocn.o $(objdir)/eos.o $(objdir)/restore_salinity.o \
 	$(objdir)/hosing.o $(objdir)/noise.o $(objdir)/flux_adj.o $(objdir)/ocn_grid_update_state.o $(objdir)/cfc_flux.o \
-	$(objdir)/free_surface.o $(objdir)/bering.o
+	$(objdir)/free_surface.o $(objdir)/bering.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_params.o : $(dir_ocn)ocn_params.f90 $(objdir)/timer.o $(objdir)/control.o
+$(objdir)/ocn_params.o : $(dir_ocn)ocn_params.f90 $(objdir)/timer.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_grid.o : $(dir_ocn)ocn_grid.f90 $(objdir)/ocn_params.o $(objdir)/control.o $(objdir)/climber_grid.o $(objdir)/constants.o
+$(objdir)/ocn_grid.o : $(dir_ocn)ocn_grid.f90 $(objdir)/ocn_params.o $(objdir)/control.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_def.o : $(dir_ocn)ocn_def.f90 $(objdir)/precision.o $(dir_ocn)ocn_grid.f90 
+$(objdir)/ocn_def.o : $(dir_ocn)ocn_def.f90 $(objdir)/precision.o $(objdir)/ocn_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_out.o : $(dir_ocn)ocn_out.f90 $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/ocn_out.o : $(dir_ocn)ocn_out.f90 $(objdir)/ocn_def.o $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/eos.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/transport_ocn.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_check.o : $(dir_ocn)ocn_check.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/ocn_check.o : $(dir_ocn)ocn_check.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/momentum.o : $(dir_ocn)momentum.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/wind.o $(objdir)/jbar.o \
-	$(objdir)/ubarsolv.o $(objdir)/island.o $(objdir)/matinv.o $(objdir)/velc.o $(objdir)/invert.o  $(objdir)/eos.o
+	$(objdir)/ubarsolv.o $(objdir)/island.o $(objdir)/matinv.o $(objdir)/velc.o $(objdir)/invert.o  $(objdir)/eos.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/convection.o : $(dir_ocn)convection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o
+$(objdir)/convection.o : $(dir_ocn)convection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/eos.o : $(dir_ocn)eos.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
+$(objdir)/eos.o : $(dir_ocn)eos.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/island.o : $(dir_ocn)island.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/island.o : $(dir_ocn)island.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/matinv.o : $(dir_ocn)matinv.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/matinv.o : $(dir_ocn)matinv.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/wind.o : $(dir_ocn)wind.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
+$(objdir)/wind.o : $(dir_ocn)wind.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/jbar.o : $(dir_ocn)jbar.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/jbar.o : $(dir_ocn)jbar.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ubarsolv.o : $(dir_ocn)ubarsolv.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/ubarsolv.o : $(dir_ocn)ubarsolv.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/invert.o : $(dir_ocn)invert.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/invert.o : $(dir_ocn)invert.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/krausturner.o : $(dir_ocn)krausturner.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o
+$(objdir)/krausturner.o : $(dir_ocn)krausturner.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/downslope.o : $(dir_ocn)downslope.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o
+$(objdir)/downslope.o : $(dir_ocn)downslope.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/eos.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/transport_ocn.o : $(dir_ocn)transport_ocn.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o \
-	$(objdir)/advection.o $(objdir)/diffusion.o $(objdir)/eos.o $(objdir)/convection.o $(objdir)/downslope.o $(objdir)/krausturner.o 
+	$(objdir)/advection.o $(objdir)/diffusion.o $(objdir)/eos.o $(objdir)/convection.o $(objdir)/downslope.o $(objdir)/krausturner.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/advection.o : $(dir_ocn)advection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
+$(objdir)/advection.o : $(dir_ocn)advection.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/diffusion.o : $(dir_ocn)diffusion.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o 
+$(objdir)/diffusion.o : $(dir_ocn)diffusion.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/velc.o : $(dir_ocn)velc.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/velc.o : $(dir_ocn)velc.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/restore_salinity.o : $(dir_ocn)restore_salinity.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/restore_salinity.o : $(dir_ocn)restore_salinity.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/hosing.o : $(dir_ocn)hosing.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/hosing.o : $(dir_ocn)hosing.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/noise.o : $(dir_ocn)noise.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/noise.o : $(dir_ocn)noise.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/flux_adj.o : $(dir_ocn)flux_adj.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/flux_adj.o : $(dir_ocn)flux_adj.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ocn_grid_update_state.o : $(dir_ocn)ocn_grid_update_state.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/ocn_grid_update_state.o : $(dir_ocn)ocn_grid_update_state.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/cfc_flux.o : $(dir_ocn)cfc_flux.f90 $(objdir)/ocn_grid.o
+$(objdir)/cfc_flux.o : $(dir_ocn)cfc_flux.f90 $(objdir)/ocn_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/free_surface.o : $(dir_ocn)free_surface.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/free_surface.o : $(dir_ocn)free_surface.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/island.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bering.o : $(dir_ocn)bering.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o
+$(objdir)/bering.o : $(dir_ocn)bering.f90 $(objdir)/ocn_params.o $(objdir)/ocn_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ####################
 # sea ice rules ####
 $(objdir)/sic_model.o : $(dir_sic)sic_model.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/sic_def.o \
 	$(objdir)/sic_dyn.o $(objdir)/transport_sic.o $(objdir)/surface_par_sic.o \
-	$(objdir)/ebal_sic.o $(objdir)/ebal_ocn.o
+	$(objdir)/ebal_sic.o $(objdir)/ebal_ocn.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sic_grid.o : $(dir_sic)sic_grid.f90 $(objdir)/constants.o $(objdir)/control.o
+$(objdir)/sic_grid.o : $(dir_sic)sic_grid.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/climber_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sic_params.o : $(dir_sic)sic_params.f90 $(objdir)/constants.o $(objdir)/control.o
+$(objdir)/sic_params.o : $(dir_sic)sic_params.f90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sic_def.o : $(dir_sic)sic_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sic_dyn.o : $(dir_sic)sic_dyn.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o
+$(objdir)/sic_dyn.o : $(dir_sic)sic_dyn.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/transport_sic.o : $(dir_sic)transport_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o
+$(objdir)/transport_sic.o : $(dir_sic)transport_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_par_sic.o : $(dir_sic)surface_par_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o
+$(objdir)/surface_par_sic.o : $(dir_sic)surface_par_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_sic.o : $(dir_sic)ebal_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o
+$(objdir)/ebal_sic.o : $(dir_sic)ebal_sic.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_ocn.o : $(dir_sic)ebal_ocn.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o
+$(objdir)/ebal_ocn.o : $(dir_sic)ebal_ocn.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sic_out.o : $(dir_sic)sic_out.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/sic_def.o
+$(objdir)/sic_out.o : $(dir_sic)sic_out.f90 $(objdir)/sic_grid.o $(objdir)/sic_params.o $(objdir)/sic_def.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 #################
@@ -533,7 +539,7 @@ $(objdir)/lnd_model.o : $(dir_lnd)lnd_model.f90 $(objdir)/lnd_grid.o $(objdir)/l
 	$(objdir)/soil_carbon.o $(objdir)/peat_carbon.o $(objdir)/shelf_carbon.o $(objdir)/ice_carbon.o $(objdir)/lake_carbon.o \
 	$(objdir)/soil_carbon_par.o $(objdir)/shelf_carbon_par.o $(objdir)/ice_carbon_par.o $(objdir)/lake_carbon_par.o \
 	$(objdir)/carbon_trans.o $(objdir)/n2o_emis.o $(objdir)/dust_emis.o $(objdir)/weathering.o $(objdir)/carbon_export.o $(objdir)/init_cell.o $(objdir)/end_cell.o \
-	$(objdir)/carbon_inventory.o $(objdir)/carbon_flx_atm_lnd.o 
+	$(objdir)/carbon_inventory.o $(objdir)/carbon_flx_atm_lnd.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90 $(objdir)/precision.o $(objdir)/control.o $(objdir)/climber_grid.o
@@ -542,136 +548,136 @@ $(objdir)/lnd_grid.o : $(dir_lnd)lnd_grid.f90 $(objdir)/precision.o $(objdir)/co
 $(objdir)/wiso_params.o : $(dir_lnd)wiso_params.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/wiso_params.o
+$(objdir)/lnd_params.o : $(dir_lnd)lnd_params.f90 $(objdir)/wiso_params.o $(objdir)/control.o $(objdir)/lnd_grid.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/lnd_def.o : $(dir_lnd)lnd_def.f90 $(objdir)/precision.o $(objdir)/lnd_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lnd_out.o : $(dir_lnd)lnd_out.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lnd_def.o $(objdir)/veg_par.o
+$(objdir)/lnd_out.o : $(dir_lnd)lnd_out.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lnd_def.o $(objdir)/veg_par.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/wiso_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 	
-$(objdir)/veg_par.o : $(dir_lnd)veg_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/veg_par.o : $(dir_lnd)veg_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_carbon_par.o : $(dir_lnd)soil_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/soil_carbon_par.o : $(dir_lnd)soil_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/shelf_carbon_par.o : $(dir_lnd)shelf_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/shelf_carbon_par.o : $(dir_lnd)shelf_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice_carbon_par.o : $(dir_lnd)ice_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/ice_carbon_par.o : $(dir_lnd)ice_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_carbon_par.o : $(dir_lnd)lake_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/lake_carbon_par.o : $(dir_lnd)lake_carbon_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_par.o : $(dir_lnd)soil_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/soil_par.o : $(dir_lnd)soil_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice_par.o : $(dir_lnd)ice_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/ice_par.o : $(dir_lnd)ice_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_par.o : $(dir_lnd)lake_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_rho.o
+$(objdir)/lake_par.o : $(dir_lnd)lake_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_rho.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_rho.o : $(dir_lnd)lake_rho.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/lake_rho.o : $(dir_lnd)lake_rho.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/shelf_par.o : $(dir_lnd)shelf_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/shelf_par.o : $(dir_lnd)shelf_par.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/timer.o
+$(objdir)/surface_par_lnd.o : $(dir_lnd)surface_par_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/timer.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/photosynthesis.o : $(dir_lnd)photosynthesis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
+$(objdir)/photosynthesis.o : $(dir_lnd)photosynthesis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_veg.o : $(dir_lnd)ebal_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
+$(objdir)/ebal_veg.o : $(dir_lnd)ebal_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_ice.o : $(dir_lnd)ebal_ice.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
+$(objdir)/ebal_ice.o : $(dir_lnd)ebal_ice.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ebal_lake.o : $(dir_lnd)ebal_lake.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o
+$(objdir)/ebal_lake.o : $(dir_lnd)ebal_lake.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/surface_par_lnd.o $(objdir)/wiso_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/lnd_grid.o $(objdir)/wiso_params.o
+$(objdir)/surface_hydro.o : $(dir_lnd)surface_hydro.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/water_deficit.o : $(dir_lnd)water_deficit.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/water_deficit.o : $(dir_lnd)water_deficit.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_temp.o : $(dir_lnd)soil_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/tridiag.o
+$(objdir)/soil_temp.o : $(dir_lnd)soil_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/tridiag.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice_temp.o : $(dir_lnd)ice_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/ice_temp.o : $(dir_lnd)ice_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/shelf_temp.o : $(dir_lnd)shelf_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/shelf_temp.o : $(dir_lnd)shelf_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_temp.o : $(dir_lnd)lake_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_convection.o
+$(objdir)/lake_temp.o : $(dir_lnd)lake_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_convection.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_convection.o : $(dir_lnd)lake_convection.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_rho.o
+$(objdir)/lake_convection.o : $(dir_lnd)lake_convection.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/lake_rho.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sublake_temp.o : $(dir_lnd)sublake_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/sublake_temp.o : $(dir_lnd)sublake_temp.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_hydro.o : $(dir_lnd)soil_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/wiso_params.o
+$(objdir)/soil_hydro.o : $(dir_lnd)soil_hydro.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/wiso_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/groundwater.o : $(dir_lnd)groundwater.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o
+$(objdir)/groundwater.o : $(dir_lnd)groundwater.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/water_check.o : $(dir_lnd)water_check.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o
+$(objdir)/water_check.o : $(dir_lnd)water_check.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/wiso_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/dyn_veg.o : $(dir_lnd)dyn_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o
+$(objdir)/dyn_veg.o : $(dir_lnd)dyn_veg.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/soil_carbon.o : $(dir_lnd)soil_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/soil_carbon.o : $(dir_lnd)soil_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/peat_carbon.o : $(dir_lnd)peat_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o
+$(objdir)/peat_carbon.o : $(dir_lnd)peat_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/shelf_carbon.o : $(dir_lnd)shelf_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/shelf_carbon.o : $(dir_lnd)shelf_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice_carbon.o : $(dir_lnd)ice_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/ice_carbon.o : $(dir_lnd)ice_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lake_carbon.o : $(dir_lnd)lake_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/lake_carbon.o : $(dir_lnd)lake_carbon.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/carbon_trans.o : $(dir_lnd)carbon_trans.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/carbon_trans.o : $(dir_lnd)carbon_trans.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/n2o_emis.o : $(dir_lnd)n2o_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/n2o_emis.o : $(dir_lnd)n2o_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/dust_emis.o : $(dir_lnd)dust_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o 
+$(objdir)/dust_emis.o : $(dir_lnd)dust_emis.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/weathering.o : $(dir_lnd)weathering.f90 
+$(objdir)/weathering.o : $(dir_lnd)weathering.f90 $(objdir)/lnd_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/carbon_export.o : $(dir_lnd)carbon_export.f90 
+$(objdir)/carbon_export.o : $(dir_lnd)carbon_export.f90 $(objdir)/lnd_params.o $(objdir)/lnd_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/init_cell.o : $(dir_lnd)init_cell.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/surface_par_lnd.o
+$(objdir)/init_cell.o : $(dir_lnd)init_cell.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/surface_par_lnd.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/end_cell.o : $(dir_lnd)end_cell.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/surface_par_lnd.o
+$(objdir)/end_cell.o : $(dir_lnd)end_cell.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/veg_par.o $(objdir)/surface_par_lnd.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/carbon_inventory.o : $(dir_lnd)carbon_inventory.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o
+$(objdir)/carbon_inventory.o : $(dir_lnd)carbon_inventory.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/carbon_flx_atm_lnd.o : $(dir_lnd)carbon_flx_atm_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o
+$(objdir)/carbon_flx_atm_lnd.o : $(dir_lnd)carbon_flx_atm_lnd.f90 $(objdir)/lnd_grid.o $(objdir)/lnd_params.o $(objdir)/timer.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 #######################
@@ -696,226 +702,229 @@ $(objdir)/bgc_model.o : $(dir_bgc)bgc_model.f90 $(objdir)/bgc_grid.o $(objdir)/b
 	$(objdir)/mo_m4ago_climberx.o \
 	$(objdir)/ocprod.o $(objdir)/carchm.o $(objdir)/cyano.o $(objdir)/powadi.o \
 	$(objdir)/dipowa.o $(objdir)/powach.o $(objdir)/sedshi.o $(objdir)/mo_beleg_bgc.o $(objdir)/tracer_cons.o \
-	$(objdir)/flx_sed.o $(objdir)/flx_sed_net.o $(objdir)/flx_bur.o $(objdir)/sed_grid_update_tracers.o
+	$(objdir)/flx_sed.o $(objdir)/flx_sed_net.o $(objdir)/flx_bur.o $(objdir)/sed_grid_update_tracers.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_grid.o : $(dir_bgc)/bgc_grid.f90 
+$(objdir)/bgc_grid.o : $(dir_bgc)/bgc_grid.f90 $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_types.o : $(dir_m4ago)/mo_m4ago_types.f90 
+$(objdir)/mo_m4ago_types.o : $(dir_m4ago)/mo_m4ago_types.f90 $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_physics.o : $(dir_m4ago)/mo_m4ago_physics.f90 
+$(objdir)/mo_m4ago_physics.o : $(dir_m4ago)/mo_m4ago_physics.f90 $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_core.o : $(dir_m4ago)/mo_m4ago_core.f90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_physics.o 
+$(objdir)/mo_m4ago_core.o : $(dir_m4ago)/mo_m4ago_core.f90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_physics.o $(objdir)/control.o $(objdir)/mo_m4ago_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_params.o : $(dir_m4ago)/mo_m4ago_params.f90 
+$(objdir)/mo_m4ago_params.o : $(dir_m4ago)/mo_m4ago_params.f90 $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_HAMOCCinit.o : $(dir_m4ago)/mo_m4ago_HAMOCCinit.F90 ${objdir}/mo_m4ago_params.o ${objdir}/mo_m4ago_core.o 
+$(objdir)/mo_m4ago_HAMOCCinit.o : $(dir_m4ago)/mo_m4ago_HAMOCCinit.F90 ${objdir}/mo_m4ago_params.o ${objdir}/mo_m4ago_core.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_params.o : $(dir_bgc)/bgc_params.f90 $(objdir)/bgc_grid.o ${objdir}/mo_m4ago_HAMOCCinit.o 
+$(objdir)/bgc_params.o : $(dir_bgc)/bgc_params.f90 $(objdir)/bgc_grid.o ${objdir}/mo_m4ago_HAMOCCinit.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_def.o : $(dir_bgc)/bgc_def.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_diag.o
+$(objdir)/bgc_def.o : $(dir_bgc)/bgc_def.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_diag.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_biomod.o : $(dir_bgc)/mo_biomod.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o
+$(objdir)/mo_biomod.o : $(dir_bgc)/mo_biomod.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_diag.o : $(dir_bgc)/bgc_diag.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o
+$(objdir)/bgc_diag.o : $(dir_bgc)/bgc_diag.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/apply_net_fw.o : $(dir_bgc)/apply_net_fw.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+$(objdir)/apply_net_fw.o : $(dir_bgc)/apply_net_fw.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/constants.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/chemcon.o : $(dir_bgc)/chemcon.f90 $(objdir)/bgc_def.o $(objdir)/bgc_params.o
+$(objdir)/chemcon.o : $(dir_bgc)/chemcon.f90 $(objdir)/bgc_def.o $(objdir)/bgc_params.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_m4ago_HAMOCCPrimPart.o : $(dir_m4ago)/mo_m4ago_HAMOCCPrimPart.F90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_HAMOCCinit.o 
+$(objdir)/mo_m4ago_HAMOCCPrimPart.o : $(dir_m4ago)/mo_m4ago_HAMOCCPrimPart.F90 ${objdir}/mo_m4ago_types.o ${objdir}/mo_m4ago_HAMOCCinit.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/mo_m4ago_climberx.o : $(dir_m4ago)/mo_m4ago_climberx.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o \
 	${objdir}/mo_m4ago_types.o $(objdir)/mo_m4ago_params.o $(objdir)/mo_m4ago_core.o  $(objdir)/mo_m4ago_physics.o \
-	${objdir}/mo_m4ago_HAMOCCinit.o $(objdir)/mo_m4ago_HAMOCCPrimPart.o 
+	${objdir}/mo_m4ago_HAMOCCinit.o $(objdir)/mo_m4ago_HAMOCCPrimPart.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/ocprod.o : $(dir_bgc)/ocprod.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o ${objdir}/bgc_diag.o \
-	$(objdir)/mo_m4ago_physics.o $(objdir)/mo_m4ago_HAMOCCinit.o ${objdir}/mo_m4ago_climberx.o
+	$(objdir)/mo_m4ago_physics.o $(objdir)/mo_m4ago_HAMOCCinit.o ${objdir}/mo_m4ago_climberx.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/carchm.o : $(dir_bgc)/carchm.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o
+$(objdir)/carchm.o : $(dir_bgc)/carchm.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/cyano.o : $(dir_bgc)/cyano.f90 $(objdir)/bgc_diag.o $(objdir)/bgc_params.o
+$(objdir)/cyano.o : $(dir_bgc)/cyano.f90 $(objdir)/bgc_diag.o $(objdir)/bgc_params.o $(objdir)/constants.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/powadi.o : $(dir_bgc)/powadi.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o
+$(objdir)/powadi.o : $(dir_bgc)/powadi.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/dipowa.o : $(dir_bgc)/dipowa.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o
+$(objdir)/dipowa.o : $(dir_bgc)/dipowa.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/powach.o : $(dir_bgc)/powach.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o \
-	$(objdir)/powadi.o $(objdir)/dipowa.o
+	$(objdir)/powadi.o $(objdir)/dipowa.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sedshi.o : $(dir_bgc)/sedshi.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o
+$(objdir)/sedshi.o : $(dir_bgc)/sedshi.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/constants.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/mo_beleg_bgc.o : $(dir_bgc)/mo_beleg_bgc.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+$(objdir)/mo_beleg_bgc.o : $(dir_bgc)/mo_beleg_bgc.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/constants.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/tracer_cons.o : $(dir_bgc)/tracer_cons.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+$(objdir)/tracer_cons.o : $(dir_bgc)/tracer_cons.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/flx_sed.o : $(dir_bgc)/flx_sed.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o
+$(objdir)/flx_sed.o : $(dir_bgc)/flx_sed.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/flx_sed_net.o : $(dir_bgc)/flx_sed_net.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o
+$(objdir)/flx_sed_net.o : $(dir_bgc)/flx_sed_net.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/flx_bur.o : $(dir_bgc)/flx_bur.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o
+$(objdir)/flx_bur.o : $(dir_bgc)/flx_bur.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sed_grid_update_tracers.o : $(dir_bgc)/sed_grid_update_tracers.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+$(objdir)/sed_grid_update_tracers.o : $(dir_bgc)/sed_grid_update_tracers.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bgc_out.o : $(dir_bgc)bgc_out.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o
+$(objdir)/bgc_out.o : $(dir_bgc)bgc_out.f90 $(objdir)/bgc_grid.o $(objdir)/bgc_params.o $(objdir)/bgc_def.o $(objdir)/bgc_diag.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.bgc_model.o : $(dir_bgc_dummy).bgc_model.f90 $(objdir)/.bgc_def.o
+$(objdir)/.bgc_model.o : $(dir_bgc_dummy).bgc_model.f90 $(objdir)/.bgc_def.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.bgc_out.o : $(dir_bgc_dummy).bgc_out.f90 $(objdir)/.bgc_def.o
+$(objdir)/.bgc_out.o : $(dir_bgc_dummy).bgc_out.f90 $(objdir)/.bgc_def.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.bgc_params.o : $(dir_bgc_dummy).bgc_params.f90
+$(objdir)/.bgc_params.o : $(dir_bgc_dummy).bgc_params.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.bgc_def.o : $(dir_bgc_dummy).bgc_def.f90 $(objdir)/.bgc_params.o 
+$(objdir)/.bgc_def.o : $(dir_bgc_dummy).bgc_def.f90 $(objdir)/.bgc_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ################
 # geo rules ###
 $(objdir)/geo.o : $(dir_geo)geo.f90 $(objdir)/climber_grid.o $(objdir)/control.o \
 	$(objdir)/geo_params.o $(objdir)/geo_grid.o $(objdir)/geo_def.o \
-	$(objdir)/runoff_routing.o $(objdir)/lakes.o $(objdir)/fill_ocean.o $(objdir)/topo_filter.o $(objdir)/topo_fill.o $(objdir)/connect_ocn.o \
+	$(objdir)/runoff_routing.o $(objdir)/lakes.o $(objdir)/fill_ocean.o $(objdir)/topo_filter.o $(objdir)/topo_fill.o $(objdir)/ocn_mask.o \
 	$(objdir)/q_geo.o $(objdir)/sed.o $(objdir)/vilma.o $(objdir)/fastearth.o $(objdir)/gia.o $(objdir)/fix_runoff.o \
-	$(objdir)/hires_to_lowres.o $(objdir)/hypso_topo.o $(objdir)/coast_cells.o $(objdir)/drainage_basins.o
+	$(objdir)/hires_to_lowres.o $(objdir)/hypso_topo.o $(objdir)/coast_cells.o $(objdir)/drainage_basins.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/vilma.o : $(dir_geo)vilma.F90
+$(objdir)/vilma.o : $(dir_geo)vilma.F90 $(objdir)/constants.o $(objdir)/control.o $(objdir)/geo_params.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fastearth.o : $(dir_geo)fastearth.F90
+$(objdir)/fastearth.o : $(dir_geo)fastearth.F90 $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/.vilma_dummy.o : $(dir_geo).vilma_dummy.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/gia.o : $(dir_geo)gia.f90 
+$(objdir)/gia.o : $(dir_geo)gia.f90 $(objdir)/constants.o $(objdir)/geo_params.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/q_geo.o : $(dir_geo)q_geo.f90 
+$(objdir)/q_geo.o : $(dir_geo)q_geo.f90 $(objdir)/constants.o $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sed.o : $(dir_geo)sed.f90 
+$(objdir)/sed.o : $(dir_geo)sed.f90 $(objdir)/constants.o $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/hypso_topo.o : $(dir_geo)hypso_topo.f90 $(objdir)/geo_grid.o
+$(objdir)/hypso_topo.o : $(dir_geo)hypso_topo.f90 $(objdir)/geo_grid.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fix_runoff.o : $(dir_geo)fix_runoff.f90 
+$(objdir)/fix_runoff.o : $(dir_geo)fix_runoff.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/hires_to_lowres.o : $(dir_geo)hires_to_lowres.f90 
+$(objdir)/hires_to_lowres.o : $(dir_geo)hires_to_lowres.f90 $(objdir)/ocn_mask.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/geo_grid.o $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/coast_cells.o : $(dir_geo)coast_cells.f90 
+$(objdir)/coast_cells.o : $(dir_geo)coast_cells.f90 $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/drainage_basins.o : $(dir_geo)drainage_basins.f90 
+$(objdir)/drainage_basins.o : $(dir_geo)drainage_basins.f90 $(objdir)/climber_grid.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/runoff_routing.o : $(dir_geo)runoff_routing.f90 $(objdir)/lakes.o
+$(objdir)/runoff_routing.o : $(dir_geo)runoff_routing.f90 $(objdir)/lakes.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/lakes.o : $(dir_geo)lakes.f90 
+$(objdir)/lakes.o : $(dir_geo)lakes.f90 $(objdir)/constants.o $(objdir)/geo_def.o $(objdir)/geo_params.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fill_ocean.o : $(dir_geo)fill_ocean.f90 
+$(objdir)/fill_ocean.o : $(dir_geo)fill_ocean.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/topo_filter.o : $(dir_geo)topo_filter.f90 
+$(objdir)/topo_filter.o : $(dir_geo)topo_filter.f90 $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/topo_fill.o : $(dir_geo)topo_fill.f90 
+$(objdir)/topo_fill.o : $(dir_geo)topo_fill.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/connect_ocn.o : $(dir_geo)connect_ocn.f90 
+$(objdir)/ocn_topology.o : $(dir_geo)ocn_topology.f90 $(objdir)/geo_params.o $(objdir)/geo_grid.o $(objdir)/fill_ocean.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/geo_params.o : $(dir_geo)geo_params.f90 $(objdir)/control.o 
+$(objdir)/ocn_mask.o : $(dir_geo)ocn_mask.f90 $(objdir)/ocn_topology.o $(objdir)/fill_ocean.o $(objdir)/geo_grid.o $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/geo_grid.o : $(dir_geo)geo_grid.f90
+$(objdir)/geo_params.o : $(dir_geo)geo_params.f90 $(objdir)/control.o $(objdir)/precision.o
+	$(FC) $(LDFLAGS) -c -o $@ $<
+
+$(objdir)/geo_grid.o : $(dir_geo)geo_grid.f90 $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/geo_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/geo_def.o : $(dir_geo)geo_def.f90 $(objdir)/precision.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/geo_out.o : $(dir_geo)geo_out.f90 $(objdir)/geo.o $(objdir)/control.o 
+$(objdir)/geo_out.o : $(dir_geo)geo_out.f90 $(objdir)/geo.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/dim_name.o $(objdir)/geo_def.o $(objdir)/geo_params.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ################
 # co2 rules ####
-$(objdir)/co2_model.o : $(dir_co2)co2_model.f90 $(objdir)/co2_def.o
+$(objdir)/co2_model.o : $(dir_co2)co2_model.f90 $(objdir)/co2_def.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/co2_def.o : $(dir_co2)co2_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/co2_out.o : $(dir_co2)co2_out.f90 $(objdir)/co2_def.o
+$(objdir)/co2_out.o : $(dir_co2)co2_out.f90 $(objdir)/co2_def.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ################
 # ch4 rules ####
-$(objdir)/ch4_model.o : $(dir_ch4)ch4_model.f90 $(objdir)/ch4_def.o 
+$(objdir)/ch4_model.o : $(dir_ch4)ch4_model.f90 $(objdir)/ch4_def.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/ch4_def.o : $(dir_ch4)ch4_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ch4_out.o : $(dir_ch4)ch4_out.f90 $(objdir)/ch4_def.o
+$(objdir)/ch4_out.o : $(dir_ch4)ch4_out.f90 $(objdir)/ch4_def.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ################
 # n2o rules ####
-$(objdir)/n2o_model.o : $(dir_n2o)n2o_model.f90 $(objdir)/n2o_def.o 
+$(objdir)/n2o_model.o : $(dir_n2o)n2o_model.f90 $(objdir)/n2o_def.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/n2o_def.o : $(dir_n2o)n2o_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/n2o_out.o : $(dir_n2o)n2o_out.f90 $(objdir)/n2o_def.o
+$(objdir)/n2o_out.o : $(dir_n2o)n2o_out.f90 $(objdir)/n2o_def.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ######################
 # ice model rules ####
-$(objdir)/ice_model.o : $(dir_ice)ice_model.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o
+$(objdir)/ice_model.o : $(dir_ice)ice_model.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/sico_model.o $(objdir)/sico_out.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.ice_model_dummy.o : $(dir_ice).ice_model_dummy.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o
+$(objdir)/.ice_model_dummy.o : $(dir_ice).ice_model_dummy.f90 $(objdir)/ice_def.o $(objdir)/ice_id.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/ice_def.o : $(dir_ice)ice_def.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice_id.o : $(dir_ice)ice_id.f90 
+$(objdir)/ice_id.o : $(dir_ice)ice_id.f90 $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ############################
@@ -926,19 +935,19 @@ $(objdir)/sico_model.o : $(dir_ice_sico)sico_model.f90 $(objdir)/control.o $(obj
 	$(objdir)/init_temp_water_age_m.o $(objdir)/calc_vxy_m.o $(objdir)/calc_vz_m.o $(objdir)/calc_dxyz_m.o \
 	$(objdir)/topograd_m.o $(objdir)/calc_thk_m.o $(objdir)/enth_temp_omega_m.o $(objdir)/calc_temp_m.o \
 	$(objdir)/calc_temp_enth_m.o $(objdir)/calc_enhance_m.o $(objdir)/flag_update_gf_gl_cf_m.o $(objdir)/calc_temp_melt_bas_m.o \
-	$(objdir)/calc_bas_melt_m.o $(objdir)/calc_thk_water_bas_m.o $(objdir)/boundary_m.o 
+	$(objdir)/calc_bas_melt_m.o $(objdir)/calc_thk_water_bas_m.o $(objdir)/boundary_m.o $(objdir)/constants.o $(objdir)/dim_name.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sico_types_m.o : $(dir_ice_sico)sico_types_m.f90 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/compare_float_m.o : $(dir_ice_sico)compare_float_m.f90 
+$(objdir)/compare_float_m.o : $(dir_ice_sico)compare_float_m.f90 $(objdir)/sico_types_m.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sico_params.o : $(dir_ice_sico)sico_params.f90 $(objdir)/sico_types_m.o
+$(objdir)/sico_params.o : $(dir_ice_sico)sico_params.f90 $(objdir)/sico_types_m.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sico_timer.o : $(dir_ice_sico)sico_timer.f90 $(objdir)/sico_types_m.o
+$(objdir)/sico_timer.o : $(dir_ice_sico)sico_timer.f90 $(objdir)/sico_types_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sico_state.o : $(dir_ice_sico)sico_state.f90 $(objdir)/sico_types_m.o
@@ -951,21 +960,21 @@ $(objdir)/ice_material_properties_m.o : $(dir_ice_sico)ice_material_properties_m
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/init_temp_water_age_m.o : $(dir_ice_sico)init_temp_water_age_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_state.o $(objdir)/sico_grid.o
+	$(objdir)/sico_state.o $(objdir)/sico_grid.o $(objdir)/ice_material_properties_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/stereo_proj_m.o : $(dir_ice_sico)stereo_proj_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sico_grid.o : $(dir_ice_sico)sico_grid.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o $(objdir)/sico_timer.o \
-	$(objdir)/ice_material_properties_m.o $(objdir)/stereo_proj_m.o
+	$(objdir)/ice_material_properties_m.o $(objdir)/stereo_proj_m.o $(objdir)/control.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sico_check.o : $(dir_ice_sico)sico_check.f90 $(objdir)/sico_state.o $(objdir)/sico_grid.o
+$(objdir)/sico_check.o : $(dir_ice_sico)sico_check.f90 $(objdir)/sico_state.o $(objdir)/sico_grid.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_vxy_m.o : $(dir_ice_sico)calc_vxy_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_timer.o $(objdir)/ice_material_properties_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_timer.o $(objdir)/ice_material_properties_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_vz_m.o : $(dir_ice_sico)calc_vz_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_grid.o $(objdir)/sico_state.o 
@@ -980,22 +989,22 @@ $(objdir)/topograd_m.o : $(dir_ice_sico)topograd_m.f90 $(objdir)/sico_types_m.o 
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_thk_m.o : $(dir_ice_sico)calc_thk_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_timer.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o $(objdir)/topograd_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o $(objdir)/topograd_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/enth_temp_omega_m.o : $(dir_ice_sico)enth_temp_omega_m.f90 $(objdir)/sico_types_m.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_temp_m.o : $(dir_ice_sico)calc_temp_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_timer.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o $(objdir)/ice_material_properties_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o $(objdir)/ice_material_properties_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_temp_enth_m.o : $(dir_ice_sico)calc_temp_enth_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_timer.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/sico_maths_m.o $(objdir)/enth_temp_omega_m.o $(objdir)/ice_material_properties_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_enhance_m.o : $(dir_ice_sico)calc_enhance_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_timer.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/flag_update_gf_gl_cf_m.o : $(dir_ice_sico)flag_update_gf_gl_cf_m.f90 $(objdir)/sico_types_m.o \
@@ -1007,85 +1016,85 @@ $(objdir)/calc_temp_melt_bas_m.o : $(dir_ice_sico)calc_temp_melt_bas_m.f90 $(obj
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_bas_melt_m.o : $(dir_ice_sico)calc_bas_melt_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_timer.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/ice_material_properties_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_params.o $(objdir)/ice_material_properties_m.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/calc_thk_water_bas_m.o : $(dir_ice_sico)calc_thk_water_bas_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_state.o 
+	$(objdir)/sico_state.o $(objdir)/sico_timer.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/hydro_m.o : $(dir_ice_sico)hydro_m.f90 $(objdir)/sico_types_m.o
+$(objdir)/hydro_m.o : $(dir_ice_sico)hydro_m.f90 $(objdir)/sico_types_m.o $(objdir)/constants.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/discharge_workers_m.o : $(dir_ice_sico)discharge_workers_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o 
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/compare_float_m.o $(objdir)/constants.o $(objdir)/sico_timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/boundary_m.o : $(dir_ice_sico)boundary_m.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/discharge_workers_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/discharge_workers_m.o $(objdir)/sico_timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/sico_out.o : $(dir_ice_sico)sico_out.f90 $(objdir)/sico_types_m.o $(objdir)/sico_params.o \
-	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_model.o $(objdir)/enth_temp_omega_m.o
+	$(objdir)/sico_grid.o $(objdir)/sico_state.o $(objdir)/sico_model.o $(objdir)/enth_temp_omega_m.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ################
 # smb rules ####
 $(objdir)/smb_model.o : $(dir_smb)smb_model.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/smb_def.o \
 	$(objdir)/topo.o $(objdir)/ice.o $(objdir)/smb_simple.o $(objdir)/smb_pdd.o $(objdir)/semi.o \
-	$(objdir)/fake_atm_hires.o $(objdir)/smb_bias_corr.o $(objdir)/filter.o
+	$(objdir)/fake_atm_hires.o $(objdir)/smb_bias_corr.o $(objdir)/filter.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_grid.o : $(dir_smb)smb_grid.f90 $(objdir)/smb_params.o
+$(objdir)/smb_grid.o : $(dir_smb)smb_grid.f90 $(objdir)/smb_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_params.o : $(dir_smb)smb_params.f90 $(objdir)/timer.o $(objdir)/control.o
+$(objdir)/smb_params.o : $(dir_smb)smb_params.f90 $(objdir)/timer.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_def.o : $(dir_smb)smb_def.f90 $(objdir)/precision.o $(objdir)/smb_simple.o
+$(objdir)/smb_def.o : $(dir_smb)smb_def.f90 $(objdir)/precision.o $(objdir)/smb_simple.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_surface_par.o : $(dir_smb)smb_surface_par.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o 
+$(objdir)/smb_surface_par.o : $(dir_smb)smb_surface_par.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/topo.o : $(dir_smb)topo.f90
+$(objdir)/topo.o : $(dir_smb)topo.f90 $(objdir)/constants.o $(objdir)/precision.o $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ice.o : $(dir_smb)ice.f90
+$(objdir)/ice.o : $(dir_smb)ice.f90 $(objdir)/precision.o $(objdir)/smb_params.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/downscaling.o : $(dir_smb)downscaling.f90 
+$(objdir)/downscaling.o : $(dir_smb)downscaling.f90 $(objdir)/constants.o $(objdir)/precision.o $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_ebal.o : $(dir_smb)smb_ebal.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o 
+$(objdir)/smb_ebal.o : $(dir_smb)smb_ebal.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_temp.o : $(dir_smb)smb_temp.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o
+$(objdir)/smb_temp.o : $(dir_smb)smb_temp.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/tridiag.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/snow.o : $(dir_smb)snow.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o
+$(objdir)/snow.o : $(dir_smb)snow.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/smb_simple.o : $(dir_smb)smb_simple.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_pdd.o : $(dir_smb)smb_pdd.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/downscaling.o
+$(objdir)/smb_pdd.o : $(dir_smb)smb_pdd.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/downscaling.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/semi.o : $(dir_smb)semi.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/downscaling.o \
-	$(objdir)/downscaling.o $(objdir)/smb_ebal.o $(objdir)/smb_temp.o $(objdir)/snow.o $(objdir)/smb_surface_par.o
+	$(objdir)/downscaling.o $(objdir)/smb_ebal.o $(objdir)/smb_temp.o $(objdir)/snow.o $(objdir)/smb_surface_par.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_atm_hires.o : $(dir_smb)fake_atm_hires.f90 $(objdir)/smb_params.o
+$(objdir)/fake_atm_hires.o : $(dir_smb)fake_atm_hires.f90 $(objdir)/smb_params.o $(objdir)/constants.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_bias_corr.o : $(dir_smb)smb_bias_corr.f90 $(objdir)/timer.o
+$(objdir)/smb_bias_corr.o : $(dir_smb)smb_bias_corr.f90 $(objdir)/timer.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/precision.o $(objdir)/smb_params.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/smb_out.o : $(dir_smb)smb_out.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/smb_def.o
+$(objdir)/smb_out.o : $(dir_smb)smb_out.f90 $(objdir)/smb_grid.o $(objdir)/smb_params.o $(objdir)/smb_def.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.smb_model_dummy.o : $(dir_smb).smb_model_dummy.f90 $(objdir)/smb_def.o
+$(objdir)/.smb_model_dummy.o : $(dir_smb).smb_model_dummy.f90 $(objdir)/smb_def.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/.smb_out_dummy.o : $(dir_smb).smb_out_dummy.f90 $(objdir)/smb_def.o
@@ -1093,25 +1102,25 @@ $(objdir)/.smb_out_dummy.o : $(dir_smb).smb_out_dummy.f90 $(objdir)/smb_def.o
 
 ################
 # bmb rules ####
-$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/bmb_bias_corr.o 
+$(objdir)/bmb_model.o : $(dir_bmb)bmb_model.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/bmb_bias_corr.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bmb_grid.o : $(dir_bmb)bmb_grid.f90 $(objdir)/bmb_params.o
+$(objdir)/bmb_grid.o : $(dir_bmb)bmb_grid.f90 $(objdir)/bmb_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bmb_params.o : $(dir_bmb)bmb_params.f90 $(objdir)/timer.o $(objdir)/control.o
+$(objdir)/bmb_params.o : $(dir_bmb)bmb_params.f90 $(objdir)/timer.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bmb_def.o : $(dir_bmb)bmb_def.f90 $(objdir)/precision.o
+$(objdir)/bmb_def.o : $(dir_bmb)bmb_def.f90 $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bmb_bias_corr.o : $(dir_bmb)bmb_bias_corr.f90
+$(objdir)/bmb_bias_corr.o : $(dir_bmb)bmb_bias_corr.f90 $(objdir)/bmb_params.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/bmb_out.o : $(dir_bmb)bmb_out.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o
+$(objdir)/bmb_out.o : $(dir_bmb)bmb_out.f90 $(objdir)/bmb_grid.o $(objdir)/bmb_params.o $(objdir)/bmb_def.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/.bmb_model_dummy.o : $(dir_bmb).bmb_model_dummy.f90 $(objdir)/bmb_def.o
+$(objdir)/.bmb_model_dummy.o : $(dir_bmb).bmb_model_dummy.f90 $(objdir)/bmb_def.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 $(objdir)/.bmb_out_dummy.o : $(dir_bmb).bmb_out_dummy.f90 $(objdir)/bmb_def.o
@@ -1123,79 +1132,79 @@ $(objdir)/bnd.o : $(dir_bnd)bnd.f90 $(objdir)/insolation.o $(objdir)/solar.o $(o
 	$(objdir)/co2.o $(objdir)/co2_rad.o $(objdir)/ch4.o $(objdir)/ch4_rad.o $(objdir)/n2o.o $(objdir)/n2o_rad.o $(objdir)/so4.o $(objdir)/o3.o \
 	$(objdir)/cfc.o $(objdir)/luc.o $(objdir)/dist.o $(objdir)/sea_level.o $(objdir)/d13c_atm.o $(objdir)/D14c_atm.o \
 	$(objdir)/fake_atm.o $(objdir)/fake_dust.o $(objdir)/fake_lnd.o $(objdir)/fake_ocn.o $(objdir)/fake_sic.o $(objdir)/fake_ice.o $(objdir)/fake_geo.o \
-	$(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o
+	$(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/constants.o $(objdir)/control.o $(objdir)/dim_name.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/insolation.o : $(dir_bnd)insolation.f90 $(objdir)/constants.o $(objdir)/timer.o
+$(objdir)/insolation.o : $(dir_bnd)insolation.f90 $(objdir)/constants.o $(objdir)/timer.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/solar.o : $(dir_bnd)solar.f90
+$(objdir)/solar.o : $(dir_bnd)solar.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/volc.o : $(dir_bnd)volc.f90
+$(objdir)/volc.o : $(dir_bnd)volc.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/co2.o : $(dir_bnd)co2.f90
+$(objdir)/co2.o : $(dir_bnd)co2.f90 $(objdir)/control.o $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/co2_rad.o : $(dir_bnd)co2_rad.f90
+$(objdir)/co2_rad.o : $(dir_bnd)co2_rad.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/sea_level.o : $(dir_bnd)sea_level.f90
+$(objdir)/sea_level.o : $(dir_bnd)sea_level.f90 $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/d13c_atm.o : $(dir_bnd)d13c_atm.f90
+$(objdir)/d13c_atm.o : $(dir_bnd)d13c_atm.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/D14c_atm.o : $(dir_bnd)D14c_atm.f90
+$(objdir)/D14c_atm.o : $(dir_bnd)D14c_atm.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ch4.o : $(dir_bnd)ch4.f90
+$(objdir)/ch4.o : $(dir_bnd)ch4.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/ch4_rad.o : $(dir_bnd)ch4_rad.f90
+$(objdir)/ch4_rad.o : $(dir_bnd)ch4_rad.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/n2o.o : $(dir_bnd)n2o.f90
+$(objdir)/n2o.o : $(dir_bnd)n2o.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/n2o_rad.o : $(dir_bnd)n2o_rad.f90
+$(objdir)/n2o_rad.o : $(dir_bnd)n2o_rad.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/so4.o : $(dir_bnd)so4.f90
+$(objdir)/so4.o : $(dir_bnd)so4.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/o3.o : $(dir_bnd)o3.f90
+$(objdir)/o3.o : $(dir_bnd)o3.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/cfc.o : $(dir_bnd)cfc.f90
+$(objdir)/cfc.o : $(dir_bnd)cfc.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/luc.o : $(dir_bnd)luc.f90
+$(objdir)/luc.o : $(dir_bnd)luc.f90 $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/dist.o : $(dir_bnd)dist.f90
+$(objdir)/dist.o : $(dir_bnd)dist.f90 $(objdir)/precision.o $(objdir)/timer.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_atm.o : $(dir_bnd)fake_atm.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_atm.o : $(dir_bnd)fake_atm.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_dust.o : $(dir_bnd)fake_dust.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_dust.o : $(dir_bnd)fake_dust.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_lnd.o : $(dir_bnd)fake_lnd.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_lnd.o : $(dir_bnd)fake_lnd.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_ocn.o : $(dir_bnd)fake_ocn.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_ocn.o : $(dir_bnd)fake_ocn.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/constants.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_sic.o : $(dir_bnd)fake_sic.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_sic.o : $(dir_bnd)fake_sic.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_ice.o : $(dir_bnd)fake_ice.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_ice.o : $(dir_bnd)fake_ice.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
-$(objdir)/fake_geo.o : $(dir_bnd)fake_geo.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o
+$(objdir)/fake_geo.o : $(dir_bnd)fake_geo.f90 $(objdir)/timer.o $(objdir)/climber_grid.o $(objdir)/control.o $(objdir)/precision.o
 	$(FC) $(LDFLAGS) -c -o $@ $<
 
 ########################################################################

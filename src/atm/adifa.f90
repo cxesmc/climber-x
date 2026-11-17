@@ -29,11 +29,12 @@ module adifa_mod
   use atm_params, only : wp
   use atm_params, only : cp
   use atm_params, only : tstep
-  use atm_params, only : l_diff_impl, l_dust, i_adv
+  use atm_params, only : l_dust, i_adv, c_adv_polar, lat_adv_polar
   use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr
-  use adv_fct_mod, only : fct_ratios
+  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit, diffx_eq
+  use constants, only : pi
+  use adv_fct_mod, only : fct_level, fct_diag_add
   !$ use omp_lib
 
   implicit none
@@ -57,7 +58,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine adifa(fax, fay, fax_psi, fay_psi, fax_psi_topo, fay_psi_topo, &
     tp, q3, d3, cam, diffx, diffy, &
-    convdse, convwtr_adv, convwtr_dif, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
+    convdse, convwtr_adv, convdst, convco2, faxdse, faxwtr, faxdst, faxco2, faydse, faywtr, faydst, fayco2, &
     fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &
     convdse_psi, convdse_psi_topo)
 
@@ -79,7 +80,6 @@ contains
     
     real(wp), intent(inout) :: convdse(:,:)
     real(wp), intent(inout) :: convwtr_adv(:,:)   ! advective moisture convergence
-    real(wp), intent(  out) :: convwtr_dif(:,:)   ! explicit diffusive moisture convergence (0 when l_diff_impl, then set by diffuse_impl)
     real(wp), intent(inout) :: convdst(:,:)
     real(wp), intent(inout) :: convco2(:,:)
 
@@ -107,16 +107,18 @@ contains
 
     integer :: i, j, k, imi, jmi
     real(wp) :: tpup, qup, dup, cup
-    real(wp) :: dpl_x, dpl_y
+    real(wp) :: dpl_x, dpl_y, kx
     real(wp) :: tp_ijk, tp_i1jk, tp_ij1k
     real(wp) :: q3_ijk, q3_i1jk, q3_ij1k
     real(wp) :: d3_ijk, d3_i1jk, d3_ij1k
     real(wp) :: c3_ij, c3_i1j, c3_ij1
     real(wp) :: fax_ijk, fay_ijk
-    real(wp) :: fdivdse, fdivwtr, fdivdst, fdivco2
     real(wp) :: cmass, ctp, mc_psi, mc_psi_topo, m_k
     integer :: ipl
     integer :: idg_dse, idg_wtr
+    integer :: n, nfct
+    real(wp), dimension(4,jm,km) :: dacc_dse, dacc_wtr   ! per level limiter diagnostics
+    real(wp), dimension(4,jm,1)  :: dacc_nul             ! not used, the diagnostics are off for these
     real(wp), dimension(imc,jm) :: faxdse_psi, faxdse_psi_topo
     ! tropospheric mass weighted mean of tp, the reference the parts are measured against
     real(wp), dimension(im,jm) :: tp_col
@@ -151,30 +153,65 @@ contains
         idg_wtr = 2
       endif
 
-      call fct_ratios(km, fax, fay, dplt, tp, rx_dse, ry_dse, idg_dse)
-      call fct_ratios(km, fax, fay, dplt, q3, rx_wtr, ry_wtr, idg_wtr)
-      if (l_dust) call fct_ratios(km, fax, fay, dplt, d3, rx_dst, ry_dst, 0)
-
       ! CO2 is uniform over the column, so its limiter is a single level problem
       ! carried by the column integrated mass flux and the column mass
-      fmx_col(:,:,1) = sum(fax(1:imc,1:jm,1:km),dim=3)
-      fmy_col(:,:,1) = sum(fay(1:im,1:jmc,1:km),dim=3)
-      dm_col(:,:,1)  = sum(dplt(1:im,1:jm,1:km),dim=3)
-      cam_col(:,:,1) = cam(1:im,1:jm)
-      call fct_ratios(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, 0)
+      !$omp parallel do private(i,j,k)
+      do j=1,jmc
+        do i=1,imc
+          if (j.le.jm) then
+            fmx_col(i,j,1) = 0._wp
+            do k=1,km
+              fmx_col(i,j,1) = fmx_col(i,j,1) + fax(i,j,k)
+            enddo
+          endif
+          if (i.le.im) then
+            fmy_col(i,j,1) = 0._wp
+            do k=1,km
+              fmy_col(i,j,1) = fmy_col(i,j,1) + fay(i,j,k)
+            enddo
+          endif
+          if (i.le.im .and. j.le.jm) then
+            dm_col(i,j,1) = 0._wp
+            do k=1,km
+              dm_col(i,j,1) = dm_col(i,j,1) + dplt(i,j,k)
+            enddo
+            cam_col(i,j,1) = cam(i,j)
+          endif
+        enddo
+      enddo
+      !$omp end parallel do
+
+      ! The limiter of each level is independent of the others, and so is that of each tracer:
+      ! all (tracer, level) pairs are done in one parallel loop, as there are only km levels
+      ! per tracer. Items 1:km are dse, km+1:2km water, 2km+1 CO2 and 2km+2:3km+1 dust.
+      nfct = 2*km+1
+      if (l_dust) nfct = nfct+km
+      !$omp parallel do schedule(dynamic,1) private(n)
+      do n=1,nfct
+        if (n.le.km) then
+          call fct_level(n, fax, fay, dplt, tp, rx_dse, ry_dse, dacc_dse(:,:,n), idg_dse)
+        else if (n.le.2*km) then
+          call fct_level(n-km, fax, fay, dplt, q3, rx_wtr, ry_wtr, dacc_wtr(:,:,n-km), idg_wtr)
+        else if (n.eq.2*km+1) then
+          call fct_level(1, fmx_col, fmy_col, dm_col, cam_col, rx_co2, ry_co2, dacc_nul(:,:,1), 0)
+        else
+          call fct_level(n-2*km-1, fax, fay, dplt, d3, rx_dst, ry_dst, dacc_nul(:,:,1), 0)
+        endif
+      enddo
+      !$omp end parallel do
+      if (idg_dse.gt.0) call fct_diag_add(km, dacc_dse, idg_dse)
+      if (idg_wtr.gt.0) call fct_diag_add(km, dacc_wtr, idg_wtr)
 
     endif
 
 
-    !$omp parallel do private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y) &
+    !$omp parallel do collapse(2) private(i, j, k, imi, jmi, tpup, qup, dup, cup, dpl_x, dpl_y, kx) &
     !$omp private (tp_ijk, tp_i1jk, tp_ij1k, q3_ijk, q3_i1jk, q3_ij1k, d3_ijk, d3_i1jk, d3_ij1k, c3_ij, c3_i1j, c3_ij1, fax_ijk, fay_ijk) &
     !$omp private (ipl, cmass, ctp, m_k) 
     do j=1,jm
-
-      jmi=max(1,j-1)
-
       do i=1,im
 
+        jmi=max(1,j-1)
         imi=i-1
         if (imi.eq.0) imi=im
 
@@ -311,12 +348,14 @@ contains
           if (k.le.km-2) then   ! limit to troposphere
 
             !-----------------------------------
-            ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff)
+            ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff).
+            ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq
             dpl_x = dplx_dif(i,j,k)
-            fdxdse(i,j) = fdxdse(i,j) + diffx(i,j)*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
-            fdxwtr(i,j) = fdxwtr(i,j) + diffx(i,j)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
-            fdxdst(i,j) = fdxdst(i,j) + diffx(i,j)*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
-            fdxco2(i,j) = fdxco2(i,j) + diffx(i,j)*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
+            kx = diffx(i,j)+diffx_eq(j)
+            fdxdse(i,j) = fdxdse(i,j) + kx*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
+            fdxwtr(i,j) = fdxwtr(i,j) + kx*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
+            fdxdst(i,j) = fdxdst(i,j) + kx*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
+            fdxco2(i,j) = fdxco2(i,j) + kx*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
 
             !-----------------------------------
             ! meridional diffusive fluxes
@@ -331,64 +370,52 @@ contains
         enddo
 
       enddo
-
-      ! no-flux condition at the poles
-      if (j.eq.jm) then
-        faydse(:,jmc) = 0._wp              
-        faydse_psi(:,jmc) = 0._wp
-        faydse_psi_topo(:,jmc) = 0._wp
-        faywtr(:,jmc) = 0._wp          
-        faydst(:,jmc) = 0._wp          
-        fayco2(:,jmc) = 0._wp          
-        fdydse(:,jmc) = 0._wp              
-        fdywtr(:,jmc) = 0._wp        
-        fdydst(:,jmc) = 0._wp 
-        fdyco2(:,jmc) = 0._wp 
-      endif
-
-      ! Cycling
-      faxdse(imc,j) = faxdse(1,j)              
-      faxdse_psi(imc,j) = faxdse_psi(1,j)
-      faxdse_psi_topo(imc,j) = faxdse_psi_topo(1,j)
-      faxwtr(imc,j) = faxwtr(1,j)          
-      faxdst(imc,j) = faxdst(1,j)          
-      faxco2(imc,j) = faxco2(1,j)          
-      fdxdse(imc,j) = fdxdse(1,j)              
-      fdxwtr(imc,j) = fdxwtr(1,j)        
-      fdxdst(imc,j) = fdxdst(1,j)        
-      fdxco2(imc,j) = fdxco2(1,j)        
-
     enddo
     !$omp end parallel do
+
+    ! zonal sub-cycling in rows that exceed the zonal Courant limit: overwrites the zonal advective
+    ! fluxes of those rows only, after (and outside) the main loop
+    call polar_zonal_subcycle(fax, fax_psi, fax_psi_topo, tp, q3, d3, cam, &
+      faxdse, faxdse_psi, faxdse_psi_topo, faxwtr, faxdst, faxco2)
+
+    ! no-flux condition at the poles
+    faydse(:,jmc) = 0._wp              
+    faydse_psi(:,jmc) = 0._wp
+    faydse_psi_topo(:,jmc) = 0._wp
+    faywtr(:,jmc) = 0._wp          
+    faydst(:,jmc) = 0._wp          
+    fayco2(:,jmc) = 0._wp          
+    fdydse(:,jmc) = 0._wp              
+    fdywtr(:,jmc) = 0._wp        
+    fdydst(:,jmc) = 0._wp 
+    fdyco2(:,jmc) = 0._wp 
+
+    ! Cycling
+    faxdse(imc,:) = faxdse(1,:)              
+    faxdse_psi(imc,:) = faxdse_psi(1,:)
+    faxdse_psi_topo(imc,:) = faxdse_psi_topo(1,:)
+    faxwtr(imc,:) = faxwtr(1,:)          
+    faxdst(imc,:) = faxdst(1,:)          
+    faxco2(imc,:) = faxco2(1,:)          
+    fdxdse(imc,:) = fdxdse(1,:)              
+    fdxwtr(imc,:) = fdxwtr(1,:)        
+    fdxdst(imc,:) = fdxdst(1,:)        
+    fdxco2(imc,:) = fdxco2(1,:)        
 
 
     !-----------------------------------
     ! fluxes convergency
     !-----------------------------------
 
-    !$omp parallel do collapse(2) private(i,j,k,fdivdse,fdivwtr,fdivdst,fdivco2,mc_psi,mc_psi_topo)
+    !$omp parallel do collapse(2) private(i,j,k,mc_psi,mc_psi_topo)
     do j=1,jm
       do i=1,im
 
-        ! Diffusive flux divergence, only added if l_diff_impl==false
-        if (l_diff_impl) then
-          fdivdse = 0._wp
-          fdivwtr = 0._wp
-          fdivdst = 0._wp
-          fdivco2 = 0._wp
-        else
-          fdivdse = fdxdse(i,j)-fdxdse(i+1,j) + fdydse(i,j+1)-fdydse(i,j)
-          fdivwtr = fdxwtr(i,j)-fdxwtr(i+1,j) + fdywtr(i,j+1)-fdywtr(i,j)
-          fdivdst = fdxdst(i,j)-fdxdst(i+1,j) + fdydst(i,j+1)-fdydst(i,j)
-          fdivco2 = fdxco2(i,j)-fdxco2(i+1,j) + fdyco2(i,j+1)-fdyco2(i,j)
-        endif
-
         !-----------------------------------
-        ! dry static energy (advection [+ explicit diffusion])
+        ! dry static energy (advection only; the diffusion is applied implicitly by diffuse_impl)
         convdse(i,j)= &
                        (faxdse(i,j)  -faxdse(i+1,j) &
-                       +faydse(i,j+1)-faydse(i,j) &
-                       +fdivdse) &
+                       +faydse(i,j+1)-faydse(i,j)) &
                        /sqr(i,j) * cp  ! K * kg/s / m2 * J/kg/K = J/m2/s = W/m2
 
         ! The part of it carried by each half of the column mass correction.
@@ -443,26 +470,23 @@ contains
                        /sqr(i,j) * cp
 
         !-----------------------------------
-        ! water (advection [+ explicit diffusion])
+        ! water (advection only)
         convwtr_adv(i,j)= (faxwtr(i,j)  -faxwtr(i+1,j) &
                           +faywtr(i,j+1)-faywtr(i,j)) &
                           /sqr(i,j)       ! kg/kg * kg/s / m2 = kg/m2/s
-        convwtr_dif(i,j)= fdivwtr/sqr(i,j)
 
         !-----------------------------------
-        ! dust (advection [+ explicit diffusion])
+        ! dust (advection only)
         convdst(i,j)= &
                        (faxdst(i,j)  -faxdst(i+1,j) &
-                       +faydst(i,j+1)-faydst(i,j) &
-                       +fdivdst) &
+                       +faydst(i,j+1)-faydst(i,j)) &
                        /sqr(i,j)
 
         !-----------------------------------
-        ! carbon (advection [+ explicit diffusion])
+        ! carbon (advection only)
         convco2(i,j)= &
                        (faxco2(i,j)  -faxco2(i+1,j) &
-                       +fayco2(i,j+1)-fayco2(i,j) &
-                       +fdivco2) &
+                       +fayco2(i,j+1)-fayco2(i,j)) &
                        /sqr(i,j)        ! kgCO2/s/m2
 
       enddo
@@ -472,5 +496,189 @@ contains
     return
 
   end subroutine adifa
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p o l a r _ z o n a l _ s u b c y c l e
+  !   Purpose    :  zonal tracer advection in rows that violate the zonal Courant condition
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Applied only poleward of lat_adv_polar. Near the poles dxt is a few tens of km, and a few m/s of azonal geostrophic wind give a zonal
+  ! Courant number above 1 on the fast step. There the FCT limiter falls back to upstream, which
+  ! is itself unstable for C>1 (output/cflchk: C_x 2.3 at 87.5N, moisture goes negative, crash).
+  ! In each row whose zonal inflow-mass Courant number C exceeds c_adv_polar, every level and
+  ! tracer is advected along the row with the zonal mass fluxes only, in nsub = ceil(C/c_adv_polar)
+  ! upstream sub-steps of the advective form used by the FCT low order leg,
+  !   x <- x + dt/nsub/m * sum_inflow F*(x_donor - x) ,
+  ! each a convex combination. The time mean of the upstream face value over the sub-steps
+  ! replaces the zonal face value of the row, and the zonal fluxes are rebuilt from it. The mass
+  ! fluxes are untouched, so fax, fax_psi and fax_psi_topo still add up and the column budgets
+  ! stay consistent with the meridional fluxes; tracers are conserved because the fluxes are on
+  ! shared faces. CO2 uses the column mass flux, as its FCT limiter does.
+  subroutine polar_zonal_subcycle(fax, fax_psi, fax_psi_topo, tp, q3, d3, cam, &
+      faxdse, faxdse_psi, faxdse_psi_topo, faxwtr, faxdst, faxco2)
+
+    implicit none
+
+    real(wp), intent(in   ) :: fax(:,:,:), fax_psi(:,:,:), fax_psi_topo(:,:,:)
+    real(wp), intent(in   ) :: tp(:,:,:), q3(:,:,:), d3(:,:,:), cam(:,:)
+    real(wp), intent(inout) :: faxdse(:,:), faxdse_psi(:,:), faxdse_psi_topo(:,:)
+    real(wp), intent(inout) :: faxwtr(:,:), faxdst(:,:), faxco2(:,:)
+
+    integer :: i, j, k, n, r, nsub, nrow
+    integer :: jrow(jm), nsub_row(jm)
+    real(wp) :: c, cmax, m
+    real(wp) :: fcol(imc), mcol(im)
+    real(wp), allocatable :: xb_dse(:,:,:), xb_wtr(:,:,:), xb_dst(:,:,:), xb_co2(:,:)
+    integer, save :: nsub_warned(jm) = 1
+
+
+    ! select the rows to treat and their number of sub-steps
+    nrow = 0
+    do j=1,jm
+
+      ! polar rows only
+      if (abs(fit(j))*180._wp/pi.le.lat_adv_polar) cycle
+
+      ! zonal inflow-mass Courant number of the row, over all levels
+      cmax = 0._wp
+      do i=1,im
+        do k=1,km
+          m = dplt(i,j,k)*sqr(i,j)
+          if (m.gt.0._wp) then
+            c = tstep*(max(0._wp,fax(i,j,k)) + max(0._wp,-fax(i+1,j,k)))/m
+            cmax = max(cmax,c)
+          endif
+        enddo
+      enddo
+      if (cmax.le.c_adv_polar) cycle
+
+      nsub = ceiling(cmax/c_adv_polar)
+      if (l_write_timer .and. nsub.gt.nsub_warned(j)) then
+        print '(a,i3,a,f7.2,a,i3)', ' atm polar zonal sub-cycling: j =',j,' , zonal Courant =',cmax,' , nsub =',nsub
+        nsub_warned(j) = nsub
+      endif
+
+      nrow = nrow + 1
+      jrow(nrow) = j
+      nsub_row(nrow) = nsub
+
+    enddo
+    if (nrow.eq.0) return
+
+    allocate(xb_dse(im,km,nrow), xb_wtr(im,km,nrow), xb_dst(im,km,nrow), xb_co2(im,nrow))
+
+    ! each (row, tracer, level) is independent. Items 1:km are dse, km+1:2km water, 2km+1:3km dust
+    ! and 3km+1 CO2.
+    !$omp parallel do collapse(2) schedule(dynamic,1) private(r, n, i, j, k, m, fcol, mcol)
+    do r=1,nrow
+      do n=1,3*km+1
+        j = jrow(r)
+        if (n.le.km) then
+          k = n
+          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), tp(:,j,k), xb_dse(:,k,r))
+        else if (n.le.2*km) then
+          k = n-km
+          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), q3(:,j,k), xb_wtr(:,k,r))
+        else if (n.le.3*km) then
+          k = n-2*km
+          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), d3(:,j,k), xb_dst(:,k,r))
+        else
+          ! CO2 uses the column mass flux and mass
+          do i=1,im
+            mcol(i) = 0._wp
+            do k=1,km
+              m = dplt(i,j,k)*sqr(i,j)
+              mcol(i) = mcol(i) + m
+            enddo
+          enddo
+          do i=1,imc
+            fcol(i) = 0._wp
+            do k=1,km
+              fcol(i) = fcol(i) + fax(i,j,k)
+            enddo
+          enddo
+          call subcycle_row(nsub_row(r), fcol, mcol, cam(:,j), xb_co2(:,r))
+        endif
+      enddo
+    enddo
+    !$omp end parallel do
+
+    ! rebuild the zonal advective fluxes of the rows from the time mean face values
+    !$omp parallel do private(r, i, j, k)
+    do r=1,nrow
+      j = jrow(r)
+      do i=1,im
+        faxdse(i,j) = 0._wp
+        faxdse_psi(i,j) = 0._wp
+        faxdse_psi_topo(i,j) = 0._wp
+        faxwtr(i,j) = 0._wp
+        faxdst(i,j) = 0._wp
+        faxco2(i,j) = 0._wp
+        do k=1,km
+          faxdse(i,j) = faxdse(i,j) + fax(i,j,k)*xb_dse(i,k,r)
+          faxdse_psi(i,j) = faxdse_psi(i,j) + fax_psi(i,j,k)*xb_dse(i,k,r)
+          faxdse_psi_topo(i,j) = faxdse_psi_topo(i,j) + fax_psi_topo(i,j,k)*xb_dse(i,k,r)
+          faxwtr(i,j) = faxwtr(i,j) + fax(i,j,k)*xb_wtr(i,k,r)
+          faxdst(i,j) = faxdst(i,j) + fax(i,j,k)*xb_dst(i,k,r)
+          faxco2(i,j) = faxco2(i,j) + fax(i,j,k)*xb_co2(i,r)
+        enddo
+      enddo
+    enddo
+    !$omp end parallel do
+
+    deallocate(xb_dse, xb_wtr, xb_dst, xb_co2)
+
+    return
+
+  end subroutine polar_zonal_subcycle
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s u b c y c l e _ r o w
+  !   Purpose    :  nsub upstream sub-steps of one tracer along one periodic row,
+  !                 returns the time mean upstream value on the zonal faces
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine subcycle_row(nsub, f, m, x0, xbar)
+
+    implicit none
+
+    integer,  intent(in ) :: nsub
+    real(wp), intent(in ) :: f(:)      ! (imc) zonal mass flux, face i between cells i-1 and i, positive eastward, kg/s
+    real(wp), intent(in ) :: m(:)      ! (im) cell mass, kg
+    real(wp), intent(in ) :: x0(:)     ! (im) tracer at the start of the step
+    real(wp), intent(out) :: xbar(:)   ! (im) time mean upstream value on face i
+
+    integer :: i, s, iw, ie
+    real(wp) :: x(im), xn(im), dts
+
+
+    dts = tstep/real(nsub,wp)
+    x(:) = x0(1:im)
+    xbar(:) = 0._wp
+    do s=1,nsub
+      do i=1,im
+        iw = modulo(i-2,im) + 1
+        if (f(i).gt.0._wp) then
+          xbar(i) = xbar(i) + x(iw)
+        else
+          xbar(i) = xbar(i) + x(i)
+        endif
+      enddo
+      do i=1,im
+        iw = modulo(i-2,im) + 1
+        ie = modulo(i,im) + 1
+        if (m(i).gt.0._wp) then
+          xn(i) = x(i) + dts/m(i)*( max(0._wp,f(i))*(x(iw)-x(i)) + max(0._wp,-f(i+1))*(x(ie)-x(i)) )
+        else
+          xn(i) = x(i)
+        endif
+      enddo
+      x(:) = xn(:)
+    enddo
+    xbar(:) = xbar(:)/real(nsub,wp)
+
+    return
+
+  end subroutine subcycle_row
 
 end module adifa_mod

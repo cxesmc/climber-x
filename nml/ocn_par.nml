@@ -1,13 +1,12 @@
 &ocn_par
 
  !-------------------------------------------------------------------------------------------
- ! ocean initialisation settings
+ ! ocean initialisation settings, used only if not from restart (ocn_restart==F in control.nml)
  !-------------------------------------------------------------------------------------------
  i_init = 2                   ! ocean T and S initialisation
                               ! 1 = latitude dependent/uniform values 
                               ! 2 = present day observations
                               ! 3 = DeepMIP-type initial conditions, with uniform S=saln0 and T determined by init3_peak and init3_bg
-                              ! used only if not from restart (ocn_restart==F in control.nml)
  init3_peak = 25.0            ! degC, peak temperature increase at the equator (relative to init3_bg), used only for i_init==3
  init3_bg   = 15.0            ! degC, background temperature, used only for i_init==3
 
@@ -26,12 +25,8 @@
  !-------------------------------------------------------------------------------------------
  nlayers = 23                 ! number of ocean layers
  levels =  0. 10. 25. 50. 100. 150. 200. 250. 300. 400. 500. 600. 800. 1000. 1250. 1500. 1750. 2000. 2500. 3000. 3500. 4000. 4500. 5000.
- i_smooth = 1                 ! topography smoothing:
-                              ! 1 = smooth smooth_fac times in physical space
-                              ! 2 = smooth in Fourier space with smooth factor smooth_fac (values ~0.1 almost unsmoothed, values ~1 very sine like)
- smooth_fac = 1               ! bathymetry smooth factor
- l_limit_ratio = F            ! despike the bathymetry by deepening shallow cells until no neighbour depth ratio exceeds depth_ratio_max
- depth_ratio_max = 12.        ! maximum allowed neighbour depth ratio (threshold for l_limit_ratio)
+ i_smooth = 1                 ! bathymetry smoothing: 0 = none, 1 = 1-2-1 binomial filter over ocean cells only (land neighbours excluded)
+ smooth_fac = 0.4             ! smoothing amount, continuous: floor(smooth_fac) full passes + a fractional pass, variance ~0.5*smooth_fac cells^2
  i_isl = 1                    ! method to determine islands for barotropic flow:
                               ! 0 = automatic
                               ! 1 = specify specific islands (l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame), valid for present-day geography
@@ -43,6 +38,14 @@
  l_isl_ame = F                ! is America considered an island for barotropic flow? Only for i_isl==1
  l_bering_flow = F            ! enable parameterisation for Bering Strait throughflow, following Goosse 1997 ?
  c_bering = 0.2               ! factor to scale the Bering Strait throughflow, used only if l_bering_flow==T
+ bering_tf_fix = -999.        ! Sv, prescribed barotropic Bering Strait throughflow, positive north (America - Eurasia), < -900 = off
+ drake_tf_fix = -999.         ! Sv, prescribed barotropic Drake Passage throughflow, positive east (Antarctica - America), < -900 = off
+ indo_tf_fix = -999.          ! Sv, prescribed barotropic Indonesian throughflow, positive east (Australia - Eurasia), < -900 = off
+ davis_tf_fix = -999.         ! Sv, prescribed barotropic Davis Strait throughflow, positive north (Greenland - America), < -900 = off
+                              ! The streamfunction of the first landmass is fixed relative to the second one instead of being solved
+                              ! from its island path integral. Ignored (with a warning) when both sides belong to the same landmass,
+                              ! e.g. Australia with l_isl_aus=F is merged into the mainland (Eurasia).
+                              ! Sign conventions as for drake, bering, indo, davis in ocn_ts.nc
  n_isl = 3                    ! number of islands for barotropic flow, only for i_isl==2
  lon_isl = 90  60 140         ! longitude of grid cell on islands, only for i_isl==2. 
  lat_isl = 50 -85 -30         ! latitude of grid cell on islands, only for i_isl==2. 
@@ -50,29 +53,35 @@
  dbl = 50.                    ! m, depth of surface boundary layer
 
  !-------------------------------------------------------------------------------------------
- ! parameters for stability 
- !-------------------------------------------------------------------------------------------
- drhcor_max = 0.005           ! maximum inverse slope gradient for Coriolis term in barotropic streamfunction equation
-
- !-------------------------------------------------------------------------------------------
- ! velocity relaxation settings
- !-------------------------------------------------------------------------------------------
- urelax = 0.                  ! velocity under-relaxation parameter of Edwards and Shepherd (2001)
-
- !-------------------------------------------------------------------------------------------
  ! wind stress scaling settings
  !-------------------------------------------------------------------------------------------
- tau_scale = 1.               ! wind stress scaling factor 
+ tau_scale = 1.               ! wind stress scaling factor for the barotropic forcing (barotropic streamfunction, island integrals, ssh)
+ tau_scale_bcl = 1.           ! wind stress scaling factor for the Ekman (boundary-layer) shear in the baroclinic velocity
 
  !-------------------------------------------------------------------------------------------
  ! friction settings
  !-------------------------------------------------------------------------------------------
- adrag = 4.                   ! days, inverse minimum drag
- drag_topo_n = 2.             ! drag increase in shallow water regions. 0 = no increase; 1 = in 2x2 neighbours; 2 = in 2x2 and 4x4 neighbours
- drag_topo_fac = 2.5          ! factor by which to increase drag in shallow water
- drag_topo_scale_eq = 0.
- z_drag_shallow = 1000.       ! m, depth of shallow water regions below which to increase adrag by factor drag_topo_fac
- drag_frac_fac = 0.           ! factor by which to increase drag where small ocean fraction
+ ! barotropic drag on each face = adrag + partial-cell term + bottom friction term (independent, added); baroclinic drag = adrag, see adrag_bcl
+ adrag = 8.                   ! days, inverse background drag of the barotropic and baroclinic velocities
+ drag_frac = 4.               ! days, 0 = off. Partial-cell drag on a face, added: (1/drag_frac)*max(0,1-f_face/f_frac_crit), with
+                              ! f_face the smaller ocean fraction of the two cells the face connects; the flow through a face that
+                              ! is mostly land is squeezed into a narrow passage. 1/drag_frac is the extra drag of a closing face
+ f_frac_crit = 0.5            ! ocean fraction of a face above which there is no partial-cell drag
+ cd_bot = 2.5e-3              ! bottom drag coefficient (2.5e-3), 0 = off. Linearised bottom friction on the depth-mean flow, added:
+                              ! cd_bot*u_bot/H with H the face depth (smaller depth of the two cells). Damps shallow cells
+                              ! (50 m: 1/(2.3 d) with 2.5e-3/0.1) and is negligible in the deep ocean (4 km: 1/(185 d))
+ u_bot = 0.1                  ! m/s, rms near-bottom speed (tides, eddies) linearising the quadratic drag
+ drag_cb = 1.                 ! days, 0 = off. Checkerboard friction on the depth-mean flow: extra face friction 1/drag_cb times
+                              ! (-1/4)*(second difference of the face transport along the face). Equal to an extra drag 1/drag_cb
+                              ! on the 2-grid-point checkerboard of psi (invisible to the J3 Coriolis term), zero for flow linear
+                              ! along the face. Makes the psi matrix 9-point (band width 2*maxi)
+ adrag_bcl = 0.               ! days, 0 = adrag. Baroclinic background drag away from the equator: the baroclinic drag is
+                              ! adrag at the equator (regularises f -> 0) and relaxes to adrag_bcl poleward,
+                              ! r = r_bcl + (r_adrag - r_bcl)*exp(-(lat/lat_drag_bcl)^2)
+ lat_drag_bcl = 15.           ! deg, e-folding latitude of the equatorial baroclinic drag
+ i_fric_ret = 1               ! return flow of the barotropic friction (r*ub/f): 0 = uniform over the column (as the depth-mean
+                              ! velocity), 1 = in the bottom level of the face (bottom Ekman layer), column transport and psi unchanged
+ lat_fric_ret = 5.            ! deg, i_fric_ret=1 only: 1/f -> f/(f^2+f0^2) with f0 = f(lat_fric_ret), removes the return near the equator
 
  !-------------------------------------------------------------------------------------------
  ! Coriolis 
@@ -80,20 +89,17 @@
  fcormin = 5.e-6              ! 1/s, minimum absolute value of Coriolis parameter
 
  !-------------------------------------------------------------------------------------------
- ! advection settings
- !-------------------------------------------------------------------------------------------
- i_advection = 2              ! advection parameterisation:
-                              ! 1 = linear weighted upstream/centred differences
-                              ! 2 = flux corrected transport scheme
-
- !-------------------------------------------------------------------------------------------
  ! diffusion settings
  !-------------------------------------------------------------------------------------------
- i_diff = 1                   ! diffusion schemes:
-                              ! 0 = horizontal/vertical diffusion
-                              ! 1 = isopycnal/diapycnal diffusion
- diff_iso = 1500              ! m2/s, isopycnal/horizontal diffusivity
- diff_gm = 1500               ! m2/s, Gent-McWilliams eddy diffusion, used only if i_diff==1
+ diff_iso = 1000              ! m2/s, isopycnal diffusivity (horizontal in years with a large change in ocean volume)
+ diff_gm = 750                ! m2/s, Gent-McWilliams eddy diffusion
+ l_mle = F                    ! mixed-layer eddy (submesoscale) restratification, Fox-Kemper et al. 2008/2011: eddy-induced
+                              ! overturning psi = c_mle*mle_fac*H^2*grad(b_ML)/sqrt(f^2+1/tau_mle^2)*mu(z) within the Kraus-Turner mixed layer H, added to the advection velocity
+ c_mle = 0.06                 ! MLE efficiency coefficient Ce (0.06-0.08)
+ mle_fac = 20.                ! MLE front-scale factor, effective Delta_s/L_f (grid scale / front length)
+ tau_mle = 5.                 ! days, MLE equatorial regularisation, f -> sqrt(f^2+1/tau_mle^2)
+ h_mle_max = 500.             ! m, MLE maximum mixed layer depth H
+ cfl_mle = 0.25               ! MLE Courant limit per face (horizontal and induced vertical velocity); mle_fac is also scaled by min(dx,dy)/dy
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
                               ! 0 = uniform with value diff_dia_min
                               ! 1 = tuned Bryan-Lewis type profile
@@ -103,11 +109,19 @@
  diff_dia_zref = 1000.        ! m2/s, diapycnal/vertical diffusivity (value at 2500m depth if not uniform)
  diff_dia_ref = 2e-5          ! m2/s, reference diapycnal diffusivity, used only if l_diff_dia_strat==T
  diff_dia_min = 1.e-5         ! m2/s, minimum (surface) diapycnal diffusivity, used only if i_diff_dia==0,3,4
- diff_dia_max = 1.5e-4        ! m2/s, maximum (deep ocean) diapycnal diffusivity, used only if i_diff_dia==3
+ diff_dia_max = 1.e-4         ! m2/s, maximum (deep ocean) diapycnal diffusivity, used only if i_diff_dia==3
  l_diff_dia_strat = F         ! use stratification dependent vertical diffusivity? Added on top of the reference profile set by i_diff_dia
  alpha_strat = 1.0            ! exponent of Brunt-Vaisala frequency dependence for stratification dependent vertical diffusivity
  brunt_vaisala_ref = 7.e-3    ! 1/s, reference Brunt-Vaisala frequency for stratification dependent vertical diffusivity.  (~drho/dz=-5e-3 kg/m3 /m)
- slope_max = 1e-3             ! maximum slope of isoentropic surface for isoneutral diffusion
+ slope_max = 1e-2             ! maximum slope of isoentropic surface for isoneutral diffusion
+ i_taper = 1                  ! taper of the isoneutral diffusion and GM tensor for slopes above slope_max:
+                              ! 1 = (slope_max/S)^2 (Gerdes et al 1991); A33 stays at diff_iso*slope_max^2 however steep the
+                              !     slope, i.e. a vertical diffusivity in all near-neutral columns
+                              ! 2 = 0.5*(1+tanh((slope_max-S)/slope_width)) (Danabasoglu and McWilliams 1995), all terms -> 0 for S >> slope_max
+ slope_width = 1e-3           ! width of the tanh taper, used only if i_taper==2
+ drho_hbl = 0.01              ! kg/m3, surface boundary layer depth hbl of the isoneutral diffusion and GM: potential density
+                              ! drho_hbl above its value at 10 m depth, minimum 10 m. Inside it the slopes decrease linearly from the tapered slope 
+                              ! at its base to zero at the surface, without taper (NEMO-like, Treguier et al 1997): full horizontal diffusion and an active GM streamfunction
 
  !-------------------------------------------------------------------------------------------
  ! convection settings
@@ -117,7 +131,7 @@
                               ! 1 = shuffle convection applied everywhere
                               ! 2 = shuffle convection applied only along the coast
  l_conv_shuffle_passive = F   ! apply shuffle convection also to passive (including bgc) tracers? Used only if i_conv_shuffle>0
- l_mix_bgc_all = T            ! apply vertical mixing to ALL bgc tracers (convection+mixed layer)?
+ drho_conv = 1.e-4            ! kg/m3, minimum density inversion between two layers that triggers convective mixing (Rahmstorf scheme).
 
  !-------------------------------------------------------------------------------------------
  ! downsloping flow of dense shelf water (Campin and Goosse 1999)
@@ -136,6 +150,8 @@
  drho_downslope_min = 0.01    ! kg/m3, minimum density excess of the shelf water over the ambient water at the
                               ! shelf-bottom level for the flow to start
  f_downslope_max = 0.5        ! maximum fraction of any involved cell volume exchanged per ocean time step
+ z_downslope_max = 2000.      ! m, maximum bottom depth of a source cell (shelves and upper slopes only; deeper steps
+                              ! between nearly homogeneous deep columns would give spurious open-ocean flows)
 
  !-------------------------------------------------------------------------------------------
  ! mixed layer settings
@@ -148,13 +164,12 @@
  !-------------------------------------------------------------------------------------------
  ! equation of state 
  !-------------------------------------------------------------------------------------------
- i_eos = 3                    ! choice of equation of state:
+ i_eos = 4                    ! choice of equation of state:
                               ! 0 = temperature and salinity dependence only
                               ! 1 = with thermobaricity
                               ! 2 = as in CLIMBER-2
                               ! 3 = EOS80 equation of state, Millero and Poisson 1981, but only limited number of terms
                               ! 4 = EOS80 equation of state, Millero and Poisson 1981, with all terms in the bulk secant modulus
-                              ! 5 = “stiffened” EOS derived from the compressibility of sea water and the UNESCO EOS80, following Ma 2020 
 
  !-------------------------------------------------------------------------------------------
  ! reference ocean water density 
@@ -170,6 +185,12 @@
  !-------------------------------------------------------------------------------------------
  ! salinity/runoff settings 
  !-------------------------------------------------------------------------------------------
+ i_runoff_dist = 2            ! spreading of runoff, calving and weathering fluxes over the ocean:
+                              ! 1 = over n_cells_dist_* coastal cells
+                              ! 2 = over a fixed ocean area A_dist_* around the river mouth, ordered by distance through the ocean
+ A_dist_runoff = 5.e11        ! m2, ocean area over which to distribute runoff and basal melt, used only if i_runoff_dist==2
+ A_dist_calving = 5.e12       ! m2, ocean area over which to distribute calving, used only if i_runoff_dist==2
+ A_dist_weath = 5.e11         ! m2, ocean area over which to distribute weathering fluxes, used only if i_runoff_dist==2
  n_cells_dist_runoff = 5      ! number of cells over which to distribute runoff and basal melt (has to be < n_coast_cells in geo_par.nml)
  n_cells_dist_calving = 5     ! number of cells over which to distribute calving (has to be < n_coast_cells in geo_par.nml)
  n_cells_dist_weath = 5       ! number of cells over which to distribute weathering fluxes (has to be < n_coast_cells in geo_par.nml)

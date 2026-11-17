@@ -27,7 +27,7 @@ module dyn_veg_mod
 
   use precision, only : wp
   use timer, only : doy, year, day_year, time_eoy_lnd 
-  use constants, only : T0
+  use constants, only : T0, c14_tdec
   use control, only : check_carbon
   use lnd_grid, only : npft, ncarb, nl, nlc, flag_tree, flag_shrub, flag_grass
   use lnd_grid, only : ic_min, ic_peat, ic_shelf, ic_ice, ic_lake
@@ -53,7 +53,7 @@ contains
                     f_crop, f_pasture, gamma_luc, &
                     z_veg_std, gamma_ice, &
                     gamma_dist, gamma_dist_cum, gamma_fire, gamma_fire_cum, npp_ann, npp13_ann, npp14_ann, &
-                    gamma_leaf, lambda, lai_bal, sai, &
+                    gamma_leaf, f_deciduous, lambda, lai_bal, sai, &
                     root_frac, litter_in_frac, &
                     veg_c, veg_c13, veg_c14, leaf_c, stem_c, root_c, &
                     seed_frac, pft_frac, &
@@ -75,6 +75,7 @@ contains
     real(wp), dimension(:), intent(inout) :: gamma_luc, gamma_ice, gamma_dist, gamma_dist_cum, gamma_fire, gamma_fire_cum
     real(wp), dimension(:), intent(inout) :: npp_ann, npp13_ann, npp14_ann
     real(wp), dimension(:), intent(inout) :: gamma_leaf, lambda, lai_bal, sai
+    real(wp), dimension(:), intent(in) :: f_deciduous
     real(wp), dimension(:,:), intent(in) :: root_frac
     real(wp), dimension(:), intent(in) :: litter_in_frac
     real(wp), dimension(:), intent(inout) :: veg_c, veg_c13, veg_c14
@@ -119,6 +120,7 @@ contains
     real(wp), parameter :: log_2 = log(2._wp)
 
     real(wp) :: lai_n, lai_np1, f, fp
+    real(wp), dimension(npft) :: sla, sla_old
 
 
     f_z_std = exp(-z_veg_std/veg_par%z_veg_std_crit)
@@ -166,6 +168,20 @@ contains
       veg_c13_old  = veg_c13
       veg_c14_old  = veg_c14
 
+      ! specific leaf area
+      sla     = pft_par%sla
+      sla_old = pft_par%sla
+      if (veg_par%l_sla_dec) then
+        do n=1,npft
+          if (flag_tree(n).eq.1 .or. flag_shrub(n).eq.1) then
+            ! blend between evergreen and deciduous specific leaf area
+            sla(n) = pft_par%sla(n) * (1._wp + (veg_par%c_sla_dec-1._wp)*f_deciduous(n))
+          endif
+          ! specific leaf area the existing leaves were built with, for carbon conservation
+          if (leaf_c_old(n).gt.0._wp) sla_old(n) = lai_bal_old(n)/leaf_c_old(n)
+        enddo
+      endif
+
       do n=1,npft
 
         if( pft_par%i_c4(n) .eq. 0 ) then
@@ -193,11 +209,11 @@ contains
         n_iter = 0
         do 
           n_iter = n_iter + 1
-          f = 2._wp*lai_n/(pft_par%sla(n)*dt_v) + pft_par%awl(n)/dt_v*lai_n**pft_par%bwl &
-            + gamma_leaf(n)/pft_par%sla(n)*lai_n + pft_par%gamma_root(n)/pft_par%sla(n)*lai_n + pft_par%gamma_stem(n)*pft_par%awl(n)*lai_n**pft_par%bwl &
-            - (1._wp-lambda(n))*npp(n) - 2._wp*lai_bal(n)/(pft_par%sla(n)*dt_v) - pft_par%awl(n)/dt_v*lai_bal(n)**pft_par%bwl
-          fp = 2._wp/(pft_par%sla(n)*dt_v) + pft_par%awl(n)*pft_par%bwl/dt_v*lai_n**(pft_par%bwl-1._wp) &
-            + gamma_leaf(n)/pft_par%sla(n) + pft_par%gamma_root(n)/pft_par%sla(n) + pft_par%gamma_stem(n)*pft_par%awl(n)*pft_par%bwl*lai_n**(pft_par%bwl-1._wp) 
+          f = 2._wp*lai_n/(sla(n)*dt_v) + pft_par%awl(n)/dt_v*lai_n**pft_par%bwl &
+            + gamma_leaf(n)/sla(n)*lai_n + pft_par%gamma_root(n)/sla(n)*lai_n + pft_par%gamma_stem(n)*pft_par%awl(n)*lai_n**pft_par%bwl &
+            - (1._wp-lambda(n))*npp(n) - 2._wp*lai_bal(n)/(sla_old(n)*dt_v) - pft_par%awl(n)/dt_v*lai_bal(n)**pft_par%bwl
+          fp = 2._wp/(sla(n)*dt_v) + pft_par%awl(n)*pft_par%bwl/dt_v*lai_n**(pft_par%bwl-1._wp) &
+            + gamma_leaf(n)/sla(n) + pft_par%gamma_root(n)/sla(n) + pft_par%gamma_stem(n)*pft_par%awl(n)*pft_par%bwl*lai_n**(pft_par%bwl-1._wp) 
           lai_np1 = lai_n - f/fp
           if (abs(lai_np1-lai_n).lt.veg_par%delta_lai_conv .or. n_iter.ge.10) exit
           lai_n = lai_np1
@@ -224,7 +240,14 @@ contains
         endif
 
         ! update vegetation carbon pools based on new balanced LAI
-        leaf_c(n) = lai_bal(n)/pft_par%sla(n)
+        if (lai_bal(n).eq.pft_par%lai_min(n)) then
+          ! at the LAI floor keep the specific leaf area of the existing leaves (as in the LAI solve above):
+          ! with a changing sla (l_sla_dec) leaf/root carbon would otherwise change at fixed LAI without NPP,
+          ! creating carbon out of nothing when sla decreases
+          leaf_c(n) = lai_bal(n)/sla_old(n)
+        else
+          leaf_c(n) = lai_bal(n)/sla(n)
+        endif
         root_c(n) = leaf_c(n)
         stem_c(n) = pft_par%awl(n)*lai_bal(n)**pft_par%bwl
         veg_c(n)  = leaf_c(n)+root_c(n)+stem_c(n) 
@@ -503,9 +526,18 @@ contains
         litter14_dist_comp(:,n) = max(0._wp,litter14_dist_comp(:,n))
 
         ! update C13 and C14
-        ! implicit scheme
-        veg_c13(n) = (veg_c13(n) + (1._wp-lambda(n))*npp13(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
-        veg_c14(n) = (veg_c14(n) + (1._wp-lambda(n))*npp14(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
+        if (lai_bal(n).eq.pft_par%lai_min(n) .and. veg_c_old(n).gt.0._wp) then
+          ! at the minimum LAI there is no NPP and veg_c changes only through the LAI floor (e.g. via sla);
+          ! carbon created by the floor (litter clipped at 0) must carry the isotopic ratio of the pool,
+          ! otherwise 13C/14C are diluted each time veg_c grows (ratchet towards zero in seed-fraction PFTs)
+          veg_c13(n) = veg_c13_old(n)/veg_c_old(n)*veg_c(n)
+          veg_c14(n) = veg_c14_old(n)/veg_c_old(n)*veg_c(n) / (1._wp + c14_tdec*dt_v)
+        else
+          ! implicit scheme
+          veg_c13(n) = (veg_c13(n) + (1._wp-lambda(n))*npp13(n)*dt_v) / (1._wp + 1._wp/veg_c(n)*sum(litter_pft(:,n))*dt_v)
+          ! including radioactive decay of 14C
+          veg_c14(n) = (veg_c14(n) + (1._wp-lambda(n))*npp14(n)*dt_v) / (1._wp + (1._wp/veg_c(n)*sum(litter_pft(:,n))+c14_tdec)*dt_v)
+        endif
 
         ! isotope litter
         litter13_pft(:,n)  = veg_c13(n)/veg_c(n)*litter_pft(:,n)
@@ -566,10 +598,12 @@ contains
             !stop
           endif
 
-          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v) .gt. 1.e-10_wp) then
+          if(abs((veg_c14(n)-veg_c14_old(n)) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v &
+            + c14_tdec*veg_c14(n)*dt_v) .gt. 1.e-10_wp) then
             print *,''
             print *,year,doy
-            print *,'local carbon 14 balance',n,veg_c14(n)-veg_c14_old(n) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v
+            print *,'local carbon 14 balance',n,veg_c14(n)-veg_c14_old(n) - (1._wp-lambda(n))*npp14(n)*dt_v + sum(litter14_pft(:,n))*dt_v &
+              + c14_tdec*veg_c14(n)*dt_v
             print *,'lai',lai_bal(n)
             print *,'lai_old',lai_bal_old(n)
             print *,'dvegc14,lambda*npp14,litter14',veg_c14(n)-veg_c14_old(n),(1._wp-lambda(n))*npp14(n)*dt_v,sum(litter14_pft(:,n))*dt_v
@@ -698,7 +732,8 @@ contains
         carbon14_bal_veg = sum(veg_c14*pft_frac)-sum(veg_c14_old*pft_frac_old) &
           - sum(npp14*pft_frac)*dt_v &
           + sum(litterfall14(:,ic_min))*dt_v &
-          + sum(fire_leaf14(:)+fire_stem14(:)+fire_root14(:))*dt_v
+          + sum(fire_leaf14(:)+fire_stem14(:)+fire_root14(:))*dt_v &
+          + c14_tdec*sum(veg_c14*pft_frac)*dt_v   ! radioactive decay
         if( abs(carbon14_bal_veg) .gt. 1.e-10_wp) then !print *,'vegetation carbon 14 balance',carbon14_bal_veg(i,j),i,j
           print *,' '
           print *,'vegetation carbon 14 balance',carbon14_bal_veg,i,j

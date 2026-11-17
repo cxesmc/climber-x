@@ -102,14 +102,13 @@ module geo_def
       type(grid_class) :: grid
       real(wp), dimension(:,:), allocatable :: f_ocn0     !! ocean fraction for present day sea level
       real(wp), dimension(:,:), allocatable :: f_lnd0     !! land fraction for present day sea level (1-ocean fraction)
-      real(wp), dimension(:,:), allocatable :: f_ocn      !! ocean fraction including floating ice
-      real(wp), dimension(:,:), allocatable :: f_ocn2     !! ocean fraction excluding floating ice
+      real(wp), dimension(:,:), allocatable :: f_ocn      !! ocean fraction
+      integer, dimension(:,:), allocatable :: mask_ocn   !! coarse ocean mask from ocn_mask (1 = ocean, 0 = land)
       real(wp), dimension(:,:), allocatable :: f_lnd     !! land fraction (1-ocean fraction)
       real(wp), dimension(:,:), allocatable :: f_lake    !! total lake fraction
       real(wp), dimension(:,:,:), allocatable :: f_lake_n  !! lakes fraction
       real(wp), dimension(:,:), allocatable :: f_ice     !! ice sheet fraction 
       real(wp), dimension(:,:), allocatable :: f_ice_grd     !! grounded ice sheet fraction 
-      real(wp), dimension(:,:), allocatable :: f_ice_flt     !! floating ice sheet fraction 
       real(wp), dimension(:,:), allocatable :: z_sur     !! grid cell mean surface elevation [m]
       real(wp), dimension(:,:), allocatable :: z_sur_std     !! standard deviation of grid cell surface elevation [m]
       real(wp), dimension(:,:), allocatable :: z_sur_smooth_std     !! standard deviation of smoothed grid cell surface elevation [m]
@@ -117,6 +116,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: z_ocn_min     !! grid cell min elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_ocn_max     !! grid cell max elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_ocn_max_q   !! grid cell quantile elevation of ocean part [m]
+      real(wp), dimension(:,:), allocatable :: z_ocn_min_q   !! grid cell deep-side quantile elevation of ocean part [m]
       real(wp), dimension(:,:), allocatable :: z_veg     !! grid cell mean elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_min     !! grid cell max elevation of ice-free land part [m]
       real(wp), dimension(:,:), allocatable :: z_veg_max     !! grid cell min elevation of ice-free land part [m]

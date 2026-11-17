@@ -78,7 +78,8 @@
     l_dew       = F             ! allow dew deposition?
     l_prc_intercept = T         ! allow for precipitation interception by vegetation?
     tau_w = 1.                  ! days, removal time scale of water from canopy
-    tau_s = 1.                  ! days, removal time scale of snow from canopy
+    tau_s_dry = 3.              ! days, removal time scale of snow from canopy when T<0°C
+    tau_s_wet = 1.              ! days, removal time scale of snow from canopy when T>0°C
     alpha_int_w_tree = 0.2      ! interception factor for water, CLM, TUNABLE
     alpha_int_w_grass = 0.1     ! interception factor for water, CLM, TUNABLE
     alpha_int_s = 0.5           ! interception factor for snow
@@ -127,6 +128,7 @@
     snow_1 = 0.5                ! parameter in dependence of snowfall rate for grain size evolution, used only if l_snow_aging==T
     snow_grain_fresh = 50       ! micro m, snow grain size of fresh snow
     snow_grain_old = 1000       ! micro m, snow grain size of old snow
+    tau_snow_grain = 8.         ! days, relaxation timescale of the snow grain size, 0 = no relaxation
     l_snow_dust = T             ! dust effect on snow albedo?
     w_snow_crit = 10.           ! kg/m2, minimum snow water equivalent for explicit snow layer
     w_snow_off = 1000           ! kg/m2, maximum snow water equivalent
@@ -140,7 +142,7 @@
     !------------------------------------------------------------------------------------
     ! dust emissions params
     !------------------------------------------------------------------------------------
-    b0 = 4.e-9                  ! dust emission flux constant [kg s^2 m^-5]
+    b0 = 2.e-9                  ! dust emission flux constant [kg s^2 m^-5]
     qd = 0.01                   ! desert dust source scaling constant
     qg = 0.005                  ! grass dust source scaling constant
     wind_gust_fac = 0.          ! 1/(1000 m), factor to scale wind to account for topographic roughness-dependent wind gusts
@@ -161,7 +163,7 @@
     sw_par_frac = 0.5           ! fraction of SW down radiation which is PAR 
     i_ci = 2                    ! parameterisation of ci/ca ratio; 1..Medlyn 2011 optimality, 2..Prentice 2014 optimality
     i_beta = 1                  ! beta parameter for Prentice 2014 optimality (i_ci==2); 0..constant, 1..soil moisture dependence
-    i_vcmax = 2                 ! parameterisation of Vcmax; 1.. LPJ strong optimality after HaxeltinePrentice 1996, 2..CLM temperature-dependent
+    i_vcmax = 1                 ! parameterisation of Vcmax; 1.. LPJ strong optimality after HaxeltinePrentice 1996, 2..CLM temperature-dependent
     i_disc = 2                  ! isotopic discrimination parameterisation; 
 
     !------------------------------------------------------------------------------------
@@ -288,6 +290,8 @@
     sla_sh  = 8.5               ! m2/(kg dry leaf), specific leaf area of shrubs, TRY database
     z_veg_std_crit = 100.       ! m, critical sub-grid topography standard deviation for disturbance rate from ice sheets
     gamma_phen = 15.            ! days, leaf senescence time scale
+    l_sla_dec = T               ! blend specific leaf area of trees and shrubs between evergreen (sla_bl, sla_nl, sla_sh) and deciduous with the deciduous fraction?
+    c_sla_dec = 2.              ! ratio of deciduous to evergreen specific leaf area of trees and shrubs (only if l_sla_dec)
     t_base_phen = 5. 2. 0. 5. 2.! degC, base temperature for phenology
     gdd5_phen = 0. 600. 0. 0. 900.  ! K, growing degree above 5 degC threshold for decidous
     t_cmon_phen = 5. -30. 0. 0. -40. ! degC, threshold coldest month temperature for decidous

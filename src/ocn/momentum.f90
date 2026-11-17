@@ -32,18 +32,19 @@ module momentum_mod
   use dim_name
 
   use precision, only : wp
-  use constants, only : omega
+  use constants, only : omega, pi
   use timer, only : time_soy_ocn, doy, year
   use control, only : out_dir
-  use climber_grid, only : lon, latv
+  use climber_grid, only : lon
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
-  use ocn_params, only : i_eos
+  use ocn_params, only : bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix, rho0
+  use ocn_params, only : nbw, qcor
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
-  use ocn_grid, only : maxisles, n_isles, psiles
-  use ocn_grid, only : dx, dy, dz, zw, zro, s, sv, cv, k1, h
+  use ocn_grid, only : maxisles, n_isles, psiles, map_isles
+  use ocn_grid, only : lm_eur, lm_ame, lm_ant, lm_aus, lm_grl, lm_name, i_lm, j_lm
+  use ocn_grid, only : dx, dy, dz, zro, s, sv, cv, rh, k1, h
 
-  use eos_mod, only : eos_tb
   use invert_mod, only : invert
   use ubarsolv_mod, only : ubarsolv
   use jbar_mod, only : jbar
@@ -65,15 +66,26 @@ module momentum_mod
   ! contiguous band-storage copies of the LU factors used by ubarsolv (built once per mask
   ! update from ratm/gap), so the per-step substitutions are unit-stride
   real(wp), allocatable :: Lband(:,:)   ! lower factors,  Lband(off,i) = ratm(i+off,off)
-  real(wp), allocatable :: Uband(:,:)   ! upper factors,  Uband(off,i) = gap(i,n+2+off)
-  real(wp), allocatable :: Udiag(:)     ! diagonal,        Udiag(i)    = gap(i,n+2)
+  real(wp), allocatable :: Uband(:,:)   ! upper factors,  Uband(off,i) = gap(i,nbw+1+off)
+  real(wp), allocatable :: Udiag(:)     ! diagonal,        Udiag(i)    = gap(i,nbw+1)
   real(wp), allocatable :: psisl(:,:,:)
   real(wp), allocatable :: ubisl(:,:,:,:)
   real(wp), allocatable :: erisl(:,:)
   integer, allocatable :: erisl_ipiv(:)   ! row-pivot vector from matinv, replayed by matmult each step
   real(wp), allocatable :: psibc(:)
-  real(wp), allocatable :: tmpdrg(:,:)
-  real(wp), allocatable :: rho_tb(:,:,:)
+  ! prescribed barotropic throughflows between landmasses (bering/drake/indo/davis_tf_fix):
+  ! psibc(isl) - psibc(isl_fix_ref(isl)) = psi_fix(isl), with psibc(0) = 0 for the mainland
+  integer, parameter :: n_strait = 4
+  character(len=10), parameter :: strait_name(n_strait) = ["Bering    ","Drake     ","Indonesian","Davis     "]
+  ! landmass on the positive side (target) and on the negative side (reference) of each strait,
+  ! so that the throughflow is (psi(target)-psi(reference))/rho0 in the sign convention of ocn_ts.nc:
+  ! Bering/Davis positive north (target to the east), Drake/Indonesian positive east (target to the south)
+  integer, parameter :: strait_lm_tgt(n_strait) = [lm_ame, lm_ant, lm_aus, lm_grl]
+  integer, parameter :: strait_lm_ref(n_strait) = [lm_eur, lm_ame, lm_eur, lm_ame]
+  integer :: strait_status(n_strait) = -1   ! 0 = off, 1 = active, 2 = reference cell not land, 3 = same landmass on both sides
+  integer :: strait_isl(n_strait) = 0       ! solver island index whose streamfunction is prescribed for each active strait
+  integer, allocatable :: isl_fix_ref(:)    ! solver index of the reference landmass (0 = mainland), -1 = island not prescribed
+  real(wp), allocatable :: psi_fix(:)       ! prescribed streamfunction difference to the reference landmass [kg/s]
 
   private
   public :: momentum_init, momentum
@@ -112,18 +124,6 @@ contains
       call momentum_update_grid(f_ocn,tau)
     endif
 
-    if (i_eos.eq.5) then
-      ! compute thermobaric density (Ma 2020, Dukowicz 2001)
-      do j=1,maxj
-        do i=1,maxi
-          do k=k1(i,j),maxk
-            call eos_tb(rho(i,j,k),zro(k), &
-                        rho_tb(i,j,k))
-          enddo
-        enddo
-      enddo
-    endif
-
     ! wind stress term for barotropic streamfunction
     !$ time1 = omp_get_wtime()
     call wind(tau, &    ! in 
@@ -133,13 +133,8 @@ contains
 
     ! jbar term for barotropic streamfunction
     !$ time1 = omp_get_wtime()
-    if (i_eos.ne.5) then
-      call jbar(rho, &    ! in
-                bp, ubar_jbar)     ! out
-    else if (i_eos.eq.5) then
-      call jbar(rho_tb, &    ! in
-                bp, ubar_jbar)     ! out
-    endif
+    call jbar(rho, &    ! in
+              bp, ubar_jbar)     ! out
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: jbar',time2-time1
 
@@ -164,7 +159,11 @@ contains
     do isl=1,n_isles
        call island(ub,tau,bp, &
                    isl,1, &
-                   erisl(isl,n_isles+1))
+                   erisl(isl,n_isles+1), psi)
+    enddo
+    ! prescribed throughflows: the row of a prescribed island reads psibc(isl) - psibc(ref) = -rhs (momentum_update_grid)
+    do isl=1,n_isles
+      if (isl_fix_ref(isl).ge.0) erisl(isl,n_isles+1) = - psi_fix(isl)
     enddo
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: islands',time2-time1
@@ -212,13 +211,8 @@ contains
 
     ! update velocities
     !$ time1 = omp_get_wtime()
-    if (i_eos.ne.5) then
-      call velc(rho,dtau_dz2,dtav_dz2,ub, &
-                u)
-    else if (i_eos.eq.5) then
-      call velc(rho_tb,dtau_dz2,dtav_dz2,ub, &
-                u)
-    endif
+    call velc(rho,dtau_dz2,dtav_dz2,ub, &
+              u)
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'momentum: velc',time2-time1
 
@@ -240,63 +234,35 @@ contains
     real(wp), dimension(:,:,:), intent(in) :: tau
 
     integer :: i, j, l, isl, isol
-    integer :: i1, i1p, j1, ii, ip1
+    integer :: ip1
     integer :: n_band, nm_band, off
-    real(wp) :: tmp, min_dep, dep_fac, topo_fac, min_frac
+    real(wp) :: f_face
 
 
-    ! calculate drag at psi points (grid cell corners!)   
-
-    do j=0,maxj
-      do i=0,maxi
-        tmpdrg(i,j) = drag_par%adrag
-      enddo
-    enddo
-
-    ! increase drag in shallow water regions depeding on water depth
-    do j=0,maxj
-      do i=0,maxi
-        if (drag_par%drag_topo_n.eq.1) then
-          min_dep = min(-zw(min(maxk,k1(i,j))),-zw(min(maxk,k1(i+1,j))),-zw(min(maxk,k1(i,j+1))),-zw(min(maxk,k1(i+1,j+1))))
-        else if (drag_par%drag_topo_n.eq.2) then
-          min_dep = -zw(min(maxk,k1(i,j)))
-          do j1=max(0,j-1),min(maxj+1,j+2)
-            do i1=i-1,i+2
-              i1p = 1 + mod(maxi + i1-1,maxi)
-              min_dep = min(min_dep,-zw(min(maxk,k1(i1p,j1))))
-            enddo
-          enddo 
-        endif
-        dep_fac = max(0._wp,(drag_par%z_drag_shallow-min_dep)/drag_par%z_drag_shallow)
-
-        !topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq*cv(j))
-        if (latv(j+1).ge.-20._wp .and. latv(j+1).le.20._wp) then
-          topo_fac = drag_par%drag_topo_fac*(1._wp+drag_par%drag_topo_scale_eq)
-        else
-          topo_fac = drag_par%drag_topo_fac
-        endif
-
-        ii = i
-        if (ii.eq.0) ii=maxi
-        ip1 = modulo(i,maxi) + 1
-        min_frac = min(f_ocn(ii,max(1,j)),f_ocn(ip1,max(1,j)),f_ocn(ii,min(maxj,j+1)),f_ocn(ip1,min(maxj,j+1)))
-
-        !tmp = drag_par%adrag*(1._wp + min(drag_par%drag_topo_fac,topo_fac*dep_fac) + drag_par%drag_frac_fac*(1._wp-min_frac))
-        tmp = drag_par%adrag*(1._wp + topo_fac*dep_fac + drag_par%drag_frac_fac*(1._wp-min_frac))
-
-        if (tmp.gt.tmpdrg(i,j)) then
-          tmpdrg(i,j) = tmp
-        endif
-
-      enddo
-    enddo
-
-    ! interpolate to velocity points
+    ! barotropic drag on the velocity faces: background adrag plus two independent enhancements on open faces,
+    ! from the two cells the face connects,
+    !  - partial-cell drag drag_frac*max(0,1-f_face/f_frac_crit), f_face = smaller ocean fraction of the two cells:
+    !    the flow through a face that is mostly land is squeezed into a narrow passage
+    !  - linearised bottom friction cd_bot*u_bot/H, H = face depth (smaller depth of the two cells):
+    !    damps shallow cells, negligible in the deep ocean
     do j=1,maxj
-       do i=1,maxi
-          drag(1,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i,j-1))    ! u-grid
-          drag(2,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i-1,j))    ! v-grid
-       enddo
+      do i=1,maxi
+        ip1 = modulo(i,maxi) + 1
+        ! u-grid, east face of cell (i,j)
+        drag(1,i,j) = drag_par%adrag
+        if (rh(1,i,j).gt.0._wp) then
+          f_face = min(f_ocn(i,j),f_ocn(ip1,j))
+          drag(1,i,j) = drag(1,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(1,i,j)
+        endif
+        ! v-grid, north face of cell (i,j)
+        drag(2,i,j) = drag_par%adrag
+        if (j.lt.maxj .and. rh(2,i,j).gt.0._wp) then
+          f_face = min(f_ocn(i,j),f_ocn(i,j+1))
+          drag(2,i,j) = drag(2,i,j) + drag_par%drag_frac*max(0._wp,1._wp-f_face/drag_par%f_frac_crit) &
+                                    + drag_par%cd_bot*drag_par%u_bot*rh(2,i,j)
+        endif
+      enddo
     enddo
 
     ! periodic boundary conditions
@@ -304,26 +270,13 @@ contains
        drag(2,maxi+1,j) = drag(2,1,j)
     enddo
 
-
-    ! for baroclinic velocity
-
-    do j=0,maxj
-      do i=0,maxi
-        tmpdrg(i,j) = drag_par%adrag
-      enddo
-    enddo
-
-    ! interpolate to velocity points
+    ! baroclinic velocities: background drag only, adrag at the equator (regularises f -> 0) relaxing to adrag_bcl
+    ! poleward with e-folding latitude lat_drag_bcl; identical to adrag everywhere if adrag_bcl = adrag
     do j=1,maxj
-       do i=1,maxi
-          drag_bcl(1,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i,j-1))    ! u-grid
-          drag_bcl(2,i,j) = 0.5_wp*(tmpdrg(i,j) + tmpdrg(i-1,j))    ! v-grid
-       enddo
-    enddo
-
-    ! boundary conditions, assuming no flow out of N or S bdy
-    do j=1,maxj
-       drag_bcl(2,maxi+1,j) = drag_bcl(2,1,j)
+      drag_bcl(1,:,j) = drag_par%adrag_bcl + (drag_par%adrag-drag_par%adrag_bcl) &
+                        * exp(-(asin(s(j))*180._wp/pi/drag_par%lat_drag_bcl)**2)
+      drag_bcl(2,:,j) = drag_par%adrag_bcl + (drag_par%adrag-drag_par%adrag_bcl) &
+                        * exp(-(asin(sv(j))*180._wp/pi/drag_par%lat_drag_bcl)**2)
     enddo
 
     ! on rows where the Coriolis parameter is set to zero (|f| < fcormin, see momentum_init) add drag instead,
@@ -355,18 +308,26 @@ contains
 
     ! for barotropic velocity
 
+    ! f/H at tracer points for the J3 Coriolis term (zero on land, so dry cells drop out of the stencil)
+    qcor(:,:) = 0._wp
+    do j=1,maxj
+      do i=0,maxi+1
+        if (k1(i,j).le.maxk) qcor(i,j) = fcor(j)*rh(3,i,j)
+      enddo
+    enddo
+
     call invert(gap,ratm)
 
     ! repack the banded LU factors into contiguous band storage so the per-step ubarsolv
     ! substitutions are unit-stride (cache- and SIMD-friendly). done once per mask update;
     ! the arithmetic is unchanged, only the memory layout differs
-    n_band  = mpxi
+    n_band  = nbw
     nm_band = mpxi*mpxj
     do i=1,nm_band
-      Udiag(i) = gap(i,n_band+2)
-      do off=1,min(n_band+1,nm_band-i)
+      Udiag(i) = gap(i,n_band+1)
+      do off=1,min(n_band,nm_band-i)
         Lband(off,i) = ratm(i+off,off)        ! lower factor (forward substitution)
-        Uband(off,i) = gap(i,n_band+2+off)     ! upper factor (back substitution)
+        Uband(off,i) = gap(i,n_band+1+off)     ! upper factor (back substitution)
       enddo
     enddo
 
@@ -391,7 +352,7 @@ contains
        do isl=1,n_isles
           call island(ubisl(:,:,:,isol),tau,bp, &  ! tau and bp not used in this call (indj==0)!
                       isl,0, &
-                      erisl(isl,isol))  ! erisl in m/s2
+                      erisl(isl,isol), psisl(:,:,isol))  ! erisl in m/s2
        enddo
     enddo
 
@@ -401,6 +362,9 @@ contains
     !    print *,isl,isol,erisl(isl,isol)
     !  enddo
     !enddo
+
+    ! prescribed throughflows: replace the path-integral equations of the prescribed islands
+    call strait_constraints
 
     ! partially invert inland integral error matrix for psi bc calc
     call matinv(n_isles,erisl,erisl_ipiv)  ! LU factors of island matrix (+ pivots)
@@ -419,6 +383,143 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  s t r a i t _ c o n s t r a i n t s
+  !   Purpose    :  prescribe the barotropic throughflow through straits
+  !                 between two landmasses
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine strait_constraints
+
+    ! The net barotropic transport between two landmasses equals the difference of their streamfunction values
+    ! divided by rho0, whatever the path of the section. A throughflow is prescribed by replacing the path-integral
+    ! equation of one of the two landmasses (target) by psibc(target) - psibc(ref) = rho0*tf_fix, with psibc = 0 on
+    ! the mainland. The island whose equation is replaced is the designated target (America for Bering, Antarctica
+    ! for Drake, Australia for the Indonesian throughflow, Greenland for Davis), or the other side if the target is
+    ! the mainland or is already prescribed. The landmasses are identified by their reference cells (ocn_grid), so the
+    ! constraints follow the island configuration (i_isl, l_isl_*): a strait is ignored when both sides belong to the
+    ! same landmass. The constraints must not form a closed loop of landmasses, which would overdetermine the system.
+
+    implicit none
+
+    integer :: n, it, ir, rt, rr, isl, lm_fix
+    integer :: status(n_strait), isl_strait(n_strait)
+    integer :: lm_strait(n_strait)
+    integer :: uf(0:maxisles)     ! union-find parent of the landmass graph spanned by the constraints (0 = mainland)
+    real(wp) :: tf_fix(n_strait), sgn
+    logical :: l_print
+
+
+    tf_fix = [bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix]
+
+    isl_fix_ref(:) = -1
+    psi_fix(:) = 0._wp
+    status(:) = 0
+    isl_strait(:) = 0
+    lm_strait(:) = 0
+    do n=0,maxisles
+      uf(n) = n
+    enddo
+
+    do n=1,n_strait
+      if (tf_fix(n).lt.-900._wp) cycle
+
+      ! solver indices of the landmasses on both sides (landmass label - 1, mainland = 0, ocean < 0)
+      it = map_isles(i_lm(strait_lm_tgt(n)),j_lm(strait_lm_tgt(n))) - 1
+      ir = map_isles(i_lm(strait_lm_ref(n)),j_lm(strait_lm_ref(n))) - 1
+      if (it.lt.0 .or. ir.lt.0) then
+        status(n) = 2
+        cycle
+      endif
+      if (it.eq.ir) then
+        status(n) = 3
+        cycle
+      endif
+
+      ! a second constraint between landmasses that are already connected by constraints closes a loop
+      rt = uf_root(it)
+      rr = uf_root(ir)
+      if (rt.eq.rr) then
+        print *,'ERROR: prescribed ',trim(strait_name(n)),' throughflow closes a loop of prescribed throughflows'
+        print *,'between ',trim(lm_name(strait_lm_tgt(n))),' and ',trim(lm_name(strait_lm_ref(n))),': disable one of them'
+        stop 'ERROR in strait_constraints: overdetermined prescribed throughflows'
+      endif
+
+      ! island whose equation is replaced: designated target, else the reference side with reversed sign
+      sgn = 1._wp
+      lm_fix = strait_lm_tgt(n)
+      if (.not.is_free(it)) then
+        isl = it
+        it = ir
+        ir = isl
+        sgn = -1._wp
+        lm_fix = strait_lm_ref(n)
+      endif
+      if (.not.is_free(it)) then
+        print *,'ERROR: no free island left to prescribe the ',trim(strait_name(n)),' throughflow:'
+        print *,'both ',trim(lm_name(strait_lm_tgt(n))),' and ',trim(lm_name(strait_lm_ref(n))), &
+          ' are the mainland or already prescribed by another strait'
+        stop 'ERROR in strait_constraints: prescribed throughflows cannot be assigned to islands'
+      endif
+
+      isl_fix_ref(it) = ir
+      psi_fix(it) = sgn*rho0*tf_fix(n)*1.e6_wp  ! kg/s
+      uf(rt) = rr
+      status(n) = 1
+      isl_strait(n) = it
+      lm_strait(n) = lm_fix
+    enddo
+
+    ! replace the island rows
+    do isl=1,n_isles
+      if (isl_fix_ref(isl).ge.0) then
+        erisl(isl,1:n_isles) = 0._wp
+        erisl(isl,isl) = 1._wp
+        if (isl_fix_ref(isl).gt.0) erisl(isl,isl_fix_ref(isl)) = -1._wp
+      endif
+    enddo
+
+    ! report on the first call and whenever the configuration changes (e.g. a strait closing with the land-sea mask)
+    l_print = any(status.ne.strait_status) .or. any(isl_strait.ne.strait_isl)
+    if (l_print) then
+      do n=1,n_strait
+        select case (status(n))
+        case (1)
+          print '(a,a,a,f8.3,a,a,a,i0,a)','momentum: ',trim(strait_name(n)),' throughflow prescribed to ',tf_fix(n), &
+            ' Sv (streamfunction of ',trim(lm_name(lm_strait(n))),', island ',isl_strait(n),', fixed)'
+        case (2)
+          print *,'WARNING: ',trim(strait_name(n)),' throughflow prescribed, but the reference cell of ', &
+            trim(lm_name(strait_lm_tgt(n))),' or ',trim(lm_name(strait_lm_ref(n))),' is not land: ignored'
+        case (3)
+          print *,'WARNING: ',trim(strait_name(n)),' throughflow prescribed, but ',trim(lm_name(strait_lm_tgt(n))), &
+            ' and ',trim(lm_name(strait_lm_ref(n))),' belong to the same landmass (not an island or strait closed): ignored'
+        end select
+      enddo
+    endif
+    strait_status = status
+    strait_isl = isl_strait
+
+    return
+
+  contains
+
+    ! island (not the mainland) whose equation is not yet replaced by a constraint
+    logical function is_free(k)
+      integer, intent(in) :: k
+      is_free = .false.
+      if (k.gt.0) is_free = isl_fix_ref(k).lt.0
+    end function is_free
+
+    integer function uf_root(k)
+      integer, intent(in) :: k
+      uf_root = k
+      do while (uf(uf_root).ne.uf_root)
+        uf_root = uf(uf_root)
+      enddo
+    end function uf_root
+
+  end subroutine strait_constraints
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  m o m e n t u m _ i n i t
   !   Purpose    :  initialize momentum equation variables
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -432,11 +533,20 @@ contains
     ! allocate variables
     allocate(ubar_wind(maxi,maxj))
     allocate(ubar_jbar(maxi,maxj))
-    allocate(ratm(mpxi*mpxj,mpxi+1))
+    allocate(qcor(0:maxi+1,0:maxj+1))
+    qcor(:,:) = 0._wp
+    ! half band width of the streamfunction matrix: 5-point stencil, 9-point with the
+    ! checkerboard friction, whose diagonal neighbours across the periodic boundary are 2*maxi-1 rows away
+    if (drag_par%drag_cb.gt.0._wp) then
+      nbw = 2*mpxi
+    else
+      nbw = mpxi+1
+    endif
+    allocate(ratm(mpxi*mpxj,nbw))
     allocate(gb(mpxi*mpxj))
-    allocate(gap(mpxi*mpxj,2*mpxi+3))
-    allocate(Lband(mpxi+1,mpxi*mpxj))
-    allocate(Uband(mpxi+1,mpxi*mpxj))
+    allocate(gap(mpxi*mpxj,2*nbw+1))
+    allocate(Lband(nbw,mpxi*mpxj))
+    allocate(Uband(nbw,mpxi*mpxj))
     allocate(Udiag(mpxi*mpxj))
     allocate(bp(maxi+1,maxj,maxk))
     allocate(psisl(0:maxi,0:maxj,maxisles))
@@ -444,17 +554,31 @@ contains
     allocate(erisl(maxisles,maxisles+1))
     allocate(erisl_ipiv(maxisles))
     allocate(psibc(maxisles))
+    allocate(isl_fix_ref(maxisles))
+    allocate(psi_fix(maxisles))
+    isl_fix_ref(:) = -1
+    psi_fix(:) = 0._wp
     allocate(drag(2,maxi+1,maxj))
     allocate(drag_bcl(2,maxi+1,maxj))
-    allocate(tmpdrg(0:maxi,0:maxj))
     allocate(fcor(0:maxj+1))
     allocate(fcorv(0:maxj+1))
     allocate(rtv(maxi,maxj))
     allocate(rtv3(maxi,maxj))
-    allocate(rho_tb(maxi,maxj,maxk))
 
 
     drag_par%adrag = 1._wp/(drag_par%adrag*86400._wp) ! 1/s
+    if (drag_par%drag_frac.gt.0._wp) drag_par%drag_frac = 1._wp/(drag_par%drag_frac*86400._wp) ! 1/s
+    if (drag_par%f_frac_crit.le.0._wp) then
+      ! no partial-cell drag, avoid the division by f_frac_crit
+      drag_par%drag_frac = 0._wp
+      drag_par%f_frac_crit = 1._wp
+    endif
+    if (drag_par%drag_cb.gt.0._wp) drag_par%drag_cb = 1._wp/(drag_par%drag_cb*86400._wp) ! 1/s
+    if (drag_par%adrag_bcl.gt.0._wp) then
+      drag_par%adrag_bcl = 1._wp/(drag_par%adrag_bcl*86400._wp) ! 1/s
+    else
+      drag_par%adrag_bcl = drag_par%adrag   ! same baroclinic and barotropic background drag everywhere
+    endif
 
     ! Coriolis parameter
     ! Rows with |f| < fcormin (only the equator v-line on the 5 deg grid) get f = 0 and instead a larger drag,

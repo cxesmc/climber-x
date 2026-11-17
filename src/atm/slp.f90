@@ -26,28 +26,36 @@
 module slp_mod
 
   use atm_params, only : wp, dp
-  use constants, only : pi, r_earth, omega, g, Rd, T0
-  use atm_params, only : ra, p0, hatm
-  use atm_params, only : c_slp_1, c_slp_2, c_slp_3, c_slp_4, c_slp_5
+  use constants, only : pi, r_earth, omega, g, Rd, T0, Le
+  use atm_params, only : ra, p0, hatm, pbl
+  use atm_params, only : c_slp_1, c_slp_2, c_slp_4, c_slp_5, i_aslp_eq, c_aslp_eq_hb, c_aslp_eq_lat0
+  use atm_params, only : c_slp_trop_f, c_slp_trop_tau, c_slp_trop_lat0, c_slp_trop_lat1
   use atm_params, only : l_aslp_temp_adv, c_aslp_temp_tau
-  use atm_params, only : l_aslp_topo, c_aslp_topo_1, c_aslp_topo_2, c_aslp_topo_3, c_aslp_topo_4
+  use atm_params, only : l_aslp_topo, c_aslp_sw_amp, c_aslp_sw_tau, c_aslp_sw_h, c_aslp_sw_umin, c_aslp_sw_lateq, n_aslp_sw
+  use atm_params, only : c_aslp_sw_fr, c_aslp_sw_nbv
+  use atm_params, only : c_aslp_sw_eddy, i_aslp_sw_eddy, n_aslp_sw_eddy
+  use atm_params, only : l_aslp_gill, c_aslp_gill, c_aslp_gill_tau, c_aslp_gill_c, c_aslp_gill_lat0, c_aslp_gill_lat1, n_aslp_gill
+  use atm_params, only : i_aslp_gill_lat, c_aslp_gill_trel
+  use timer, only : dt_atm, sec_day
   use atm_params, only : cp
-  use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2
-  use atm_params, only : i_mmc_fer
+  use atm_params, only : c_mmc_had, c_mmc_fer, c_mmc_pol, c_mmc_1, c_mmc_2, i_mmc_geo, c_mmc_edge
+  use atm_params, only : i_mmc_itcz, c_mmc_efe
+  use atm_params, only : i_mmc_fer, i_mmc_fer_shape, c_mmc_fer_q
   use atm_params, only : i_mmc_had, c_mmc_q, q_mmc_ref
-  use atm_params, only : i_mmc_wid, c_mmc_dt2, hdv_mmc_ref
-  use atm_params, only : c_mmc_dt0, c_mmc_dt1, c_mmc_z
-  use atm_params, only : nsmooth_aslp, nsmooth_aslp_topo
-  use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, i_ice
-  use atm_grid, only : fcorua, sint, cost, fiu, fit
-  use atm_grid, only : zc, k_dse_lo, k_dse_up
+  use atm_params, only : c_mmc_dt0, c_mmc_dt1, hdv_mmc_ref, c_mmc_mt, amas
+  use atm_params, only : nsmooth_aslp, aslp_polar_lat
+  use atm_grid, only : im, jm, jmc, aim, jeq, jts, jtn, jps, jpn, dy, pl, k500, k850, k300, i_ice
+  use atm_grid, only : fcorua, sint, cost, fiu, fit, dxt
+  use atm_grid, only : z3, k_dse_lo, k_dse_up
   use smooth_atm_mod, only : smooth2_m, zona
   !$ use omp_lib
 
   implicit none
 
   private
-  public :: zslp, azslp 
+  public :: zslp, azslp, efe_diag, col_prev_unset
+
+  real(wp), parameter :: col_prev_unset = -9.e9_wp   !! sentinel of tcol_prev/wcon_prev: no previous step (efe_diag)
 
 contains
 
@@ -55,9 +63,9 @@ contains
   !   Subroutine :  azslp
   !   Purpose    :  compute azonal component of sea level pressure
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine azslp(tsksl, htrop, zsa, uz500, &
+  subroutine azslp(tsksl, htrop, zsa, uz500, u3f, sam, eke, prc, ficz, &
       aslp, &
-      aslp_temp, aslp_topo, dz500, atsl)
+      aslp_temp, aslp_topo, aslp_eddy, aslp_gill, aslp_temp_slow, atsl)
 
     use, intrinsic :: iso_c_binding 
 
@@ -69,45 +77,42 @@ contains
     real(wp), intent(in   ) :: tsksl(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: uz500(:)
+    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind for the upstream displacement of aslp_temp, thermal wind damped with c_uz500_pol
+    real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used if l_aslp_topo
+    real(wp), intent(in   ) :: sam(:,:)       !! synoptic eddy kinetic energy, used only if l_aslp_topo and c_aslp_sw_eddy>0
+    real(wp), intent(in   ) :: eke(:,:)       !! ERA-Interim 2-6 day eddy kinetic energy climatology, used only if i_aslp_sw_eddy==2
+    real(wp), intent(in   ) :: prc(:,:)       !! precipitation (kg/m2/s), previous step, used only if l_aslp_gill
+    real(wp), intent(in   ) :: ficz        !! ITCZ latitude of the meridional cell geometry from the previous step (radians)
 
     real(wp), intent(inout) :: aslp(:,:)
     real(wp), intent(inout) :: aslp_temp(:,:)
     real(wp), intent(inout) :: aslp_topo(:,:)
+    real(wp), intent(inout) :: aslp_eddy(:,:)
+    real(wp), intent(inout) :: aslp_gill(:,:)
+    real(wp), intent(inout) :: aslp_temp_slow(:,:)   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
 
     real(wp), intent(out  ) :: atsl(:,:)
-    real(wp), intent(out  ) :: dz500(:,:)
 
     integer :: i, j
-    real(wp) :: cor, beta, k
-    real(wp) :: m, r, uz
+    real(wp) :: k, uz
     real(wp) :: tslz(jm)
     real(wp) :: htropz(jm)
     real(wp) :: uz500s(jm)
-    real(wp) :: u500(jm)
-    real(wp) :: dz500o(im)
-    type(C_PTR) :: plan_r2c, plan_c2r
     type(C_PTR) :: plan_r2c_temp, plan_c2r_temp
-    real(wp), dimension(im) :: eps, Kn2
-    real(wp) :: zsa_smooth(im,jm)
-    real(dp) :: zsa_smooth_dp(im,jm)
-    real(dp), dimension(im) :: psi
-    complex(dp), dimension(im/2+1) :: zsa_fft
-    complex(dp), dimension(im/2+1) :: psi_fft
+    real(wp) :: aslp_frc(im,jm)
+    real(wp) :: aslp_gill_new(im,jm), cgill
+    real(wp) :: cslow, ftrop, wtrop, alat, weq
     real(dp), dimension(im) :: aslp_temp_dp
     complex(dp), dimension(im/2+1) :: aslp_temp_fft
 
 
+    ! zonal mean zonal wind for the upstream displacement of aslp_temp:
     ! smooth zonal mean 500 hPa zonal wind
     do j=2,jm-1
       uz500s(j) = 0.4_wp*uz500(j)+0.3_wp*(uz500(j+1)+uz500(j-1))
     enddo
     uz500s(1)  = 0.5_wp*(uz500(1)+uz500(2))
     uz500s(jm) = 0.5_wp*(uz500(jm)+uz500(jm-1))
-
-    do j=1,jm
-      u500(j) = max(0.1_wp,uz500s(j)) * c_aslp_topo_3
-    enddo
 
     ! zonal mean sea level temperature and tropopause height
     do j=1,jm
@@ -123,7 +128,7 @@ contains
     ! temperature related azonal sea level pressure 
     !------------------------------------------------
 
-    !$omp parallel do private(i,j)
+    !$omp parallel do private(i,j,weq)
     do j=1,jm
 
       do i=1,im
@@ -137,12 +142,24 @@ contains
           aslp_temp(i,j) = 0._wp
         else
           ! as in CLIMBER-2, Petoukhov 2000, eq. (17)
-          aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
+          aslp_temp(i,j) = -c_slp_1*g*p0*10000._wp/(2._wp*Rd*T0**2)*atsl(i,j)
+          !aslp_temp(i,j) = -c_slp_1*g*p0*htropz(j)/(2._wp*Rd*T0**2)*atsl(i,j)
         endif
       enddo
 
       ! ensure zero zonal mean
       aslp_temp(:,j) = aslp_temp(:,j) - sum(aslp_temp(:,j))*aim
+
+      ! i_aslp_eq=1: equatorial taper of the thermal forcing only. In the deep tropics the free troposphere
+      ! is held at weak temperature gradients, so an azonal surface temperature anomaly builds pressure only
+      ! through the boundary layer (Lindzen & Nigam 1987), not through the full column depth of eq. (17).
+      ! ERA-Interim azonal msl regressed on the components wants a weight ~0.1 on aslp_temp in 15S-20N,
+      ! rising poleward (analysis/aslp_eq_damping/regress_rows.jl). Tapering the forcing, not the relaxed
+      ! state, gives the equilibrium exactly weq*forcing and a latitude-independent relaxation time.
+      if (i_aslp_eq.eq.1) then
+        weq = c_aslp_eq_hb + (1._wp-c_aslp_eq_hb)*sint(j)**2/(sint(j)**2+sin(c_aslp_eq_lat0*pi/180._wp)**2)
+        aslp_temp(:,j) = weq*aslp_temp(:,j)
+      endif
 
     enddo
     !$omp end parallel do
@@ -202,103 +219,125 @@ contains
 
     endif
 
-
     !------------------------------------------------
     ! topographic stationary planetary waves
     !------------------------------------------------
 
     if (l_aslp_topo) then
 
-      ! smooth topography
-      do j=1,jm
-        zsa_smooth(:,j) = zsa(:,j) * c_aslp_topo_4      ! optional scaling to mimic difference between surface wind and 500 hPa wind
-      enddo
-      call smooth2_m(zsa_smooth,nsmooth_aslp_topo)
-
-      zsa_smooth_dp = zsa_smooth
-
-      ! Make forward and backward plans for the FFT
-      plan_r2c = fftw_plan_dft_r2c_1d(im, zsa_smooth_dp, zsa_fft, FFTW_ESTIMATE)
-      plan_c2r = fftw_plan_dft_c2r_1d(im, psi_fft, psi, FFTW_ESTIMATE)
-
-      do j=1,jm
-
-        cor  = 2._wp*omega*sint(j)  
-        beta = 2._wp*omega*cost(j)/r_earth  
-        k = 2._wp*pi/(2._wp*pi*r_earth*cost(j))      ! lowest zonal wavenumber 
-
-        uz = u500(j)
-        r = c_aslp_topo_1
-        m = pi/c_aslp_topo_2
-
-        do i=1,im
-          Kn2(i) = (k*(i-1))**2+m**2
-        enddo
-        do i=2,im
-          eps(i) = r*Kn2(i)/(k*(i-1)*uz)
-        enddo
-        eps(1) = 0._wp
-
-        !  forward transform the data
-        call fftw_execute_dft_r2c(plan_r2c, zsa_smooth_dp(:,j), zsa_fft)
-
-        do i=1,im/2+1
-          psi_fft(i) = cor*zsa_fft(i)/(htropz(j)*(Kn2(i)-beta/uz-cmplx(0._wp,eps(i)) ))
-        enddo
-
-        ! backward transform the data
-        call fftw_execute_dft_c2r(plan_c2r, psi_fft, psi )
-
-        ! zonal anomalies
-        psi = psi - sum(psi)*aim
-        ! convert to geopotential height perturbation
-        dz500o = psi * abs(cor)/g * aim  ! m
-
-        ! convert from geopotential height anomalies at ~500 hPa (dz500o) to sea level pressure anomalies 
-        ! assuming dz is constant throughout the lower troposphere, see PIK-report eq. 7.23, 7.24, 4.73  
-        aslp_topo(:,j) = dz500o(:) * ra*pl(k500)*g    ! Pa
-
-      enddo
-
-      ! destrox FFT plans
-      call fftw_destroy_plan(plan_r2c)
-      call fftw_destroy_plan(plan_c2r)
+      ! linear barotropic stationary waves, coupled in latitude
+      if (i_aslp_sw_eddy.eq.2) then
+        call stationary_waves(zsa, u3f, eke, aslp_topo, aslp_eddy)
+      else
+        call stationary_waves(zsa, u3f, sam, aslp_topo, aslp_eddy)
+      endif
 
     else
 
       aslp_topo(:,:) = 0._wp
+      aslp_eddy(:,:) = 0._wp
 
     endif
 
 
-    !-------------------------------------------------------------------------------
-    ! geopotential height zonal anomalies at 500 hPa from planetary stationary waves
-    !-------------------------------------------------------------------------------
+    !------------------------------------------------
+    ! baroclinic (Gill) response to the azonal latent heating
+    !------------------------------------------------
 
-    dz500(:,:) = aslp_topo(:,:)/(ra*pl(k500)*g)  ! m
+    if (l_aslp_gill) then
+      if (c_aslp_gill_trel.gt.0._wp) then
+        ! The Gill response relaxes towards the response to the current heating with its own time scale.
+        ! Heating -> Kelvin low east of it -> convergence -> heating further east closes an eastward
+        ! propagating loop (10-40 d tropical waves); a relaxation time longer than the loop period breaks it
+        ! while keeping the seasonal monsoon/ITCZ response, which only lags by atan(2pi*trel/1yr).
+        call gill_response(prc, ficz, aslp_gill_new)
+        cgill = min(1._wp, dt_atm/(c_aslp_gill_trel*sec_day))
+        aslp_gill = aslp_gill + cgill*(aslp_gill_new-aslp_gill)
+      else
+        call gill_response(prc, ficz, aslp_gill)
+      endif
+    else
+      aslp_gill(:,:) = 0._wp
+    endif
+
+
+    !------------------------------------------------
+    ! damping of the fast part of the thermal azonal sea level pressure
+    !------------------------------------------------
+
+    ! Over land the thermal low closes a delayed negative feedback (warm skin -> low ->
+    ! ageostrophic convergence -> ascent cooling) that oscillates with a ~10 d period in JAS over
+    ! West Africa, and with 20-40 d over Tibet/Central Asia in MJJASO (both grow with CO2).
+    ! Lowering c_slp_2 kills the tropical one only by halving the equilibrium tropical aslp (the
+    ! equatorial damping accumulates as c S/(1-(1-c) S)), which changes the mean climate. Here only
+    ! the departure of aslp_temp from its slowly relaxed state is damped, by f, with a relaxation
+    ! time tau: the time mean is unchanged and the seasonal cycle lags by ~(1-f)*tau.
+    ! f is c_slp_trop_f equatorward of c_slp_trop_lat0 and 1 (no damping) poleward of c_slp_trop_lat1,
+    ! with a cosine transition in between. Extratropical damping (tested down to tau 5 d) creates a
+    ! new ~10 d mode over Tibet at the LGM.
+    if (c_slp_trop_f.lt.1._wp) then
+      if (any(aslp_temp_slow.gt.1.e19_wp)) aslp_temp_slow = aslp_temp
+      cslow = min(1._wp, dt_atm/(c_slp_trop_tau*sec_day))
+      do j=1,jm
+        alat = abs(asin(sint(j)))*180._wp/pi
+        if (alat.le.c_slp_trop_lat0) then
+          wtrop = 1._wp
+        else if (alat.ge.c_slp_trop_lat1) then
+          wtrop = 0._wp
+        else
+          wtrop = 0.5_wp*(1._wp+cos(pi*(alat-c_slp_trop_lat0)/(c_slp_trop_lat1-c_slp_trop_lat0)))
+        endif
+        ftrop = wtrop*c_slp_trop_f + (1._wp-wtrop)
+        do i=1,im
+          aslp_temp_slow(i,j) = aslp_temp_slow(i,j) + cslow*(aslp_temp(i,j)-aslp_temp_slow(i,j))
+          aslp_temp(i,j) = aslp_temp_slow(i,j) + ftrop*(aslp_temp(i,j)-aslp_temp_slow(i,j))
+        enddo
+      enddo
+    endif
 
 
     !------------------------------------------------
     ! azonal component of sea level pressure 
     !------------------------------------------------
 
+    ! the forcing is tapered once per call through its vorticity (does not accumulate), while smoothing and
+    ! equatorial damping act on the time-relaxed state at every call, so they accumulate: the equilibrium
+    ! is c S X/(1-(1-c) S) instead of S X (analysis/stationary_wave/aslp_smooth_loop.jl)
+    do j=1,jm
+      do i=1,im
+        aslp_frc(i,j) = aslp_temp(i,j)+aslp_topo(i,j)+aslp_gill(i,j)
+      enddo
+    enddo
+    ! i_aslp_eq=2: smooth equatorial taper of the TOTAL forcing, 1-(1-c_aslp_eq_hb)*exp(-(lat/c_aslp_eq_lat0)^2).
+    ! Same equatorial amplitude range as the old state damping (i_aslp_eq=0) but applied before the relaxation,
+    ! so it does not accumulate into a cliff and leaves the relaxation time latitude-independent.
+    if (i_aslp_eq.eq.2) then
+      do j=1,jm
+        weq = 1._wp - (1._wp-c_aslp_eq_hb)*exp(-(asin(sint(j))*180._wp/pi/c_aslp_eq_lat0)**2)
+        aslp_frc(:,j) = weq*aslp_frc(:,j)
+      enddo
+    endif
+    call vorticity_taper(aslp_frc)
     do j=1,jm
       do i=1,im
         ! relax in time
-        aslp(i,j) = (1._wp-c_slp_2)*aslp(i,j)+c_slp_2*(aslp_temp(i,j)+aslp_topo(i,j)) 
+        aslp(i,j) = (1._wp-c_slp_2)*aslp(i,j)+c_slp_2*aslp_frc(i,j)
       enddo
     enddo
 
     ! smooth in space
     call smooth2_m(aslp,nsmooth_aslp)
 
-    ! polar and equatorial damping
-    do j=1,jm
-      do i=1,im
-        aslp(i,j)=aslp(i,j) &
-          * min(1._wp,c_slp_3*(cost(j)-cost(1))**2) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
+    ! equatorial damping of the state (i_aslp_eq=0). It acts after the relaxation at every call, so the
+    ! equilibrium factor is c_slp_2*S/(1-(1-c_slp_2)*S): 0.03/0.06/0.16/1 at 2.5/7.5/12.5/17.5 deg for
+    ! c_slp_4=9, c_slp_5=0.25, a factor-6 cliff in one row (analysis/aslp_eq_damping/osc_diag.jl).
+    if (i_aslp_eq.eq.0) then
+      do j=1,jm
+        do i=1,im
+          aslp(i,j) = aslp(i,j) * min(1._wp,c_slp_5+c_slp_4*(sint(j)**2-sint(jm/2)**2))
+        enddo
       enddo
-    enddo
+    endif
 
 
     return
@@ -307,74 +346,657 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  v o r t i c i t y _ t a p e r
+  !   Purpose    :  polar taper of an azonal field through its vorticity
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Multiplying the field by a latitude taper T adds the curvature 2 grad(T).grad(p) + p lap(T), which
+  ! for a deep subpolar low is a cyclonic band equatorward and an anticyclonic band poleward of the
+  ! taper edge (analysis/amoc_stab/polar_taper_offline.jl). Instead, poleward of aslp_polar_lat the
+  ! Laplacian of the field is multiplied by T (raised cosine, 1 at aslp_polar_lat, 0 at the pole) and
+  ! inverted per zonal wavenumber n,
+  !   lap_n(p_n) = T * lap_n(x_n) ,   p_n = x_n at the last row equatorward of aslp_polar_lat ,
+  ! with the same discrete Laplacian (5 point, face cosines, zero flux through the pole face). The
+  ! vorticity then decays monotonically to the pole and never changes sign, and each wavenumber decays
+  ! harmonically (regularly) towards the pole. The zonal mean (n=0) is left unchanged.
+  subroutine vorticity_taper(x)
+
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+
+    include 'fftw3.f03'
+
+    real(wp), intent(inout) :: x(:,:)
+
+    integer :: j, k, n, m, jb, hemi, nrow
+    integer :: rows(jm)
+    real(wp) :: dphi, dlon, al, tap, den
+    real(wp) :: a(jm), b(jm), c(jm)
+    complex(dp) :: rhs(jm), cp(jm), dpv(jm), sol(jm), pb
+    type(C_PTR) :: plan_r2c, plan_c2r
+    real(dp), dimension(im) :: row
+    complex(dp), dimension(im/2+1) :: rowc
+    complex(dp) :: xh(im/2+1,jm)
+
+
+    dphi = pi/real(jm,wp)
+    dlon = 2._wp*pi/real(im,wp)
+
+    plan_r2c = fftw_plan_dft_r2c_1d(im, row, rowc, FFTW_ESTIMATE)
+    plan_c2r = fftw_plan_dft_c2r_1d(im, rowc, row, FFTW_ESTIMATE)
+
+    do j=1,jm
+      row(:) = x(:,j)
+      call fftw_execute_dft_r2c(plan_r2c, row, rowc)
+      xh(:,j) = rowc(:)
+    enddo
+
+    do hemi=1,2
+
+      ! rows of the cap ordered from the edge to the pole (internal j=1 is the North Pole row);
+      ! jb is the Dirichlet row, the last one equatorward of aslp_polar_lat
+      nrow = 0
+      if (hemi.eq.1) then
+        do j=jm/2,1,-1
+          if (fit(j)*180._wp/pi.gt.aslp_polar_lat) then
+            nrow = nrow+1
+            rows(nrow) = j
+          endif
+        enddo
+        if (nrow.eq.0) cycle
+        jb = rows(1)+1
+      else
+        do j=jm/2+1,jm
+          if (-fit(j)*180._wp/pi.gt.aslp_polar_lat) then
+            nrow = nrow+1
+            rows(nrow) = j
+          endif
+        enddo
+        if (nrow.eq.0) cycle
+        jb = rows(1)-1
+      endif
+      m = nrow
+
+      do n=1,im/2
+        do k=1,m
+          al = abs(fit(rows(k)))
+          a(k) = cos(al-0.5_wp*dphi)/(r_earth**2*cos(al)*dphi**2)
+          c(k) = max(0._wp,cos(al+0.5_wp*dphi))/(r_earth**2*cos(al)*dphi**2)
+          if (k.eq.m) c(k) = 0._wp   ! no flux through the pole face
+          b(k) = -(a(k)+c(k)) - (2._wp-2._wp*cos(real(n,wp)*dlon))/(r_earth*cos(al)*dlon)**2
+        enddo
+        ! tapered Laplacian of the field
+        pb = xh(n+1,jb)
+        do k=1,m
+          al = abs(fit(rows(k)))*180._wp/pi
+          tap = 0.5_wp*(1._wp+cos(pi*(al-aslp_polar_lat)/(90._wp-aslp_polar_lat)))
+          if (k.eq.1) then
+            rhs(k) = a(k)*pb
+          else
+            rhs(k) = a(k)*xh(n+1,rows(k-1))
+          endif
+          rhs(k) = rhs(k) + b(k)*xh(n+1,rows(k))
+          if (k.lt.m) rhs(k) = rhs(k) + c(k)*xh(n+1,rows(k+1))
+          rhs(k) = tap*rhs(k)
+        enddo
+        rhs(1) = rhs(1) - a(1)*pb
+        ! Thomas algorithm
+        cp(1) = c(1)/b(1)
+        dpv(1) = rhs(1)/b(1)
+        do k=2,m
+          den = b(k) - a(k)*real(cp(k-1),wp)
+          cp(k) = c(k)/den
+          dpv(k) = (rhs(k) - a(k)*dpv(k-1))/den
+        enddo
+        sol(m) = dpv(m)
+        do k=m-1,1,-1
+          sol(k) = dpv(k) - cp(k)*sol(k+1)
+        enddo
+        do k=1,m
+          xh(n+1,rows(k)) = sol(k)
+        enddo
+      enddo
+
+      ! back to grid space for the cap rows; the zonal mean (n=0) is kept
+      do k=1,m
+        rowc(:) = xh(:,rows(k))
+        call fftw_execute_dft_c2r(plan_c2r, rowc, row)
+        x(:,rows(k)) = row(:)*aim
+      enddo
+
+    enddo
+
+    call fftw_destroy_plan(plan_r2c)
+    call fftw_destroy_plan(plan_c2r)
+
+    return
+
+  end subroutine vorticity_taper
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  stationary_waves
+  !   Purpose    :  sea level pressure of the topographically forced stationary
+  !                 planetary waves from a linear barotropic model
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine stationary_waves(zsa, u3f, sam, aslp_sw, aslp_eddy)
+
+    ! Steady linear barotropic vorticity equation at the equivalent barotropic level (~300 hPa),
+    ! linearised about the zonal mean wind U(phi) of that level,
+    !   U/(a cos) d(zeta')/dlambda + q_y v' = -r zeta' + F ,
+    !   q_y = 2 Omega cos/a - (1/a) d/dphi [ (1/(a cos)) d(U cos)/dphi ] ,
+    ! forced by the low-level (~850 hPa) zonal mean flow over the topography,
+    !   F = -(U_850 f/H) (1/(a cos)) d(zsa)/dlambda .
+    ! In Fourier space each zonal wavenumber n is a second order ODE in latitude,
+    !   (i n U/(a cos) + r) lap_n(psi_n) + i n q_y/(a cos) psi_n = F_n ,
+    ! solved as one tridiagonal system with psi = 0 at the poles. Unlike a row-by-row
+    ! Charney-Eliassen solution the meridional structure is not prescribed, so
+    ! the waves can propagate across latitudes (Rockies -> Labrador trough -> European ridge)
+    ! and the solution is not tied to the K^2 = beta/U resonance of a fixed meridional wavenumber.
+    ! The height anomaly f*psi/g is converted to sea level pressure assuming an equivalent
+    ! barotropic structure, aslp_sw = c_aslp_sw_amp * ra*g * f*psi/g.
+    !
+    ! Optional transient-eddy forcing (c_aslp_sw_eddy>0). For non-divergent eddies the vorticity
+    ! forcing depends only on the eddy momentum flux u'v' and the anisotropy M = (u'^2-v'^2)/2,
+    !   F_e = (d_yy - d_xx) u'v' + 2 d_xy M ,
+    ! the eddy kinetic energy itself drops out. The azonal parts of M and u'v' are closed with the
+    ! synoptic kinetic energy E = sam (i_aslp_sw_eddy=1) or the ERA-Interim 2-6 day eke_2_6_int
+    ! climatology (i_aslp_sw_eddy=2) and its gradients,
+    !   (M, u'v') = c_aslp_sw_eddy * [ c1 E' + c2 a dE/dx + c3 a dE/dy ] ,
+    ! E' = E - [E]: eddies are zonally elongated where they grow and meridionally elongated where
+    ! they decay along the storm track. c1..c3 are fitted to 300 hPa high-pass (<9 d) NCEP R1
+    ! eddy statistics, DJF 1981-2010. Offline with the observed EKE the forcing adds the
+    ! storm-track exit troughs (Aleutian, Icelandic) and the European ridge.
+    !
+    ! The response to the azonal latent heating is the baroclinic Gill term (gill_response), not a
+    ! barotropic Rossby wave source here: the equivalent barotropic conversion maps the upper-level
+    ! anticyclone over the heating to the surface, i.e. a high where the observed surface low is.
+
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+
+    include 'fftw3.f03'
+
+    real(wp), intent(in ) :: zsa(:,:)
+    real(wp), intent(in ) :: u3f(:,:,:)
+    real(wp), intent(in ) :: sam(:,:)
+    real(wp), intent(out) :: aslp_sw(:,:)
+    real(wp), intent(out) :: aslp_eddy(:,:)
+
+    integer :: i, j, n, nmax
+    real(wp) :: dphi, ri
+    real(wp) :: phi(jm), uup(jm), ulo(jm), ue(jm), zbar(jm), qy(jm)
+    real(wp) :: cph(0:jm)            ! cos at the half latitudes between j and j+1 (0 at the poles)
+    real(dp) :: frc(im,jm)
+    real(dp), dimension(im) :: rowr
+    complex(dp), dimension(im/2+1) :: rowc
+    complex(dp) :: frc_hat(im/2+1,jm), psi_hat(im/2+1,jm)
+    complex(dp) :: frce_hat(im/2+1,jm), psie_hat(im/2+1,jm)
+    real(dp) :: frce(im,jm)
+    integer :: ip, imn
+    real(wp) :: samz, dsdx, dsdy, tap, sgn
+    real(wp) :: hfr
+    real(wp) :: zeff(im,jm)
+    integer :: nmaxe
+    real(wp), dimension(im,jm) :: eddm, edduv, mfx, mfy
+    ! closure coefficients for (M, u'v') on (E', a dE/dx, a dE/dy), NCEP R1 300 hPa high-pass DJF fit (NH);
+    ! in the SH the terms odd under y -> -y (c_edd_m(3), c_edd_uv(1:2)) change sign
+    real(wp), parameter :: c_edd_m(3)  = [-0.29_wp, 0.039_wp, 0.015_wp]
+    real(wp), parameter :: c_edd_uv(3) = [ 0.16_wp,-0.056_wp, 0.015_wp]
+    complex(dp) :: al(jm), ad(jm), au(jm), rhs(jm), x(jm)
+    type(C_PTR) :: plan_r2c, plan_c2r
+
+    nmax = min(n_aslp_sw, im/2-1)
+    ! the eddy forcing is ~ the third derivative of E, which amplifies the small-scale noise of the model EKE:
+    ! keep only the planetary-scale part (equivalent to truncating E, the closure being linear in E)
+    nmaxe = min(n_aslp_sw_eddy, nmax)
+    ri = 1._wp/c_aslp_sw_tau
+    dphi = dy/r_earth
+
+    do j=1,jm
+      phi(j) = asin(sint(j))
+      ! u3f, not u3: the thermal wind in u3 is damped towards the poles and the equator, which removes
+      ! the subtropical jet waveguide and weakens the subpolar westerlies the waves propagate on
+      uup(j) = sum(u3f(:,j,k300))*aim
+      ulo(j) = sum(u3f(:,j,k850))*aim
+      ue(j)  = max(c_aslp_sw_umin, uup(j))
+    enddo
+    cph(0)  = 0._wp
+    cph(jm) = 0._wp
+    do j=1,jm-1
+      cph(j) = cos(0.5_wp*(phi(j)+phi(j+1)))
+    enddo
+
+    ! gradient of zonal mean absolute vorticity, orientation independent (centred differences in phi)
+    zbar(:) = 0._wp
+    do j=2,jm-1
+      zbar(j) = -(uup(j+1)*cost(j+1)-uup(j-1)*cost(j-1))/(phi(j+1)-phi(j-1)) / (r_earth*cost(j))
+    enddo
+    do j=1,jm
+      qy(j) = 2._wp*omega*cost(j)/r_earth
+    enddo
+    do j=2,jm-1
+      qy(j) = qy(j) + (zbar(j+1)-zbar(j-1))/(phi(j+1)-phi(j-1)) / r_earth
+    enddo
+
+    ! effective height of the topography seen by the forcing flow (c_aslp_sw_fr>0, Froude blocking).
+    ! Where N h/U >> 1 the low-level flow is blocked and goes around the obstacle instead of over it, so the
+    ! vortex stretching saturates at a height of order U/N (e.g. Valdes & Hoskins 1991):
+    !   h_eff = h0 tanh(h/h0) ,  h0 = c_aslp_sw_fr * max(|U_850|, c_aslp_sw_umin) / N .
+    ! Offline (analysis/aslp_topo/froude.jl, c = 2, tau = 4 d) this raises the PI correlation with the ERA dynamic SLP
+    ! part (DJF/MAM/SON 0.52/0.26/0.31 -> 0.70/0.54/0.59) and brings the ratio of the PI to the LGM-PI (CMIP5) amplitude
+    ! deficit from 3.9/1.4/1.2 to 1.9/1.4/0.9: the linear forcing over the 3 km ice sheets is otherwise far too strong.
+    do j=1,jm
+      if (c_aslp_sw_fr.gt.0._wp) then
+        hfr = c_aslp_sw_fr*max(abs(ulo(j)),c_aslp_sw_umin)/c_aslp_sw_nbv
+        do i=1,im
+          zeff(i,j) = hfr*tanh(max(zsa(i,j),0._wp)/hfr)
+        enddo
+      else
+        zeff(:,j) = zsa(:,j)
+      endif
+    enddo
+
+    ! topographic forcing
+    frc(:,:) = 0._dp
+    do j=2,jm-1
+      do i=1,im
+        frc(i,j) = -ulo(j)*2._wp*omega*sint(j)/c_aslp_sw_h &
+          * (zeff(modulo(i,im)+1,j)-zeff(modulo(i-2,im)+1,j))/(2._wp*dxt(j))
+      enddo
+    enddo
+
+    ! transient-eddy forcing
+    frce(:,:) = 0._dp
+    if (c_aslp_sw_eddy.gt.0._wp) then
+      ! azonal anisotropy and momentum flux from the synoptic kinetic energy
+      eddm(:,:) = 0._wp
+      edduv(:,:) = 0._wp
+      do j=2,jm-1
+        samz = sum(sam(:,j))*aim
+        sgn = sign(1._wp, sint(j))
+        do i=1,im
+          dsdx = r_earth*(sam(modulo(i,im)+1,j)-sam(modulo(i-2,im)+1,j))/(2._wp*dxt(j))
+          dsdy = (sam(i,j+1)-sam(i,j-1))/(phi(j+1)-phi(j-1))
+          eddm(i,j)  = c_aslp_sw_eddy*(c_edd_m(1)*(sam(i,j)-samz)  + c_edd_m(2)*dsdx  + sgn*c_edd_m(3)*dsdy)
+          edduv(i,j) = c_aslp_sw_eddy*(sgn*c_edd_uv(1)*(sam(i,j)-samz) + sgn*c_edd_uv(2)*dsdx + c_edd_uv(3)*dsdy)
+        enddo
+      enddo
+      ! eddy momentum flux convergence, u'u' = M, v'v' = -M (azonal parts only)
+      mfx(:,:) = 0._wp
+      mfy(:,:) = 0._wp
+      do j=2,jm-1
+        do i=1,im
+          ip  = modulo(i,im)+1
+          imn = modulo(i-2,im)+1
+          mfx(i,j) = -( (eddm(ip,j)-eddm(imn,j))/(2._wp*dxt(j)) &
+            + (edduv(i,j+1)*cost(j+1)**2-edduv(i,j-1)*cost(j-1)**2)/((phi(j+1)-phi(j-1))*r_earth*cost(j)**2) )
+          mfy(i,j) = -( (edduv(ip,j)-edduv(imn,j))/(2._wp*dxt(j)) &
+            - (eddm(i,j+1)*cost(j+1)-eddm(i,j-1)*cost(j-1))/((phi(j+1)-phi(j-1))*r_earth*cost(j)) &
+            + eddm(i,j)*sint(j)/(cost(j)*r_earth) )
+        enddo
+      enddo
+      ! curl of the eddy momentum flux convergence, tapered to zero equatorward of 20 deg and, where the
+      ! 1/cos metric terms amplify the closure error (2x ERA5 at 77.5N), poleward of 80 deg
+      do j=3,jm-2
+        tap = min(1._wp, max(0._wp, (abs(phi(j))*180._wp/pi-20._wp)/10._wp), &
+                  max(0._wp, (80._wp-abs(phi(j))*180._wp/pi)/10._wp))
+        do i=1,im
+          ip  = modulo(i,im)+1
+          imn = modulo(i-2,im)+1
+          frce(i,j) = tap * ( (mfy(ip,j)-mfy(imn,j))/(2._wp*dxt(j)) &
+            - (mfx(i,j+1)*cost(j+1)-mfx(i,j-1)*cost(j-1))/((phi(j+1)-phi(j-1))*r_earth*cost(j)) )
+        enddo
+      enddo
+    endif
+
+    plan_r2c = fftw_plan_dft_r2c_1d(im, rowr, rowc, FFTW_ESTIMATE)
+    plan_c2r = fftw_plan_dft_c2r_1d(im, rowc, rowr, FFTW_ESTIMATE)
+
+    do j=1,jm
+      rowr(:) = frc(:,j)
+      call fftw_execute_dft_r2c(plan_r2c, rowr, rowc)
+      frc_hat(:,j) = rowc(:)
+      rowr(:) = frce(:,j)
+      call fftw_execute_dft_r2c(plan_r2c, rowr, rowc)
+      frce_hat(:,j) = rowc(:)
+    enddo
+
+    psi_hat(:,:) = (0._dp,0._dp)
+    psie_hat(:,:) = (0._dp,0._dp)
+    do n=1,nmax
+      do j=1,jm
+        ! Laplacian of wavenumber n, tridiagonal in latitude
+        al(j) = cph(j-1)/(r_earth**2*dphi**2*cost(j))
+        au(j) = cph(j)  /(r_earth**2*dphi**2*cost(j))
+        ad(j) = -(cph(j-1)+cph(j))/(r_earth**2*dphi**2*cost(j)) - real(n,wp)**2/(r_earth*cost(j))**2
+        ! (i n U/(a cos) + r) lap + i n q_y/(a cos)
+        al(j) = cmplx(ri, real(n,wp)*ue(j)/(r_earth*cost(j)), dp) * al(j)
+        au(j) = cmplx(ri, real(n,wp)*ue(j)/(r_earth*cost(j)), dp) * au(j)
+        ad(j) = cmplx(ri, real(n,wp)*ue(j)/(r_earth*cost(j)), dp) * ad(j) &
+          + cmplx(0._dp, real(n,wp)*qy(j)/(r_earth*cost(j)), dp)
+        rhs(j) = frc_hat(n+1,j)
+      enddo
+      call tridiag_c(al, ad, au, rhs, x)
+      psi_hat(n+1,:) = x(:)
+      if (c_aslp_sw_eddy.gt.0._wp .and. n.le.nmaxe) then
+        call tridiag_c(al, ad, au, frce_hat(n+1,:), x)
+        psie_hat(n+1,:) = x(:)
+      endif
+    enddo
+
+    do j=1,jm
+      rowc(:) = psi_hat(:,j)
+      call fftw_execute_dft_c2r(plan_c2r, rowc, rowr)
+      if (abs(phi(j)).lt.c_aslp_sw_lateq*pi/180._wp) then
+        aslp_sw(:,j) = 0._wp
+      else
+        ! f*psi/g is the height anomaly, aim the FFTW normalisation
+        aslp_sw(:,j) = c_aslp_sw_amp*ra*g * 2._wp*omega*sint(j)/g * rowr(:)*aim
+      endif
+    enddo
+
+    ! transient-eddy part, included in aslp_sw
+    aslp_eddy(:,:) = 0._wp
+    if (c_aslp_sw_eddy.gt.0._wp) then
+      do j=1,jm
+        rowc(:) = psie_hat(:,j)
+        call fftw_execute_dft_c2r(plan_c2r, rowc, rowr)
+        if (abs(phi(j)).ge.c_aslp_sw_lateq*pi/180._wp) then
+          aslp_eddy(:,j) = c_aslp_sw_amp*ra*g * 2._wp*omega*sint(j)/g * rowr(:)*aim
+        endif
+      enddo
+      aslp_sw(:,:) = aslp_sw(:,:) + aslp_eddy(:,:)
+    endif
+
+    call fftw_destroy_plan(plan_r2c)
+    call fftw_destroy_plan(plan_c2r)
+
+    return
+
+  end subroutine stationary_waves
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  gill_response
+  !   Purpose    :  sea level pressure of the first baroclinic mode response
+  !                 to the azonal latent heating (Gill 1980) on the sphere
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine gill_response(prc, ficz, aslp_gill)
+
+    ! Deep (latent) heating warms the column above the surface layer, so the surface low it
+    ! produces is invisible to aslp_temp, which only sees the surface-anchored tsksl. In ERA-Interim
+    ! the JJA low over E China and the W Pacific monsoon flank is carried by the warm free troposphere
+    ! (azonal T +0.2 K at 850, +2.5 K at 500, +3.9 K at 300 hPa over E China) and by a(Z500), not by the
+    ! surface temperature. The steady, damped, linear shallow-water equations of the first baroclinic
+    ! mode (Gill 1980; Matsuno 1966), with phi the lower-level geopotential anomaly,
+    !   eps u - f v = -(1/(a cos)) d(phi)/dlambda
+    !   eps v + f u = -(1/a) d(phi)/dlat
+    !   eps phi + c^2 div(u,v) = -Q ,
+    ! give the surface low beneath and west of the heating, the monsoon trough and the subtropical
+    ! high to the east of it (Rodwell & Hoskins 2001). The heating forcing is the thickness tendency
+    ! of the 1000-500 hPa layer heated by the azonal latent heat release,
+    !   Q = Rd ln2 g Le P' / (cp dp) ,  dp = 500 hPa ,
+    ! tapered to zero beyond c_aslp_gill_lat0..lat1, where precipitation is frontal and the heating is
+    ! balanced by horizontal advection instead (Hoskins & Karoly 1981). With i_aslp_gill_lat=2 the
+    ! distance is taken from the ITCZ (ficz) instead of the equator, so the window follows the tropical
+    ! belt into the summer hemisphere (Asian monsoon, Meiyu-Baiu) and excludes the winter-hemisphere
+    ! subtropical storm-track entrances, which a fixed window counts as deep heating. Offline (CX prc,
+    ! ERA surface-anchored thermal part, Asia-Pacific 0-50N r) 25/35 deg from ficz vs 30/40 from the
+    ! equator: DJF 0.71 vs 0.70 (no Gill 0.72), MAM 0.64 vs 0.66, JJA 0.95 vs 0.91, SON 0.61 vs 0.54.
+    ! In Fourier space each zonal wavenumber n is one banded system in latitude (see below).
+    ! aslp_gill = c_aslp_gill * ra * phi. Offline against ERA-Interim, JJA, 0-50N 40E-120W, adding it to the
+    ! surface-anchored thermal part raises the correlation with the azonal msl from 0.77 to 0.86-0.90
+    ! for c_aslp_gill ~ 1 (eps^-1 = 3-10 d, c = 30-50 m/s); the DJF correlation is unchanged.
+
+    use, intrinsic :: iso_c_binding
+
+    implicit none
+
+    include 'fftw3.f03'
+
+    real(wp), intent(in ) :: prc(:,:)
+    real(wp), intent(in ) :: ficz          !! ITCZ latitude (radians)
+    real(wp), intent(out) :: aslp_gill(:,:)
+
+    integer :: i, j, n, nmax, f, jj, k, r
+    real(wp) :: eps, c2, dphis, alat, tap, prcz, rn
+    real(wp) :: phi(jm), cph(jm-1), fcj(jm), fcf(jm-1)
+    real(dp), dimension(im) :: rowr
+    complex(dp), dimension(im/2+1) :: rowc
+    complex(dp) :: q_hat(im/2+1,jm), phi_hat(im/2+1,jm)
+    complex(dp) :: amat(2*jm-1,2*jm-1), rhs(2*jm-1), x(2*jm-1)
+    real(dp) :: frc(im,jm)
+    type(C_PTR) :: plan_r2c, plan_c2r
+
+    nmax  = min(n_aslp_gill, im/2-1)
+    eps   = 1._wp/(c_aslp_gill_tau*86400._wp)
+    c2    = c_aslp_gill_c**2
+
+    do j=1,jm
+      phi(j) = asin(sint(j))
+    enddo
+    dphis = phi(2)-phi(1)     ! signed: v and the latitude derivatives are taken northward whatever the grid orientation
+    do j=1,jm
+      fcj(j) = 2._wp*omega*sint(j)
+    enddo
+    do f=1,jm-1
+      cph(f) = cos(0.5_wp*(phi(f)+phi(f+1)))
+      fcf(f) = 2._wp*omega*sin(0.5_wp*(phi(f)+phi(f+1)))
+    enddo
+
+    ! heating forcing, tapered with distance from the equator (i_aslp_gill_lat=1) or from the ITCZ (2)
+    frc(:,:) = 0._dp
+    do j=1,jm
+      if (i_aslp_gill_lat.eq.2) then
+        alat = abs(phi(j)-ficz)*180._wp/pi
+      else
+        alat = abs(phi(j))*180._wp/pi
+      endif
+      if (alat.le.c_aslp_gill_lat0) then
+        tap = 1._wp
+      else if (alat.ge.c_aslp_gill_lat1) then
+        tap = 0._wp
+      else
+        tap = 0.5_wp*(1._wp+cos(pi*(alat-c_aslp_gill_lat0)/(c_aslp_gill_lat1-c_aslp_gill_lat0)))
+      endif
+      prcz = sum(prc(:,j))*aim
+      frc(:,j) = tap*Rd*log(2._wp)*g*Le*(prc(:,j)-prcz)/(cp*5.e4_wp)
+    enddo
+
+    plan_r2c = fftw_plan_dft_r2c_1d(im, rowr, rowc, FFTW_ESTIMATE)
+    plan_c2r = fftw_plan_dft_c2r_1d(im, rowc, rowr, FFTW_ESTIMATE)
+
+    do j=1,jm
+      rowr(:) = frc(:,j)
+      call fftw_execute_dft_r2c(plan_r2c, rowr, rowc)
+      q_hat(:,j) = rowc(:)
+    enddo
+
+    ! C grid in latitude, as the 2D C-grid solution it reproduces (converged at 5 deg: r 0.999 against 0.5 deg):
+    ! phi and u on the cell latitudes, v on the half latitude f between rows f and f+1 (v = 0 at the poles).
+    ! u is local and is eliminated, u_j = [ f_j (v_{j-1/2}+v_{j+1/2})/2 - i n phi_j/(a cos_j) ] / eps;
+    ! the remaining unknowns are ordered x = (phi_1, v_1, phi_2, v_2, ..., phi_jm), a banded system
+    ! solved with Gaussian elimination and partial pivoting.
+    phi_hat(:,:) = (0._dp,0._dp)
+    ! the wavenumbers are independent; each dense solve is O(jm^3)
+    !$omp parallel do schedule(dynamic,1) private(n,rn,amat,rhs,x,j,r,k,f,jj)
+    do n=1,nmax
+      rn = real(n,wp)
+      amat(:,:) = (0._dp,0._dp)
+      ! continuity on row j: eps phi + c^2 [ i n u/(a cos) + (v_{j+1/2} cph - v_{j-1/2} cph)/(a cos dphis) ] = -Q
+      do j=1,jm
+        r = 2*j-1
+        amat(r,r) = amat(r,r) + eps + c2*rn**2/(eps*(r_earth*cost(j))**2)
+        do k=0,1
+          f = j-1+k     ! k=0: half latitude below row j (towards row j-1), k=1: above (towards row j+1)
+          if (f.ge.1 .and. f.le.jm-1) then
+            amat(r,2*f) = amat(r,2*f) + c2*cmplx((2*k-1)*cph(f)/(r_earth*cost(j)*dphis), &
+              rn*fcj(j)/(2._wp*eps*r_earth*cost(j)), dp)
+          endif
+        enddo
+        rhs(r) = -q_hat(n+1,j)
+      enddo
+      ! meridional momentum on half latitude f: eps v + f (u_f + u_{f+1})/2 = -(phi_{f+1}-phi_f)/(a dphis)
+      do f=1,jm-1
+        r = 2*f
+        amat(r,r) = amat(r,r) + eps
+        do jj=f,f+1
+          amat(r,2*jj-1) = amat(r,2*jj-1) + cmplx(0._wp, -0.5_wp*fcf(f)*rn/(eps*r_earth*cost(jj)), dp)
+          do k=jj-1,jj
+            if (k.ge.1 .and. k.le.jm-1) amat(r,2*k) = amat(r,2*k) + 0.25_wp*fcf(f)*fcj(jj)/eps
+          enddo
+        enddo
+        amat(r,2*f+1) = amat(r,2*f+1) + 1._wp/(r_earth*dphis)
+        amat(r,2*f-1) = amat(r,2*f-1) - 1._wp/(r_earth*dphis)
+        rhs(r) = (0._dp,0._dp)
+      enddo
+      call solve_c_dense(amat, rhs, x)
+      do j=1,jm
+        phi_hat(n+1,j) = x(2*j-1)
+      enddo
+    enddo
+    !$omp end parallel do
+
+    do j=1,jm
+      rowc(:) = phi_hat(:,j)
+      call fftw_execute_dft_c2r(plan_c2r, rowc, rowr)
+      aslp_gill(:,j) = c_aslp_gill*ra*rowr(:)*aim    ! aim accounts for the FFTW normalisation
+    enddo
+
+    call fftw_destroy_plan(plan_r2c)
+    call fftw_destroy_plan(plan_c2r)
+
+    return
+
+  end subroutine gill_response
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  solve_c_dense
+  !   Purpose    :  complex linear system, Gaussian elimination with partial pivoting
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine solve_c_dense(a, b, x)
+
+    implicit none
+
+    complex(dp), intent(inout) :: a(:,:)   !! matrix, overwritten
+    complex(dp), intent(inout) :: b(:)     !! right hand side, overwritten
+    complex(dp), intent(out  ) :: x(:)
+
+    integer :: k, i, p, nk
+    complex(dp) :: tmp(size(b)), t, fac
+
+    nk = size(b)
+    do k=1,nk-1
+      p = k-1+maxloc(abs(a(k:nk,k)),1)
+      if (p.ne.k) then
+        tmp(:) = a(k,:); a(k,:) = a(p,:); a(p,:) = tmp(:)
+        t = b(k); b(k) = b(p); b(p) = t
+      endif
+      do i=k+1,nk
+        if (a(i,k).ne.(0._dp,0._dp)) then
+          fac = a(i,k)/a(k,k)
+          a(i,k:nk) = a(i,k:nk) - fac*a(k,k:nk)
+          b(i) = b(i) - fac*b(k)
+        endif
+      enddo
+    enddo
+    do k=nk,1,-1
+      x(k) = (b(k) - sum(a(k,k+1:nk)*x(k+1:nk)))/a(k,k)
+    enddo
+
+    return
+
+  end subroutine solve_c_dense
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  tridiag_c
+  !   Purpose    :  complex tridiagonal solver (Thomas algorithm)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine tridiag_c(a, b, c, d, x)
+
+    implicit none
+
+    complex(dp), intent(in ) :: a(:), b(:), c(:), d(:)   !! sub-, main and super-diagonal, right hand side
+    complex(dp), intent(out) :: x(:)
+
+    integer :: k, nk
+    complex(dp) :: cpr(size(b)), dpr(size(b)), den
+
+    nk = size(b)
+    cpr(1) = c(1)/b(1)
+    dpr(1) = d(1)/b(1)
+    do k=2,nk
+      den    = b(k)-a(k)*cpr(k-1)
+      cpr(k) = c(k)/den
+      dpr(k) = (d(k)-a(k)*dpr(k-1))/den
+    enddo
+    x(nk) = dpr(nk)
+    do k=nk-1,1,-1
+      x(k) = dpr(k)-cpr(k)*x(k+1)
+    enddo
+
+    return
+
+  end subroutine tridiag_c
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  zslp
   !   Purpose    :  compute zonally averaged sea level pressure component
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine zslp(sin_cos_acbar, tsl, aslp, zsa, fdydse, t3, q3, htrop, ttrop, &
-          slp, had_fi, had_width)
+  subroutine zslp(sin_cos_acbar, tsl, aslp, pzsa, fdydse, t3, q3, htrop, ttrop, efe, &
+          ficz, mtz, slp, had_fi, had_width)
 
     implicit none
 
     real(wp), intent(in ) :: sin_cos_acbar(:,:)
     real(wp), intent(in ) :: tsl(:,:)
     real(wp), intent(in ) :: aslp(:,:)
-    real(wp), intent(in ) :: zsa(:,:)
+    real(wp), intent(in ) :: pzsa(:,:)     !! relative surface pressure of the (smoothed) topography, exp(-zsa_smooth/hatm)
     real(wp), intent(in ) :: fdydse(:,:)
     real(wp), intent(in ) :: t3(:,:,:)
     real(wp), intent(in ) :: q3(:,:,:)
     real(wp), intent(in ) :: htrop(:,:)
     real(wp), intent(in ) :: ttrop(:,:)
+    real(wp), intent(in ) :: efe          !! energy flux equator from the previous step (deg), see efe_diag
 
+    real(wp), intent(out) :: ficz         !! ITCZ latitude of the cell geometry (radians)
+    real(wp), intent(out) :: mtz(:)       !! zonal mean mountain torque [p_s dz_s/dx] on T-points (N/m2)
     real(wp), intent(out) :: slp(:,:)
     real(wp), intent(out) :: had_fi
     real(wp), intent(out) :: had_width
 
     real(wp), parameter :: p6=pi/6._wp
     real(wp), parameter :: dse_min=1.e3_wp   !! J/kg, floor on the branch DSE contrast
-    real(wp), parameter :: fi_dt_eq =10._wp*pi/180._wp  !! equatorial band, |fi| below this
-    real(wp), parameter :: fi_dt_s1 =25._wp*pi/180._wp  !! subtropical band, equatorward limit
-    real(wp), parameter :: fi_dt_s2 =35._wp*pi/180._wp  !! subtropical band, poleward limit
 
     integer :: i, j, k
     integer :: jc, jtn1, jtn2, jpn1, jpn2, jts1, jts2, jps1, jps2
     real(wp) :: wtn1, wtn2, wpn1, wpn2, wts1, wts2, wps1, wps2
     real(wp) :: tnh, tsh, scosh
-    real(wp) :: dtpn, dtps, dtfn, dtfs, ficz, ttrpmx, tbhn, tbhs, dthn, dths, cocfn, cocfs
+    real(wp) :: dtpn, dtps, dtfn, dtfs, ttrpmx, tbhn, tbhs, dthn, dths, cocfn, cocfs
     real(wp) :: hadwidsc
-    real(wp) :: dttrp, hadwid, teqsum, tsubsum, weqsum, wsubsum
+    real(wp) :: hadwid
     real(wp) :: ff, coc, psum, csum
-    real(wp) :: dzdse, aferzn, aferzs
+    real(wp) :: aferzn, aferzs
     real(wp) :: qtrp, wtrp, fqhad
     real(wp) :: htrpz, sbotz, stopz, tsfcz, wwid, hdv
 
     real(wp) :: fisu(jmc), fist(jm), vsz(jmc), tslz(jm), psz(jmc), acbarz(jm)
     real(wp) :: dsez(jm), fedz(jmc), aferz(jm)
-    real(wp) :: zsaz(jm), fzsa(jm)
+    real(wp) :: mtu, sgnf
 
 
-    ! zonal mean sea level temperature and topography
+    ! zonal mean sea level temperature
     tslz(:) = 0._wp
-    zsaz(:) = 0._wp
     do j=1,jm 
       do i=1,im
         tslz(j) = tslz(j) + tsl(i,j)*aim 
-        zsaz(j) = zsaz(j) + zsa(i,j)*aim 
       enddo        
     enddo
-
-    ! Factor accounting for the zonal mean topography in the PBL.
-    ! The meridional cells below are driven by a sea level temperature contrast and close
-    ! through the planetary boundary layer, so where the zonal mean surface sits well above
-    ! sea level there is less atmosphere left to carry the return branch and the cell is
-    ! damped. c_mmc_z is the elevation at which the damping is complete; c_mmc_z<=0 switches
-    ! the damping off (fzsa=1 everywhere).
-    if (c_mmc_z.gt.0._wp) then
-      do j=1,jm 
-        fzsa(j) = 1._wp-min(1._wp,max(0._wp,0.5_wp*(zsaz(max(1,j-1))+zsaz(j))/c_mmc_z))
-      enddo
-    else
-      fzsa(:) = 1._wp
-    endif
 
     ! NH and SH mean sea level temperatures
     tnh = 0._wp
@@ -409,67 +1031,58 @@ contains
 
     ! ITCZ position, depends on temperature difference between the two hemispheres 
 
-    ficz = c_mmc_2*(tnh-tsh)
-
-    ! Width of the Hadley cells
-
-    teqsum  = 0._wp; weqsum  = 0._wp
-    tsubsum = 0._wp; wsubsum = 0._wp
-    do j=1,jm
-      if (abs(fit(j)).lt.fi_dt_eq) then
-        teqsum  = teqsum  + tslz(j)*cost(j)
-        weqsum  = weqsum  + cost(j)
-      else if (abs(fit(j)).gt.fi_dt_s1 .and. abs(fit(j)).lt.fi_dt_s2) then
-        tsubsum = tsubsum + tslz(j)*cost(j)
-        wsubsum = wsubsum + cost(j)
-      endif
-    enddo
-    dttrp = teqsum/max(weqsum,1.e-20_wp) - tsubsum/max(wsubsum,1.e-20_wp)
-
-    ! total width in degrees, then hadwidsc from width = 180/(3*hadwidsc) deg
-    hadwid   = c_mmc_dt0 - c_mmc_dt1*dttrp
-
-    ! Thermodynamic scaling of the Hadley width, selected by i_mmc_wid
+    ! ITCZ latitude, selected by i_mmc_itcz.  The zero of the cell phase ff below, i.e. the boundary
+    ! between the two Hadley cells, sits exactly at fi = ficz.
     !
-    ! i_mmc_wid = 0  The width follows the tropical sea level temperature contrast alone.  That contrast
-    !                is almost invariant under greenhouse warming, so the cells do not expand, contrary
-    !                to CMIP.
+    ! i_mmc_itcz = 0  Proportional to the interhemispheric sea level temperature contrast,
+    !                   ficz = c_mmc_2*(T_NH - T_SH).
+    !                 One coefficient serves the seasonal cycle and forced changes alike, so the ITCZ moves
+    !                 4-10 times too far under LGM and 4xCO2 forcing, whose contrast sits at high latitudes.
     !
-    ! i_mmc_wid = 1  The same width, scaled by the Held (2000) supercriticality criterion.  The Hadley
-    !                cell ends where the angular momentum conserving flow first becomes baroclinically
-    !                unstable, at
-    !                  fi_H ~ [ g H Dv / (Omega**2 a**2) ]**(1/4),
-    !                with H the tropopause height and Dv = (theta(H)-theta(sfc))/theta_sfc the bulk dry
-    !                stability of the tropical troposphere.  Only H*Dv varies here, so
-    !                  hadwid -> hadwid * (H*Dv/hdv_mmc_ref)**c_mmc_dt2.
-    !                Both factors grow under warming - the tropopause rises and the troposphere gets
-    !                more stable - which is the accepted explanation of the observed expansion.  Note
-    !                that Dv is the DRY stability up to the tropopause and does rise here, unlike the
-    !                gross moist stability between fixed levels.
-    if (i_mmc_wid.eq.1) then
-      htrpz = 0._wp
-      stopz = 0._wp
-      sbotz = 0._wp
-      tsfcz = 0._wp
-      wwid  = 0._wp
-      do j=jtn,jts+1
-        do i=1,im
-          ! ttrop is t_prof evaluated at htrop: t_prof clamps its argument at the tropopause,
-          ! so vesta's profile loop leaves it holding exactly the tropopause temperature.
-          htrpz = htrpz + htrop(i,j)*cost(j)
-          stopz = stopz + (ttrop(i,j)+g*htrop(i,j)/cp)*cost(j)
-          sbotz = sbotz + (t3(i,j,1)+g*zc(1)/cp)*cost(j)
-          tsfcz = tsfcz + t3(i,j,1)*cost(j)
-          wwid  = wwid  + cost(j)
-        enddo
-      enddo
-      htrpz = htrpz/wwid
-      stopz = stopz/wwid
-      sbotz = sbotz/wwid
-      tsfcz = tsfcz/wwid
-      hdv   = htrpz*(stopz-sbotz)/tsfcz
-      hadwid = hadwid*(max(hdv,1.e-20_wp)/hdv_mmc_ref)**c_mmc_dt2
+    ! i_mmc_itcz = 1  Energy flux equator closure: ficz = c_mmc_efe*efe.  efe is the zero of the northward
+    !                 atmospheric energy transport implied by the boundary fluxes and the column storage
+    !                 (efe_diag), so it does not depend on the circulation this routine prescribes.  It is
+    !                 from the previous step (from the restart file on the first step; 0 after a cold start).
+    if (i_mmc_itcz.eq.1) then
+      ficz = c_mmc_efe*efe*pi/180._wp
+    else
+      ficz = c_mmc_2*(tnh-tsh)
     endif
+
+    ! Width of the Hadley cells: c_mmc_dt0 degrees in total, scaled by the Held (2000) supercriticality
+    ! criterion.  The Hadley cell ends where the angular momentum conserving flow first becomes
+    ! baroclinically unstable, at
+    !   fi_H ~ [ g H Dv / (Omega**2 a**2) ]**(1/4),
+    ! with H the tropopause height and Dv = (theta(H)-theta(sfc))/theta_sfc the bulk dry stability of the
+    ! tropical troposphere.  Only H*Dv varies here, so
+    !   hadwid = c_mmc_dt0 * (H*Dv/hdv_mmc_ref)**c_mmc_dt1,
+    ! and hadwidsc follows from width = 180/(3*hadwidsc) deg.
+    ! Both factors grow under warming - the tropopause rises and the troposphere gets more stable - which is
+    ! the accepted explanation of the observed expansion.  Note that Dv is the DRY stability up to the tropopause
+    ! and does rise here, unlike the gross moist stability between fixed levels.
+    htrpz = 0._wp
+    stopz = 0._wp
+    sbotz = 0._wp
+    tsfcz = 0._wp
+    wwid  = 0._wp
+    do j=jtn,jts+1
+      do i=1,im
+        ! ttrop is t_prof evaluated at htrop: t_prof clamps its argument at the tropopause,
+        ! so vesta's profile loop leaves it holding exactly the tropopause temperature.
+        htrpz = htrpz + htrop(i,j)*cost(j)
+        stopz = stopz + (ttrop(i,j)+g*htrop(i,j)/cp)*cost(j)
+        sbotz = sbotz + (t3(i,j,1)+g*z3(i,j,1)/cp)*cost(j)
+        tsfcz = tsfcz + t3(i,j,1)*cost(j)
+        wwid  = wwid  + cost(j)
+      enddo
+    enddo
+    htrpz = htrpz/wwid
+    stopz = stopz/wwid
+    sbotz = sbotz/wwid
+    tsfcz = tsfcz/wwid
+    hdv   = htrpz*(stopz-sbotz)/tsfcz
+    hadwid = c_mmc_dt0*(max(hdv,1.e-20_wp)/hdv_mmc_ref)**c_mmc_dt1
+
     hadwidsc = 60._wp/max(hadwid,1._wp)
 
     hadwidsc = max(hadwidsc,0.5_wp)
@@ -478,8 +1091,8 @@ contains
     ! position of borders of cells
 
     do j=1,jm
-      fisu(j) = 6._wp*hadwidsc*(fiu(j)-ficz/(c_mmc_1*(fiu(j)-ficz)**2+1._wp))
-      fist(j) = 6._wp*hadwidsc*(fit(j)-ficz/(c_mmc_1*(fit(j)-ficz)**2+1._wp))
+      fisu(j) = cell_phase(fiu(j),ficz,hadwidsc)
+      fist(j) = cell_phase(fit(j),ficz,hadwidsc)
     enddo
     do j=1,jm
       ! N boundary between Hadley and Ferrel cells
@@ -608,11 +1221,11 @@ contains
 
       ! Bulk dry static energy contrast between the lower and the upper branch of the cells.
       ! It is the denominator of the Ferrel amplitude below. 
-      dzdse = zc(k_dse_up)-zc(k_dse_lo)
+      ! with the geometric distance of the two layer centres of each column (vesta)
       do j=1,jm
         dsez(j) = 0._wp
         do i=1,im
-          dsez(j) = dsez(j) + (cp*(t3(i,j,k_dse_up)-t3(i,j,k_dse_lo)) + g*dzdse)*aim
+          dsez(j) = dsez(j) + (cp*(t3(i,j,k_dse_up)-t3(i,j,k_dse_lo)) + g*(z3(i,j,k_dse_up)-z3(i,j,k_dse_lo)))*aim
         enddo
         dsez(j) = max(dsez(j),dse_min)
       enddo
@@ -651,7 +1264,7 @@ contains
 
     do j=2,jm
 
-      ff = 6._wp*hadwidsc*(fiu(j)-ficz/(c_mmc_1*(fiu(j)-ficz)**2+1._wp))
+      ff = cell_phase(fiu(j),ficz,hadwidsc)
 
       coc = 0._wp
 
@@ -663,8 +1276,44 @@ contains
       if (-ff.gt.pi .and. (-ff).le.2._wp*pi)       coc = cocfs
       if (-ff.gt.2._wp*pi .and. (-ff).le.3._wp*pi) coc = c_mmc_pol*dtps
 
-      vsz(j) = -coc*fzsa(j)*sin(ff) 
+      vsz(j) = -coc*sin(ff) 
 
+      ! i_mmc_fer_shape = 2: Ferrel branches from the latitude-resolved TEM closure instead of the half-sine with the
+      ! belt-mean amplitude. aferz(j) = c_mmc_fer*|F_eddy|/Ds is the cell's mass flux at this v-point, the velocity of the
+      ! branch scales with 1/cos(lat) (reference 45 deg, absorbed in c_mmc_fer), and |sin(ff)|^c_mmc_fer_q tapers it to
+      ! zero at the cell edges only. F/Ds is much flatter across the cell than sin(ff), which moves pressure gradient
+      ! onto the poleward flank of the westerlies (offline emulator: analysis/ferrel_fds_shape_emulator.jl).
+      if (i_mmc_fer_shape.eq.2) then
+        if ((ff.ge.pi .and. ff.lt.2._wp*pi) .or. (-ff.gt.pi .and. (-ff).le.2._wp*pi)) then
+          vsz(j) = -sign(1._wp,sin(ff)) * aferz(j) * cos(0.25_wp*pi)/max(cos(fiu(j)),0.1_wp) * abs(sin(ff))**c_mmc_fer_q
+        endif
+      endif
+
+    enddo
+
+    ! Mountain torque
+    !
+    ! vsz prescribes the lower branch of the cells, i.e. its Coriolis torque f*M.  In the zonal mean that
+    ! torque is balanced by the surface friction AND by the form drag of the orography,
+    !   f*M = [tau] + [p_s dz_s/dx],
+    ! and only the friction part comes with zonal mean surface westerlies and so with a meridional gradient
+    ! of the zonal mean SLP.  Where the azonal SLP puts high pressure on the upstream flank of a mountain
+    ! range (the LGM ice sheets, the Rockies), the lower branch is carried by the geostrophic flow against
+    ! that pressure dipole instead: u3d's vgb over the layer mass above the terrain, whose zonal integral is
+    ! exactly [p_s dz_s/dx]/f.  The zonal part of the SLP drops out of the zonal integral, and with
+    ! p_s = slp*pzsa, z_s = -hatm*ln(pzsa),
+    !   [p_s dz_s/dx] = hatm*[pzsa d(aslp)/dx].
+    ! The friction (Ekman) part of the branch is vsz - MT/(f*M_pbl), with M_pbl = (1-pbl)*amas the mass of
+    ! the PBL that carries the zonal mean ageostrophic flux in u3d.  In the SLP increment below f cancels,
+    ! so the torque term needs no regularisation at the equator.
+    do j=1,jm
+      mtz(j) = 0._wp
+      if (j.gt.1 .and. j.lt.jm) then
+        do i=1,im
+          mtz(j) = mtz(j) + pzsa(i,j)*(aslp(modulo(i,im)+1,j)-aslp(modulo(i-2,im)+1,j))/(2._wp*dxt(j))
+        enddo
+        mtz(j) = hatm*mtz(j)*aim
+      endif
     enddo
 
     ! Zonally averaged SLP   
@@ -672,7 +1321,15 @@ contains
 
     psz(:) = 0._wp
     do j=2,jm
-      psz(j) = psz(j-1) + vsz(j)*fcorua(j)*ra/acbarz(j) * dy
+      mtu  = 0.5_wp*(mtz(j-1)+mtz(j))
+      if (fiu(j).gt.0._wp) then
+        sgnf = 1._wp
+      else if (fiu(j).lt.0._wp) then
+        sgnf = -1._wp
+      else
+        sgnf = 0._wp
+      endif
+      psz(j) = psz(j-1) + (vsz(j)*fcorua(j) - c_mmc_mt*sgnf*mtu/((1._wp-pbl)*amas))*ra/acbarz(j) * dy
     enddo
 
     ! SLP = zonal+azonal
@@ -704,5 +1361,187 @@ contains
     return
 
   end subroutine zslp
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  e f e _ d i a g
+  !   Purpose    :  diagnostic energy flux equator (EFE), from boundary fluxes only
+  !
+  !   The net energy input into the atmospheric column is NEI = rb_atm + sha + lha, the moist static
+  !   energy source of the column budget in time_step (latent heat enters through evaporation).
+  !   Its storage is dE/dt with E = cheat*(tam+dtcol) + Le*wcon, the column enthalpy plus latent
+  !   energy, differenced between successive calls.  The difference is taken in the column state,
+  !   cheat*d(tam+dtcol) + Le*d(wcon) with the current cheat, so that a change of the column mass
+  !   with the topography (atm_grid_update, or a restart into a new geometry) is not read as storage.  NEI - dE/dt, with its global mean removed so
+  !   that the implied transport closes at both poles, integrated from the south pole gives the
+  !   northward atmospheric energy transport F at every latitude boundary.  Nothing here uses the
+  !   model's own transports, so the EFE is independent of the circulation that the MMC
+  !   parameterisation prescribes.
+  !
+  !   aht_eq  : F across the equator (PW), positive northward
+  !   efe     : latitude (deg) of the zero crossing of F closest to the equator within +-25 deg,
+  !             linearly interpolated between v-points (the full EFE)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  subroutine efe_diag(rb_atm, sha, lha, cheat, tam, dtcol, wcon, sqr, dt, &
+      tcol_prev, wcon_prev, aht_eq, efe)
+
+    implicit none
+
+    real(wp), intent(in   ) :: rb_atm(:,:)
+    real(wp), intent(in   ) :: sha(:,:)
+    real(wp), intent(in   ) :: lha(:,:)
+    real(wp), intent(in   ) :: cheat(:,:)
+    real(wp), intent(in   ) :: tam(:,:)
+    real(wp), intent(in   ) :: dtcol(:,:)
+    real(wp), intent(in   ) :: wcon(:,:)
+    real(wp), intent(in   ) :: sqr(:,:)
+    real(wp), intent(in   ) :: dt
+    real(wp), intent(inout) :: tcol_prev(:,:)   !! tam+dtcol at the previous call (K), col_prev_unset before the first
+    real(wp), intent(inout) :: wcon_prev(:,:)   !! wcon at the previous call (kg m-2)
+    real(wp), intent(out  ) :: aht_eq
+    real(wp), intent(out  ) :: efe
+
+    integer :: i, j
+    real(wp), parameter :: fi_efe_max = 25._wp   !! deg, search window for the zero crossing
+    real(dp) :: atot, nglob
+    real(dp) :: nrow(jm), arow(jm), f(jmc)
+    real(wp) :: src(im,jm)
+    real(wp) :: la, lb, x
+
+    ! column energy storage since the previous call; zero storage on the first call (cold start, or a
+    ! restart file without tcol_prev)
+    where (tcol_prev.le.col_prev_unset)
+      src = rb_atm + sha + lha
+    elsewhere
+      src = rb_atm + sha + lha - (cheat*(tam+dtcol-tcol_prev) + Le*(wcon-wcon_prev))/dt
+    endwhere
+    tcol_prev = tam+dtcol
+    wcon_prev = wcon
+
+    ! zonal integrals per row (W) and the global mean (W/m2)
+    do j=1,jm
+      nrow(j) = 0._dp
+      arow(j) = 0._dp
+      do i=1,im
+        nrow(j) = nrow(j) + real(src(i,j),dp)*real(sqr(i,j),dp)
+        arow(j) = arow(j) + real(sqr(i,j),dp)
+      enddo
+    enddo
+    atot  = sum(arow)
+    nglob = sum(nrow)/atot
+
+    ! northward transport across the northern edge of each row, fiu(j), integrated from the south
+    ! pole (j=1 is the northern-most row); f(jmc) = 0 at the south pole
+    f(jmc) = 0._dp
+    do j=jm,1,-1
+      f(j) = f(j+1) + (nrow(j) - nglob*arow(j))
+    enddo
+
+    ! transport across the equator, fiu(jeq+1) = 0
+    aht_eq = real(f(jeq+1),wp)*1.e-15_wp
+
+    ! zero crossing of f closest to the equator
+    efe = -999._wp
+    do j=1,jm
+      la = fiu(j)*180._wp/pi
+      lb = fiu(j+1)*180._wp/pi
+      if (abs(la).gt.fi_efe_max+1.e-6_wp .or. abs(lb).gt.fi_efe_max+1.e-6_wp) cycle
+      if ((f(j).gt.0._dp .and. f(j+1).le.0._dp) .or. (f(j).lt.0._dp .and. f(j+1).ge.0._dp)) then
+        x = lb + (la-lb)*real(-f(j+1)/(f(j)-f(j+1)),wp)
+        if (efe.lt.-900._wp .or. abs(x).lt.abs(efe)) efe = x
+      endif
+    enddo
+    ! no crossing in the window: the EFE lies beyond it, on the side opposite to the transport
+    if (efe.lt.-900._wp) efe = -sign(fi_efe_max, aht_eq)
+
+    return
+
+  end subroutine efe_diag
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function :  c e l l _ p h a s e
+  !   Purpose  :  phase of the meridional cell pattern at latitude fi;
+  !               0 at the ITCZ, +-pi at the Hadley edges, +-2pi at the
+  !               Ferrel/polar boundaries
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function cell_phase(fi, ficz, hadwidsc) result(ff)
+
+    implicit none
+
+    real(wp), intent(in) :: fi        !! latitude (radians)
+    real(wp), intent(in) :: ficz      !! ITCZ latitude (radians)
+    real(wp), intent(in) :: hadwidsc  !! width scale, one cell spans pi/(6*hadwidsc) radians
+    real(wp) :: ff
+
+    real(wp), parameter :: dfi_min = 5._wp*pi/180._wp   !! minimum latitudinal extent of a Hadley cell
+    real(wp), parameter :: dfer_min = 10._wp*pi/180._wp !! minimum latitudinal extent of a Ferrel cell (i_mmc_geo=2)
+    real(wp) :: hw, fen, fes, fpn, fps, fmn, fms
+
+    ! i_mmc_geo = 0  The whole pattern is displaced towards the ITCZ by ficz/(1+c_mmc_1*(fi-ficz)**2).
+    !                The displacement decays with the distance from the ITCZ, so the summer Hadley edge,
+    !                which lies close to the ITCZ, moves by ~0.6-0.75*ficz and the winter edge by ~0.2-0.3*ficz.
+    !                The summer subtropical high and trades end up ~10 deg too far poleward in JJA, while the
+    !                observed edges move by only ~0.25-0.35 times the ITCZ excursion in both hemispheres.
+    !
+    ! i_mmc_geo = 1  Both Hadley edges sit at +-hw + c_mmc_edge*ficz, with hw = pi/(6*hadwidsc) half the
+    !                Hadley width, and the phase is linear in latitude within each Hadley cell, so the cell
+    !                boundary stays at ficz and the summer cell narrows.  The Ferrel and polar cells keep the
+    !                width hw poleward of the edges.
+    !
+    ! i_mmc_geo = 2  Hadley edges as in i_mmc_geo = 1.  The Ferrel/polar boundaries sit at fpn/fps = +-2*hw,
+    !                independent of ficz: they follow FORCED changes of the Hadley width (Held scaling) but not the
+    !                seasonal displacement of the Hadley edges.  In CMIP6/PMIP the polar edge stays at ~61-65 deg all
+    !                year while the Hadley edge moves 7-9 deg (the winter Ferrel cell is the wide one), and the
+    !                annual-mean polar edge is ~2x the Hadley edge in every state (|P| = 3.8 + 1.94|H|, rms 3.6 deg over
+    !                aquaplanet, PI, 4xCO2 and LGM; ratio 1.96-2.24).  Within each Ferrel cell the phase is piecewise
+    !                linear: 1.5 pi (maximum of the branch) is reached at hw/2 from the Hadley edge (the mid-point of
+    !                the cell for ficz = 0), kept within the central half of the cell; the polar cells keep the
+    !                angular rate of i_mmc_geo = 1 (pi per hw).
+    if (i_mmc_geo.eq.2) then
+      hw  = pi/(6._wp*hadwidsc)
+      fen = max(hw + c_mmc_edge*ficz, ficz + dfi_min)
+      fes = min(-hw + c_mmc_edge*ficz, ficz - dfi_min)
+      fpn = max( 2._wp*hw, fen + dfer_min)
+      fps = min(-2._wp*hw, fes - dfer_min)
+      ! mid-point of the Ferrel cell (phase 1.5 pi, maximum of the branch) at hw/2 from the Hadley edge,
+      ! kept within the central half of the cell
+      fmn = fen + min(max(0.5_wp*hw, 0.25_wp*(fpn-fen)), 0.75_wp*(fpn-fen))
+      fms = fes - min(max(0.5_wp*hw, 0.25_wp*(fes-fps)), 0.75_wp*(fes-fps))
+      if (fi.ge.fpn) then
+        ff = 2._wp*pi + pi*(fi-fpn)/hw
+      else if (fi.ge.fmn) then
+        ff = 1.5_wp*pi + 0.5_wp*pi*(fi-fmn)/(fpn-fmn)
+      else if (fi.ge.fen) then
+        ff = pi + 0.5_wp*pi*(fi-fen)/(fmn-fen)
+      else if (fi.ge.ficz) then
+        ff = pi*(fi-ficz)/(fen-ficz)
+      else if (fi.ge.fes) then
+        ff = pi*(fi-ficz)/(ficz-fes)
+      else if (fi.ge.fms) then
+        ff = -pi - 0.5_wp*pi*(fes-fi)/(fes-fms)
+      else if (fi.ge.fps) then
+        ff = -1.5_wp*pi - 0.5_wp*pi*(fms-fi)/(fms-fps)
+      else
+        ff = -2._wp*pi + pi*(fi-fps)/hw
+      endif
+    else if (i_mmc_geo.eq.1) then
+      hw  = pi/(6._wp*hadwidsc)
+      fen = max(hw + c_mmc_edge*ficz, ficz + dfi_min)
+      fes = min(-hw + c_mmc_edge*ficz, ficz - dfi_min)
+      if (fi.ge.fen) then
+        ff = pi + 6._wp*hadwidsc*(fi-fen)
+      else if (fi.ge.ficz) then
+        ff = pi*(fi-ficz)/(fen-ficz)
+      else if (fi.ge.fes) then
+        ff = pi*(fi-ficz)/(ficz-fes)
+      else
+        ff = -pi + 6._wp*hadwidsc*(fi-fes)
+      endif
+    else
+      ff = 6._wp*hadwidsc*(fi-ficz/(c_mmc_1*(fi-ficz)**2+1._wp))
+    endif
+
+  end function cell_phase
 
 end module slp_mod
