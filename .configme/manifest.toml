@@ -1,10 +1,10 @@
 # configme manifest for climber-x.
 package = "climber-x"
 deps = [
-    "fesm-utils:2.4-beta",
-    "yelmo:2.4-beta",
-    "vilma2",
-    "bgc:dev",
+    "fesm-utils:v1.5",
+    "yelmo:v2.4",
+    "vilma2:v0.2.0",
+    "bgc",
     "vilma1:@machine",
     "climber-x-input:dev",
 ]
