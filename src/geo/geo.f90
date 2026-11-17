@@ -567,7 +567,7 @@ contains
       call vilma1_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
     endif
     if (flag_geo .and. i_geo.eq.3) then
-      call vilma2_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq, geo%hires%h_ice)
+      call vilma2_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq)
     endif
 
     print*

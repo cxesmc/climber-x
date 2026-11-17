@@ -17,11 +17,9 @@ module vilma2_model
   use coords, only : grid_class
 
 #ifdef VILMA2
-  ! VILMA2 public API (library modules keep the upstream vilma* names). The umbrella
-  ! module re-exports the types, parameter record and restart I/O; the coupling
-  ! procedures come from vilma_coupling.
-  use vilma, only : solid_earth, vilma_par_load, vilma_restart_write, vilma_restart_read
-  use vilma_coupling, only : solid_earth_init, solid_earth_update, solid_earth_finalize
+  ! VILMA2 host API: `vilma` is the one module a host uses.
+  use vilma, only : solid_earth, vilma_par_load, vilma_restart_write, vilma_restart_read, &
+                    solid_earth_init, solid_earth_update, solid_earth_finalize
 #endif
 
   implicit none
@@ -41,14 +39,13 @@ contains
   ! Function :  v i l m a 2 _ i n i t
   ! Purpose  :  initialize solid Earth (VILMA2)
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine vilma2_init(geo_grid, z_bed_eq_g, h_ice_eq_g, h_ice_g)
+  subroutine vilma2_init(geo_grid, z_bed_eq_g, h_ice_eq_g)
 
     implicit none
 
     type(grid_class), intent(in) :: geo_grid
     real(wp), intent(in) :: z_bed_eq_g(:,:)   ! equilibrium (relaxed) bedrock elevation [m]
     real(wp), intent(in) :: h_ice_eq_g(:,:)   ! ice thickness associated with equilibrium bedrock [m]
-    real(wp), intent(in) :: h_ice_g(:,:)      ! current ice thickness [m]
 
 #ifdef VILMA2
 
@@ -60,7 +57,8 @@ contains
 
     ! Build the model and set the relaxed reference state. VILMA2 owns its
     ! Gauss grid and builds the host<->Gauss remap from geo_grid internally.
-    call solid_earth_init(se, z_bed_eq_g, h_ice_eq_g, grid=geo_grid, h_ice_init=h_ice_g)
+    ! The current ice thickness enters with the first update.
+    call solid_earth_init(se, z_bed_eq_g, h_ice_eq_g, grid=geo_grid)
 
     ! Restart: restore prognostic state on top of the freshly built model.
     if (geo_restart) then
