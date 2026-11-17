@@ -26,7 +26,7 @@
 module ice_model
     
     use precision, only : wp, sp, dp 
-    use control, only : out_dir
+    use control, only : out_dir, restart_in_dir
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
     use constants, only : map_gen, constants_phys_const
@@ -351,8 +351,16 @@ contains
 
                 ! Now initialize remaining Yelmo components
                 ! (set `grid_def="none"` to use the grid definition from above)
-                call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
-                            load_topo=.FALSE.,domain=domain,grid_name=grid%name)
+                ! ctl.ice_restart: Yelmo restarts from the set in restart_in_dir (the file
+                ! ice_write_restart writes); otherwise yelmo.restart of the par file decides.
+                if (l_restart) then
+                    call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
+                                load_topo=.FALSE.,domain=domain,grid_name=grid%name, &
+                                restart=trim(restart_in_dir)//"/ice_yelmo_"//trim(grid%name)//"_restart.nc")
+                else
+                    call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
+                                load_topo=.FALSE.,domain=domain,grid_name=grid%name)
+                end if
 
                 if (.not. ylmo%par%use_restart) then                          
                   ! Define topography based on input data
