@@ -60,8 +60,6 @@ module ocn_params
      integer :: nlayers
      integer :: i_smooth
      real(wp) :: smooth_fac
-     logical :: l_limit_ratio   !! limit the neighbour ocean-depth ratio of the bathymetry by deepening shallow cells (despike for barotropic stability)?
-     real(wp) :: depth_ratio_max  !! maximum allowed neighbour depth ratio (threshold for l_limit_ratio) []
      real(wp), dimension(:), allocatable :: zw_in
      integer :: i_isl
      real(wp) :: isl_area_min
@@ -82,8 +80,8 @@ module ocn_params
 
      real(wp) :: rho0 !! reference density ocean water [kg/m3]
 
-     real(wp) :: urelax
      real(wp) :: tau_scale
+     real(wp) :: tau_scale_bcl
 
      type drag_par_type
        real(wp) :: adrag           !! background drag of the barotropic and baroclinic velocities (namelist in days)
@@ -110,10 +108,8 @@ module ocn_params
      real(wp) :: z_downslope_max     !! maximum bottom depth of a source (shelf) cell [m]
      real(wp) :: pe_buoy_coeff, ke_tau_coeff, ke_wind_dec
      integer :: i_eos
-     real(wp) :: drhcor_max
-     integer :: i_cor_form      
      integer :: nbw             !! half band width of the streamfunction matrix (maxi+1 for the 5-point stencil, 2*maxi with drag_cb > 0)
-     real(wp), allocatable :: qcor(:,:)  !! f/H at tracer points, used by the J3 Coriolis term (i_cor_form=1)
+     real(wp), allocatable :: qcor(:,:)  !! f/H at tracer points, used by the J3 Coriolis term
      integer :: i_diff_dia
      real(wp) :: diff_iso, diff_dia_zref
      real(wp) :: diff_dia_min, diff_dia_max, diff_dia_ref
@@ -288,8 +284,6 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","levels",zw_in)
     call nml_read(filename,"ocn_par","i_smooth",i_smooth)
     call nml_read(filename,"ocn_par","smooth_fac",smooth_fac)
-    call nml_read(filename,"ocn_par","l_limit_ratio",l_limit_ratio)
-    call nml_read(filename,"ocn_par","depth_ratio_max",depth_ratio_max)
     call nml_read(filename,"ocn_par","i_isl",i_isl)
     call nml_read(filename,"ocn_par","isl_area_min",isl_area_min)
     call nml_read(filename,"ocn_par","l_isl_ant",l_isl_ant)
@@ -312,8 +306,8 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","dbl",dbl)
 
     call nml_read(filename,"ocn_par","rho0",rho0)
-    call nml_read(filename,"ocn_par","urelax",urelax)
     call nml_read(filename,"ocn_par","tau_scale",tau_scale)
+    call nml_read(filename,"ocn_par","tau_scale_bcl",tau_scale_bcl)
     call nml_read(filename,"ocn_par","adrag",drag_par%adrag)
     call nml_read(filename,"ocn_par","drag_frac",drag_par%drag_frac)
     call nml_read(filename,"ocn_par","f_frac_crit",drag_par%f_frac_crit)
@@ -339,8 +333,6 @@ subroutine ocn_par_load(filename)
       stop
     endif
 
-    call nml_read(filename,"ocn_par","drhcor_max",drhcor_max)
-    call nml_read(filename,"ocn_par","i_cor_form",i_cor_form)
 
     call nml_read(filename,"ocn_par","fcormin",fcormin)
     fcormin_ref = fcormin

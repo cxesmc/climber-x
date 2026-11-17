@@ -30,7 +30,7 @@ module invert_mod
 
   use precision, only : wp
   use ocn_grid, only : maxi, maxj, maxk, k1, c, cv, ds, dsv, dphi, rh, R_earth
-  use ocn_params, only : fcor, fcorv, drag, drhcor_max, i_cor_form, nbw, qcor, drag_par
+  use ocn_params, only : drag, nbw, qcor, drag_par
 
   implicit none
 
@@ -45,14 +45,10 @@ contains
   !
   !   The equation is the discrete curl (dual-cell loop with the segment lengths of island.f90 / wind.f90) of
   !     drag*u_b + f x u_b = tau/(rho0 H) + JEBAR - grad p
-  !   The drag part is the same for both i_cor_form. The Coriolis part is
-  !     i_cor_form = 0 : advective form J(psi,f/H), central differences, drhcor_max limiter. NOT a discrete
-  !                      divergence, so no line integrand matches it and the island constants of island.f90
-  !                      depend on the integration path
-  !     i_cor_form = 1 : flux form, J3 Jacobian d_phi(psi d_s q) - d_s(psi d_phi q) with q = f/H at tracer points;
-  !                      a discrete divergence, so the matching path integral in island.f90 is path-independent.
-  !                      Only psi averaging, and only the 4 cells of the psi point are used
-  !   Both are 5-point stencils. Valid for 1 <= j <= maxj-1.
+  !   The Coriolis part is in flux form, J3 Jacobian d_phi(psi d_s q) - d_s(psi d_phi q) with q = f/H at tracer
+  !   points; a discrete divergence, so the matching path integral in island.f90 is path-independent.
+  !   Only psi averaging, and only the 4 cells of the psi point are used.
+  !   5-point stencil. Valid for 1 <= j <= maxj-1.
   !   With drag_cb > 0 a checkerboard friction is added (9-point stencil), see below.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine stencil_coef(i,j,cf)
@@ -62,7 +58,6 @@ contains
     integer, intent(in) :: i, j
     real(wp), dimension(-1:1,-1:1), intent(out) :: cf
 
-    real(wp) :: tv, tv1, rh1, rh2, drh
     real(wp) :: dsq_e, dsq_w, dpq_n, dpq_s, fac_p, fac_s
     real(wp) :: fac, w
     integer :: di, dj
@@ -104,55 +99,22 @@ contains
       enddo
     endif
 
-    if (i_cor_form.eq.0) then
+    ! Coriolis terms, J3 flux form: J(psi,q) = d_phi(psi d_s q) - d_s(psi d_phi q), q = f/H at tracer points.
+    !   d_phi(psi d_s q) = [ (psi(i,j)+psi(i+1,j))/2 * dsq_e - (psi(i-1,j)+psi(i,j))/2 * dsq_w ] / dphi
+    !   d_s  (psi d_phi q) = [ (psi(i,j)+psi(i,j+1))/2 * dpq_n - (psi(i,j-1)+psi(i,j))/2 * dpq_s ] / dsv(j)
+    ! with the q differences taken on the dual-cell edges, i.e. over the four cells of this psi point only
+    dsq_e = (qcor(i+1,j+1) - qcor(i+1,j))/dsv(j)
+    dsq_w = (qcor(i  ,j+1) - qcor(i  ,j))/dsv(j)
+    dpq_n = (qcor(i+1,j+1) - qcor(i  ,j+1))/dphi
+    dpq_s = (qcor(i+1,j  ) - qcor(i  ,j  ))/dphi
+    fac_p = 1._wp/(dphi*R_earth**2)
+    fac_s = 1._wp/(dsv(j)*R_earth**2)
 
-      ! Coriolis terms, advective form, limit topography gradient
-      rh1 = rh(1,i,j+1)
-      rh2 = rh(1,i,j)
-      drh = abs((rh1-rh2)/dphi)
-      if (drh.gt.drhcor_max) then
-        drh = drhcor_max
-        rh2 = rh1 - sign(drh,(rh1-rh2)/dphi)*dphi
-      endif
-      tv  = (fcor(j+1)*rh1 - fcor(j)*rh2) /(2._wp*dphi*dsv(j)*R_earth**2)  ! 1/s/m3
-      rh1 = rh(2,i+1,j)
-      rh2 = rh(2,i,j)
-      drh = abs((rh1-rh2)/dsv(j))
-      if (drh.gt.drhcor_max) then
-        drh = drhcor_max
-        rh2 = rh1 - sign(drh,(rh1-rh2)/dsv(j))*dsv(j)
-      endif
-      tv1 = (fcorv(j)*rh1  - fcorv(j)*rh2)/(2._wp*dphi*dsv(j)*R_earth**2)
-
-      cf( 0,-1) = cf( 0,-1) + tv1
-      cf(-1, 0) = cf(-1, 0) - tv
-      cf( 1, 0) = cf( 1, 0) + tv
-      cf( 0, 1) = cf( 0, 1) - tv1
-
-    else if (i_cor_form.eq.1) then
-
-      ! Coriolis terms, J3 flux form: J(psi,q) = d_phi(psi d_s q) - d_s(psi d_phi q), q = f/H at tracer points.
-      !   d_phi(psi d_s q) = [ (psi(i,j)+psi(i+1,j))/2 * dsq_e - (psi(i-1,j)+psi(i,j))/2 * dsq_w ] / dphi
-      !   d_s  (psi d_phi q) = [ (psi(i,j)+psi(i,j+1))/2 * dpq_n - (psi(i,j-1)+psi(i,j))/2 * dpq_s ] / dsv(j)
-      ! with the q differences taken on the dual-cell edges, i.e. over the four cells of this psi point only
-      dsq_e = (qcor(i+1,j+1) - qcor(i+1,j))/dsv(j)
-      dsq_w = (qcor(i  ,j+1) - qcor(i  ,j))/dsv(j)
-      dpq_n = (qcor(i+1,j+1) - qcor(i  ,j+1))/dphi
-      dpq_s = (qcor(i+1,j  ) - qcor(i  ,j  ))/dphi
-      fac_p = 1._wp/(dphi*R_earth**2)
-      fac_s = 1._wp/(dsv(j)*R_earth**2)
-
-      cf( 1, 0) = cf( 1, 0) + 0.5_wp*fac_p*dsq_e
-      cf(-1, 0) = cf(-1, 0) - 0.5_wp*fac_p*dsq_w
-      cf( 0, 1) = cf( 0, 1) - 0.5_wp*fac_s*dpq_n
-      cf( 0,-1) = cf( 0,-1) + 0.5_wp*fac_s*dpq_s
-      cf( 0, 0) = cf( 0, 0) + 0.5_wp*fac_p*(dsq_e-dsq_w) - 0.5_wp*fac_s*(dpq_n-dpq_s)
-
-    else
-
-      stop 'stencil_coef: i_cor_form must be 0 or 1'
-
-    endif
+    cf( 1, 0) = cf( 1, 0) + 0.5_wp*fac_p*dsq_e
+    cf(-1, 0) = cf(-1, 0) - 0.5_wp*fac_p*dsq_w
+    cf( 0, 1) = cf( 0, 1) - 0.5_wp*fac_s*dpq_n
+    cf( 0,-1) = cf( 0,-1) + 0.5_wp*fac_s*dpq_s
+    cf( 0, 0) = cf( 0, 0) + 0.5_wp*fac_p*(dsq_e-dsq_w) - 0.5_wp*fac_s*(dpq_n-dpq_s)
 
     return
 

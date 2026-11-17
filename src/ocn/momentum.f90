@@ -39,7 +39,7 @@ module momentum_mod
   use ocn_params, only : drag, drag_bcl, rtv, rtv3, fcor, fcorv, fcormin, fcormin_ref, dt
   use ocn_params, only : drag_par
   use ocn_params, only : bering_tf_fix, drake_tf_fix, indo_tf_fix, davis_tf_fix, rho0
-  use ocn_params, only : i_cor_form, nbw, qcor
+  use ocn_params, only : nbw, qcor
   use ocn_grid, only : maxi, maxj, maxk, mpxi, mpxj 
   use ocn_grid, only : maxisles, n_isles, psiles, map_isles
   use ocn_grid, only : lm_eur, lm_ame, lm_ant, lm_aus, lm_grl, lm_name, i_lm, j_lm
@@ -308,15 +308,13 @@ contains
 
     ! for barotropic velocity
 
-    if (i_cor_form.eq.1) then
-      ! f/H at tracer points for the J3 Coriolis term (zero on land, so dry cells drop out of the stencil)
-      qcor(:,:) = 0._wp
-      do j=1,maxj
-        do i=0,maxi+1
-          if (k1(i,j).le.maxk) qcor(i,j) = fcor(j)*rh(3,i,j)
-        enddo
+    ! f/H at tracer points for the J3 Coriolis term (zero on land, so dry cells drop out of the stencil)
+    qcor(:,:) = 0._wp
+    do j=1,maxj
+      do i=0,maxi+1
+        if (k1(i,j).le.maxk) qcor(i,j) = fcor(j)*rh(3,i,j)
       enddo
-    endif
+    enddo
 
     call invert(gap,ratm)
 
@@ -537,7 +535,7 @@ contains
     allocate(ubar_jbar(maxi,maxj))
     allocate(qcor(0:maxi+1,0:maxj+1))
     qcor(:,:) = 0._wp
-    ! half band width of the streamfunction matrix: 5-point stencil for both i_cor_form, 9-point with the
+    ! half band width of the streamfunction matrix: 5-point stencil, 9-point with the
     ! checkerboard friction, whose diagonal neighbours across the periodic boundary are 2*maxi-1 rows away
     if (drag_par%drag_cb.gt.0._wp) then
       nbw = 2*mpxi

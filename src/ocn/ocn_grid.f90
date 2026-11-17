@@ -36,14 +36,9 @@ module ocn_grid
   use control, only: in_dir, out_dir
   use ocn_params, only : ocn_depth_min, nlayers, i_smooth, smooth_fac, zw_in
   use ocn_params, only : dbl
-  use ocn_params, only : l_limit_ratio, depth_ratio_max
   use ocn_params, only : i_isl, isl_area_min, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
   
-  use, intrinsic :: iso_c_binding 
-
   implicit none
-  
-  include 'fftw3.f03'
 
   integer :: maxi     !! number of gridcells in longitudinal direction []
   integer :: maxj     !! number of gridcells in latitudinal direction []
@@ -397,7 +392,7 @@ contains
     ! set bathymetry (smooth -> condition -> truncate -> shelf clamp -> mask)
     !-------------------------------------------------------------
 
-    call compute_bathy(topo_in, f_ocn, .true.)
+    call compute_bathy(topo_in, f_ocn)
 
     ! actual total ocean volume, and the part below 1000 m, on nominal levels
     ocn_vol_tot = 0._wp
@@ -607,7 +602,7 @@ contains
     ! cells thus wet/dry/deepen/shoal with sea level; the tracer re-mapping in
     ! ocn_grid_update_state handles the resulting volume changes.
     !--------------------------------------------------------
-    call compute_bathy(z_ocn, f_ocn, .false.)
+    call compute_bathy(z_ocn, f_ocn)
 
     grid%k1 = k1(1:maxi,1:maxj)
 
@@ -1164,27 +1159,23 @@ contains
   !             ocn_grid_init (fixed bathymetry at start) and ocn_grid_update (dynamic bathymetry
   !             following sea level / GIA / sediment each year).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine compute_bathy(z_bed, f_ocn, verbose)
+  subroutine compute_bathy(z_bed, f_ocn)
 
     implicit none
 
     real(wp), intent(in) :: z_bed(:,:)   !! ocean bed elevation, relative to sea level, negative [m]
     real(wp), intent(in) :: f_ocn(:,:)   !! ocean fraction []
-    logical, intent(in) :: verbose       !! print conditioning diagnostics? (init .true., yearly update .false.)
 
     integer :: k1p(maxi,maxj)   ! potential bottom-layer index (before applying the land/sea mask)
 
     topo = z_bed
 
-    ! smooth the bathymetry
+    ! smooth the bathymetry with a binomial filter, over ocean cells only (land neighbours excluded)
     if (i_smooth.eq.1) then
-      call smooth_topo(topo, int(smooth_fac))
-    else if (i_smooth.eq.2) then
-      call smooth_topo_fft(topo, smooth_fac)
+      if (smooth_fac.gt.0._wp) call smooth_topo(topo, smooth_fac, f_ocn.gt.0._wp)
+    else if (i_smooth.ne.0) then
+      stop 'ERROR: ocn i_smooth must be 0 or 1'
     endif
-
-    ! optional conditioning against steep f/H contrasts that destabilise the barotropic solve
-    if (l_limit_ratio)  call limit_depth_ratio(topo, f_ocn, depth_ratio_max, verbose=verbose)
 
     ! truncate to nominal depth levels -> potential bottom-layer index
     call truncate_topo(topo, k1p)
@@ -1205,259 +1196,68 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  l i m i t _ d e p t h _ r a t i o
-  ! Purpose  :  limit the depth ratio between adjacent ocean cells.
-  !             Iteratively deepens any ocean cell that is shallower than
-  !             max(deepest ocean neighbour)/ratio_max, i.e. it removes isolated
-  !             shallow seamounts and one-cell shelf->abyss cliffs (which create
-  !             closed f/H contours / trapped modes that destabilise the barotropic
-  !             solve) while leaving coherent slopes and the rest of the bathymetry
-  !             untouched. This targets the actual instability (the f/H *contrast*
-  !             between neighbours), not the local rh gradient, so it allows realistic
-  !             little/no-smoothing bathymetry. Basins are never filled (only shallow
-  !             cells are deepened).
+  ! Subroutine :  s m o o t h _ t o p o
+  ! Purpose  :  smooth bathymetry with a 1-2-1 binomial filter (9-point, [1 2 1]/4 x [1 2 1]/4),
+  !             response cos^2(kx/2)*cos^2(ky/2): all 2dx modes (incl. the checkerboard) are
+  !             removed in one pass, the response is in [0,1] and monotonic, and all weights are
+  !             positive (no new extrema). smooth_fac is continuous: floor(smooth_fac) full passes
+  !             plus a fractional pass (1-f)*topo + f*filtered with f = the remainder, so that the
+  !             smoothing variance is ~0.5*smooth_fac grid cells^2 per direction.
+  !             Only cells with mask=.true. are smoothed and used as neighbours (weights
+  !             renormalised over them); periodic in longitude, one-sided at the first/last row.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine limit_depth_ratio(topo, f_ocn, ratio_max, verbose)
+  subroutine smooth_topo(topo, smooth_fac, mask)
 
     implicit none
 
-    real(wp), intent(inout) :: topo(:,:)   !! bathymetry, negative below sea level [m]
-    real(wp), intent(in) :: f_ocn(:,:)     !! ocean fraction []
-    real(wp), intent(in) :: ratio_max      !! maximum allowed neighbour depth ratio []
-    logical, intent(in), optional :: verbose !! print diagnostics? (default .true.; off for the yearly bathymetry update)
-
-    integer :: i, j, iter, ip, im, ni_, nj_, ntouch
-    real(wp) :: dmx, dmin_allowed, worst
-    real(wp), allocatable :: d(:,:)
-    logical, allocatable :: ocn(:,:), touched(:,:)
-    logical :: changed, verb
-    integer, parameter :: maxiter = 200
-
-    verb = .true.
-    if (present(verbose)) verb = verbose
-
-    ni_ = size(topo,1); nj_ = size(topo,2)
-    allocate(d(ni_,nj_), ocn(ni_,nj_), touched(ni_,nj_))
-    ocn = f_ocn > 0._wp
-    d = -topo            ! positive ocean depth
-    touched = .false.
-
-    do iter=1,maxiter
-      changed = .false.
-      do j=1,nj_
-        do i=1,ni_
-          if (.not.ocn(i,j)) cycle
-          ip = modulo(i,ni_) + 1          ! periodic in longitude
-          im = modulo(i-2,ni_) + 1
-          dmx = 0._wp
-          if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
-          if (ocn(im,j)) dmx = max(dmx,d(im,j))
-          if (j.lt.nj_) then
-            if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
-          endif
-          if (j.gt.1) then
-            if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
-          endif
-          dmin_allowed = dmx/ratio_max
-          if (d(i,j).lt.dmin_allowed) then
-            d(i,j) = dmin_allowed
-            touched(i,j) = .true.
-            changed = .true.
-          endif
-        enddo
-      enddo
-      if (.not.changed) exit
-    enddo
-
-    topo = -d
-    ntouch = count(touched)
-
-    ! worst residual neighbour depth ratio (for diagnostics; should be <= ratio_max)
-    worst = 1._wp
-    do j=1,nj_
-      do i=1,ni_
-        if (.not.ocn(i,j) .or. d(i,j).le.0._wp) cycle
-        ip = modulo(i,ni_) + 1
-        im = modulo(i-2,ni_) + 1
-        dmx = 0._wp
-        if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
-        if (ocn(im,j)) dmx = max(dmx,d(im,j))
-        if (j.lt.nj_) then
-          if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
-        endif
-        if (j.gt.1) then
-          if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
-        endif
-        worst = max(worst, dmx/d(i,j))
-      enddo
-    enddo
-
-    if (verb) print '(a,f6.1,a,i4,a,i5,a,f6.1)', &
-      ' limit_depth_ratio: ratio_max=',ratio_max,' iters=',min(iter,maxiter), &
-      ' cells deepened=',ntouch,' worst residual ratio=',worst
-
-    deallocate(d, ocn, touched)
-
-  end subroutine limit_depth_ratio
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  s m o o t h _ t o p o
-  ! Purpose  :  smooth bathymetry
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smooth_topo(topo, nsmooth)
-
-  implicit none
-
     real(wp), intent(inout) :: topo(:,:)
-    integer, intent(in) :: nsmooth
+    real(wp), intent(in) :: smooth_fac
+    logical, intent(in) :: mask(:,:)
 
-    integer :: iter, i, j, imi, ipl, im, jm
+    real(wp), parameter :: wb(-1:1) = [0.25_wp, 0.5_wp, 0.25_wp]
+
+    integer :: ipass, npass, i, j, ii, jj, di, dj, im, jm
+    real(wp) :: f, w, wsum, s
     real(wp), allocatable :: Y(:,:)
-
 
     im = size(topo,1)
     jm = size(topo,2)
     allocate(Y(im,jm))
 
-    do iter=1,nsmooth
+    npass = ceiling(smooth_fac)
+
+    do ipass=1,npass
+
+      ! weight of the filtered field: 1 for full passes, the remainder for the last pass
+      f = min(1._wp, smooth_fac-real(ipass-1,wp))
+
+      Y = topo
 
       do j=1,jm
         do i=1,im
-          Y(i,j)=topo(i,j)
-        enddo
-      enddo        
-
-      do j=2,jm-1       
-        do i=1,im
-          imi=i-1
-          if (imi.eq.0)imi=im
-          ipl=i+1
-          if (ipl.gt.im)ipl=1
-          topo(i,j)=0.2*(Y(i,j)+Y(imi,j)+Y(ipl,j)+Y(i,j+1)+Y(i,j-1))
+          if (.not.mask(i,j)) cycle
+          s = 0._wp
+          wsum = 0._wp
+          do dj=-1,1
+            jj = j+dj
+            if (jj.lt.1 .or. jj.gt.jm) cycle
+            do di=-1,1
+              ii = modulo(i+di-1,im)+1
+              if (.not.mask(ii,jj)) cycle
+              w = wb(di)*wb(dj)
+              s = s + w*Y(ii,jj)
+              wsum = wsum + w
+            enddo
+          enddo
+          topo(i,j) = (1._wp-f)*Y(i,j) + f*s/wsum
         enddo
       enddo
 
-    enddo       
+    enddo
 
     deallocate(Y)
 
   end subroutine smooth_topo
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  s m o o t h _ t o p o _ f f t
-  ! Purpose  :  smooth bathymetry using filter in fourier transform space
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smooth_topo_fft(topo, smooth_fac)
-
-  implicit none
-
-
-    real(wp), intent(inout) :: topo(:,:)
-    real(wp), intent(in) :: smooth_fac
-
-    integer :: i, j, nx, ny, nx2, ny2
-    type(C_PTR) :: plan_r2c, plan_c2r
-    real(wp) :: X, Y, R, R0, lambda
-    real(wp), allocatable :: topo_ext(:,:)
-    real(wp), allocatable, dimension(:,:) :: M
-    complex(wp), allocatable :: topo_fft(:,:)
-
-    character(len=256) :: fnm
-    integer :: ncid
-
-    nx = size(topo,1)
-    ny = size(topo,2)
-
-    nx2 = nx/2
-    ny2 = ny/2
-
-    allocate(topo_ext(nx*2,ny*2))
-    topo_ext = 0._wp
-    ! Put data matrix into centre of frame
-    topo_ext((nx2+1):(nx2+nx),(ny2+1):(ny2+ny)) = topo(1:nx,1:ny)
-    ! Repeat data matrix either side (i.e. where it wraps east-west) 
-    topo_ext(1:nx2,(ny2+1):(ny2+ny)) = topo(nx2+1:nx,1:ny)
-    topo_ext((nx2+nx+1):(2*nx),(ny2+1):(ny2+ny)) = topo(1:nx2,1:ny)
-
-    !
-    ! Now, need to do something clever to remove low amplitude/high frequency stuff
-    ! Here I'm creating a circular mask
-    allocate(M(nx*2,ny*2))
-    ! R0 is the radius of the circle within which FFT components are destroyed
-    R0 = nx * smooth_fac
-    lambda = (5._wp/360._wp)*nx
-    do i=1,2*nx
-      do j=1,2*ny
-        X = i - nx - 0.5_wp
-        Y = j - ny - 0.5_wp
-        R = sqrt(X**2 + Y**2)
-        M(i,j) = (tanh((R - R0)/lambda)+1._wp)/2._wp
-      enddo
-    enddo
-
-    !    fnm = "test_fft.nc"
-    !    call nc_create(fnm)
-    !    call nc_open(fnm,ncid)
-    !    call nc_write_dim(fnm,"nx",x=1._wp,dx=1._wp,nx=nx,ncid=ncid)
-    !    call nc_write_dim(fnm,"nx1",x=1._wp,dx=1._wp,nx=nx+1,ncid=ncid)
-    !    call nc_write_dim(fnm,"nx2",x=1._wp,dx=1._wp,nx=nx*2,ncid=ncid)
-    !    call nc_write_dim(fnm,"ny",x=1._wp,dx=1._wp,nx=ny,ncid=ncid)
-    !    call nc_write_dim(fnm,"ny2",x=1._wp,dx=1._wp,nx=ny*2,ncid=ncid)
-    !    call nc_write(fnm,"topo",     topo,dims=["nx","ny"],start=[1,1],count=[nx,ny],ncid=ncid)
-    !    call nc_write(fnm,"topo_ext",     topo_ext,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"M",     M,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-
-    allocate(topo_fft(nx+1, 2*ny))
-
-    !  Make a plan for the FFT, and forward transform the data.
-    !
-    plan_r2c = fftw_plan_dft_r2c_2d(nx*2,ny*2,topo_ext,topo_fft,FFTW_ESTIMATE)
-    call fftw_execute_dft_r2c(plan_r2c, topo_ext, topo_fft)
-    call fftw_destroy_plan(plan_r2c)
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_fft_re",     real(topo_fft),dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"topo_fft_im",     imag(topo_fft),dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"topo_fft",     real(topo_fft)**2+imag(topo_fft)**2,dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    ! Apply this to the real and imaginary components
-    do i=1,nx
-      do j=1,2*ny
-        topo_fft(i,j) = topo_fft(i,j) * M(i,j)
-      enddo
-    enddo
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_fft_fil",     real(topo_fft)**2+imag(topo_fft)**2,dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    !  Make a plan for the backward FFT, and back transform.
-    !
-    plan_c2r = fftw_plan_dft_c2r_2d(nx*2,ny*2,topo_fft,topo_ext,FFTW_ESTIMATE)
-    call fftw_execute_dft_c2r(plan_c2r, topo_fft, topo_ext)
-    call fftw_destroy_plan(plan_c2r)
-
-    ! De-frame the data matrix
-    topo = topo_ext((nx2+1):(nx2+nx),(ny2+1):(ny2+ny))
-
-    ! normalize
-    topo = topo/real(nx*2*ny*2,wp)
-
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_inv",     topo,dims=["nx","ny"],start=[1,1],count=[nx,ny],ncid=ncid)
-    !    call nc_write(fnm,"topo_ext_inv",     topo_ext,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    deallocate(topo_fft)
-    deallocate(M)
-
-  end subroutine smooth_topo_fft
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

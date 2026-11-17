@@ -47,7 +47,7 @@ module ocn_model
     use ocn_params, only : l_hosing, i_hosing_comp, l_flux_adj_atl, l_flux_adj_ant, l_flux_adj_pac, l_salinity_restore, l_q_geo
     use ocn_params, only : l_ocn_input_fix, i_ocn_input_fix, l_ocn_input_fix_write, ocn_input_fix_file
     use ocn_params, only : l_noise_fw, l_noise_flx
-    use ocn_params, only : tau_scale, ke_tau_coeff
+    use ocn_params, only : tau_scale, tau_scale_bcl, ke_tau_coeff
     use ocn_params, only : l_bering_flow
     use ocn_def, only : ocn_class
     use ocn_check, only : check_vel
@@ -127,6 +127,17 @@ contains
       !------------------------------------------------------------------------
       call ocn_grid_update_state(ocn%grid,ocn%ts,ocn%u)
 
+      ! recompute density from the updated tracers: newly wet cells were just filled from their neighbours, while
+      ! ocn%rho still holds the density of the old state (from the restart at the first step, with T=S=0 in cells that
+      ! were land there), which the momentum balance of the first step would otherwise use
+      do k=1,maxk
+        do j=1,maxj
+          do i=1,maxi
+            ocn%rho(i,j,k) = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),zro(k))
+          enddo
+        enddo
+      enddo
+
       ! update flux adjustment to account for changes in ocean fraction
       if (l_flux_adj_atl .or. l_flux_adj_ant .or. l_flux_adj_pac) then
         call flux_adj_update(ocn%f_ocn, ocn%fw_flux_adj)
@@ -191,10 +202,10 @@ contains
         if (mask_ocn(i,j).eq.1) then
           ocn%tau(1,i,j) = tau_scale*ocn%stressxu(i,j)  ! N/m2
           ocn%tau(2,i,j) = tau_scale*ocn%stressyv(i,j)  ! N/m2
-          ocn%dtau_dz2(1,i,j) = 2._wp*ocn%stressxu(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtau_dz2(2,i,j) = 2._wp*ocn%stressyu(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtav_dz2(1,i,j) = 2._wp*ocn%stressxv(i,j)/dbl**2 !dzz  ! N/m4
-          ocn%dtav_dz2(2,i,j) = 2._wp*ocn%stressyv(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtau_dz2(1,i,j) = tau_scale_bcl*2._wp*ocn%stressxu(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtau_dz2(2,i,j) = tau_scale_bcl*2._wp*ocn%stressyu(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtav_dz2(1,i,j) = tau_scale_bcl*2._wp*ocn%stressxv(i,j)/dbl**2 !dzz  ! N/m4
+          ocn%dtav_dz2(2,i,j) = tau_scale_bcl*2._wp*ocn%stressyv(i,j)/dbl**2 !dzz  ! N/m4
           ! compute wind stress from magnitude of surface wind: tau = Cd*rho_a*V^2
           tau = 1.3e-3_wp*1.3_wp*ocn%wind(i,j)**2
           ! kinetic energy input into the ocean by wind stress, proportional to tau^(3/2), only over ice-free fraction

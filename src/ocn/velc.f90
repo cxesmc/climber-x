@@ -30,7 +30,7 @@ module velc_mod
 
   use precision, only : wp
   use ocn_grid, only : maxi, maxj, maxk, k1, f_ek, c, rc, cv, rcv, rdsv, rds2, rdphi, dx, dxv, dy, dz, dza, rh, R_earth
-  use ocn_params, only : fcor, fcorv, drag, drag_bcl, drag_par, rho0, rtv, rtv3, urelax, dt
+  use ocn_params, only : fcor, fcorv, drag, drag_bcl, drag_par, rho0, rtv, rtv3, dt
   use constants, only : g, omega, pi
 
   implicit none
@@ -59,7 +59,6 @@ contains
 
     real(wp), allocatable, dimension(:,:) :: du_dz    
     real(wp), allocatable, dimension(:,:) :: u1
-    real(wp), allocatable, dimension(:,:) :: u_old
     real(wp), allocatable, dimension(:,:) :: u_ek
 
     integer :: i, j, k, l, ip1, im1, kb(2)
@@ -70,25 +69,16 @@ contains
 
     allocate(du_dz(2,maxk))
     allocate(u1(2,maxk))
-    allocate(u_old(2,maxk))
     allocate(u_ek(2,maxk))
 
     ! equatorial regularisation of 1/f in the bottom return of the barotropic friction
     f0 = 2._wp*omega*sin(drag_par%lat_fric_ret*pi/180._wp)
 
 
-    !$omp parallel do private(i,j,k,l,ip1,im1,tv1,tv2,tv4,tv5,tsum,du_dz,u1,u_old,u_ek,kb,ufr,hface)
+    !$omp parallel do private(i,j,k,l,ip1,im1,tv1,tv2,tv4,tv5,tsum,du_dz,u1,u_ek,kb,ufr,hface)
     do j=1,maxj
 
       do i=1,maxi
-        ! save old velocity field to be used for relaxation
-        u_old(1:2,:) = u(1:2,i,j,1:maxk)
-        ! set velocity to zero outside domain
-        do k=1,maxk
-          if (k.lt.k1(i,j)) then
-            u_old(1:2,k) = 0._wp
-          endif
-        enddo
         tsum(:) = 0._wp
         ip1 = modulo(i,maxi) + 1
         im1 = modulo(i - 2, maxi) + 1
@@ -192,17 +182,17 @@ contains
           enddo
         endif
 
-        ! add barotropic part and relax
+        ! add barotropic part
         do k = k1(i,j),maxk
           if (k1(ip1,j).le.k) then
             u1(1,k) = u1(1,k) - tsum(1)*rh(1,i,j) + ub(1,i,j)  ! m/s
-            u(1,i,j,k) = urelax*u_old(1,k) + (1._wp - urelax)*u1(1,k)
+            u(1,i,j,k) = u1(1,k)
           else 
             u(1,i,j,k) = 0._wp
           endif
           if (k1(i,j+1).le.k) then
             u1(2,k) = u1(2,k) - tsum(2)*rh(2,i,j) + ub(2,i,j)
-            u(2,i,j,k) = urelax*u_old(2,k) + (1._wp - urelax)*u1(2,k)
+            u(2,i,j,k) = u1(2,k)
           else
             u(2,i,j,k) = 0._wp 
           endif
@@ -240,7 +230,6 @@ contains
 
     deallocate(du_dz)
     deallocate(u1)
-    deallocate(u_old)
     deallocate(u_ek)
 
    return

@@ -1,13 +1,12 @@
 &ocn_par
 
  !-------------------------------------------------------------------------------------------
- ! ocean initialisation settings
+ ! ocean initialisation settings, used only if not from restart (ocn_restart==F in control.nml)
  !-------------------------------------------------------------------------------------------
  i_init = 2                   ! ocean T and S initialisation
                               ! 1 = latitude dependent/uniform values 
                               ! 2 = present day observations
                               ! 3 = DeepMIP-type initial conditions, with uniform S=saln0 and T determined by init3_peak and init3_bg
-                              ! used only if not from restart (ocn_restart==F in control.nml)
  init3_peak = 25.0            ! degC, peak temperature increase at the equator (relative to init3_bg), used only for i_init==3
  init3_bg   = 15.0            ! degC, background temperature, used only for i_init==3
 
@@ -26,12 +25,8 @@
  !-------------------------------------------------------------------------------------------
  nlayers = 23                 ! number of ocean layers
  levels =  0. 10. 25. 50. 100. 150. 200. 250. 300. 400. 500. 600. 800. 1000. 1250. 1500. 1750. 2000. 2500. 3000. 3500. 4000. 4500. 5000.
- i_smooth = 1                 ! topography smoothing:
-                              ! 1 = smooth smooth_fac times in physical space
-                              ! 2 = smooth in Fourier space with smooth factor smooth_fac (values ~0.1 almost unsmoothed, values ~1 very sine like)
- smooth_fac = 1               ! bathymetry smooth factor
- l_limit_ratio = F            ! despike the bathymetry by deepening shallow cells until no neighbour depth ratio exceeds depth_ratio_max
- depth_ratio_max = 12.        ! maximum allowed neighbour depth ratio (threshold for l_limit_ratio)
+ i_smooth = 1                 ! bathymetry smoothing: 0 = none, 1 = 1-2-1 binomial filter over ocean cells only (land neighbours excluded)
+ smooth_fac = 0.4             ! smoothing amount, continuous: floor(smooth_fac) full passes + a fractional pass, variance ~0.5*smooth_fac cells^2
  i_isl = 1                    ! method to determine islands for barotropic flow:
                               ! 0 = automatic
                               ! 1 = specify specific islands (l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame), valid for present-day geography
@@ -58,24 +53,10 @@
  dbl = 50.                    ! m, depth of surface boundary layer
 
  !-------------------------------------------------------------------------------------------
- ! Coriolis term settings
- !-------------------------------------------------------------------------------------------
- i_cor_form = 1               ! Coriolis term of the barotropic streamfunction operator and the matching island integrand:
-                              ! 0 = original advective-form J(psi,f/H) with the drhcor_max limiter + the path integral of island.f90. The advective
-                              !     Jacobian is not a discrete divergence, so no line integrand matches it and the island constants depend on the integration path 
-                              ! 1 = flux form: J3 Jacobian d_phi(psi d_s q) - d_s(psi d_phi q) with q = f/H at tracer points, and the matching
-                              !     path integral (0.5*(psi+psi)*delta_q). Path-independent
- drhcor_max = 0.005           ! maximum inverse slope gradient for Coriolis term in barotropic streamfunction equation (i_cor_form=0 only)
-
- !-------------------------------------------------------------------------------------------
- ! velocity relaxation settings
- !-------------------------------------------------------------------------------------------
- urelax = 0.                  ! velocity under-relaxation parameter of Edwards and Shepherd (2001)
-
- !-------------------------------------------------------------------------------------------
  ! wind stress scaling settings
  !-------------------------------------------------------------------------------------------
- tau_scale = 1.               ! wind stress scaling factor 
+ tau_scale = 1.               ! wind stress scaling factor for the barotropic forcing (barotropic streamfunction, island integrals, ssh)
+ tau_scale_bcl = 1.           ! wind stress scaling factor for the Ekman (boundary-layer) shear in the baroclinic velocity
 
  !-------------------------------------------------------------------------------------------
  ! friction settings
