@@ -81,7 +81,7 @@ contains
 
 !    fnm = trim(out_dir)//"/vilma_h_ice.nc"
 !    call nc_create(fnm)
-!    call nc_open(fnm,ncid)
+!    call nc_open(fnm,ncid,writable=.true.)
 !    call nc_write_dim(fnm,"epoch",x=epoch(iepoch-1:iepoch), units="ka BP", unlimited=.TRUE.,ncid=ncid)
 !    call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
 !    call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -136,7 +136,7 @@ contains
 
     !fnm = trim(out_dir)//"/test.nc"
     !call nc_create(fnm)
-    !call nc_open(fnm,ncid)
+    !call nc_open(fnm,ncid,writable=.true.)
     !call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
     !call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
     !call nc_write(fnm,"dfgl", transpose(dfgl) ,dims=["lon","lat"],start=[1,1],count=[ni,nj],ncid=ncid)
@@ -145,7 +145,7 @@ contains
 
     !fnm = trim(out_dir)//"/test_g.nc"
     !call nc_create(fnm)
-    !call nc_open(fnm,ncid)
+    !call nc_open(fnm,ncid,writable=.true.)
     !call nc_write_dim(fnm,"lon",x=geo_grid%G%x,axis="x",ncid=ncid)
     !call nc_write_dim(fnm,"lat",x=geo_grid%G%y,axis="y",ncid=ncid)
     !call nc_write(fnm,"rsl_g", rsl_g ,dims=["lon","lat"],start=[1,1],count=[geo_grid%G%nx,geo_grid%G%ny],ncid=ncid)

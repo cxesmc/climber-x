@@ -267,7 +267,7 @@ contains
 
     ! add fluxes from ocean, land, weathering, volcanic degassing, emissions, CH4 oxidation, production and decay
     co2%Catm   = co2%Catm - co2%dCocn_dt - co2%dClnd_dt + co2%dCemis_dt + co2%dCH4_dt + co2%dCvolc_dt - co2%dCweath_dt + co2%dCemis_extra_dt ! kgC
-    if (l_c13) co2%C13atm = co2%C13atm - co2%dC13ocn_dt - co2%dC13lnd_dt + co2%dC13emis_dt + co2%dC13volc_dt - co2%dC13weath_dt    ! kgC13
+    if (l_c13) co2%C13atm = co2%C13atm - co2%dC13ocn_dt - co2%dC13lnd_dt + co2%dC13emis_dt + co2%dC13H4_dt + co2%dC13volc_dt - co2%dC13weath_dt    ! kgC13
     if (l_c14) co2%C14atm = co2%C14atm - co2%dC14ocn_dt - co2%dC14lnd_dt - co2%dC14weath_dt - co2%dC14dec_dt + co2%dC14prod_dt
 
     ! isotopic ratios
@@ -402,6 +402,7 @@ contains
 
     ! CH4 oxidation
     co2%dCH4_dt = 0._wp
+    co2%dC13H4_dt = 0._wp
 
     co2%T_glob = 0._wp
     co2%dT_glob_cum = 0._wp

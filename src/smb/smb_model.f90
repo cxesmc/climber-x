@@ -488,7 +488,7 @@ contains
 
       !    fnm = "test_smb.nc"
       !    call nc_create(fnm)
-      !    call nc_open(fnm,ncid)
+      !    call nc_open(fnm,ncid,writable=.true.)
       !    call nc_write_dim(fnm,"nx",x=1._wp,dx=1._wp,nx=smb%grid%G%nx,ncid=ncid)
       !    call nc_write_dim(fnm,"ny",x=1._wp,dx=1._wp,nx=smb%grid%G%ny,ncid=ncid)
       !    call nc_write(fnm,"t2m",      smb%t2m,dims=["nx","ny"],start=[1,1],count=[smb%grid%G%nx,smb%grid%G%ny],ncid=ncid)

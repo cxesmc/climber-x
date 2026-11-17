@@ -109,6 +109,7 @@ module bgc_def
       real(wp), dimension(:,:),   allocatable :: sst_min    ! minimum annual surface layer temperature [degC]
       real(wp), dimension(:,:),   allocatable :: sst_max    ! maximum annual surface layer temperature [degC]
       real(wp) :: t2m_glob_ann                              ! global mean annual temperature [degC]
+      real(wp), dimension(:,:),   allocatable :: q_geo      ! geothermal heat flux at the seafloor [W/m2]
     end type
 
     ! daily climate input type
@@ -211,6 +212,7 @@ module bgc_def
       real(wp), dimension(:), allocatable :: coral_f_lev          !! coral light fraction per depth bin (exp(-pk490*z)), allocated by the coupler
       real(wp), dimension(:,:,:), allocatable :: f_sed_lev        !! fraction of each cell's wet seafloor area in each depth class (one per ocean level)
       real(wp), dimension(:,:,:), allocatable :: f_sed_lev_old    !! previous-year f_sed_lev (for sediment redistribution on area/sea-level change)
+      real(wp), dimension(:,:,:), allocatable :: z_sed_lev        !! area-weighted mean seafloor depth of each depth class [m]
     end type
 
     type bgc_class
@@ -225,6 +227,9 @@ module bgc_def
       real(wp) :: delta_c13 !! cumulated air-sea carbon 13 flux over one year [kgc13]
       real(wp) :: delta_c14 !! cumulated air-sea carbon 14 flux over one year [kgc14]
       real(wp) :: n2o_flx  !! cumulated air-sea N2O flux over one year [kgN2O]
+      real(wp) :: ch4_flx  !! hydrate-derived CH4 flux to the atmosphere over one year [kgCH4]
+      real(wp) :: c13h4_flx  !! 13C of it [kgC13]
+      real(wp) :: ch4_geo_flx  !! hydrate CH4 carbon entering the budget from outside [kgC]
       real(wp) :: Cflx_avg !! average air-sea carbon flux [kgc/yr]
       real(wp) :: A_shelf !! flooded shelf area with a water depth between 0 and 100 m [m2]
       real(wp) :: A_shelf_old !! old flooded shelf area with a water depth between 0 and 100 m [m2]
