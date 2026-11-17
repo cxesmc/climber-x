@@ -2206,7 +2206,7 @@ end subroutine lnd_update
    call nc_write_dim(fnm,"nmonwet",x=[(i,i=1,nmonwet)],units="month")
 
 
-   call nc_open(fnm,ncid)
+   call nc_open(fnm,ncid,writable=.true.)
 
    call nc_write(fnm,"Cflx_avg",  l0d%Cflx_avg,dim1="p",long_name="average land-atm carbon flux",ncid=ncid)
    call nc_write(fnm,"weath_carb_avg",  l0d%weath_carb_avg,dim1="p",long_name="average carbonate weathering flux",ncid=ncid)

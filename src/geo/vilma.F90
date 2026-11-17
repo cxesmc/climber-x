@@ -81,7 +81,7 @@ contains
 
 !    fnm = trim(out_dir)//"/vilma_h_ice.nc"
 !    call nc_create(fnm)
-!    call nc_open(fnm,ncid)
+!    call nc_open(fnm,ncid,writable=.true.)
 !    call nc_write_dim(fnm,"epoch",x=epoch(iepoch-1:iepoch), units="ka BP", unlimited=.TRUE.,ncid=ncid)
 !    call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
 !    call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -108,7 +108,7 @@ contains
 
       ! append h_ice to ice thickness netcdf file
       fnm = trim(out_dir)//"/vilma_h_ice.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.true.)
       call nc_write(fnm,"Ice", h_ice, dims=["lon","lat","epoch"],start=[1,1,iepoch],count=[ni,nj,1],long_name="Ice thickness",units="m",ncid=ncid)
       call nc_close(ncid)
 
@@ -116,7 +116,7 @@ contains
 
       ! write current ice thicknes as second time slice
       fnm = trim(out_dir)//"/vilma_h_ice.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.true.)
       call nc_write(fnm,"Ice", h_ice, dims=["lon","lat","epoch"],start=[1,1,2],count=[ni,nj,1],long_name="Ice thickness",units="m",ncid=ncid)
       call nc_close(ncid)
 
@@ -136,7 +136,7 @@ contains
 
     !fnm = trim(out_dir)//"/test.nc"
     !call nc_create(fnm)
-    !call nc_open(fnm,ncid)
+    !call nc_open(fnm,ncid,writable=.true.)
     !call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
     !call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
     !call nc_write(fnm,"dfgl", transpose(dfgl) ,dims=["lon","lat"],start=[1,1],count=[ni,nj],ncid=ncid)
@@ -145,7 +145,7 @@ contains
 
     !fnm = trim(out_dir)//"/test_g.nc"
     !call nc_create(fnm)
-    !call nc_open(fnm,ncid)
+    !call nc_open(fnm,ncid,writable=.true.)
     !call nc_write_dim(fnm,"lon",x=geo_grid%G%x,axis="x",ncid=ncid)
     !call nc_write_dim(fnm,"lat",x=geo_grid%G%y,axis="y",ncid=ncid)
     !call nc_write(fnm,"rsl_g", rsl_g ,dims=["lon","lat"],start=[1,1],count=[geo_grid%G%nx,geo_grid%G%ny],ncid=ncid)
@@ -378,7 +378,7 @@ contains
     ! write reference topography to netcdf file
     fnm = trim(out_dir)//"/vilma_z_bed_eq.nc"
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.true.)
     call nc_write_dim(fnm,"epoch",x=1._dp, units="ka BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -388,7 +388,7 @@ contains
     ! write reference ice thickness to netcdf file
     fnm = trim(out_dir)//"/vilma_h_ice_eq.nc"
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.true.)
     call nc_write_dim(fnm,"epoch",x=1._dp, units="ka BP", unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
     call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -399,7 +399,7 @@ contains
     if (l_load_hist) then
       fnm = trim(out_dir)//"/vilma_h_ice.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.true.)
       call nc_write_dim(fnm,"epoch",x=epoch(1:), units="ka BP", unlimited=.TRUE.,ncid=ncid)
       call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
       call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
@@ -409,7 +409,7 @@ contains
     else
       fnm = trim(out_dir)//"/vilma_h_ice.nc"
       call nc_create(fnm)
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.true.)
       call nc_write_dim(fnm,"epoch",x=epoch(1:2), units="ka BP", unlimited=.TRUE.,ncid=ncid)
       call nc_write_dim(fnm,"lon",x=lon,axis="x",ncid=ncid)
       call nc_write_dim(fnm,"lat",x=lat,axis="y",ncid=ncid)
