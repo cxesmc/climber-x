@@ -3,6 +3,21 @@
 All notable changes to CLIMBER-X are documented here. 
 Entries marked **Results** may change model output relative to the previous version.
 
+## [Unreleased]
+
+### Changed
+- Physical constants are shared with the ice sheet instead of being declared twice. `constants.f90` can now express its set as a fesm-utils `phys_const_class` (`constants_phys_const`), and `ice_init` compares that against the record Yelmo loaded, so a disagreement inside one executable is logged at startup. **Results**: `Lf` 334.e3 -> 333.5e3 J/kg, the standard value and the one Yelmo reads, which changes every melt energy budget by 0.15 % (SICO follows, since it renames `Lf` rather than declaring its own).
+- New `cap_sw` = 3974 J/kg/K, the specific heat capacity of *seawater*, alongside `cap_w` = 4187 for pure water -- the same split fesm-utils' `phys_constants` makes between `cp_w` and `cp_ocn`. **Results**: the ice-shelf melt parameterisation (`bmb_model`, both the Beckmann & Goose 2003 and Pollard & DeConto 2012 laws) takes `cap_sw`, since the medium there is the ocean. Both laws are linear in `rho_sw*cap/(rho_i*Lf)`, so shelf melt drops 5.1 % for unchanged `k_1`/`k_2`. This makes the coefficient identical to Yelmo's `marine_shelf`/PICO, which previously differed by 5.2 % for the same nominal parameters. Anyone retuning should expect `k_1`/`k_2` to absorb it.
+- Requires Yelmo >= the `phys_constants` refactor (`ybound%cnst`), and `input/` >= the matching yelmo file sync.
+- FastEarth3D renamed to VILMA (`fesmc/vilma`), referred to in CLIMBER-X as VILMA2 and cloned at `vilma2/`; the legacy VILMA (`cxesmc/vilma`) is now VILMA1 at `src/vilma1`. Build toggles `vilma1=`/`vilma2=` (`-DVILMA1`/`-DVILMA2`); `i_geo` unchanged (2=VILMA1, 3=VILMA2).
+- `geo_par`: `vilma_grid_file` → `vilma1_grid_file`; namelist group `&fe3d` → `&vilma`, now with the explicit 11-layer PREM/Clemens structure. VILMA2 inputs in `input/vilma2/` + `input/vilma_defaults.nml`; restart in `vilma2/vilma_restart.nc`. **Results** (i_geo=3): VILMA2 defaults now `deg1_frame="cm"`, `l_toroidal=.false.`.
+
+### Fixed
+- `nml/ice_yelmo_par.nml` failed `nml_validate` against Yelmo's subgrid-front refactor: `ytopo.margin_flt_subgrid` and `ytopo.f_ice_method` are gone, replaced by `front_subgrid` (+ `front_H_eff_min`, `front_dHdx`), and `ycalv.tau_ice` is split into `tau_ice_flt`/`tau_ice_grnd`, both carrying the 85 kPa set here. `ytopo.dHdt_dyn_lim` is retired as well (a per-cell clip of the dynamic thickness change that did not conserve the mass it removed); nothing replaces it, and results change wherever it was binding. **Results**: `front_subgrid = "marine"` gives subgrid fronts at floating *and* marine-grounded margins -- the realistic configuration, and the one Yelmo's own Antarctic and initMIP setups use -- in place of the former binary `f_ice`. With it the `calv_thin` rate is no longer applied on top of `vm-l19`, and `H_min_tau` (10 yr, now set explicitly) also governs removal of isolated partial cells.
+
+### Build / Infrastructure
+- `yelmo` → `dev`, which `ice_model` requires for `ybound%cnst`; `v2.3.1` predates it.
+
 ## [1.5.4] - 2026-07-17
 
 Namelist sync with Yelmo v2.3.1.

@@ -700,7 +700,7 @@ contains
 
     ! write to file
     fnm = trim(out_dir)//"/smb_"//trim(smb%grid%name)//".nc"
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,dim_time,dble(year_now), dim1=dim_time, start=[smb%nout], count=[1],ncid=ncid)    
     do k = 1, nmon_year
        call smb_nc_write(fnm,ncid,smb%mon_s(k),grid,k,smb%nout)
@@ -711,7 +711,7 @@ contains
     if (l_daily_output) then
       ! write to file
       fnm = trim(out_dir)//"/smb_"//trim(smb%grid%name)//"_daily.nc"
-      call nc_open(fnm,ncid)
+      call nc_open(fnm,ncid,writable=.TRUE.)
       call nc_write(fnm,dim_time,dble(year_now), dim1=dim_time, start=[smb%nout], count=[1],ncid=ncid)    
       do k = 1, nday_year
         call smb_daily_nc_write(fnm,ncid,smb%day_s(k),grid,k,smb%nout)
@@ -760,7 +760,7 @@ contains
     character (len=*) :: fnm
     integer :: nout, ncid, y, i
 
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write(fnm,"time", dble([(i,i=(year_now-(y-1)*n_year_smb),(year_now),n_year_smb)]), &
     dim1=dim_time,start=[nout],count=[y],ncid=ncid)
     call nc_write(fnm,"A_ice", vars%A_ice, dims=[dim_time],start=[nout],count=[y],&
@@ -827,7 +827,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE.,ncid=ncid)
     call nc_write_dim(fnm, dim_month, x=1._wp, dx=1._wp, nx=13, axis="e", &
@@ -1017,7 +1017,7 @@ call nc_write(fnm,"refreezing_ann_ice", sngl(vars%ann_refreezing_ice        ), d
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_time, x=empty_time, axis="t", units="years BP", &
     unlimited=.TRUE., ncid=ncid)
     call nc_write_dim(fnm, dim_day, x=1._wp, dx=1._wp, nx=nday_year, axis="e", units="days", ncid=ncid)

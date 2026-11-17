@@ -76,7 +76,7 @@ contains
   ! read constant climate forcing
   if (ifake_sic.eq.0) then
 
-    call nc_read(fake_sic_const_file,"f_sic",f_sic(:,:,1:12) )
+    call nc_read(fake_sic_const_file,"f_sic",f_sic(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     where (f_sic(:,:,1:12).gt.0.95_wp) 
       f_sic(:,:,1:12) = 1._wp
     endwhere

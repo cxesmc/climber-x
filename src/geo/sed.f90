@@ -69,7 +69,7 @@ contains
     ! grid definition
     spos = scan(trim(sed_file),"/", BACK= .true.)+1
     ppos = scan(trim(sed_file),".", BACK= .true.)-1
-    call grid_init(sed_grid,name=trim(sed_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_sed,dp),y=real(lat_sed,dp))
+    call grid_init(sed_grid,name=trim(sed_file(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon_sed,dp),y=real(lat_sed,dp))
     ! map to geo grid
     call map_init(maps_sed_to_geo,sed_grid,geo_grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
     call map_field(maps_sed_to_geo,"h_sed",h_sed_in,h_sed,stat="mean",missing_value=-9999._dp)

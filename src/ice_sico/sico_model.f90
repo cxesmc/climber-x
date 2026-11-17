@@ -396,7 +396,7 @@ contains
     ! grid definition
     spos = scan(trim(ice%par%mask_maxextent_file),"/", BACK= .true.)+1
     ppos = scan(trim(ice%par%mask_maxextent_file),".", BACK= .true.)-1
-    call grid_init(mask_maxextent_grid,name=trim(ice%par%mask_maxextent_file(spos:ppos)),mtype="latlon",units="degrees",x=lon_maxi,y=lat_maxi)
+    call grid_init(mask_maxextent_grid,name=trim(ice%par%mask_maxextent_file(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", x=lon_maxi,y=lat_maxi)
     ! map to ice grid
     allocate(tmpi(1:ice%grid%IMAX+1,1:ice%grid%JMAX+1))
     call map_init(maps_maxextent_to_ice,mask_maxextent_grid,ice%grid%grid1,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
@@ -1431,7 +1431,7 @@ contains
 
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
-    call nc_open(fnm,ncid)
+    call nc_open(fnm,ncid,writable=.TRUE.)
     call nc_write_dim(fnm,dim_x,x=ice%grid%x0,dx=ice%grid%dx,nx=ice%grid%IMAX+1,axis="x",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_y,x=ice%grid%y0,dx=ice%grid%dx,nx=ice%grid%JMAX+1,axis="y",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_kc,x=1,dx=1,nx=ice%grid%KCMAX+1,axis="z",units="#",ncid=ncid)

@@ -78,7 +78,7 @@ contains
   ! read constant climate forcing
   if (ifake_dust.eq.0) then
 
-    call nc_read(fake_dust_const_file,"dust_dep",dust_dep(:,:,1:12) )
+    call nc_read(fake_dust_const_file,"dust_dep",dust_dep(:,:,1:12),start=[1,1,1],count=[ni,nj,12])
     where (dust_dep.lt.0._wp)
       dust_dep = 0._wp
     endwhere

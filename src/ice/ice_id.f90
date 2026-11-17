@@ -78,7 +78,7 @@ contains
     ! grid definition
     spos = scan(trim(ice_id_file),"/", BACK= .true.)+1
     ppos = scan(trim(ice_id_file),".", BACK= .true.)-1
-    call grid_init(ice_id_grid,name=trim(ice_id_file(spos:ppos)),mtype="latlon",units="degrees",x=real(lon_ice_id,dp),y=real(lat_ice_id,dp))
+    call grid_init(ice_id_grid,name=trim(ice_id_file(spos:ppos)),mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon_ice_id,dp),y=real(lat_ice_id,dp))
     ! map to ice grid
     call map_init(maps_ice_id_to_ice,ice_id_grid,ice_grid,method="nn",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
     call map_field(maps_ice_id_to_ice,"ice_id",ice_id_in,ice_id_mask,stat="mean",missing_value=-9999)
