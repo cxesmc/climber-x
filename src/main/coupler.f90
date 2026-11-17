@@ -4239,7 +4239,7 @@ contains
 
    
     ! Common grid definition
-    call grid_init(cmn%grid,name="CMN-5x5",mtype="latlon",units="degrees",x=real(lon,dp),y=real(lat,dp))
+    call grid_init(cmn%grid,name="CMN-5x5",mtype="latlon",units="degrees",planet="Spherical Earth", x=real(lon,dp),y=real(lat,dp))
 
     call cmn_alloc(cmn)
 

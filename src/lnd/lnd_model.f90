@@ -2175,7 +2175,7 @@ end subroutine lnd_update
   subroutine lnd_write_restart(fnm,lnd,l0d)
 
     use ncio
-    use dim_name, only: dim_lon, dim_lat, dim_depth, dim_depth0, dim_depth1, dim_depthl, dim_depth0l, dim_npft, dim_nsurf, dim_nsoil
+    use dim_name, only: dim_lon, dim_lat, dim_depth, dim_depth0, dim_depth1, dim_depthl, dim_depth0l, dim_npft, dim_nsurf, dim_nsoil, dim_nmonwet, dim_wiso
 
     implicit none
 
@@ -2201,12 +2201,12 @@ end subroutine lnd_update
    call nc_write_dim(fnm,dim_nsurf,x=i_surf,units="n/a")
    call nc_write_dim(fnm,dim_nsoil,x=i_soil,units="n/a")
    if (l_wiso) then
-     call nc_write_dim(fnm,"wiso",x=[(i,i=1,nwiso)],units="n/a")
+     call nc_write_dim(fnm,dim_wiso,x=[(i,i=1,nwiso)],units="n/a")
    endif
-   call nc_write_dim(fnm,"nmonwet",x=[(i,i=1,nmonwet)],units="month")
+   call nc_write_dim(fnm,dim_nmonwet,x=[(i,i=1,nmonwet)],units="month")
 
 
-   call nc_open(fnm,ncid,writable=.true.)
+   call nc_open(fnm,ncid,writable=.TRUE.)
 
    call nc_write(fnm,"Cflx_avg",  l0d%Cflx_avg,dim1="p",long_name="average land-atm carbon flux",ncid=ncid)
    call nc_write(fnm,"weath_carb_avg",  l0d%weath_carb_avg,dim1="p",long_name="average carbonate weathering flux",ncid=ncid)
@@ -2653,7 +2653,7 @@ end subroutine lnd_update
        var_n(:,i,j) = lnd(i,j)%f_wet_long(:)
      enddo
    enddo
-   call nc_write(fnm,"f_wet_long",      var_n,       dims=["nmonwet",dim_lon,dim_lat],start=[1,1,1],count=[nmonwet,ni,nj],long_name="monthly wetland fraction of the last nmonwet months",units="/",ncid=ncid)
+   call nc_write(fnm,"f_wet_long",      var_n,       dims=[dim_nmonwet,dim_lon,dim_lat],start=[1,1,1],count=[nmonwet,ni,nj],long_name="monthly wetland fraction of the last nmonwet months",units="/",ncid=ncid)
    deallocate(var_n)
 
    allocate(var_n(nl_l,nx,ny))
@@ -2956,16 +2956,16 @@ end subroutine lnd_update
            tmp_s (:,ii,jj) = lnd(ii,jj)%w_can_iso(:,iwiso)
            tmp_ll(:,ii,jj) = lnd(ii,jj)%w_w_lake_iso(:,iwiso)
          enddo; enddo
-         call nc_write(fnm,"w_w_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_w_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nl,ni,nj,1],&
                        long_name="soil liquid water isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"w_snow_iso", tmp_so, dims=[dim_nsoil,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_snow_iso", tmp_so, dims=[dim_nsoil,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nsoil,ni,nj,1],&
                        long_name="snowpack isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"w_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nsurf,ni,nj,1],&
                        long_name="canopy liquid water isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"w_w_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_w_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nl_l,ni,nj,1],&
                        long_name="lake liquid water isotope mass",units="kg/m2",ncid=ncid)
          do jj=1,nj; do ii=1,ni
@@ -2973,16 +2973,16 @@ end subroutine lnd_update
            tmp_s (:,ii,jj) = lnd(ii,jj)%s_can_iso(:,iwiso)
            tmp_ll(:,ii,jj) = lnd(ii,jj)%w_i_lake_iso(:,iwiso)
          enddo; enddo
-         call nc_write(fnm,"w_i_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_i_iso", tmp_l, dims=[dim_depth,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nl,ni,nj,1],&
                        long_name="soil ice isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"s_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"s_can_iso", tmp_s, dims=[dim_nsurf,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nsurf,ni,nj,1],&
                        long_name="canopy snow isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"w_i_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_i_lake_iso", tmp_ll, dims=[dim_depthl,dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,1,iwiso],count=[nl_l,ni,nj,1],&
                        long_name="lake ice isotope mass",units="kg/m2",ncid=ncid)
-         call nc_write(fnm,"w_gw_iso", tmp_gw, dims=[dim_lon,dim_lat,"wiso"],&
+         call nc_write(fnm,"w_gw_iso", tmp_gw, dims=[dim_lon,dim_lat,dim_wiso],&
                        start=[1,1,iwiso],count=[ni,nj,1],&
                        long_name="groundwater isotope mass",units="kg/m2",ncid=ncid)
        enddo

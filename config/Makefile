@@ -9,22 +9,22 @@ srcdir = src
 debug  ?= 0
 openmp ?= 1
 openmp_yelmo ?= $(openmp)
-openmp_fastearth ?= $(openmp)
+openmp_vilma2 ?= $(openmp)
 
 # Solid-earth backend toggles (FULL build only; inert for CLIM targets). Default
-# on. Set vilma=0 / fastearth=0 to drop a backend when its library is unavailable
-# on this machine (e.g. the VILMA prebuilt archive). They gate -DVILMA/-DFASTEARTH
+# on. Set vilma1=0 / vilma2=0 to drop a backend when its library is unavailable
+# on this machine (e.g. the VILMA1 prebuilt archive). They gate -DVILMA1/-DVILMA2
 # and the corresponding INC_/LIB_ flags in config/common.mk; selecting a dropped
 # backend at runtime (i_geo=2/3) aborts with a clear message (see the #else stubs
-# in src/geo/vilma.F90 / src/geo/fastearth.F90).
-vilma     ?= 1
-fastearth ?= 1
+# in src/geo/vilma1.F90 / src/geo/vilma2.F90).
+vilma1 ?= 1
+vilma2 ?= 1
 
-# FastEarth3D static-lib prerequisite, gated so a fastearth=0 build neither
-# requires the FastEarth3D checkout nor builds its library.
-FASTEARTH_STATIC_DEP = fastearth-static
-ifeq ($(fastearth),0)
-    FASTEARTH_STATIC_DEP =
+# VILMA2 static-lib prerequisite, gated so a vilma2=0 build neither
+# requires the VILMA2 checkout nor builds its library.
+VILMA2_STATIC_DEP = vilma2-static
+ifeq ($(vilma2),0)
+    VILMA2_STATIC_DEP =
 endif
 
 defaulttarget: usage
@@ -40,7 +40,7 @@ defaulttarget: usage
 ## SHARED DEPENDENCY WIRING ##
 # Pulled in after the compiler/machine fragment so it can reference FFLAGS_BASE,
 # FFLAGS_OPENMP, CPPFLAGS_PP, INC_NC, LIB_NC, and LFLAGS_EXTRA set there.
-# Defines the FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA paths,
+# Defines the FESMUTILS, FFTW, LIS, YELMO, and (optional) VILMA1/VILMA2 paths,
 # the openmp= build switch, and the final FFLAGS_CLIM/FFLAGS_FULL and
 # LFLAGS_CLIM/LFLAGS_FULL flag sets.
 
@@ -87,11 +87,11 @@ yelmo-static:
 	$(MAKE) -C $(YELMOROOT) yelmo-static openmp=$(openmp_yelmo)
 #	cp $(YELMOROOT)/git_yelmo.txt ./
 
-# FastEarth3D solid-earth library (i_geo=3). Built with the same openmp toggle as
-# climber-x so its objects match (FastEarth3D adds -fopenmp to its own per-degree
+# VILMA2 solid-earth library (i_geo=3). Built with the same openmp toggle as
+# climber-x so its objects match (VILMA2 adds -fopenmp to its own per-degree
 # loop; its fesm-utils/SHTns/FFTW deps stay serial by its own design).
-fastearth-static:
-	$(MAKE) -C $(FASTEARTHROOT) fastearth-static openmp=$(openmp_fastearth)
+vilma2-static:
+	$(MAKE) -C $(VILMA2ROOT) vilma-static openmp=$(openmp_vilma2)
 
 climber-clim: FFLAGS = $(FFLAGS_CLIM)
 climber-clim: LFLAGS = $(LFLAGS_CLIM)
@@ -127,7 +127,7 @@ climber-clim-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
+climber-clim-ice: yelmo-static $(VILMA2_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc-dummy co2 ch4 n2o \
@@ -142,7 +142,7 @@ climber-clim-bgc-ice: FFLAGS = $(FFLAGS_FULL)
 climber-clim-bgc-ice: LFLAGS = $(LFLAGS_FULL)
 climber-clim-bgc-ice: CPPFLAGS = $(CPPFLAGS_FULL)
 climber-clim-bgc-ice: LDFLAGS = $(FFLAGS) $(DFLAGS) $(CPPFLAGS)
-climber-clim-bgc-ice: yelmo-static $(FASTEARTH_STATIC_DEP) \
+climber-clim-bgc-ice: yelmo-static $(VILMA2_STATIC_DEP) \
 				utils bnd geo \
 				atm ocn sic lnd \
 				bgc co2 ch4 n2o \
