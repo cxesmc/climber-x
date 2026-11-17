@@ -35,7 +35,7 @@ module geo_mod
   use ncio
   use geo_params, only : i_geo, geo_ref_file, i_z_bed_std, z_bed_std_const, z_bed_std_file, geo_eq_file, i_equilibrium, l_z_bed_ini_eq, dz_bed_ini
   use geo_params, only : z_bed_rel_file, sigma_filter
-  use geo_params, only : geo_params_init, l_connect_ocn, f_crit, n_coast_cells, i_fix_cell_grl
+  use geo_params, only : geo_params_init, f_crit, n_coast_cells, i_fix_cell_grl
   use geo_params, only : h_ice_min
   use geo_params, only : l_close_hudson, l_close_baltic
   use geo_params, only : lon_ocn_origin, lat_ocn_origin
@@ -54,7 +54,7 @@ module geo_mod
   use gia_mod, only : gia_init, gia_update
   use q_geo_mod, only : geo_heat
   use sed_mod, only : sed
-  use connect_ocn_mod, only : connect_ocn
+  use ocn_mask_mod, only : ocn_mask
   use fix_runoff_mod, only : fix_runoff, fix_runoff_lake
   use hires_to_lowres_mod, only : hires_to_lowres
   use coast_cells_mod, only : coast_cells
@@ -155,12 +155,11 @@ contains
     allocate(geo%f_ocn0(ni,nj))
     allocate(geo%f_lnd0(ni,nj))
     allocate(geo%f_ocn(ni,nj))
-    allocate(geo%f_ocn2(ni,nj))
+    allocate(geo%mask_ocn(ni,nj))
     allocate(geo%f_lnd(ni,nj))
     allocate(geo%f_lake(ni,nj))
     allocate(geo%f_ice(ni,nj))
     allocate(geo%f_ice_grd(ni,nj))
-    allocate(geo%f_ice_flt(ni,nj))
     allocate(geo%z_sur(ni,nj))
     allocate(geo%z_sur_std(ni,nj))
     allocate(geo%z_sur_smooth_std(ni,nj))
@@ -168,6 +167,7 @@ contains
     allocate(geo%z_ocn_min(ni,nj))
     allocate(geo%z_ocn_max(ni,nj))
     allocate(geo%z_ocn_max_q(ni,nj))
+    allocate(geo%z_ocn_min_q(ni,nj))
     allocate(geo%z_veg(ni,nj))
     allocate(geo%z_veg_min(ni,nj))
     allocate(geo%z_veg_max(ni,nj))
@@ -260,6 +260,11 @@ contains
         geo%hires%z_bed = geo%hires%z_bed + dz_bed_ini
       else
         ! different grid, compute anomalies and add on top of reference bedrock elevation
+        if (any(shape(z_bed).ne.shape(z_bed_ref))) then
+          print *,'ERROR: fake_geo_ref_file must be on the same grid as fake_geo_const/var_file'
+          print *,'shape z_bed, z_bed_ref:',shape(z_bed),shape(z_bed_ref)
+          stop
+        endif
         allocate(z_bed_anom(geo%hires%grid%G%nx,geo%hires%grid%G%ny))
         call map_init(maps_bndgeo_to_geo,bnd_geo_grid,geo%hires%grid,method="bil",gen=map_gen,fldr="maps",load=.TRUE.,clean=.FALSE.)
         call map_field(maps_bndgeo_to_geo,"z_bed",z_bed-z_bed_ref,z_bed_anom,stat="mean",missing_value=-9999._dp)
@@ -733,15 +738,13 @@ contains
   !$ if(l_write_timer) print *,'topo_filter',time2-time1
 
   !-------------------------------------------------------------------
-  ! compute ocean fraction of coarse grid and make sure all ocean cells are connected
+  ! coarse ocean mask: threshold, strait closures, topology repair and connectivity
   !-------------------------------------------------------------------
-  if (l_connect_ocn) then
-    !$ time1 = omp_get_wtime()
-    call connect_ocn(geo%hires%mask,real(geo%grid%G%x,wp),real(geo%grid%G%y,wp),lon_ocn_origin,lat_ocn_origin, &
-      geo%f_ocn) 
-    !$ time2 = omp_get_wtime()
-    !$ if(l_write_timer) print *,'connect_ocn',time2-time1
-  endif
+  !$ time1 = omp_get_wtime()
+  call ocn_mask(geo%hires%mask,geo%hires%z_bed,real(geo%grid%G%x,wp),real(geo%grid%G%y,wp),lon_ocn_origin,lat_ocn_origin, &
+    geo%mask_ocn) 
+  !$ time2 = omp_get_wtime()
+  !$ if(l_write_timer) print *,'ocn_mask',time2-time1
 
   !-------------------------------------------------------------------
   ! fill topography depressions 
@@ -859,11 +862,11 @@ contains
   ! derive fractions, topography and runoff on coarse resolution
   !-------------------------------------------------------------------
   !$ time1 = omp_get_wtime()
-  call hires_to_lowres(geo%n_lakes, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, &  ! in
+  call hires_to_lowres(geo%n_lakes, geo%mask_ocn, geo%hires%mask, geo%hires%mask_lake, geo%hires%z_topo, geo%hires%z_topo_fil, &  ! in
     geo%hires%z_bed, geo%hires%z_sur, geo%hires%z_bed_std, & ! in
     geo%hires%map_runoff, geo%hires%i_runoff_coarse, geo%hires%j_runoff_coarse, &   ! in
-    geo%f_ocn, geo%f_ocn2, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_ice_flt, geo%f_lake, geo%f_lake_n, &
-    geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
+    geo%f_ocn, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_lake, geo%f_lake_n, &
+    geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ocn_min_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
     geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, &    ! out
     geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice)   ! out
   !$ time2 = omp_get_wtime()
@@ -1044,12 +1047,11 @@ contains
     deallocate(geo%f_ocn0)
     deallocate(geo%f_lnd0)
     deallocate(geo%f_ocn)
-    deallocate(geo%f_ocn2)
+    deallocate(geo%mask_ocn)
     deallocate(geo%f_lnd)
     deallocate(geo%f_lake)
     deallocate(geo%f_ice)
     deallocate(geo%f_ice_grd)
-    deallocate(geo%f_ice_flt)
     deallocate(geo%z_sur)
     deallocate(geo%z_sur_std)
     deallocate(geo%z_sur_smooth_std)
@@ -1057,6 +1059,7 @@ contains
     deallocate(geo%z_ocn_min)
     deallocate(geo%z_ocn_max)
     deallocate(geo%z_ocn_max_q)
+    deallocate(geo%z_ocn_min_q)
     deallocate(geo%z_veg)
     deallocate(geo%z_veg_min)
     deallocate(geo%z_veg_max)

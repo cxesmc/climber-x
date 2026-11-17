@@ -29,15 +29,15 @@
 module island_mod
 
   use precision, only : wp
-  use ocn_grid, only : maxi, maxj, maxk, c, dphi, rcv, dsv, dz, rh, R_earth, ku
+  use ocn_grid, only : maxi, maxj, maxk, c, dphi, rdphi, rds, rcv, dsv, dz, rh, R_earth, ku
   use ocn_grid, only : npi, lpisl, ipisl, jpisl
-  use ocn_params, only : fcor, fcorv, drag, rho0
+  use ocn_params, only : drag, rho0, qcor, drag_par
   !$use om_lib
 
   implicit none
 
   private
-  public :: island
+  public :: island, face_cb
 
 contains
 
@@ -47,7 +47,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine island(ubloc,tau,bp, &
                    isl,indj, &
-                   erisl1)
+                   erisl1, psiloc)
 
     implicit none
 
@@ -57,40 +57,51 @@ contains
     integer, intent(in) :: isl, indj
   
     real(wp), intent(out) :: erisl1
+    ! streamfunction of the same solution as ubloc, required by the J3 flux form, whose Coriolis
+    ! integrand is psi itself rather than the velocity
+    real(wp), dimension(0:,0:), intent(in), optional :: psiloc
 
-    integer :: i, k, lpi, ipi, jpi
-    real(wp) :: cor, tv1, tv2
+    integer :: i, k, lpi, ipi, jpi, im1
+    real(wp) :: tv1, tv2, fcb
 
 
     erisl1 = 0._wp
-    !!$omp parallel do private (i,k,lpi,ipi,jpi,cor,tv1,tv2) reduction(+:erisl1)
+    !!$omp parallel do private (i,k,lpi,ipi,jpi,tv1,tv2) reduction(+:erisl1)
     do i=1,npi(isl)
        lpi = lpisl(i,isl)
        ipi = ipisl(i,isl)
        jpi = jpisl(i,isl)
-       if (abs(lpi).eq.1) then
-          !cor = - fcor(jpi)*0.25_wp*(ubloc(2,ipi,jpi) + ubloc(2,ipi+1,jpi) &  ! m/s2
-          !    + ubloc(2,ipi,jpi-1) + ubloc(2,ipi+1,jpi-1))
-          cor = - 0.5_wp * (fcorv(jpi)*0.5_wp*(ubloc(2,ipi,jpi) + ubloc(2,ipi+1,jpi))  &  ! m/s2
-              + fcorv(jpi-1)*0.5_wp*(ubloc(2,ipi,jpi-1) + ubloc(2,ipi+1,jpi-1)))
-       else
-          !cor = fcorv(jpi)*0.25_wp*(ubloc(1,ipi-1,jpi) + ubloc(1,ipi,jpi) &
-          !    + ubloc(1,ipi-1,jpi+1) + ubloc(1,ipi,jpi+1))
-          cor = 0.5_wp * (fcor(jpi)*0.5_wp*(ubloc(1,ipi-1,jpi) + ubloc(1,ipi,jpi)) &
-              + fcor(jpi+1)*0.5_wp*(ubloc(1,ipi-1,jpi+1) + ubloc(1,ipi,jpi+1)))
-       endif
+
+       ! checkerboard friction on this face (see stencil_coef in invert.f90), from the streamfunction
+       fcb = 0._wp
+       if (drag_par%drag_cb.gt.0._wp) fcb = face_cb(psiloc, abs(lpi), ipi, jpi)
 
        if (jpi.lt.maxj) then ! to avoid acessing rcv(maxj) and dsv(maxj), out of bound!
           erisl1 = erisl1 + sign(1,lpi)*(drag(abs(lpi),ipi,jpi) &  ! m/s2
-              * ubloc(abs(lpi),ipi,jpi) + cor &
+              * ubloc(abs(lpi),ipi,jpi) + fcb &
               - indj*tau(abs(lpi),ipi,jpi)/rho0*rh(abs(lpi),ipi,jpi)) &
               * (c(jpi)*dphi*(2._wp - abs(lpi)) &
               + rcv(jpi)*dsv(jpi)*(abs(lpi) - 1._wp))  
        else
           erisl1 = erisl1 + sign(1,lpi)*(drag(abs(lpi),ipi,jpi) &  ! m/s2
-              * ubloc(abs(lpi),ipi,jpi) + cor &
+              * ubloc(abs(lpi),ipi,jpi) + fcb &
               - indj*tau(abs(lpi),ipi,jpi)/rho0*rh(abs(lpi),ipi,jpi)) &
               * (c(jpi)*dphi*(2._wp - abs(lpi)))
+       endif
+
+       ! flux form J3: sign * 0.5*(psi at the two ends of the face) * (q difference across the face) / (rho0 R).
+       ! Its area sum over the enclosed psi points is exactly the J3 Coriolis term of stencil_coef, so the value of
+       ! the path integral does not depend on the path taken around the island
+       im1 = ipi-1
+       if (im1.lt.0) im1 = im1+maxi
+       if (abs(lpi).eq.1) then
+          ! u-face (1,ipi,jpi): spans psi(ipi,jpi-1)..psi(ipi,jpi), separates cells (ipi,jpi) and (ipi+1,jpi)
+          erisl1 = erisl1 + sign(1,lpi)*0.5_wp*(psiloc(ipi,jpi-1) + psiloc(ipi,jpi)) &
+                 * (qcor(ipi+1,jpi) - qcor(ipi,jpi))/(rho0*R_earth)
+       else
+          ! v-face (2,ipi,jpi): spans psi(ipi-1,jpi)..psi(ipi,jpi), separates cells (ipi,jpi) and (ipi,jpi+1)
+          erisl1 = erisl1 + sign(1,lpi)*0.5_wp*(psiloc(im1,jpi) + psiloc(ipi,jpi)) &
+                 * (qcor(ipi,jpi+1) - qcor(ipi,jpi))/(rho0*R_earth)
        endif
 
        ! calc tricky bits and add to source term for path integral round 
@@ -127,5 +138,45 @@ contains
    return
 
   end subroutine island
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function   :  f a c e _ c b
+  !   Purpose    :  checkerboard friction on face (l,i,j), m/s2: drag_cb*rh*(-1/4)*(second difference along the face of
+  !                 the face transport), with the transports from psi and the metric of face (l,i,j) (as in stencil_coef)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function face_cb(psi, l, i, j) result(fcb)
+
+    implicit none
+
+    real(wp), dimension(0:,0:), intent(in) :: psi
+    integer, intent(in) :: l, i, j
+    real(wp) :: fcb
+
+    integer :: n, a, b
+    real(wp) :: tr(-1:1)
+
+
+    if (l.eq.1) then
+      ! u-face: u-transports of the faces (1,i-1..i+1,j)
+      do n=-1,1
+        a = modulo(i+n-1,maxi) + 1
+        tr(n) = -c(j)*(psi(a,j) - psi(a,j-1))*rds(j)/(rho0*R_earth)
+      enddo
+    else
+      ! v-face: v-transports of the faces (2,i,j-1..j+1), zero beyond the N/S boundaries
+      do n=-1,1
+        b = j+n
+        a = modulo(i-1,maxi) + 1
+        if (b.lt.0 .or. b.gt.maxj) then
+          tr(n) = 0._wp
+        else
+          tr(n) = (psi(a,b) - psi(modulo(a-2,maxi)+1,b))*rcv(j)*rdphi/(rho0*R_earth)
+        endif
+      enddo
+    endif
+    fcb = drag_par%drag_cb*rh(l,i,j)*(-0.25_wp)*(tr(1) - 2._wp*tr(0) + tr(-1))
+
+  end function face_cb
 
 end module island_mod

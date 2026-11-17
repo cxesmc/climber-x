@@ -26,7 +26,6 @@
 module fill_ocean_mod
 
   use precision, only : wp
-  use geo_params, only : l_ocn_below_shelf
 
   implicit none
 
@@ -63,19 +62,11 @@ module fill_ocean_mod
     allocate(mask_ocean(ni,nj))
 
     ! potential ocean mask based on sea level (current sea level is 0 by definition)
-    if (l_ocn_below_shelf) then
-      where (z_topo.le.0._wp .or. mask.eq.3) 
-        mask_sea_level = .true.
-      elsewhere
-        mask_sea_level = .false.
-      endwhere
-    else
-      where (z_topo.le.0._wp) 
-        mask_sea_level = .true.
-      elsewhere
-        mask_sea_level = .false.
-      endwhere
-    endif
+    where (z_topo.le.0._wp) 
+      mask_sea_level = .true.
+    elsewhere
+      mask_sea_level = .false.
+    endwhere
 
     ! initialize
     mask_ocean = 0

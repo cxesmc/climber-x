@@ -12,8 +12,8 @@ The length of the simulation is set to 10000 years, which is generally enough to
 runme -rs -q short -w 24:00:00 --omp 32 -o output/lgm -p ctl.nyears=10000 \
 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 \
 ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 \
-ctl.fake_geo_const_file=input/geo_ice_tarasov_lgm.nc ctl.fake_geo_ref_file=input/geo_ice_tarasov_lgc_0ka.nc geo.geo_ref_file=input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc \
-ctl.fake_ice_const_file=input/geo_ice_tarasov_lgm.nc 
+ctl.fake_geo_const_file=input/geo_ice_tarasov122k_lgm.nc ctl.fake_geo_ref_file=input/geo_ice_tarasov122k_0ka.nc geo.geo_ref_file=input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc \
+ctl.fake_ice_const_file=input/geo_ice_tarasov122k_lgm.nc 
 ```
 
 The simulation starts from a pre-industrial equilibrium state of the climate and switches instantaneoulsy to LGM boundary conditions for orbital parameters, GHGs and continental ice sheets. 
@@ -32,8 +32,8 @@ The following command runs an LGM simulation with interactive ice sheets in the 
 runme -rs -q medium --omp 32 -o output/lgm_ice_nh -p ctl.nyears=100000 ctl.n_accel=10 \
 ctl.iorbit=1 ctl.ecc_const=0.018994 ctl.obl_const=22.949 ctl.per_const=114.42 \
 ctl.co2_const=190 ctl.ch4_const=375 ctl.n2o_const=200 \
-ctl.fake_geo_const_file=input/geo_ice_tarasov_lgm.nc ctl.fake_geo_ref_file=input/geo_ice_tarasov_lgc_0ka.nc geo.geo_ref_file=input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc \
-ctl.fake_ice_const_file=input/geo_ice_tarasov_lgm.nc \
+ctl.fake_geo_const_file=input/geo_ice_tarasov122k_lgm.nc ctl.fake_geo_ref_file=input/geo_ice_tarasov122k_0ka.nc geo.geo_ref_file=input/RTopo-2.0.1_0.125deg_DRThydrocorr.nc \
+ctl.fake_ice_const_file=input/geo_ice_tarasov122k_lgm.nc \
 ctl.ice_domain_name=NH-16KM ctl.ice_model_name=yelmo \
 ctl.flag_geo=T ctl.flag_ice=T ctl.flag_smb=T ctl.flag_bmb=T \
 ctl.restart_in_dir=restart/lgm

@@ -29,115 +29,15 @@
 module advection_mod
 
   use precision, only : wp
-  use ocn_grid, only : maxi, maxj, maxk, k1, dx, dxv, dy, dz, dza, mask_ocn, mask_c, mask_u, mask_v, mask_w
-  use ocn_params , only : dt, diff_iso, diff_dia
-  use constants, only : r_earth
+  use ocn_grid, only : maxi, maxj, maxk, k1, dx, dxv, dy, dz, mask_ocn, mask_c, mask_u, mask_v, mask_w
+  use ocn_params , only : dt
 
   implicit none
 
   private
-  public :: advection_upstream, advection_fct
+  public :: advection_fct
 
 contains
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  a d v e c t i o n _ u p s t r e a m
-  !   Purpose    :  
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine advection_upstream(f_ocn,u,tracer,flx_sur,flx_bot, &
-                               fax,fay,faz,tracer_tendency)
-
-    implicit none
-
-    real(wp), dimension(:,:), intent(in) :: f_ocn
-    real(wp), dimension(:,:,:,:), intent(in) :: u
-    real(wp), dimension(:,:,:), intent(in) :: tracer
-    real(wp), dimension(:,:), intent(in) :: flx_sur
-    real(wp), dimension(:,:), intent(in) :: flx_bot
-
-    real(wp), dimension(0:,0:,0:), intent(out) :: fax
-    real(wp), dimension(0:,0:,0:), intent(out) :: fay
-    real(wp), dimension(0:,0:,0:), intent(out) :: faz
-    real(wp), dimension(:,:,:), intent(out) :: tracer_tendency
-
-    integer :: i, j, k, ip1
-    real(wp) :: ups(3), pec(3)
-    
-
-    do i=1,maxi
-      ip1 = i+1
-      if (ip1.eq.maxi+1) ip1=1
-      do j=1,maxj
-        !if (mask_ocn(i,j).eq.1) then
-          do k=1,maxk
-            pec(1) = u(1,i,j,k)*dx(j)/diff_iso
-            ups(1) = pec(1) / (2.0 + abs(pec(1)))
-            pec(2) = u(2,i,j,k)*dy/diff_iso
-            ups(2) = pec(2) / (2.0 + abs(pec(2)))
-            pec(3) = u(3,i,j,k)*dza(k)/diff_dia(i,j,k)
-            ups(3) = pec(3) / (2.0 + abs(pec(3)))
-
-            ! flux to east
-            if (mask_u(i,j,k).eq.1) then
-              fax(i,j,k) = u(1,i,j,k)*0.5_wp*((1.-ups(1))*tracer(ip1,j,k) + (1.+ups(1))*tracer(i,j,k)) * dy*dz(k)*dt  ! m/s*K * m2*s = m3 * K
-            else
-              fax(i,j,k) = 0
-            endif
-            ! flux to north
-            if (j.lt.maxj .and. mask_v(i,j,k).eq.1) then
-              fay(i,j,k) = u(2,i,j,k)*0.5_wp*((1.-ups(2))*tracer(i,j+1,k) + (1.+ups(2))*tracer(i,j,k)) * dxv(j)*dz(k)*dt  ! m/s*K * m2*s = m3 * K
-            else
-              fay(i,j,k) = 0._wp
-            endif
-            ! flux up
-            if (mask_w(i,j,k).eq.1) then
-              faz(i,j,k) = u(3,i,j,k)*0.5_wp*((1.-ups(3))*tracer(i,j,k+1) + (1.+ups(3))*tracer(i,j,k)) * dx(j)*dy*dt ! m/s*K * m2*s = m3 * K
-            else if (k.eq.maxk) then
-              faz(i,j,k) = flx_sur(i,j) * dx(j)*dy*f_ocn(i,j)*dt ! m/s*K * m2*s = m3 * K, atmosphere-ocean flux
-            else if (k.eq.(k1(i,j)-1)) then
-              faz(i,j,k) = flx_bot(i,j) * dx(j)*dy*f_ocn(i,j)*dt ! m/s*K * m2*s = m3 * K, bottom ocean flux
-            else
-              faz(i,j,k) = 0._wp
-            endif
-          enddo
-        !endif
-      enddo
-    enddo
-
-    ! western boundary fluxes, periodic boundary condition
-    fax(0,:,:) = fax(maxi,:,:)
-
-    ! southern boundary fluxes
-    fay(:,0,:) = 0._wp
-
-    ! bottom boundary fluxes
-    faz(:,:,0) = 0._wp
-    ! geothermal bottom flux for full-depth columns (k1=1): their bottom face is at index 0,
-    ! which lies outside the k=1..maxk loop above and would otherwise be lost
-    do j=1,maxj
-      do i=1,maxi
-        if (k1(i,j).eq.1) then
-          faz(i,j,0) = flx_bot(i,j) * dx(j)*dy*f_ocn(i,j)*dt ! m/s*K * m2*s = m3 * K, bottom ocean flux
-        endif
-      enddo
-    enddo
-
-    ! tracer tendency due to advection, K/s
-    do i=1,maxi
-      do j=1,maxj
-        do k=1,maxk
-          if (mask_c(i,j,k).eq.1) then
-            tracer_tendency(i,j,k) = -(fax(i,j,k)-fax(i-1,j,k) + fay(i,j,k)-fay(i,j-1,k) + faz(i,j,k)-faz(i,j,k-1)) &
-                            / (dx(j)*dy*dz(k)*f_ocn(i,j)*dt)
-          endif
-        enddo
-      enddo
-    enddo
-
-   return
-
-  end subroutine advection_upstream
-
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !   Subroutine :  a d v e c t i o n _ f c t
@@ -146,6 +46,8 @@ contains
   subroutine advection_fct(f_ocn,u,tracer,flx_sur,flx_bot, &
                           fax,fay,faz,tracer_tendency)
 
+    !$ use omp_lib
+
     implicit none
 
     real(wp), dimension(:,:), intent(in) :: f_ocn
@@ -158,11 +60,80 @@ contains
     real(wp), dimension(0:,0:,0:), intent(out) :: faz
     real(wp), dimension(:,:,:), intent(out) :: tracer_tendency
 
-    real(wp), allocatable, dimension(:,:,:) :: tracer_tmp
+    ! work arrays: every element that is read is either overwritten in each call or a boundary plane that stays zero.
+    ! When called serially (grid loops parallel), the saved arrays are allocated and zeroed once and reused.
+    ! When called from inside a parallel region (parallel over tracers), each call allocates its own arrays.
+    real(wp), allocatable, dimension(:,:,:), save :: tracer_tmp_s, xa_s, xb_s, rp_s, rn_s
+    real(wp), allocatable, dimension(:,:,:), save :: fxl_s, fyl_s, fzl_s, afx_s, afy_s, afz_s
+    real(wp), allocatable, dimension(:,:,:) :: tracer_tmp, xa, xb, rp, rn
+    real(wp), allocatable, dimension(:,:,:) :: fxl, fyl, fzl, afx, afy, afz
+    logical :: in_par
+
+
+    in_par = .false.
+    !$ in_par = omp_in_parallel()
+
+    if (in_par) then
+      allocate(tracer_tmp(maxi,maxj,maxk), source=0._wp)
+      allocate(fxl(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(fyl(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(fzl(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(afx(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(afy(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(afz(0:maxi,0:maxj,0:maxk), source=0._wp)
+      allocate(xa(maxi,maxj,maxk), source=0._wp)
+      allocate(xb(maxi,maxj,maxk), source=0._wp)
+      allocate(rp(maxi,maxj,maxk), source=0._wp)
+      allocate(rn(maxi,maxj,maxk), source=0._wp)
+      call advection_fct_kernel(f_ocn,u,tracer,flx_sur,flx_bot,fax,fay,faz,tracer_tendency, &
+        tracer_tmp,fxl,fyl,fzl,afx,afy,afz,xa,xb,rp,rn)
+    else
+      if (.not.allocated(tracer_tmp_s)) then
+        allocate(tracer_tmp_s(maxi,maxj,maxk), source=0._wp)
+        allocate(fxl_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(fyl_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(fzl_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(afx_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(afy_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(afz_s(0:maxi,0:maxj,0:maxk), source=0._wp)
+        allocate(xa_s(maxi,maxj,maxk), source=0._wp)
+        allocate(xb_s(maxi,maxj,maxk), source=0._wp)
+        allocate(rp_s(maxi,maxj,maxk), source=0._wp)
+        allocate(rn_s(maxi,maxj,maxk), source=0._wp)
+      endif
+      call advection_fct_kernel(f_ocn,u,tracer,flx_sur,flx_bot,fax,fay,faz,tracer_tendency, &
+        tracer_tmp_s,fxl_s,fyl_s,fzl_s,afx_s,afy_s,afz_s,xa_s,xb_s,rp_s,rn_s)
+    endif
+
+   return
+
+  end subroutine advection_fct
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  a d v e c t i o n _ f c t _ k e r n e l
+  !   Purpose    :  Flux-Correction Transport scheme (Zalesak 1979), with work arrays passed in
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine advection_fct_kernel(f_ocn,u,tracer,flx_sur,flx_bot, &
+                          fax,fay,faz,tracer_tendency, &
+                          tracer_tmp,fxl,fyl,fzl,afx,afy,afz,xa,xb,rp,rn)
+
+    implicit none
+
+    real(wp), dimension(:,:), intent(in) :: f_ocn
+    real(wp), dimension(:,:,:,:), intent(in) :: u
+    real(wp), dimension(:,:,:), intent(in) :: tracer
+    real(wp), dimension(:,:), intent(in) :: flx_sur
+    real(wp), dimension(:,:), intent(in) :: flx_bot
+    real(wp), dimension(0:,0:,0:), intent(out) :: fax
+    real(wp), dimension(0:,0:,0:), intent(out) :: fay
+    real(wp), dimension(0:,0:,0:), intent(out) :: faz
+    real(wp), dimension(:,:,:), intent(out) :: tracer_tendency
+    real(wp), dimension(maxi,maxj,maxk), intent(inout) :: tracer_tmp, xa, xb, rp, rn
+    real(wp), dimension(0:maxi,0:maxj,0:maxk), intent(inout) :: fxl, fyl, fzl, afx, afy, afz
+
     real(wp) :: tracer_ijk
     real(wp) :: ti, tip1, tj, tjp1, tk, tkp1   ! scalar tracer values (replace array temporaries)
-    real(wp), dimension(:,:,:), allocatable :: fxl, fyl, fzl, afx, afy, afz
-    real(wp), dimension(:,:,:), allocatable :: xa, xb, rp, rn
     real(wp) :: fxh, fyh, fzh
     integer :: i, j, k
     integer :: im1, ip1, ip2, jm1, jp1, jp2, km1, kp1, kp2
@@ -177,20 +148,6 @@ contains
     real(wp) :: xmax, xmin
     real(wp) :: tracer_tmp1
 
-    allocate(tracer_tmp(maxi,maxj,maxk))
-
-    allocate(fxl(0:maxi,0:maxj,0:maxk), source=0._wp)
-    allocate(fyl(0:maxi,0:maxj,0:maxk), source=0._wp)
-    allocate(fzl(0:maxi,0:maxj,0:maxk), source=0._wp)
-    allocate(afx(0:maxi,0:maxj,0:maxk), source=0._wp)
-    allocate(afy(0:maxi,0:maxj,0:maxk), source=0._wp)
-    allocate(afz(0:maxi,0:maxj,0:maxk), source=0._wp)
-
-    allocate(xa(maxi,maxj,maxk))
-    allocate(xb(maxi,maxj,maxk))
-    allocate(rp(maxi,maxj,maxk))
-    allocate(rn(maxi,maxj,maxk))
-
     ! precompute zonally-wrapped i indices once (hoist modulo out of the grid loops below)
     do i=1,maxi
       ipw(i)  = modulo(i,maxi) + 1     ! i+1, wrapping maxi -> 1
@@ -203,6 +160,7 @@ contains
     ! for low and high oder solutions
 
     ! X-direction
+    !$omp parallel do collapse(2) private(i,j,k,ip1,uvel,ti,tip1,dy_dz,flux_low,fxh,maskr)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -220,12 +178,14 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     ! periodic boundary conditions
     fxl(0,:,:) = fxl(maxi,:,:)
     afx(0,:,:) = afx(maxi,:,:)
 
     ! Y-direction
+    !$omp parallel do collapse(2) private(i,j,k,vvel,tj,tjp1,dx_dz,flux_low,fyh,maskr)
     do k=1,maxk
       do j=1,maxj-1
         do i=1,maxi
@@ -242,6 +202,7 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     ! no meridional flux across South Pole and North Pole
     fyl(:,0,:) = 0._wp
@@ -250,6 +211,7 @@ contains
     afy(:,maxj,:) = 0._wp
 
     ! Z-direction
+    !$omp parallel do collapse(2) private(i,j,k,kp1,wvel,tk,tkp1,fzl_int,fzh,fzl_surf,fzl_bot,is_int,is_surf,is_bot)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -272,6 +234,7 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
     fzl(:,:,0) = 0._wp
     afz(:,:,0) = 0._wp
     ! geothermal bottom flux for full-depth columns (k1=1): their bottom face is at index 0,
@@ -285,6 +248,7 @@ contains
     enddo
 
     ! STEP I: LOWER ORDER SOLUTION
+    !$omp parallel do collapse(2) private(i,j,k,tracer_ijk)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -293,16 +257,18 @@ contains
           tracer_tmp(i,j,k) = real(mask_c(i,j,k),wp) &
             * (tracer_ijk-(fxl(i,j,k)-fxl(i-1,j,k)+fyl(i,j,k)-fyl(i,j-1,k)+fzl(i,j,k)-fzl(i,j,k-1)) &
               / (dx(j)*dy*dz(k)*max(f_ocn(i,j),f_min)))
-          ! for fluxes limits
-          xa(i,j,k)=max(tracer_ijk,tracer_tmp(i,j,k))
-          xb(i,j,k)=min(tracer_ijk,tracer_tmp(i,j,k))
+          ! for fluxes limits; land and sub-bottom cells must not bound the neighbouring ocean cells
+          xa(i,j,k)=merge(max(tracer_ijk,tracer_tmp(i,j,k)), -1.e30_wp, mask_c(i,j,k).eq.1)
+          xb(i,j,k)=merge(min(tracer_ijk,tracer_tmp(i,j,k)),  1.e30_wp, mask_c(i,j,k).eq.1)
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     ! flux limiters
 
     ! apply eq. 14' of Zalesak 1979
+    !$omp parallel do collapse(2) private(i,j,k,ip1,im1,ip2,jm1,jp1,jp2,km1,kp1,kp2)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -327,8 +293,10 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     ! flux ratios rp/rn
+    !$omp parallel do collapse(2) private(i,j,k,im1,ip1,jm1,jp1,km1,kp1,xmax,xmin,pp,pm,qp,qm,qdp)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -351,8 +319,10 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     ! apply flux limiters
+    !$omp parallel do collapse(2) private(i,j,k,ip1,jp1,kp1)
     do k=1,maxk
       do j=1,maxj
         do i=1,maxi
@@ -367,6 +337,7 @@ contains
         enddo
       enddo
     enddo
+    !$omp end parallel do
 
     !periodic b.c.
     afx(0,:,:) = afx(maxi,:,:)
@@ -374,6 +345,7 @@ contains
 
     ! STEP II: HIGH ORDER CORRECTION
 
+    !$omp parallel do collapse(2) private(i,j,k,tracer_tmp1)
     do k=1,maxk
        do j=1,maxj
           do i=1,maxi
@@ -385,18 +357,16 @@ contains
           enddo
        enddo
     enddo
+    !$omp end parallel do
 
     fax(0:,:,:) = fxl(0:,:,:) + afx(0:,:,:)
     fay(:,0:,:) = fyl(:,0:,:) + afy(:,0:,:)
     faz(:,:,0:) = fzl(:,:,0:) + afz(:,:,0:)
 
-    deallocate(tracer_tmp)
-    deallocate(fxl,fyl,fzl,afx,afy,afz)
-    deallocate(xa,xb,rp,rn)
 
    return
 
-  end subroutine advection_fct
+  end subroutine advection_fct_kernel
 
 
 end module advection_mod

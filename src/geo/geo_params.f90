@@ -56,13 +56,16 @@ module geo_params
   character (len=256) :: z_bed_rel_file
 
   real(wp) :: f_crit
-  real(wp) :: f_crit_eq
-  logical :: l_ocn_below_shelf
-  logical :: l_connect_ocn
   logical :: l_close_panama
   logical :: l_close_bering
+  logical :: l_close_iberia
   logical :: l_close_hudson
   logical :: l_close_baltic
+  logical :: l_ocn_topo          !! topology-preserving coarse ocean mask (see ocn_topology.f90)?
+  real(wp) :: z_sill_ocn_topo    !! m, high resolution ocean pixels connect across a coarse face only if deeper than this
+  real(wp) :: f_sub_ocn_topo     !! minimum fraction of a coarse cell for an ocean body within it to be checked
+  integer :: k_ocn_topo          !! locality radius of the connectivity check (hops)
+  integer :: n_excess_ocn_topo   !! tolerated excess hops between the coarse and the high resolution connectivity
   integer :: i_fix_cell_grl
 
   real(wp) :: h_ice_min
@@ -70,6 +73,8 @@ module geo_params
   integer :: i_z_min_max
   real(wp) :: sigma_filter
   real(wp) :: z_ocn_max_quant
+  real(wp) :: z_ocn_min_quant   !! elevation quantile (%) of the ocean points of a cell defining z_ocn_min_q (the deep-side depth)
+  integer :: i_z_ocn            !! bathymetry passed to the ocean model: 1 = z_bed (whole-cell mean), 2 = z_ocn (ocean-points mean), 3 = z_ocn_min_q (deep-side quantile of the ocean points)
 
   integer :: i_lakes
   real(wp) :: lake_area_crit 
@@ -129,18 +134,23 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","visc_log10_min",visc_log10_min)
     call nml_read(filename,"geo_par","visc_log10_max",visc_log10_max)
     call nml_read(filename,"geo_par","f_crit",f_crit)
-    call nml_read(filename,"geo_par","f_crit_eq",f_crit_eq)
-    call nml_read(filename,"geo_par","l_ocn_below_shelf",l_ocn_below_shelf)
-    call nml_read(filename,"geo_par","l_connect_ocn",l_connect_ocn)
     call nml_read(filename,"geo_par","l_close_panama",l_close_panama)
     call nml_read(filename,"geo_par","l_close_bering",l_close_bering)
+    call nml_read(filename,"geo_par","l_close_iberia",l_close_iberia)
     call nml_read(filename,"geo_par","l_close_hudson",l_close_hudson)
     call nml_read(filename,"geo_par","l_close_baltic",l_close_baltic)
+    call nml_read(filename,"geo_par","l_ocn_topo",l_ocn_topo)
+    call nml_read(filename,"geo_par","z_sill_ocn_topo",z_sill_ocn_topo)
+    call nml_read(filename,"geo_par","f_sub_ocn_topo",f_sub_ocn_topo)
+    call nml_read(filename,"geo_par","k_ocn_topo",k_ocn_topo)
+    call nml_read(filename,"geo_par","n_excess_ocn_topo",n_excess_ocn_topo)
     call nml_read(filename,"geo_par","i_fix_cell_grl",i_fix_cell_grl)
     call nml_read(filename,"geo_par","h_ice_min",h_ice_min)
     call nml_read(filename,"geo_par","i_z_min_max",i_z_min_max)
     call nml_read(filename,"geo_par","sigma_filter",sigma_filter)
     call nml_read(filename,"geo_par","z_ocn_max_quant",z_ocn_max_quant)
+    call nml_read(filename,"geo_par","z_ocn_min_quant",z_ocn_min_quant)
+    call nml_read(filename,"geo_par","i_z_ocn",i_z_ocn)
     call nml_read(filename,"geo_par","i_equilibrium",i_equilibrium)
     call nml_read(filename,"geo_par","l_z_bed_ini_eq",l_z_bed_ini_eq)
     call nml_read(filename,"geo_par","dz_bed_ini",dz_bed_ini)

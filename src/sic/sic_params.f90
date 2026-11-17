@@ -44,10 +44,16 @@ module sic_params
   real(wp) :: alb_sic_nir
   real(wp) :: c_alb_sic
   integer :: i_adv
+  logical :: l_adv_on_area  !! transport sea ice and snow volume as tracers on ice area, used only if i_fsic>1
   integer :: i_fsic
   real(wp) :: f_sic_max
   real(wp) :: f_sic_pow
   real(wp) :: h0
+  real(wp) :: c_lead_h      !! thickness dependence of lead closing (MPIOM rleadclose(3)), used only if i_fsic==4
+  real(wp) :: c_lead_melt   !! lateral melt factor (MPIOM rleadclose(1), 0.5 = Hibler 1979), used only if i_fsic==4
+  logical :: l_lead_shear   !! open leads by shear deformation (ridging, Flato & Hibler 1995 / CICE), used only if i_fsic>1
+  real(wp) :: c_lead_shear  !! shear opening coefficient, df = -c_lead_shear*0.5*(del-|div|)*(1-a_P(0))*dt (CICE Cs = 0.5)
+  real(wp) :: g_star_lead   !! open water fraction above which ridging consumes only open water (CICE Gstar = 0.15)
   real(wp) :: u_star
   integer :: i_cd_ocn
   logical :: l_neutral_ocn
@@ -68,6 +74,9 @@ module sic_params
     real(wp) :: p0_rho                  ! The pressure constant divided by ice density [N m kg-1].
     real(wp) :: c0 = 20.                ! A constant in the exponent of the expression for the ice strength, c* in Hunke & Dukowicz 1997.
     real(wp) :: cdw = 3.24e-3           ! The drag coefficient between the sea ice and water. [nondim]
+    logical :: l_stress_conc = .false.  ! If true, scale the air stress and the ice-ocean drag in the ice momentum equation by the
+                                        ! sea ice concentration on the velocity faces (CICE, SI3; Connolley et al. 2004), consistent
+                                        ! with the grid-mean ice mass; if false, unscaled (Hibler 1979, SIS2)
     real(wp) :: EC = 2.0                ! The ellipticity coefficient for the plastic yield curve in the sea-ice rheology.  
                                         ! For an infinite ellipticity (i.e., a cavitating fluid rheology), use 0. units="Nondim"
     real(wp) :: Rho_ocean = 1030.       ! The nominal density of sea water [kg m-3].
@@ -101,7 +110,8 @@ module sic_params
   type(snow_par_type) :: snow_par
 
   real(wp), parameter :: rho_sic  = 910._wp      ! kg/m3, Density of sea ice
-  real(wp), parameter :: rho_snow = 250._wp      ! kg/m3, Density of snow on sea ice
+  real(wp) :: rho_snow      !! kg/m3, density of snow on sea ice
+  logical :: l_snow_ice     !! snow-ice formation when the snow load pushes the ice surface below the waterline
   real(wp), parameter :: emis_sic = 0.99_wp
   real(wp) :: lambda_sic
   real(wp) :: lambda_snow
@@ -149,15 +159,23 @@ contains
     call nml_read(filename,"sic_par","h_snow_min",h_snow_min)
     call nml_read(filename,"sic_par","h_sic_max",h_sic_max)
     call nml_read(filename,"sic_par","h_snow_max",h_snow_max)
+    call nml_read(filename,"sic_par","rho_snow",rho_snow)
+    call nml_read(filename,"sic_par","l_snow_ice",l_snow_ice)
     call nml_read(filename,"sic_par","i_ice_albedo",i_ice_albedo)
     call nml_read(filename,"sic_par","alb_sic_vis",alb_sic_vis)
     call nml_read(filename,"sic_par","alb_sic_nir",alb_sic_nir)
     call nml_read(filename,"sic_par","c_alb_sic",c_alb_sic)
     call nml_read(filename,"sic_par","i_fsic",i_fsic)
     call nml_read(filename,"sic_par","i_adv",i_adv)
+    call nml_read(filename,"sic_par","l_adv_on_area",l_adv_on_area)
     call nml_read(filename,"sic_par","f_sic_max",f_sic_max)
     call nml_read(filename,"sic_par","f_sic_pow",f_sic_pow)
     call nml_read(filename,"sic_par","h0",h0)
+    call nml_read(filename,"sic_par","c_lead_h",c_lead_h)
+    call nml_read(filename,"sic_par","c_lead_melt",c_lead_melt)
+    call nml_read(filename,"sic_par","l_lead_shear",l_lead_shear)
+    call nml_read(filename,"sic_par","c_lead_shear",c_lead_shear)
+    call nml_read(filename,"sic_par","g_star_lead",g_star_lead)
     call nml_read(filename,"sic_par","lambda_snow",lambda_snow)
     call nml_read(filename,"sic_par","lambda_sic",lambda_sic)
     call nml_read(filename,"sic_par","h_k_crit",h_k_crit)
@@ -172,6 +190,7 @@ contains
     call nml_read(filename,"sic_par","f_Ri_stab",f_Ri_stab)
     call nml_read(filename,"sic_par","f_Ri_unstab",f_Ri_unstab)
     call nml_read(filename,"sic_par","l_daily_output",l_daily_output)
+    call nml_read(filename,"sic_par","l_diag_dyn",l_diag_dyn)
 
     call nml_read(filename,"sic_par","i_snow_albedo",snow_par%i_snow_albedo)
     call nml_read(filename,"sic_par","l_snow_aging",snow_par%l_snow_aging)
@@ -186,6 +205,7 @@ contains
     call nml_read(filename,"sic_par","p0              ", dyn_par%p0)               
     call nml_read(filename,"sic_par","c0              ", dyn_par%c0) 
     call nml_read(filename,"sic_par","cdw             ", dyn_par%cdw) 
+    call nml_read(filename,"sic_par","l_stress_conc", dyn_par%l_stress_conc)
     call nml_read(filename,"sic_par","EC              ", dyn_par%EC) 
     call nml_read(filename,"sic_par","Tdamp           ", dyn_par%Tdamp) 
     call nml_read(filename,"sic_par","del_sh_min_scale", dyn_par%del_sh_min_scale)

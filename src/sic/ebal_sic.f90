@@ -29,7 +29,7 @@ module ebal_sic_mod
    use control, only: check_energy, check_water
    use constants, only : Le, Lf, Ls, q_sat_i, dqsat_dt_i
    use constants, only : cap_a, cap_w, rho_a, rho_w, emis_snow, sigma, T0
-   use sic_params, only : rho_sic, rho_snow, dt, emis_sic, lambda_sic, lambda_snow, h_sic_max, h_k_crit, u_star
+   use sic_params, only : rho_sic, rho_snow, dt, emis_sic, lambda_sic, lambda_snow, h_k_crit, u_star
 
    implicit none
 
@@ -82,10 +82,6 @@ contains
       k_scale = 1._wp+0.5_wp*log(2._wp*h_e/(e*eps))*exp(-max(0._wp,h_sic-h_k_crit)/5._wp)  
     else 
       k_scale = 1._wp
-    endif
-    ! set conductivity to zero when half max ice thickness threshold crossed 
-    if (h_sic.gt.h_sic_max/2._wp) then
-      k_scale = 0._wp
     endif
 
     if (h_snow .gt. 0._wp) then

@@ -36,19 +36,15 @@ module ocn_grid
   use control, only: in_dir, out_dir
   use ocn_params, only : ocn_depth_min, nlayers, i_smooth, smooth_fac, zw_in
   use ocn_params, only : dbl
-  use ocn_params, only : l_limit_ratio, depth_ratio_max
   use ocn_params, only : i_isl, isl_area_min, l_isl_ant, l_isl_aus, l_isl_grl, l_isl_ame, n_isl, lat_isl, lon_isl
   
-  use, intrinsic :: iso_c_binding 
-
   implicit none
-  
-  include 'fftw3.f03'
 
   integer :: maxi     !! number of gridcells in longitudinal direction []
   integer :: maxj     !! number of gridcells in latitudinal direction []
   integer :: maxk     !! number of gridcells in vertical direction []
   integer, parameter :: maxisles = 10     !! maximum allowed number of islands []
+  integer, parameter :: maxislet = 20  !! maximum number of landmasses attached to islands
   integer :: n_isles   !! actual number of islands []
   integer :: mpi 
   integer :: mpxi 
@@ -82,6 +78,20 @@ module ocn_grid
   integer, dimension(20) :: i_idx_isl       !! i-index of islands
   integer, dimension(20) :: j_idx_isl       !! j-index of islands
 
+  ! reference land cells of the present-day landmasses, used to select the islands for i_isl==1 and to
+  ! identify the landmasses on both sides of the straits with prescribed barotropic throughflow (momentum)
+  integer, parameter :: n_lm = 5
+  integer, parameter :: lm_eur = 1   !! Eurasia (+Africa), mainland for i_isl==1
+  integer, parameter :: lm_ame = 2   !! America
+  integer, parameter :: lm_ant = 3   !! Antarctica
+  integer, parameter :: lm_aus = 4   !! Australia
+  integer, parameter :: lm_grl = 5   !! Greenland
+  character(len=10), parameter :: lm_name(n_lm) = ["Eurasia   ","America   ","Antarctica","Australia ","Greenland "]
+  real(wp), parameter :: lon_lm(n_lm) = [  82.5_wp, -102.5_wp,  -2.5_wp, 132.5_wp, -42.5_wp]   !! degE
+  real(wp), parameter :: lat_lm(n_lm) = [  42.5_wp,   47.5_wp, -87.5_wp, -27.5_wp,  72.5_wp]   !! degN
+  integer, dimension(n_lm) :: i_lm   !! i-index of the landmass reference cells
+  integer, dimension(n_lm) :: j_lm   !! j-index of the landmass reference cells
+
   real(wp) :: depth  !! maximum ocean depth, updated during runtime! [m]
   real(wp) :: phi0   !! easternmost longitude [radians] 
   real(wp) :: dphi   !! longitudinal resolution [radians] 
@@ -107,13 +117,14 @@ module ocn_grid
   real(wp), dimension(:), allocatable :: dxv !! longitudinal grid-cell width at cell edges [m]
   real(wp), dimension(:), allocatable :: rdxv!! reverse of dxv
   real(wp), dimension(:), allocatable :: zro !! depth of layer center, zero at the surface, decreasing [m]
+  real(wp), dimension(:), allocatable :: dz_nom  !! NOMINAL (un-stretched) layer thickness, reference for the deep-layer volume stretch [m]
   real(wp), dimension(:), allocatable :: zro_nom !! NOMINAL (un-stretched) layer-centre depth, for truncating bathymetry to levels consistently in init and update [m]
   real(wp), dimension(:), allocatable :: zw  !! depth of layer edges, zero at the surface, decreasing [m]
   real(wp), dimension(:), allocatable :: dz  !! nominal thickness of layers [m]
   real(wp), dimension(:), allocatable :: dza !! thickness between layer centers [m]
   real(wp), dimension(:), allocatable :: rdz  !! reverse of dz [1/m] 
   real(wp), dimension(:), allocatable :: rdza !! reverse of dza [1/m]
-  real(wp), dimension(:), allocatable :: f_pbl  !! fraction of layers in boundary layer [] 
+  real(wp), dimension(:), allocatable :: f_ek   !! layer mean of d(tau/tau0)/dz times dbl**2/2 for tau = tau0*(1+z/dbl)**2, sums to dbl**2/2 over dz [m]
 
   real(wp) :: dzz
   real(wp), dimension(:,:), allocatable :: dzg !! 2D "depth" grid of difference between each pair of levels [m]
@@ -145,7 +156,6 @@ module ocn_grid
     real(wp), dimension(:), allocatable :: zw  !! depth of layer edges, zero at the surface, decreasing [m]
     real(wp), dimension(:), allocatable :: dz  !! thickness of layers [m] 
     real(wp), dimension(:), allocatable :: dza !! thickness between layer centers [m]
-    logical :: l_large_vol_change    
   end type
 
 contains
@@ -168,7 +178,6 @@ contains
     real(wp) :: tv1
     real(wp) :: zfac
     real(dp) :: ocn_vol_tot_1000
-    real(wp) :: dist_isl
 
 
     maxi = ni   
@@ -213,6 +222,7 @@ contains
     allocate(rdxv(0:maxj))
     allocate(zro(maxk))
     allocate(zro_nom(maxk))
+    allocate(dz_nom(maxk))
     allocate(zw(0:maxk))
     allocate(dz(maxk))
     allocate(dza(maxk))
@@ -221,7 +231,7 @@ contains
     allocate(rdza(maxk))
     allocate(rdzg(maxk,maxk))
     allocate(z2dzg(maxk,maxk))
-    allocate(f_pbl(maxk))
+    allocate(f_ek(maxk))
     allocate(h(3,0:maxi+1,0:maxj+1))
     allocate(rh(3,0:maxi+1,0:maxj+1))
     allocate(ocn_area(maxi,maxj))
@@ -332,14 +342,15 @@ contains
     ! store the nominal (un-stretched) layer centres; bathymetry is always truncated to these,
     ! so init and the dynamic update produce consistent level indices regardless of the zfac depth stretch
     zro_nom = zro
+    dz_nom  = dz
 
-    ! define fraction of layers in boundary layer
+    ! exact layer integral of the parabolic wind-stress profile tau = tau0*(1+z/dbl)**2 in the boundary layer, used by velc
     do k=maxk,1,-1
-      f_pbl(k) = max(0.,min(1.,(zw(k)+dbl)/(zw(k)-zw(k-1))))
+      f_ek(k) = 0.5_wp*dbl**2*(max(0._wp,1._wp+zw(k)/dbl)**2 - max(0._wp,1._wp+zw(k-1)/dbl)**2)/(zw(k)-zw(k-1))
     enddo
 
-    print*,'layer #, layer top, layer mid, layer thick, dz layer mid, f_pbl'
-    write(6,'(i7,5f12.4)')(k,zw(k),zro(k),dz(k),dza(k),f_pbl(k),k=maxk,1,-1)
+    print*,'layer #, layer top, layer mid, layer thick, dz layer mid, f_ek'
+    write(6,'(i7,5f12.4)')(k,zw(k),zro(k),dz(k),dza(k),f_ek(k),k=maxk,1,-1)
 
     ! define shelf depth, needed? fixme
     k1_shelf = maxk
@@ -381,7 +392,7 @@ contains
     ! set bathymetry (smooth -> condition -> truncate -> shelf clamp -> mask)
     !-------------------------------------------------------------
 
-    call compute_bathy(topo_in, f_ocn, .true.)
+    call compute_bathy(topo_in, f_ocn)
 
     ! actual total ocean volume, and the part below 1000 m, on nominal levels
     ocn_vol_tot = 0._wp
@@ -485,28 +496,58 @@ contains
     ! find index of island grid cells
     if (i_isl.eq.2) then
       do n=1,n_isl
-        i_idx_isl(n) = 0
-        dist_isl = 999.
-        do i=1,maxi
-          if (modulo(abs(phi0+(i-0.5)*dphi-(pi*lon_isl(n)/180.0)),2.0*pi).lt.dist_isl) then
-            i_idx_isl(n) = i
-            dist_isl = modulo(abs(phi0+(i-0.5)*dphi-(pi*lon_isl(n)/180.0)),2.0*pi)
-          endif
-        enddo
-        j_idx_isl(n) = 0
-        dist_isl = 999.
-        do j=1,maxj
-          if (abs(s(j)-sin(pi*lat_isl(n)/180.0)).lt.dist_isl) then
-            j_idx_isl(n) = j
-            dist_isl = abs(s(j)-sin(pi*lat_isl(n)/180.0))
-          endif
-        enddo
+        call nearest_cell(lon_isl(n),lat_isl(n), i_idx_isl(n),j_idx_isl(n))
       enddo
     endif
+
+    ! find index of landmass reference cells
+    do n=1,n_lm
+      call nearest_cell(lon_lm(n),lat_lm(n), i_lm(n),j_lm(n))
+    enddo
 
     return
 
   end subroutine ocn_grid_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  n e a r e s t _ c e l l
+  !   Purpose    :  indices of the tracer cell closest to a given longitude/latitude
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine nearest_cell(lon_deg, lat_deg, inear, jnear)
+
+    implicit none
+
+    real(wp), intent(in) :: lon_deg, lat_deg
+    integer, intent(out) :: inear, jnear
+
+    integer :: i, j
+    real(wp) :: dist, dist_min
+
+
+    inear = 1
+    dist_min = huge(1._wp)
+    do i=1,maxi
+      ! longitude distance wrapped to [0,pi]
+      dist = abs(modulo(phi0+(i-0.5_wp)*dphi-pi*lon_deg/180._wp+pi,2._wp*pi)-pi)
+      if (dist.lt.dist_min) then
+        inear = i
+        dist_min = dist
+      endif
+    enddo
+    jnear = 1
+    dist_min = huge(1._wp)
+    do j=1,maxj
+      dist = abs(s(j)-sin(pi*lat_deg/180._wp))
+      if (dist.lt.dist_min) then
+        jnear = j
+        dist_min = dist
+      endif
+    enddo
+
+    return
+
+  end subroutine nearest_cell
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -526,8 +567,6 @@ contains
 
     integer :: i, j, k, kk, ip1, jp1, ncells, n
     integer :: spole, npole
-    integer :: flag, sum1, sum2
-    integer :: flagi, sum1i, sum2i
     logical :: is_mainland
     logical :: is_island
     real(wp) :: isl_area
@@ -536,6 +575,11 @@ contains
     integer, dimension(maxisles) :: perm, newlab   ! perm(rk)=old label of rk-th largest; newlab(old)=new label
     real(wp), dimension(maxisles) :: a_isl         ! landmass area per label
     integer, allocatable :: map_edge_tmp(:,:,:)
+    integer :: n_islet, n1                                           ! landmasses attached to an island
+    integer, dimension(maxi,maxj,maxislet) :: islet_edge
+    integer, dimension(maxislet) :: islet_label
+    integer, dimension(mpi) :: ip_tmp, jp_tmp, lp_tmp
+    integer, dimension(maxi,maxj) :: map_path_tmp
     real(dp) :: ocn_vol_tot_1000
     real(dp) :: ocn_vol_tot_old
 
@@ -558,7 +602,7 @@ contains
     ! cells thus wet/dry/deepen/shoal with sea level; the tracer re-mapping in
     ! ocn_grid_update_state handles the resulting volume changes.
     !--------------------------------------------------------
-    call compute_bathy(z_ocn, f_ocn, .false.)
+    call compute_bathy(z_ocn, f_ocn)
 
     grid%k1 = k1(1:maxi,1:maxj)
 
@@ -579,6 +623,11 @@ contains
     enddo
     grid%ocn_area_tot = ocn_area_tot
     grid%ocn_area = ocn_area
+
+    ! start from the nominal layer thicknesses, so that the deep-layer stretch below depends only on
+    ! the current geometry: rescaling the previous year's dz accumulates round-off from year to year,
+    ! which a restart (dz rebuilt from the nominal levels) does not reproduce
+    dz = dz_nom
 
     ! compute total ocean volume for new surface area
     ocn_vol_tot = 0._wp
@@ -684,13 +733,9 @@ contains
     ocn_vol_tot_old = sum(grid%ocn_vol_old)
 
     if (abs(ocn_vol_tot-ocn_vol_tot_old)/ocn_vol_tot.gt.1e-2_wp) then
-      grid%l_large_vol_change = .true.
       print *,'WARNING: large change in ocean volume!'
-      print *,'use of horizontal diffusion enforced for all tracers for the current year'
       print *,'old ocean volume',ocn_vol_tot_old
       print *,'new ocean volume',ocn_vol_tot
-    else
-      grid%l_large_vol_change = .false.
     endif
 
     !print *,'ocn_vol_tot_real',grid%ocn_vol_tot_real,'ocn_vol_tot after',ocn_vol_tot
@@ -759,6 +804,9 @@ contains
       h(1,i,j) = min(h(3,i,j),h(3,i+1,j))
       if (max(k1(i,j),k1(i+1,j)).le.maxk) rh(1,i,j) = 1._wp/h(1,i,j)
      enddo
+     ! periodic copy (needed by the flux-form Coriolis stencil, which reaches the u-face i+1 at i=maxi)
+     h(1,maxi+1,j) = h(1,1,j)
+     rh(1,maxi+1,j) = rh(1,1,j)
     enddo
     do j=0,maxj
      do i=0,maxi+1
@@ -801,9 +849,6 @@ contains
       map_isles = 0
     endwhere
 
-    ! try to connect lonely land cells to larger islands close by
-    call lonely_cell(f_ocn,map,map_isles)
-
     ! identify isles
     if (i_isl.eq.0) then
       n_isles = 0
@@ -825,25 +870,25 @@ contains
           if (i_isl.eq.1) then
             ! manual island determination
             if (ncells>10) then
-              if (islands(53,27).eq.1) then
+              if (islands(i_lm(lm_eur),j_lm(lm_eur)).eq.1) then
                 ! Eurasia, set to mainland, island 1
                 is_island = .true.
                 is_mainland = .true.
               endif
-              if (l_isl_ant .and. islands(36,1).eq.1) then
+              if (l_isl_ant .and. islands(i_lm(lm_ant),j_lm(lm_ant)).eq.1) then
                 ! Antarctica
                 is_island = .true.
               endif
-              if (l_isl_aus .and. islands(63,13).eq.1) then
+              if (l_isl_aus .and. islands(i_lm(lm_aus),j_lm(lm_aus)).eq.1) then
                 ! Australia
                 is_island = .true.
               endif
-              if (l_isl_grl .and. islands(28,33).eq.1) then
+              if (l_isl_grl .and. islands(i_lm(lm_grl),j_lm(lm_grl)).eq.1) then
                 ! Greenland
                 is_island = .true.
               endif
-              if (l_isl_ame .and. islands(16,28).eq.1) then
-                ! Greenland
+              if (l_isl_ame .and. islands(i_lm(lm_ame),j_lm(lm_ame)).eq.1) then
+                ! America
                 is_island = .true.
               endif
             endif
@@ -869,9 +914,10 @@ contains
                 endwhere
               endif
             else
-              ! add island to mainland (island 1)
+              ! landmass not selected as an island: mark it, it is resolved after the labelling
+              ! (attached to a nearby island if there is one, otherwise to the mainland)
               where (islands.eq.1)
-                map_isles = 1
+                map_isles = -2
               endwhere
             endif
           endif
@@ -982,10 +1028,9 @@ contains
       deallocate(map_edge_tmp)
     endif
 
-    ! attach the sub-threshold land to the mainland (largest landmass, label 1)
-    if (i_isl.eq.0) then
-      where (map_isles.eq.-2) map_isles = 1
-    endif
+    ! Land that belongs to no island (too small, or not selected) is attached to the closest island if it sits within a couple grid cells from it
+    call attach_small_landmasses(map_isles, n_islet, islet_edge, islet_label)
+    where (map_isles.eq.-2) map_isles = 1
 
     ! number of isles, remove the mainland
     n_isles = n_isles-1
@@ -1012,28 +1057,10 @@ contains
     !--------------------------------------------------------
 
     do i=1,n_isles+1
-      flag = 0
-      do while (flag==0)
-        sum1 = sum(map_edge(:,:,i))
-        flagi = 0
-        ! get rid of dangling edge points with only one neighbor in its four cell neighborhood
-        do while (flagi==0)
-          sum1i = sum(map_edge(:,:,i))
-          call lonely_cell_edge(map_edge(:,:,i))
-          sum2i = sum(map_edge(:,:,i))
-          if (sum2i==sum1i) flagi = 1
-        enddo
-        flagi = 0
-        ! clean edge, fix cells with too many neighbors
-        do while (flagi==0)
-          sum1i = sum(map_edge(:,:,i))
-          call clean_edge(map_edge(:,:,i))
-          sum2i = sum(map_edge(:,:,i))
-          if (sum2i==sum1i) flagi = 1
-        enddo
-        sum2 = sum(map_edge(:,:,i))
-        if (sum2==sum1) flag = 1
-      enddo
+      call process_edge(map_edge(:,:,i))
+    enddo
+    do n=1,n_islet
+      call process_edge(islet_edge(:,:,n))
     enddo
 
     !--------------------------------------------------------
@@ -1042,6 +1069,25 @@ contains
 
     do i = 2,n_isles+1
       call create_path(map_edge(:,:,i), npi(i-1), ipisl(:,i-1), jpisl(:,i-1), lpisl(:,i-1), map_path(:,:,i))
+    enddo
+
+    ! A landmass attached to an island shares its streamfunction constant, so its loop belongs to the constraint of
+    ! that island: the single constant is determined by the sum of the path integrals around all its landmasses. A
+    ! landmass whose surrounding cells are not all wet has no closed loop and is left out of the constraint.
+    do n=1,n_islet
+      if (sum(islet_edge(:,:,n)).eq.0) then
+        print *,'WARNING: no closed path around the landmass attached to island',islet_label(n)
+        cycle
+      endif
+      i = islet_label(n)
+      call create_path(islet_edge(:,:,n), n1, ip_tmp, jp_tmp, lp_tmp, map_path_tmp)
+      if (npi(i-1)+n1.gt.mpi) stop 'ERROR in ocn_grid_update: path around island and attached landmasses too long'
+      ipisl(npi(i-1)+1:npi(i-1)+n1,i-1) = ip_tmp(1:n1)
+      jpisl(npi(i-1)+1:npi(i-1)+n1,i-1) = jp_tmp(1:n1)
+      lpisl(npi(i-1)+1:npi(i-1)+n1,i-1) = lp_tmp(1:n1)
+      where (map_path_tmp.gt.0) map_path(:,:,i) = map_path_tmp+npi(i-1)
+      where (islet_edge(:,:,n).eq.1) map_edge(:,:,i) = 1
+      npi(i-1) = npi(i-1)+n1
     enddo
 
     do i=1,n_isles
@@ -1113,27 +1159,23 @@ contains
   !             ocn_grid_init (fixed bathymetry at start) and ocn_grid_update (dynamic bathymetry
   !             following sea level / GIA / sediment each year).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine compute_bathy(z_bed, f_ocn, verbose)
+  subroutine compute_bathy(z_bed, f_ocn)
 
     implicit none
 
     real(wp), intent(in) :: z_bed(:,:)   !! ocean bed elevation, relative to sea level, negative [m]
     real(wp), intent(in) :: f_ocn(:,:)   !! ocean fraction []
-    logical, intent(in) :: verbose       !! print conditioning diagnostics? (init .true., yearly update .false.)
 
     integer :: k1p(maxi,maxj)   ! potential bottom-layer index (before applying the land/sea mask)
 
     topo = z_bed
 
-    ! smooth the bathymetry
+    ! smooth the bathymetry with a binomial filter, over ocean cells only (land neighbours excluded)
     if (i_smooth.eq.1) then
-      call smooth_topo(topo, int(smooth_fac))
-    else if (i_smooth.eq.2) then
-      call smooth_topo_fft(topo, smooth_fac)
+      if (smooth_fac.gt.0._wp) call smooth_topo(topo, smooth_fac, f_ocn.gt.0._wp)
+    else if (i_smooth.ne.0) then
+      stop 'ERROR: ocn i_smooth must be 0 or 1'
     endif
-
-    ! optional conditioning against steep f/H contrasts that destabilise the barotropic solve
-    if (l_limit_ratio)  call limit_depth_ratio(topo, f_ocn, depth_ratio_max, verbose=verbose)
 
     ! truncate to nominal depth levels -> potential bottom-layer index
     call truncate_topo(topo, k1p)
@@ -1154,259 +1196,68 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  l i m i t _ d e p t h _ r a t i o
-  ! Purpose  :  limit the depth ratio between adjacent ocean cells.
-  !             Iteratively deepens any ocean cell that is shallower than
-  !             max(deepest ocean neighbour)/ratio_max, i.e. it removes isolated
-  !             shallow seamounts and one-cell shelf->abyss cliffs (which create
-  !             closed f/H contours / trapped modes that destabilise the barotropic
-  !             solve) while leaving coherent slopes and the rest of the bathymetry
-  !             untouched. This targets the actual instability (the f/H *contrast*
-  !             between neighbours), not the local rh gradient, so it allows realistic
-  !             little/no-smoothing bathymetry. Basins are never filled (only shallow
-  !             cells are deepened).
+  ! Subroutine :  s m o o t h _ t o p o
+  ! Purpose  :  smooth bathymetry with a 1-2-1 binomial filter (9-point, [1 2 1]/4 x [1 2 1]/4),
+  !             response cos^2(kx/2)*cos^2(ky/2): all 2dx modes (incl. the checkerboard) are
+  !             removed in one pass, the response is in [0,1] and monotonic, and all weights are
+  !             positive (no new extrema). smooth_fac is continuous: floor(smooth_fac) full passes
+  !             plus a fractional pass (1-f)*topo + f*filtered with f = the remainder, so that the
+  !             smoothing variance is ~0.5*smooth_fac grid cells^2 per direction.
+  !             Only cells with mask=.true. are smoothed and used as neighbours (weights
+  !             renormalised over them); periodic in longitude, one-sided at the first/last row.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine limit_depth_ratio(topo, f_ocn, ratio_max, verbose)
+  subroutine smooth_topo(topo, smooth_fac, mask)
 
     implicit none
 
-    real(wp), intent(inout) :: topo(:,:)   !! bathymetry, negative below sea level [m]
-    real(wp), intent(in) :: f_ocn(:,:)     !! ocean fraction []
-    real(wp), intent(in) :: ratio_max      !! maximum allowed neighbour depth ratio []
-    logical, intent(in), optional :: verbose !! print diagnostics? (default .true.; off for the yearly bathymetry update)
-
-    integer :: i, j, iter, ip, im, ni_, nj_, ntouch
-    real(wp) :: dmx, dmin_allowed, worst
-    real(wp), allocatable :: d(:,:)
-    logical, allocatable :: ocn(:,:), touched(:,:)
-    logical :: changed, verb
-    integer, parameter :: maxiter = 200
-
-    verb = .true.
-    if (present(verbose)) verb = verbose
-
-    ni_ = size(topo,1); nj_ = size(topo,2)
-    allocate(d(ni_,nj_), ocn(ni_,nj_), touched(ni_,nj_))
-    ocn = f_ocn > 0._wp
-    d = -topo            ! positive ocean depth
-    touched = .false.
-
-    do iter=1,maxiter
-      changed = .false.
-      do j=1,nj_
-        do i=1,ni_
-          if (.not.ocn(i,j)) cycle
-          ip = modulo(i,ni_) + 1          ! periodic in longitude
-          im = modulo(i-2,ni_) + 1
-          dmx = 0._wp
-          if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
-          if (ocn(im,j)) dmx = max(dmx,d(im,j))
-          if (j.lt.nj_) then
-            if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
-          endif
-          if (j.gt.1) then
-            if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
-          endif
-          dmin_allowed = dmx/ratio_max
-          if (d(i,j).lt.dmin_allowed) then
-            d(i,j) = dmin_allowed
-            touched(i,j) = .true.
-            changed = .true.
-          endif
-        enddo
-      enddo
-      if (.not.changed) exit
-    enddo
-
-    topo = -d
-    ntouch = count(touched)
-
-    ! worst residual neighbour depth ratio (for diagnostics; should be <= ratio_max)
-    worst = 1._wp
-    do j=1,nj_
-      do i=1,ni_
-        if (.not.ocn(i,j) .or. d(i,j).le.0._wp) cycle
-        ip = modulo(i,ni_) + 1
-        im = modulo(i-2,ni_) + 1
-        dmx = 0._wp
-        if (ocn(ip,j)) dmx = max(dmx,d(ip,j))
-        if (ocn(im,j)) dmx = max(dmx,d(im,j))
-        if (j.lt.nj_) then
-          if (ocn(i,j+1)) dmx = max(dmx,d(i,j+1))
-        endif
-        if (j.gt.1) then
-          if (ocn(i,j-1)) dmx = max(dmx,d(i,j-1))
-        endif
-        worst = max(worst, dmx/d(i,j))
-      enddo
-    enddo
-
-    if (verb) print '(a,f6.1,a,i4,a,i5,a,f6.1)', &
-      ' limit_depth_ratio: ratio_max=',ratio_max,' iters=',min(iter,maxiter), &
-      ' cells deepened=',ntouch,' worst residual ratio=',worst
-
-    deallocate(d, ocn, touched)
-
-  end subroutine limit_depth_ratio
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  s m o o t h _ t o p o
-  ! Purpose  :  smooth bathymetry
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smooth_topo(topo, nsmooth)
-
-  implicit none
-
     real(wp), intent(inout) :: topo(:,:)
-    integer, intent(in) :: nsmooth
+    real(wp), intent(in) :: smooth_fac
+    logical, intent(in) :: mask(:,:)
 
-    integer :: iter, i, j, imi, ipl, im, jm
+    real(wp), parameter :: wb(-1:1) = [0.25_wp, 0.5_wp, 0.25_wp]
+
+    integer :: ipass, npass, i, j, ii, jj, di, dj, im, jm
+    real(wp) :: f, w, wsum, s
     real(wp), allocatable :: Y(:,:)
-
 
     im = size(topo,1)
     jm = size(topo,2)
     allocate(Y(im,jm))
 
-    do iter=1,nsmooth
+    npass = ceiling(smooth_fac)
+
+    do ipass=1,npass
+
+      ! weight of the filtered field: 1 for full passes, the remainder for the last pass
+      f = min(1._wp, smooth_fac-real(ipass-1,wp))
+
+      Y = topo
 
       do j=1,jm
         do i=1,im
-          Y(i,j)=topo(i,j)
-        enddo
-      enddo        
-
-      do j=2,jm-1       
-        do i=1,im
-          imi=i-1
-          if (imi.eq.0)imi=im
-          ipl=i+1
-          if (ipl.gt.im)ipl=1
-          topo(i,j)=0.2*(Y(i,j)+Y(imi,j)+Y(ipl,j)+Y(i,j+1)+Y(i,j-1))
+          if (.not.mask(i,j)) cycle
+          s = 0._wp
+          wsum = 0._wp
+          do dj=-1,1
+            jj = j+dj
+            if (jj.lt.1 .or. jj.gt.jm) cycle
+            do di=-1,1
+              ii = modulo(i+di-1,im)+1
+              if (.not.mask(ii,jj)) cycle
+              w = wb(di)*wb(dj)
+              s = s + w*Y(ii,jj)
+              wsum = wsum + w
+            enddo
+          enddo
+          topo(i,j) = (1._wp-f)*Y(i,j) + f*s/wsum
         enddo
       enddo
 
-    enddo       
+    enddo
 
     deallocate(Y)
 
   end subroutine smooth_topo
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Subroutine :  s m o o t h _ t o p o _ f f t
-  ! Purpose  :  smooth bathymetry using filter in fourier transform space
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine smooth_topo_fft(topo, smooth_fac)
-
-  implicit none
-
-
-    real(wp), intent(inout) :: topo(:,:)
-    real(wp), intent(in) :: smooth_fac
-
-    integer :: i, j, nx, ny, nx2, ny2
-    type(C_PTR) :: plan_r2c, plan_c2r
-    real(wp) :: X, Y, R, R0, lambda
-    real(wp), allocatable :: topo_ext(:,:)
-    real(wp), allocatable, dimension(:,:) :: M
-    complex(wp), allocatable :: topo_fft(:,:)
-
-    character(len=256) :: fnm
-    integer :: ncid
-
-    nx = size(topo,1)
-    ny = size(topo,2)
-
-    nx2 = nx/2
-    ny2 = ny/2
-
-    allocate(topo_ext(nx*2,ny*2))
-    topo_ext = 0._wp
-    ! Put data matrix into centre of frame
-    topo_ext((nx2+1):(nx2+nx),(ny2+1):(ny2+ny)) = topo(1:nx,1:ny)
-    ! Repeat data matrix either side (i.e. where it wraps east-west) 
-    topo_ext(1:nx2,(ny2+1):(ny2+ny)) = topo(nx2+1:nx,1:ny)
-    topo_ext((nx2+nx+1):(2*nx),(ny2+1):(ny2+ny)) = topo(1:nx2,1:ny)
-
-    !
-    ! Now, need to do something clever to remove low amplitude/high frequency stuff
-    ! Here I'm creating a circular mask
-    allocate(M(nx*2,ny*2))
-    ! R0 is the radius of the circle within which FFT components are destroyed
-    R0 = nx * smooth_fac
-    lambda = (5._wp/360._wp)*nx
-    do i=1,2*nx
-      do j=1,2*ny
-        X = i - nx - 0.5_wp
-        Y = j - ny - 0.5_wp
-        R = sqrt(X**2 + Y**2)
-        M(i,j) = (tanh((R - R0)/lambda)+1._wp)/2._wp
-      enddo
-    enddo
-
-    !    fnm = "test_fft.nc"
-    !    call nc_create(fnm)
-    !    call nc_open(fnm,ncid)
-    !    call nc_write_dim(fnm,"nx",x=1._wp,dx=1._wp,nx=nx,ncid=ncid)
-    !    call nc_write_dim(fnm,"nx1",x=1._wp,dx=1._wp,nx=nx+1,ncid=ncid)
-    !    call nc_write_dim(fnm,"nx2",x=1._wp,dx=1._wp,nx=nx*2,ncid=ncid)
-    !    call nc_write_dim(fnm,"ny",x=1._wp,dx=1._wp,nx=ny,ncid=ncid)
-    !    call nc_write_dim(fnm,"ny2",x=1._wp,dx=1._wp,nx=ny*2,ncid=ncid)
-    !    call nc_write(fnm,"topo",     topo,dims=["nx","ny"],start=[1,1],count=[nx,ny],ncid=ncid)
-    !    call nc_write(fnm,"topo_ext",     topo_ext,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"M",     M,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-
-    allocate(topo_fft(nx+1, 2*ny))
-
-    !  Make a plan for the FFT, and forward transform the data.
-    !
-    plan_r2c = fftw_plan_dft_r2c_2d(nx*2,ny*2,topo_ext,topo_fft,FFTW_ESTIMATE)
-    call fftw_execute_dft_r2c(plan_r2c, topo_ext, topo_fft)
-    call fftw_destroy_plan(plan_r2c)
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_fft_re",     real(topo_fft),dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"topo_fft_im",     imag(topo_fft),dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_write(fnm,"topo_fft",     real(topo_fft)**2+imag(topo_fft)**2,dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    ! Apply this to the real and imaginary components
-    do i=1,nx
-      do j=1,2*ny
-        topo_fft(i,j) = topo_fft(i,j) * M(i,j)
-      enddo
-    enddo
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_fft_fil",     real(topo_fft)**2+imag(topo_fft)**2,dims=["nx1","ny2"],start=[1,1],count=[nx+1,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    !  Make a plan for the backward FFT, and back transform.
-    !
-    plan_c2r = fftw_plan_dft_c2r_2d(nx*2,ny*2,topo_fft,topo_ext,FFTW_ESTIMATE)
-    call fftw_execute_dft_c2r(plan_c2r, topo_fft, topo_ext)
-    call fftw_destroy_plan(plan_c2r)
-
-    ! De-frame the data matrix
-    topo = topo_ext((nx2+1):(nx2+nx),(ny2+1):(ny2+ny))
-
-    ! normalize
-    topo = topo/real(nx*2*ny*2,wp)
-
-
-    !    call nc_open(fnm,ncid)
-    !    call nc_write(fnm,"topo_inv",     topo,dims=["nx","ny"],start=[1,1],count=[nx,ny],ncid=ncid)
-    !    call nc_write(fnm,"topo_ext_inv",     topo_ext,dims=["nx2","ny2"],start=[1,1],count=[nx*2,ny*2],ncid=ncid)
-    !    call nc_close(ncid)
-
-    deallocate(topo_fft)
-    deallocate(M)
-
-  end subroutine smooth_topo_fft
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1575,88 +1426,127 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Function :  l o n e l y _ c e l l
-  ! Purpose  :  find lonely land cells and try to connect them to larger islands nearby
+  ! Subroutine :  a t t a c h _ s m a l l _ l a n d m a s s e s
+  ! Purpose    :  give land that belongs to no island (map_isles = -2) the label of an island lying within
+  !               n_attach cells, so that the psi points around it carry that island's streamfunction constant
+  !               instead of being pinned to the mainland value psi = 0.
+  !               Land further away from any island keeps its -2 marker and is tied to the mainland.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine lonely_cell(f_ocn,map,map_isles)
+  subroutine attach_small_landmasses(map_isles, n_islet, islet_edge, islet_label)
 
     implicit none
 
-    real(wp), intent(in) :: f_ocn(:,:)
-    integer, intent(inout) :: map(:,:)
     integer, intent(inout) :: map_isles(:,:)
+    integer, intent(out) :: n_islet                    !! number of attached landmasses
+    integer, intent(out) :: islet_edge(:,:,:)          !! edge map of each attached landmass
+    integer, intent(out) :: islet_label(:)             !! label of the island each one is attached to
 
-    integer :: i, j, ii, jj, iii, jjj, i1, j1, ii1, jj1, iii1, jjj1, iiii1, jjjj1
-    integer :: ncell_ocn, n, nfill, ncell_lnd(8), idx(8), jdx(8)
-    real(wp) :: focn(8)
+    integer, allocatable :: map_new(:,:)
+    integer :: i, j, ii, jj, iii, r, isl
+    logical :: l_main
+    integer, parameter :: n_attach = 2   ! search radius [cells]
 
 
-    ! Loop through cells counting 9 cell neighbours
-    do i=1,maxi
-      do j=1,maxj
-        if (map(i,j).eq.1) then ! land point
-          ! count number of ocean neighbors
-          ncell_ocn = 0
-          do ii=i-1,i+1
-            do jj=j-1,j+1
+    allocate(map_new, MOLD=map_isles)
+    map_new = map_isles
+
+    do j=1,maxj
+      do i=1,maxi
+        if (map_isles(i,j).ne.-2) cycle    ! land not belonging to any island
+        isl = 0
+        ! nearest labelled landmass, searching outward ring by ring. The mainland wins ties: a landmass that is
+        ! no further from the mainland than from an island keeps psi = 0, as before
+        do r=1,n_attach
+          isl = 0
+          l_main = .false.
+          do jj=max(1,j-r),min(maxj,j+r)
+            do ii=i-r,i+r
+              if (max(abs(ii-i),abs(jj-j)).ne.r) cycle   ! ring of radius r only
               iii = ii
-              if (iii.eq.0) iii = maxi
-              if (iii.eq.maxi+1) iii = 1
-              jjj = jj
-              jjj = max(1,jjj)
-              jjj = min(maxj,jjj)
-              if (map(iii,jjj).eq.0) then !  ocean
-                ncell_ocn = ncell_ocn+1
-              endif
+              if (iii.lt.1) iii = iii+maxi
+              if (iii.gt.maxi) iii = iii-maxi
+              if (map_isles(iii,jj).eq.1) l_main = .true.                             ! mainland
+              if (map_isles(iii,jj).ge.2 .and. isl.eq.0) isl = map_isles(iii,jj)      ! island
             enddo
           enddo
-          if (ncell_ocn.eq.8) then  ! isolated land point, all neighbors are ocean
-            ! count number of land point neighbors of neighbors
-            n=0
-            ncell_lnd(:) = 0
-            focn(:) = 0._wp
-            do i1=i-1,i+1
-              do j1=j-1,j+1
-                ii1 = i1
-                if (ii1.eq.0) ii1 = maxi
-                if (ii1.eq.maxi+1) ii1 = 1
-                jj1 = j1
-                jj1 = max(1,jj1)
-                jj1 = min(maxj,jj1)
-                if (.not.(ii1.eq.i .and. jj1.eq.j)) then
-                  n=n+1
-                  idx(n) = ii1
-                  jdx(n) = jj1
-                  focn(n) = f_ocn(ii1,jj1)
-                  do iii1=ii1-1,ii1+1
-                    do jjj1=jj1-1,jj1+1
-                      iiii1 = iii1
-                      if (iiii1.eq.0) iiii1 = maxi
-                      if (iiii1.eq.maxi+1) iiii1 = 1
-                      jjjj1 = jjj1
-                      jjjj1 = max(1,jjjj1)
-                      jjjj1 = min(maxj,jjjj1)
-                      if (map(iiii1,jjjj1).eq.1) then !  land
-                        ncell_lnd(n) = ncell_lnd(n)+1
-                        ncell_lnd(n) = min(2,ncell_lnd(n))
-                      endif
-                    enddo
-                  enddo
-                endif
-              enddo
-            enddo
-            ! find index of cell with most land neighbors and consider also land fraction
-            nfill = maxloc(ncell_lnd+(1._wp-focn),1)
-            ! turn ocean cell to land to connect isolated land point
-            map(idx(nfill),jdx(nfill)) = 1
-            map_isles(idx(nfill),jdx(nfill)) = -1
+          if (l_main) then
+            isl = 0
+            exit
           endif
+          if (isl.gt.0) exit
+        enddo
+        if (isl.gt.0) map_new(i,j) = isl
+      enddo
+    enddo
+
+    ! a landmass carries a single streamfunction constant: label it as a whole, and store its edge for the island
+    ! constraint. Labels of the cells attached above are >=2 in map_new only, map_isles still holds -2 there.
+    n_islet = 0
+    islet_edge = 0
+    islet_label = 0
+    do j=1,maxj
+      do i=1,maxi
+        if (map_isles(i,j).eq.-2 .and. map_new(i,j).ge.2) then
+          isl = map_new(i,j)
+          islands = 0
+          edge = 0
+          call fill_island(i,j)
+          where (islands.eq.1)
+            map_isles = isl
+            map_new = isl
+          endwhere
+          n_islet = n_islet+1
+          if (n_islet.gt.size(islet_label)) stop 'ERROR in attach_small_landmasses: too many landmasses attached to islands'
+          islet_edge(:,:,n_islet) = edge
+          islet_label(n_islet) = isl
         endif
       enddo
     enddo
 
+    map_isles = map_new
 
-  end subroutine lonely_cell
+    deallocate(map_new)
+
+  end subroutine attach_small_landmasses
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  p r o c e s s _ e d g e
+  ! Purpose    :  remove dangling edge points and points with too many neighbours from an island edge
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine process_edge(map_edge)
+
+    implicit none
+
+    integer, intent(inout) :: map_edge(:,:)
+
+    integer :: flag, flagi, sum1, sum2, sum1i, sum2i
+
+
+    flag = 0
+    do while (flag==0)
+      sum1 = sum(map_edge)
+      flagi = 0
+      ! get rid of dangling edge points with only one neighbor in its four cell neighborhood
+      do while (flagi==0)
+        sum1i = sum(map_edge)
+        call lonely_cell_edge(map_edge)
+        sum2i = sum(map_edge)
+        if (sum2i==sum1i) flagi = 1
+      enddo
+      flagi = 0
+      ! clean edge, fix cells with too many neighbors
+      do while (flagi==0)
+        sum1i = sum(map_edge)
+        call clean_edge(map_edge)
+        sum2i = sum(map_edge)
+        if (sum2i==sum1i) flagi = 1
+      enddo
+      sum2 = sum(map_edge)
+      if (sum2==sum1) flag = 1
+    enddo
+
+  end subroutine process_edge
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

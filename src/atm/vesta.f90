@@ -26,22 +26,23 @@
 module vesta_mod
 
   use atm_params, only : wp
-  use constants, only : fqsat, pi
-  use atm_params, only : gad, hatm, p0, ra, zmax
-  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_rel, nsmooth_gam
-  use atm_params, only : gams_min, gams_max, sh_gams
+  use constants, only : fqsat, pi, Rd, g
+  use atm_params, only : cp, gad, hatm, p0, ra, zmax
+  use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
+  use atm_params, only : gams_min, gams_max, sh_gams_pos, sh_gams_0, sh_gams_neg
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
-  use atm_grid, only : im, jm, km, aim, zl, fit, exp_zc, i_lnd, dplt
+  use timer, only : sec_day
+  use atm_grid, only : im, jm, km, kmc, aim, zl, zc, z3, z3l, fit, cost, exp_zc, i_lnd, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
   implicit none
 
   private
-  public :: hscales, vesta, t_prof, rh_prof, tropoheight
+  public :: hscales, vesta, t_prof, rh_prof, tropoheight, tropopause_pressure
 
 contains
 
@@ -75,14 +76,19 @@ contains
     real(wp), intent(out) :: hdust(:,:)
 
     integer :: i, j
-    real(wp) :: hrs, fi, f_trop
+    real(wp) :: hrs, fi, f_trop, cgam, chrm
+    real(wp) :: sh_w
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
     real(wp), parameter :: hrs_min = 1.e3_wp
     real(wp), parameter :: hrs_max = 10.e3_wp
 
 
-    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop)
+    ! time relaxation weights per fast step, hscales is called every fast step
+    cgam = min(1._wp, tstep/(c_gam_tau*sec_day))
+    chrm = min(1._wp, tstep/(c_hrm_tau*sec_day))
+
+    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,sh_w)
     do j=1,jm
       do i=1,im
 
@@ -93,12 +99,20 @@ contains
         ! One tanh in the grid-mean sensible heat flux replaces the per-surface-type branching
         ! (9 constants and a switch over ocean / land / lake / ice). sha > 0 is an unstable
         ! surface layer and drives gam_s towards the well mixed limit gams_max; sha < 0 is a
-        ! stable, decoupled surface layer and drives it towards gams_min. sh_gams sets the flux
-        ! scale over which the surface layer changes regime.
-        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh(sha(i,j)/sh_gams)) 
+        ! stable, decoupled surface layer and drives it towards gams_min. 
+        ! The tanh is centred at sh_gams_0 (with gams_min = -gams_max this is where gam_s = 0) and has
+        ! the width sh_gams_pos on the unstable side and sh_gams_neg on the stable side. A narrow stable
+        ! width saturates calm, weakly cooled (decoupled) surfaces at gams_min, while the floor
+        ! gams_min caps the inversion of strongly cooled, wind-mixed surfaces (katabatic ice sheets).
+        if (sha(i,j).ge.sh_gams_0) then
+          sh_w = sh_gams_pos
+        else
+          sh_w = sh_gams_neg
+        endif
+        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
 
         ! bottom
-        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j) 
+        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j)
 
         ! top
         gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
@@ -113,7 +127,7 @@ contains
         hrs = f_trop * c_hrs_1*exp(c_hrs_2*wcld(i,j)) + (1._wp-f_trop) * c_hrs_1*c_hrs_3 
         hrs = max(hrs,hrs_min)   
         hrs = min(hrs,hrs_max)   
-        hrm(i,j) = 0.9_wp*hrm(i,j) + 0.1_wp*hrs 
+        hrm(i,j) = (1._wp-chrm)*hrm(i,j) + chrm*hrs 
 
         !----------------------------------------------
         ! effective moisture height scale
@@ -137,21 +151,21 @@ contains
     call smooth2(gam_s,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gams(i,j) = c_gam_rel*gams(i,j) + (1._wp-c_gam_rel)*gam_s(i,j)
+        gams(i,j) = (1._wp-cgam)*gams(i,j) + cgam*gam_s(i,j)
       enddo
     enddo
     !$omp section
     call smooth2(gam_b,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gamb(i,j) = c_gam_rel*gamb(i,j) + (1._wp-c_gam_rel)*gam_b(i,j)
+        gamb(i,j) = (1._wp-cgam)*gamb(i,j) + cgam*gam_b(i,j)
       enddo
     enddo
     !$omp section
     call smooth2(gam_t,nsmooth_gam)
     do j=1,jm
       do i=1,im
-        gamt(i,j) = c_gam_rel*gamt(i,j) + (1._wp-c_gam_rel)*gam_t(i,j)
+        gamt(i,j) = (1._wp-cgam)*gamt(i,j) + cgam*gam_t(i,j)
       enddo
     enddo
     !$omp end parallel sections
@@ -165,6 +179,13 @@ contains
   !   Subroutine :  v e s t a
   !   Purpose    :  vertical structure of atmosphere 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! t_prof and rh_prof are formulated in geometric height (lapse rates in K/m, zsa, hgams,
+  ! htrop, hrm), while the dynamics treat t3 as the temperature on the pressure levels pl*p0
+  ! (thermal wind, layer masses). Each level is therefore placed at the geometric height that
+  ! the column's own temperature profile gives it, from the hypsometric equation integrated up-
+  ! and downward from the surface (hypso_column); z3/z3l (atm_grid) keep these heights for
+  ! synop, zslp and the output. The level pressure p0*exp_zc in qsat and the layer mass
+  ! dvol (= dp/g) do not depend on it, so A_trop and W_strat are mass integrals.
   subroutine vesta(zsa, tam, gams, gamb, gamt, htrop, ram, hrm, dam, hdust, &
       A_trop, W_strat, dtcol, t3, q3, tp, d3, ttrop)
 
@@ -213,6 +234,9 @@ contains
         rsur   = ram(i,j)
         hrml   = hrm(i,j)
 
+        ! geometric heights of the layer centres and interfaces of this column
+        call hypso_column(z_sur, taml, gamsl, gambl, gamtl, htropl, z3(i,j,:), z3l(i,j,:))
+
         ! 3D fields of temperature and humidity
 
         A_l   = 0._wp   ! tropospheric coefficient ∫ g(z)·qsat·ρ dz
@@ -222,7 +246,7 @@ contains
         flag_strat = .false.
         do k=1,km
 
-          z = 0.5_wp*(zl(k)+zl(k+1))
+          z = z3(i,j,k)
 
           if (.not.flag_strat) then
             ! construct vertical temperature profile
@@ -384,7 +408,7 @@ contains
   !   Purpose    :  compute height of tropopause
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine tropoheight(had_fi, had_width, rb_str, hcld, &
-      htrop, ptrop, rb_str_ref)
+      htrop, rb_str_ref)
 
     implicit none
 
@@ -393,7 +417,6 @@ contains
     real(wp), intent(in   ) :: rb_str(:,:)
     real(wp), intent(in   ) :: hcld(:,:)
     real(wp), intent(inout) :: htrop(:,:)
-    real(wp), intent(out  ) :: ptrop(:)
     ! optional reference stratospheric radiative balance, used for the feedback analysis.
     ! If present, the tropopause is relaxed towards the state in which the stratospheric
     ! radiative balance matches rb_str_ref instead of the balance with the prescribed
@@ -417,7 +440,6 @@ contains
       if (fi.gt.pi/2._wp)  fi = pi/2._wp
       if (fi.lt.-pi/2._wp) fi = -pi/2._wp
       sheat = c_trop_2*(1._wp-c_trop_3*(1._wp-sin(fi)**8))
-      ptrop(j) = 0._wp
       do i=1,im
         if (fixed_heat) then
           rbstr = rb_str(i,j) - rb_str_ref(i,j)
@@ -431,13 +453,169 @@ contains
         htropp = min(htropp,h_trop_max)
         ! height of tropopause
         htrop(i,j) = htropp
-        ! pressure at tropopause
-        ptrop(j) = ptrop(j) + exp(-htrop(i,j)/hatm)*aim
       enddo
     enddo
 
     return
 
   end subroutine tropoheight
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  h y p s o _ c o l u m n
+  !   Purpose    :  geometric height of the pressure levels of one column
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  pure subroutine hypso_column(zs, tam, gams, gamb, gamt, htrop, zc_geo, zl_geo)
+
+    ! Solves dz/dlnp = -Rd*T(z)/g with T = t_prof(z) exactly, from the surface, at pressure
+    ! p0*exp(-zs/hatm) (the surface of the layer masses), upward to the levels above it and
+    ! downward, along the sub-surface extrapolation of t_prof, to those below it. Targets are
+    ! the interfaces zl and the layer centres zc, i.e. ln(p/p0) = -zl/hatm and -zc/hatm.
+    ! Within each segment of t_prof (0: below zs, 1: surface layer zs..zs+hgams, 2: free
+    ! troposphere up to htrop) T is quadratic in z, T(z0+u) = T0 - (gam+2*qq*z0)*u - qq*u**2 with
+    ! qq = (gamt-gamb)/(2*hgamt), so in l = ln(p/p0) the equation is a constant-coefficient Riccati
+    ! equation du/dl = a + b*u + c*u**2, a = -kz*T0, b = kz*(gam+2*qq*z0), c = kz*qq, kz = Rd/g,
+    ! with the solution u(0) = 0
+    !   u = a*S/(C - b/2*S),  C = cosh(r*dl), S = sinh(r*dl)/r,  r**2 = b**2/4 - a*c
+    ! (cos/sin for r**2 < 0; both are the same power series in x = r**2*dl**2, summed here to x**9,
+    ! exact to roundoff for |x| < 2, while |x| < 0.4 for any tropospheric segment). The pressure
+    ! at the top of a segment follows from the inverse, dl = rho*atanh(r*rho)/(r*rho) with
+    ! rho = u/(a + b*u/2) (atan for r**2 < 0). Above htrop T = t_prof(htrop) and
+    ! z = htrop - (l - l_trop)*kz*ttrop. Every level is solved from the base of its segment, so the
+    ! level loop has no dependency and vectorises. Agrees with an RK4 reference (dlnp 1e-5) to
+    ! 5e-8 m, against ~1 m for the former RK2 with dlnp_max = 0.05, at 1/4.6 of the cost
+    ! (analysis/hypso_accuracy/hypso_exact_test.f90).
+
+    implicit none
+
+    real(wp), intent(in ) :: zs, tam, gams, gamb, gamt, htrop
+    real(wp), intent(out) :: zc_geo(:)
+    real(wp), intent(out) :: zl_geo(:)
+
+    integer :: k, n, nt
+    real(wp) :: lnp_t(2*km+1), z_t(2*km+1), lnps, ttrop, qq, kz, zbl, ztr, lnp_bl, lnp_tr
+    real(wp) :: a0, b0, a1, b1, a2, b2, c, t_bl
+    real(wp) :: a, b, z0, l0, dl, x, cc, sl
+
+    kz = Rd/g
+    qq = (gamt-gamb)/(2._wp*hgamt)
+    c  = kz*qq
+    ztr = max(htrop,zs)
+    zbl = min(zs+hgams, ztr)
+    lnps = -zs/hatm
+    ttrop = t_prof(zs, htrop, tam, gams, gamb, gamt, htrop, 1)
+
+    ! segments 0 (below ground) and 1 (surface layer), from the surface
+    a0 = -kz*tam
+    b0 = kz*(gamb + 2._wp*qq*zs)
+    a1 = a0
+    b1 = kz*(gams + 2._wp*qq*zs)
+    lnp_bl = lnps + ric_dl(a1, b1, c, zbl-zs)
+    ! segment 2 (free troposphere), from the top of the surface layer
+    t_bl = tam - gams*(zbl-zs) - qq*(zbl**2-zs**2)
+    a2 = -kz*t_bl
+    b2 = kz*(gamb + 2._wp*qq*zbl)
+    lnp_tr = lnp_bl + ric_dl(a2, b2, c, ztr-zbl)
+
+    ! targets from the bottom up: interface 1, centre 1, interface 2, ..., interface kmc
+    nt = 2*km+1
+    do k=1,km
+      lnp_t(2*k-1) = -zl(k)/hatm
+      lnp_t(2*k)   = -zc(k)/hatm
+    enddo
+    lnp_t(nt) = -zl(kmc)/hatm
+
+    !$omp simd private(a,b,z0,l0,dl,x,cc,sl)
+    do n=1,nt
+      if (lnp_t(n).ge.lnps) then
+        a = a0 ; b = b0 ; z0 = zs  ; l0 = lnps
+      else if (lnp_t(n).ge.lnp_bl) then
+        a = a1 ; b = b1 ; z0 = zs  ; l0 = lnps
+      else
+        a = a2 ; b = b2 ; z0 = zbl ; l0 = lnp_bl
+      endif
+      dl = lnp_t(n)-l0
+      x = (0.25_wp*b*b - a*c)*dl*dl
+      ! C = sum x^m/(2m)!, S/dl = sum x^m/(2m+1)!
+      cc = 1._wp+x*(1._wp/2._wp+x*(1._wp/24._wp+x*(1._wp/720._wp+x*(1._wp/40320._wp+x*(1._wp/3628800._wp &
+         + x*(1._wp/479001600._wp+x*(1._wp/87178291200._wp+x*(1._wp/20922789888000._wp &
+         + x*(1._wp/6402373705728000._wp)))))))))
+      sl = 1._wp+x*(1._wp/6._wp+x*(1._wp/120._wp+x*(1._wp/5040._wp+x*(1._wp/362880._wp+x*(1._wp/39916800._wp &
+         + x*(1._wp/6227020800._wp+x*(1._wp/1307674368000._wp+x*(1._wp/355687428096000._wp &
+         + x*(1._wp/121645100408832000._wp)))))))))
+      z_t(n) = z0 + a*sl*dl/(cc - 0.5_wp*b*sl*dl)
+      ! isothermal stratosphere
+      if (lnp_t(n).lt.lnp_tr) z_t(n) = ztr - (lnp_t(n)-lnp_tr)*kz*ttrop
+    enddo
+
+    do k=1,km
+      zl_geo(k) = z_t(2*k-1)
+      zc_geo(k) = z_t(2*k)
+    enddo
+    zl_geo(kmc) = z_t(nt)
+
+  contains
+
+    ! dl at which du/dl = a + b*u + c*u**2, u(0) = 0, reaches u
+    pure function ric_dl(a, b, c, u) result(dl)
+      real(wp), intent(in) :: a, b, c, u
+      real(wp) :: dl, rho, y, f, rr
+      rho = u/(a + 0.5_wp*b*u)
+      y = (0.25_wp*b*b - a*c)*rho*rho
+      if (abs(y).lt.1.e-8_wp) then
+        f = 1._wp + y/3._wp
+      else if (y.gt.0._wp) then
+        rr = sqrt(y)
+        f = atanh(rr)/rr
+      else
+        rr = sqrt(-y)
+        f = atan(rr)/rr
+      endif
+      dl = rho*f
+    end function ric_dl
+
+  end subroutine hypso_column
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t r o p o p a u s e _ p r e s s u r e
+  !   Purpose    :  zonal mean relative tropopause pressure from the hypsometric equation
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine tropopause_pressure(zsa, tam, gams, gamb, gamt, htrop, ptrop)
+
+    ! p(htrop)/p0 = exp(-zsa/hatm)*exp(-int_zsa^htrop g/(Rd*T) dz), T = t_prof, consistent with
+    ! the geometric heights of the pressure levels in vesta.
+
+    implicit none
+
+    real(wp), intent(in ) :: zsa(:,:)
+    real(wp), intent(in ) :: tam(:,:)
+    real(wp), intent(in ) :: gams(:,:)
+    real(wp), intent(in ) :: gamb(:,:)
+    real(wp), intent(in ) :: gamt(:,:)
+    real(wp), intent(in ) :: htrop(:,:)
+    real(wp), intent(out) :: ptrop(:)
+
+    real(wp), parameter :: dz_max = 250._wp
+    integer :: i, j, n, ns
+    real(wp) :: h, s
+
+    !$omp parallel do private(i,j,n,ns,h,s)
+    do j=1,jm
+      ptrop(j) = 0._wp
+      do i=1,im
+        ns = max(1,ceiling(max(0._wp,htrop(i,j)-zsa(i,j))/dz_max))
+        h = max(0._wp,htrop(i,j)-zsa(i,j))/real(ns,wp)
+        s = 0._wp
+        do n=1,ns
+          s = s + g*h/(Rd*t_prof(zsa(i,j), zsa(i,j)+(n-0.5_wp)*h, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1))
+        enddo
+        ptrop(j) = ptrop(j) + exp(-zsa(i,j)/hatm-s)*aim
+      enddo
+    enddo
+
+    return
+
+  end subroutine tropopause_pressure
 
 end module vesta_mod

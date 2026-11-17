@@ -495,7 +495,7 @@ contains
 
       ! update phenological status of the vegetation 
       call phenology(lnd%frac_surf,lnd%f_veg, lnd%t2m, lnd%t2m_min_mon, lnd%gdd5_temp, lnd%gdd5, lnd%gdd, &
-                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%lai, lnd%lai_bal)
+                    lnd%phen_acc, lnd%phen, lnd%gamma_leaf, lnd%f_deciduous, lnd%lai, lnd%lai_bal)
 
       ! aerodynamic resistance
       call resist_aer(lnd%frac_surf,lnd%veg_h,lnd%lai,lnd%sai,lnd%h_snow,&
@@ -533,14 +533,14 @@ contains
       endif
 
       ! surface resistance for evapotranspiration
-      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%theta_w,lnd%g_can, &
-                     lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can)
+      call resist_sur(lnd%frac_surf,lnd%mask_snow,lnd%w_snow,lnd%theta_w,lnd%g_can, &
+                     lnd%beta_s,lnd%r_s,lnd%beta_s_can,lnd%r_s_can,lnd%f_sub_soil)
 
       ! compute evaporation of intercepted water
       call canopy_water(lnd%frac_surf,lnd%lai,lnd%sai,lnd%r_a,lnd%t_skin, &
                        lnd%pressure,lnd%qatm,lnd%rain,lnd%snow, &
                        lnd%w_can,lnd%w_can_old,lnd%s_can,lnd%s_can_old, &
-                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_snow_can,lnd%f_wat_can, &
+                       lnd%rain_ground,lnd%snow_ground,lnd%evap_can,lnd%subl_can,lnd%f_wat_can,lnd%f_snow_can, &
                        lnd%rain_iso,lnd%snow_iso, &
                        lnd%w_can_iso,lnd%w_can_iso_old,lnd%s_can_iso,lnd%s_can_iso_old, &
                        lnd%rain_ground_iso,lnd%snow_ground_iso,lnd%evap_can_iso,lnd%subl_can_iso)
@@ -555,7 +555,7 @@ contains
 
       ! solve surface energy balance equation to get among others the ground heat flux 
       if( lnd%f_veg .gt. 0._wp ) then
-       call ebal_veg(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%h_snow(is_veg),lnd%w_snow(is_veg),lnd%lambda_soil, &
+       call ebal_veg(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%h_snow(is_veg),lnd%w_snow(is_veg),lnd%f_sub_soil,lnd%lambda_soil, &
                     lnd%evap_can,lnd%subl_can, &
                     lnd%t_skin,lnd%t_skin_old, &
                     lnd%t_soil,lnd%tatm,lnd%qatm,lnd%pressure, &
@@ -797,7 +797,7 @@ contains
       endif
 
       ! surface hydrology
-      call surface_hydrology(lnd%frac_surf,lnd%mask_snow, &
+      call surface_hydrology(lnd%frac_surf,lnd%mask_snow,lnd%f_sub_soil, &
                             lnd%evap_surface,lnd%rain_ground,lnd%snow_ground, &
                             lnd%snowmelt, lnd%icemelt, lnd%icesub, lnd%et, &
                             lnd%k_sat,lnd%cap_soil(1),lnd%cap_lake(1), &
@@ -820,7 +820,7 @@ contains
                           lnd%psi,lnd%kappa_int)
 
        ! update water content of the soil profile
-       call soil_hydro(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%theta_sat, &
+       call soil_hydro(lnd%frac_surf,lnd%mask_snow(is_veg),lnd%f_sub_soil,lnd%theta_sat, &
                       lnd%k_sat,lnd%k_exp,lnd%psi_exp,lnd%kappa_int,lnd%psi, &
                       lnd%transpiration,lnd%evap_surface,lnd%infiltration,lnd%wilt, &
                       lnd%w_snow(is_veg),lnd%w_w,lnd%w_i, &
@@ -951,7 +951,7 @@ contains
                    lnd%f_lake,lnd%f_lake_old,lnd%f_shelf,lnd%f_shelf_old, lnd%f_crop, lnd%f_pasture, &
                    lnd%gamma_luc, lnd%z_veg_std, lnd%gamma_ice, lnd%gamma_dist,lnd%gamma_dist_cum, lnd%gamma_fire, lnd%gamma_fire_cum, &
                    lnd%npp_ann,lnd%npp13_ann,lnd%npp14_ann, &
-                   lnd%gamma_leaf, lnd%lambda, &
+                   lnd%gamma_leaf, lnd%f_deciduous, lnd%lambda, &
                    lnd%lai_bal,lnd%sai,lnd%root_frac,lnd%litter_in_frac, &
                    lnd%veg_c,lnd%veg_c13,lnd%veg_c14, &
                    lnd%leaf_c, &
@@ -1231,54 +1231,38 @@ end subroutine lnd_update
           ! hydraulic properties
           lnd%l2d(i,j)%psi_sat(k) = mineral(i,j)%psi_sat
           lnd%l2d(i,j)%k_sat(k) = mineral(i,j)%k_sat
-          lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
           lnd%l2d(i,j)%psi_exp(k) = -nint(mineral(i,j)%Bi)
-          ! field capacity
-          lnd%l2d(i,j)%theta_field(k) = lnd%l2d(i,j)%theta_sat(k) * (0.1_wp / (86400._wp * lnd%l2d(i,j)%k_sat(k)))**(1._wp/lnd%l2d(i,j)%k_exp(k))
-          ! wilting point
-          lnd%l2d(i,j)%theta_wilt(k) = lnd%l2d(i,j)%theta_sat(k) * (hydro_par%p_psi_min / lnd%l2d(i,j)%psi_sat(k))**(1._wp/lnd%l2d(i,j)%psi_exp(k))
+
+          if (soil_par%uniform_soil_par_hydro) then
+             ! field capacity
+             lnd%l2d(i,j)%theta_field(k) = soil_par%theta_field_u
+             ! wilting point
+             lnd%l2d(i,j)%theta_wilt(k) = soil_par%theta_wilt_u
+
+             ! the exponent of the hydraulic conductivity curve is decoupled from the exponent of the
+             ! retention curve: k_exp_u<0 restores the Clapp-Hornberger/Burdine relation k_exp = 2*b+3,
+             ! a smaller value gives an effective grid-scale conductivity curve flatter than the
+             ! point-scale one (see below)
+             if (soil_par%k_exp_u.lt.0) then
+                lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
+             else
+                lnd%l2d(i,j)%k_exp(k) = soil_par%k_exp_u   
+             endif
+          else
+             ! field capacity
+             lnd%l2d(i,j)%theta_field(k) = lnd%l2d(i,j)%theta_sat(k) * (0.1_wp / (86400._wp * lnd%l2d(i,j)%k_sat(k)))**(1._wp/lnd%l2d(i,j)%k_exp(k))
+             ! wilting point
+             lnd%l2d(i,j)%theta_wilt(k) = lnd%l2d(i,j)%theta_sat(k) * (hydro_par%p_psi_min / lnd%l2d(i,j)%psi_sat(k))**(1._wp/lnd%l2d(i,j)%psi_exp(k))
+
+             lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
+          endif
+          
           ! thermal properties
           lnd%l2d(i,j)%lambda_s(k) = mineral(i,j)%lambda_s
           lnd%l2d(i,j)%lambda_dry(k) = mineral(i,j)%lambda_dry
         enddo
       enddo
     enddo
-
-    if (soil_par%uniform_porosity) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%theta_sat(k) = soil_par%theta_sat_u
-          enddo
-        enddo
-      enddo
-    endif
-
-    if (soil_par%uniform_soil_par_therm) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%lambda_s(k) = soil_par%lambda_s_u
-            lnd%l2d(i,j)%lambda_dry(k) = soil_par%lambda_dry_u
-          enddo
-        enddo
-      enddo
-    endif
-
-    if (soil_par%uniform_soil_par_hydro) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%psi_sat(k) = soil_par%psi_sat_u
-            lnd%l2d(i,j)%k_sat(k) = soil_par%k_sat_u
-            lnd%l2d(i,j)%k_exp(k) = soil_par%k_exp_u
-            lnd%l2d(i,j)%psi_exp(k) = -soil_par%b_u
-            lnd%l2d(i,j)%theta_field(k) = soil_par%theta_field_u
-            lnd%l2d(i,j)%theta_wilt(k) = soil_par%theta_wilt_u
-          enddo
-        enddo
-      enddo
-    endif
 
     ! Handle mcwd_clim based on i_mcwd_clim setting after restart read
     if (veg_par%i_mcwd_clim == 0) then
@@ -1529,23 +1513,26 @@ end subroutine lnd_update
 
     deallocate(f_veg)
 
+    ! state that is also in the restart file is set here only on a cold start, otherwise it would
+    ! overwrite what lnd_read_restart has just read
     ! initialize
     do i = 1,ni
       do j = 1,nj
         lnd%l2d(i,j)%f_wet_cum      = 0._wp
         lnd%l2d(i,j)%runoff_ann     = 0._wp
-        lnd%l2d(i,j)%w_table        = w_table_ini()
+        if (.not.lnd_restart) lnd%l2d(i,j)%w_table        = w_table_ini()
         lnd%l2d(i,j)%runoff_gw      = 0._wp
         lnd%l2d(i,j)%runoff_exc     = 0._wp
         lnd%l2d(i,j)%w_table_perch  = 0._wp
-        lnd%l2d(i,j)%w_table_eff    = 0._wp
-        lnd%l2d(i,j)%fz_eff         = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%w_table_eff    = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%fz_eff         = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%dust_emis      = 0._wp
 
         lnd%l2d(i,j)%coszm          = 0._wp 
         lnd%l2d(i,j)%daylength      = 0._wp 
         lnd%l2d(i,j)%f_wet_mon      = 0._wp 
         lnd%l2d(i,j)%w_table_mon    = 0._wp 
-        lnd%l2d(i,j)%f_wet_long     = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%f_wet_long     = 0._wp 
         lnd%l2d(i,j)%tatm           = T0
         lnd%l2d(i,j)%t2m            = T0
         lnd%l2d(i,j)%t_skin_amp      = 0._wp
@@ -1554,10 +1541,11 @@ end subroutine lnd_update
         lnd%l2d(i,j)%swnet          = 0._wp 
         lnd%l2d(i,j)%swnet_min      = 0._wp 
         lnd%l2d(i,j)%lwdown         = 0._wp 
-        lnd%l2d(i,j)%Ri             = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%Ri             = 0._wp 
         lnd%l2d(i,j)%r_a            = 0._wp 
         lnd%l2d(i,j)%r_s            = 0._wp 
-        lnd%l2d(i,j)%beta_s         = 0._wp 
+        lnd%l2d(i,j)%beta_s         = 0._wp
+        lnd%l2d(i,j)%f_sub_soil     = 0._wp
         lnd%l2d(i,j)%rain_ground    = 0._wp 
         lnd%l2d(i,j)%evap_can       = 0._wp 
         lnd%l2d(i,j)%snow_ground    = 0._wp 
@@ -1565,7 +1553,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%w_can_old      = 0._wp 
         lnd%l2d(i,j)%s_can_old      = 0._wp 
         lnd%l2d(i,j)%f_wat_can      = 0._wp 
-        lnd%l2d(i,j)%f_snow_can     = 0._wp 
+        if (.not.lnd_restart) lnd%l2d(i,j)%f_snow_can     = 0._wp 
         lnd%l2d(i,j)%transpiration  = 0._wp 
         lnd%l2d(i,j)%evap_surface   = 0._wp
         lnd%l2d(i,j)%flx_g          = 0._wp 
@@ -1603,7 +1591,7 @@ end subroutine lnd_update
         lnd%l2d(i,j)%icemelt        = 0._wp
         lnd%l2d(i,j)%icesub         = 0._wp
 
-        lnd%l2d(i,j)%snow_grain     = 0._wp  
+        if (.not.lnd_restart) lnd%l2d(i,j)%snow_grain = 0._wp  
         lnd%l2d(i,j)%dust_con       = 0._wp  
         lnd%l2d(i,j)%runoff         = 0._wp  
         lnd%l2d(i,j)%runoff_sur     = 0._wp  
@@ -1645,8 +1633,8 @@ end subroutine lnd_update
         lnd%l2d(i,j)%cap_sublake        = 0._wp 
         lnd%l2d(i,j)%t_soil_old      = T0
         lnd%l2d(i,j)%t_soil_max      = T0
-        lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
-        lnd%l2d(i,j)%thaw_timer      = 0._wp
+        if (.not.lnd_restart) lnd%l2d(i,j)%frozen_years    = -1._wp  ! sentinel: frozen history unknown -> no priming detected on the first end-of-year (avoids spurious priming)
+        if (.not.lnd_restart) lnd%l2d(i,j)%thaw_timer      = 0._wp
         lnd%l2d(i,j)%t_ice_old       = T0
         lnd%l2d(i,j)%t_shelf_old     = T0 
         lnd%l2d(i,j)%t_shelf_max     = T0 
@@ -1898,6 +1886,8 @@ end subroutine lnd_update
         allocate(lnd%l2d(i,j)%phen_acc        (npft))
         allocate(lnd%l2d(i,j)%gdd             (npft))
         allocate(lnd%l2d(i,j)%gamma_leaf      (npft))
+        allocate(lnd%l2d(i,j)%f_deciduous     (npft))
+        lnd%l2d(i,j)%f_deciduous = 0._wp
         allocate(lnd%l2d(i,j)%lambda          (npft))
         allocate(lnd%l2d(i,j)%lai_bal         (npft))
         allocate(lnd%l2d(i,j)%npp_cum         (npft))
@@ -2213,6 +2203,7 @@ end subroutine lnd_update
    if (l_wiso) then
      call nc_write_dim(fnm,"wiso",x=[(i,i=1,nwiso)],units="n/a")
    endif
+   call nc_write_dim(fnm,"nmonwet",x=[(i,i=1,nmonwet)],units="month")
 
 
    call nc_open(fnm,ncid,writable=.TRUE.)
@@ -2412,6 +2403,13 @@ end subroutine lnd_update
    call nc_write(fnm,"Ri",       var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="Richardson number",units="1",ncid=ncid)
    do i=1,nx
      do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%f_snow_can(:)
+     enddo
+   enddo
+   ! surface_albedo uses the canopy snow fraction of the previous step
+   call nc_write(fnm,"f_snow_can", var_n, dims=[dim_nsurf,dim_lon,dim_lat],start=[1,1,1],count=[nsurf,ni,nj],long_name="snow covered fraction of the canopy",units="1",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
        var_n(:,i,j) = lnd(i,j)%albedo(:)
      enddo
    enddo
@@ -2504,6 +2502,13 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"h_snow",          var_n,          dims=[dim_nsoil,dim_lon,dim_lat],start=[1,1,1],count=[nsoil,ni,nj],long_name="snow thickness",units="m",ncid=ncid)
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%snow_grain(:)
+     enddo
+   enddo
+   ! snow_grain is a prognostic state if tau_snow_grain>0 (see snow_grain_size)
+   call nc_write(fnm,"snow_grain",      var_n,          dims=[dim_nsoil,dim_lon,dim_lat],start=[1,1,1],count=[nsoil,ni,nj],long_name="snow grain size",units="micro m",ncid=ncid)
    do i=1,nx
      do j=1,ny
        vari_n(:,i,j) = lnd(i,j)%mask_snow(:)
@@ -2640,6 +2645,15 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"thaw_timer",         var_n,   dims=[dim_depth,dim_lon,dim_lat],start=[1,1,1],count=[nl,ni,nj],long_name="permafrost-thaw: priming years remaining",units="yr",ncid=ncid)
+   deallocate(var_n)
+
+   allocate(var_n(nmonwet,nx,ny))
+   do i=1,nx
+     do j=1,ny
+       var_n(:,i,j) = lnd(i,j)%f_wet_long(:)
+     enddo
+   enddo
+   call nc_write(fnm,"f_wet_long",      var_n,       dims=["nmonwet",dim_lon,dim_lat],start=[1,1,1],count=[nmonwet,ni,nj],long_name="monthly wetland fraction of the last nmonwet months",units="/",ncid=ncid)
    deallocate(var_n)
 
    allocate(var_n(nl_l,nx,ny))
@@ -2901,6 +2915,9 @@ end subroutine lnd_update
    call nc_write(fnm,"w_table",          lnd%w_table,         dims=[dim_lon,dim_lat],long_name="water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_min",      lnd%w_table_min,     dims=[dim_lon,dim_lat],long_name="minumum yearly water table depth",units="m",ncid=ncid)
    call nc_write(fnm,"w_table_peat",     lnd%w_table_peat,    dims=[dim_lon,dim_lat],long_name="peatland water table depth",units="m",ncid=ncid)
+   call nc_write(fnm,"w_table_eff",      lnd%w_table_eff,     dims=[dim_lon,dim_lat],long_name="effective water table depth",units="m",ncid=ncid)
+   call nc_write(fnm,"fz_eff",           lnd%fz_eff,          dims=[dim_lon,dim_lat],long_name="TOPMODEL shift of cti_lim from the effective water table",units="1",ncid=ncid)
+   call nc_write(fnm,"dust_emis",        lnd%dust_emis,       dims=[dim_lon,dim_lat],long_name="dust emission",units="kg/m2/s",ncid=ncid)
 
    call nc_write(fnm,"f_carb",  lnd%f_carb, dims=[dim_lon,dim_lat],long_name="carbonate weathering rate",units="mol C/m2/yr",ncid=ncid)
    call nc_write(fnm,"weath_carb",  lnd%weath_carb, dims=[dim_lon,dim_lat],long_name="carbonate weathering rate",units="mol C/m2/yr",ncid=ncid)
@@ -2996,6 +3013,9 @@ end subroutine lnd_update
     type(lnd_0d_class) :: l0d
 
     integer :: i, j, ncid
+    real(wp), allocatable :: tmp_pft(:,:,:), tmp_srf(:,:,:), tmp_snw(:,:,:), tmp_t0(:,:,:), tmp_tlk(:,:,:)
+    real(wp), allocatable :: tmp_lev(:,:,:), tmp_wet(:,:,:), tmp_lak(:,:,:), tmp_c(:,:,:), tmp_rf(:,:,:,:)
+    integer,  allocatable :: itmp_snw(:,:,:)
 
 
     ! the restart file has to be on the same vertical grid as the model
@@ -3033,149 +3053,253 @@ end subroutine lnd_update
     call nc_read(fnm,"t2m_min_mon",    lnd%t2m_min_mon,ncid=ncid)
     call nc_read(fnm,"f_lake_ice",    lnd%f_lake_ice,ncid=ncid)
 
-    if (nc_exists_var(fnm,"mcwd")) then
-      call nc_read(fnm,"mcwd",lnd%mcwd,ncid=ncid)
-    else
-      lnd%mcwd = 0._wp  ! default to 0.
-    endif
-    if (veg_par%i_mcwd_clim==2) then
-      ! Read mcwd (may not exist in old restart files)
-      if (nc_exists_var(fnm,"mcwd")) then
-        call nc_read(fnm,"mcwd",lnd%mcwd_clim,ncid=ncid)
-      else
-        lnd%mcwd_clim = 0._wp  ! default to 0.
-      endif
-    endif
+    call nc_read(fnm,"mcwd",lnd%mcwd,ncid=ncid)
+    if (veg_par%i_mcwd_clim==2) lnd%mcwd_clim = lnd%mcwd
 
     call nc_read(fnm,"t_skin_veg",      lnd%t_skin_veg,ncid=ncid)
 
-    do j=1,ny
-      do i=1,nx
-        call nc_read(fnm,"gdd",lnd(i,j)%gdd,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"phen",lnd(i,j)%phen,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"phen_acc",lnd(i,j)%phen_acc,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"lai_bal",lnd(i,j)%lai_bal,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"lai",lnd(i,j)%lai,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"sai",lnd(i,j)%sai,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"npp_ann",lnd(i,j)%npp_ann,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"npp13_ann",lnd(i,j)%npp13_ann,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"npp14_ann",lnd(i,j)%npp14_ann,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"seed_frac",lnd(i,j)%seed_frac,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"pft_frac",lnd(i,j)%pft_frac,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"veg_h",lnd(i,j)%veg_h,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"veg_c",lnd(i,j)%veg_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"veg_c13",lnd(i,j)%veg_c13,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"veg_c14",lnd(i,j)%veg_c14,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"leaf_c",lnd(i,j)%leaf_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"root_c",lnd(i,j)%root_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"stem_c",lnd(i,j)%stem_c,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        call nc_read(fnm,"gamma_dist",lnd(i,j)%gamma_dist,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        if (nc_exists_var(fnm,"gamma_fire")) then
-          call nc_read(fnm,"gamma_fire",lnd(i,j)%gamma_fire,start=[1,i,j],count=[npft,1,1],ncid=ncid)
-        else
-          lnd(i,j)%gamma_fire = 0._wp  ! default for as 0.
-        endif
-        call nc_read(fnm,"root_frac",lnd(i,j)%root_frac,start=[1,1,i,j],count=[nl,npft,1,1],ncid=ncid)
+    ! multi-level fields are read whole and scattered to the grid cells; reading them
+    ! cell by cell costs one netCDF call per cell and variable
+    allocate(tmp_pft(npft,nx,ny))
+    call nc_read(fnm,"gdd",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%gdd = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"phen",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%phen = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"phen_acc",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%phen_acc = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"lai_bal",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%lai_bal = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"lai",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%lai = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"sai",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%sai = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"npp_ann",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%npp_ann = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"npp13_ann",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%npp13_ann = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"npp14_ann",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%npp14_ann = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"seed_frac",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%seed_frac = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"pft_frac",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%pft_frac = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"veg_h",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%veg_h = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"veg_c",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%veg_c = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"veg_c13",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%veg_c13 = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"veg_c14",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%veg_c14 = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"leaf_c",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%leaf_c = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"root_c",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%root_c = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"stem_c",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%stem_c = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"gamma_dist",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%gamma_dist = tmp_pft(:,i,j); enddo; enddo
+    call nc_read(fnm,"gamma_fire",tmp_pft,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%gamma_fire = tmp_pft(:,i,j); enddo; enddo
+    deallocate(tmp_pft)
+    allocate(tmp_rf(nl,npft,nx,ny))
+    call nc_read(fnm,"root_frac",tmp_rf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%root_frac = tmp_rf(:,:,i,j); enddo; enddo
+    deallocate(tmp_rf)
 
-        call nc_read(fnm,"frac_surf",lnd(i,j)%frac_surf,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"rough_m",lnd(i,j)%rough_m,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"rough_h",lnd(i,j)%rough_h,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"Cd",lnd(i,j)%Ch,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        if (nc_exists_var(fnm,"Ri")) then
-          call nc_read(fnm,"Ri",lnd(i,j)%Ri,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        else
-          lnd(i,j)%Ri = 0._wp   ! restarts predating the relaxed Ri: start neutral, spins up over tau_Ri
-        endif
-        call nc_read(fnm,"albedo",lnd(i,j)%albedo,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"w_can",lnd(i,j)%w_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"s_can",lnd(i,j)%s_can,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"t_skin",lnd(i,j)%t_skin,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"flx_sh",lnd(i,j)%flx_sh,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"flx_lh",lnd(i,j)%flx_lh,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"flx_lwu",lnd(i,j)%flx_lwu,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"et",lnd(i,j)%et,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"alb_vis_dir",lnd(i,j)%alb_vis_dir,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"alb_vis_dif",lnd(i,j)%alb_vis_dif,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"alb_nir_dir",lnd(i,j)%alb_nir_dir,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
-        call nc_read(fnm,"alb_nir_dif",lnd(i,j)%alb_nir_dif,start=[1,i,j],count=[nsurf,1,1],ncid=ncid)
+    allocate(tmp_srf(nsurf,nx,ny))
+    call nc_read(fnm,"frac_surf",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%frac_surf = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"rough_m",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%rough_m = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"rough_h",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%rough_h = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"Cd",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%Ch = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"Ri",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%Ri = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"f_snow_can",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%f_snow_can = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"albedo",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%albedo = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_can",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_can = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"s_can",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%s_can = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"t_skin",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_skin = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"flx_sh",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%flx_sh = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"flx_lh",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%flx_lh = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"flx_lwu",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%flx_lwu = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"et",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%et = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"alb_vis_dir",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%alb_vis_dir = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"alb_vis_dif",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%alb_vis_dif = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"alb_nir_dir",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%alb_nir_dir = tmp_srf(:,i,j); enddo; enddo
+    call nc_read(fnm,"alb_nir_dif",tmp_srf,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%alb_nir_dif = tmp_srf(:,i,j); enddo; enddo
+    deallocate(tmp_srf)
 
-        call nc_read(fnm,"w_snow",lnd(i,j)%w_snow,start=[1,i,j],count=[nsoil,1,1],ncid=ncid)
-        call nc_read(fnm,"w_snow_max",lnd(i,j)%w_snow_max,start=[1,i,j],count=[nsoil,1,1],ncid=ncid)
-        call nc_read(fnm,"h_snow",lnd(i,j)%h_snow,start=[1,i,j],count=[nsoil,1,1],ncid=ncid)
-        call nc_read(fnm,"mask_snow",lnd(i,j)%mask_snow,start=[1,i,j],count=[nsoil,1,1],ncid=ncid)
+    allocate(tmp_snw(nsoil,nx,ny),itmp_snw(nsoil,nx,ny))
+    call nc_read(fnm,"w_snow",tmp_snw,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_snow = tmp_snw(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_snow_max",tmp_snw,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_snow_max = tmp_snw(:,i,j); enddo; enddo
+    call nc_read(fnm,"h_snow",tmp_snw,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%h_snow = tmp_snw(:,i,j); enddo; enddo
+    ! older restarts have no snow_grain, 0 = start from the diagnosed value
+    if (nc_exists_var(fnm,"snow_grain")) then
+      call nc_read(fnm,"snow_grain",tmp_snw,ncid=ncid)
+      do j=1,ny; do i=1,nx; lnd(i,j)%snow_grain = tmp_snw(:,i,j); enddo; enddo
+    else
+      do j=1,ny; do i=1,nx; lnd(i,j)%snow_grain = 0._wp; enddo; enddo
+    endif
+    call nc_read(fnm,"mask_snow",itmp_snw,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%mask_snow = itmp_snw(:,i,j); enddo; enddo
+    deallocate(tmp_snw,itmp_snw)
 
-        call nc_read(fnm,"t_soil",lnd(i,j)%t_soil,start=[1,i,j],count=[nl+1,1,1],ncid=ncid)
-        call nc_read(fnm,"t_ice",lnd(i,j)%t_ice,start=[1,i,j],count=[nl+1,1,1],ncid=ncid)
-        call nc_read(fnm,"t_shelf",lnd(i,j)%t_shelf,start=[1,i,j],count=[nl+1,1,1],ncid=ncid)
-        call nc_read(fnm,"t_sublake",lnd(i,j)%t_sublake,start=[1,i,j],count=[nl+1,1,1],ncid=ncid)
-        call nc_read(fnm,"t_lake",lnd(i,j)%t_lake,start=[1,i,j],count=[nl_l+1,1,1],ncid=ncid)
+    allocate(tmp_t0(nl+1,nx,ny))
+    call nc_read(fnm,"t_soil",tmp_t0,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_soil = tmp_t0(:,i,j); enddo; enddo
+    call nc_read(fnm,"t_ice",tmp_t0,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_ice = tmp_t0(:,i,j); enddo; enddo
+    call nc_read(fnm,"t_shelf",tmp_t0,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_shelf = tmp_t0(:,i,j); enddo; enddo
+    call nc_read(fnm,"t_sublake",tmp_t0,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_sublake = tmp_t0(:,i,j); enddo; enddo
+    deallocate(tmp_t0)
+    allocate(tmp_tlk(nl_l+1,nx,ny))
+    call nc_read(fnm,"t_lake",tmp_tlk,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%t_lake = tmp_tlk(:,i,j); enddo; enddo
+    deallocate(tmp_tlk)
 
-        call nc_read(fnm,"theta",lnd(i,j)%theta,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_i",lnd(i,j)%theta_i,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_w",lnd(i,j)%theta_w,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_w",lnd(i,j)%w_w,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_i",lnd(i,j)%w_i,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_i_shelf",lnd(i,j)%theta_i_shelf,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_w_shelf",lnd(i,j)%theta_w_shelf,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_w_shelf",lnd(i,j)%w_w_shelf,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_i_shelf",lnd(i,j)%w_i_shelf,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_i_sublake",lnd(i,j)%theta_i_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"theta_w_sublake",lnd(i,j)%theta_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_w_sublake",lnd(i,j)%w_w_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        call nc_read(fnm,"w_i_sublake",lnd(i,j)%w_i_sublake,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        if (nc_exists_var(fnm,"frozen_years")) then
-          call nc_read(fnm,"frozen_years",lnd(i,j)%frozen_years,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        else
-          lnd(i,j)%frozen_years = -1._wp ! sentinel: frozen history unknown for restarts predating this field -> no spurious priming on the first end-of-year
-        endif
-        if (nc_exists_var(fnm,"thaw_timer")) then
-          call nc_read(fnm,"thaw_timer",lnd(i,j)%thaw_timer,start=[1,i,j],count=[nl,1,1],ncid=ncid)
-        else
-          lnd(i,j)%thaw_timer = 0._wp
-        endif
-        call nc_read(fnm,"f_i_lake",lnd(i,j)%f_i_lake,start=[1,i,j],count=[nl_l,1,1],ncid=ncid)
+    allocate(tmp_lev(nl,nx,ny))
+    call nc_read(fnm,"theta",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_i",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_i = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_w",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_w = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_w",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_w = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_i",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_i = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_i_shelf",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_i_shelf = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_w_shelf",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_w_shelf = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_w_shelf",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_w_shelf = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_i_shelf",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_i_shelf = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_i_sublake",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_i_sublake = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"theta_w_sublake",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%theta_w_sublake = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_w_sublake",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_w_sublake = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"w_i_sublake",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%w_i_sublake = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"frozen_years",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%frozen_years = tmp_lev(:,i,j); enddo; enddo
+    call nc_read(fnm,"thaw_timer",tmp_lev,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%thaw_timer = tmp_lev(:,i,j); enddo; enddo
+    deallocate(tmp_lev)
+    allocate(tmp_wet(nmonwet,nx,ny))
+    call nc_read(fnm,"f_wet_long",tmp_wet,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%f_wet_long = tmp_wet(:,i,j); enddo; enddo
+    deallocate(tmp_wet)
+    allocate(tmp_lak(nl_l,nx,ny))
+    call nc_read(fnm,"f_i_lake",tmp_lak,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%f_i_lake = tmp_lak(:,i,j); enddo; enddo
+    deallocate(tmp_lak)
 
-        call nc_read(fnm,"litter_c",lnd(i,j)%litter_c,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c",lnd(i,j)%fast_c,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c",lnd(i,j)%slow_c,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c13",lnd(i,j)%litter_c13,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c13",lnd(i,j)%fast_c13,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c13",lnd(i,j)%slow_c13,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c14",lnd(i,j)%litter_c14,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c14",lnd(i,j)%fast_c14,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c14",lnd(i,j)%slow_c14,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c_shelf",lnd(i,j)%litter_c_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c_shelf",lnd(i,j)%fast_c_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c_shelf",lnd(i,j)%slow_c_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c13_shelf",lnd(i,j)%litter_c13_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c13_shelf",lnd(i,j)%fast_c13_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c13_shelf",lnd(i,j)%slow_c13_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c14_shelf",lnd(i,j)%litter_c14_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c14_shelf",lnd(i,j)%fast_c14_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c14_shelf",lnd(i,j)%slow_c14_shelf,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c_ice",lnd(i,j)%litter_c_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c_ice",lnd(i,j)%fast_c_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c_ice",lnd(i,j)%slow_c_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c13_ice",lnd(i,j)%litter_c13_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c13_ice",lnd(i,j)%fast_c13_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c13_ice",lnd(i,j)%slow_c13_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c14_ice",lnd(i,j)%litter_c14_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c14_ice",lnd(i,j)%fast_c14_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c14_ice",lnd(i,j)%slow_c14_ice,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c_lake",lnd(i,j)%litter_c_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c_lake",lnd(i,j)%fast_c_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c_lake",lnd(i,j)%slow_c_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c13_lake",lnd(i,j)%litter_c13_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c13_lake",lnd(i,j)%fast_c13_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c13_lake",lnd(i,j)%slow_c13_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"litter_c14_lake",lnd(i,j)%litter_c14_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"fast_c14_lake",lnd(i,j)%fast_c14_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"slow_c14_lake",lnd(i,j)%slow_c14_lake,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"cato_c",lnd(i,j)%cato_c,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"cato_c13",lnd(i,j)%cato_c13,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-        call nc_read(fnm,"cato_c14",lnd(i,j)%cato_c14,start=[1,i,j],count=[nlc,1,1],ncid=ncid)
-      enddo
-    enddo
+    allocate(tmp_c(nlc,nx,ny))
+    call nc_read(fnm,"litter_c",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c13",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c13 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c13",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c13 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c13",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c13 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c14",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c14 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c14",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c14 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c14",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c14 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c13_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c13_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c13_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c13_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c13_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c13_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c14_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c14_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c14_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c14_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c14_shelf",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c14_shelf = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c13_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c13_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c13_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c13_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c13_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c13_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c14_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c14_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c14_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c14_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c14_ice",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c14_ice = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c13_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c13_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c13_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c13_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c13_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c13_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"litter_c14_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%litter_c14_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"fast_c14_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%fast_c14_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"slow_c14_lake",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%slow_c14_lake = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"cato_c",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%cato_c = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"cato_c13",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%cato_c13 = tmp_c(:,i,j); enddo; enddo
+    call nc_read(fnm,"cato_c14",tmp_c,ncid=ncid)
+    do j=1,ny; do i=1,nx; lnd(i,j)%cato_c14 = tmp_c(:,i,j); enddo; enddo
+    deallocate(tmp_c)
 
     call nc_read(fnm,"litter_c_peat",    lnd%litter_c_peat,ncid=ncid)
     call nc_read(fnm,"acro_c",           lnd%acro_c,ncid=ncid)
@@ -3186,18 +3310,15 @@ end subroutine lnd_update
     call nc_read(fnm,"f_peat",           lnd%f_peat,ncid=ncid)
     call nc_read(fnm,"f_peat_pot",       lnd%f_peat_pot,ncid=ncid)
     call nc_read(fnm,"dCpeat_dt",        lnd%dCpeat_dt,ncid=ncid)
-    ! the water table is prognostic and is not in restart files written before the aquifer was
-    ! introduced, so stop with an explicit message instead of failing inside netCDF
-    if (.not.nc_exists_var(fnm,"w_table")) then
-      print *,'ERROR: variable w_table missing from the land restart file'
-      print *,'       file : ',trim(fnm)
-      print *,'       the water table is prognostic since the unconfined aquifer was introduced'
-      print *,'       and the restart file has to be regenerated'
-      stop
-    endif
     call nc_read(fnm,"w_table",          lnd%w_table,ncid=ncid)
     call nc_read(fnm,"w_table_min",      lnd%w_table_min,ncid=ncid)
     call nc_read(fnm,"w_table_peat",     lnd%w_table_peat,ncid=ncid)
+    ! surface_hydrology uses the effective water table of the previous step, before groundwater
+    ! and perched_water_table update it
+    call nc_read(fnm,"w_table_eff",      lnd%w_table_eff,ncid=ncid)
+    call nc_read(fnm,"fz_eff",           lnd%fz_eff,ncid=ncid)
+    ! the atmosphere gets the dust emission of the previous land step
+    call nc_read(fnm,"dust_emis",        lnd%dust_emis,ncid=ncid)
 
     call nc_read(fnm,"f_carb",  lnd%f_carb,ncid=ncid)
     call nc_read(fnm,"weath_carb",  lnd%weath_carb,ncid=ncid)

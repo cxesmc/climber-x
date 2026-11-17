@@ -78,6 +78,8 @@ module sic_def
       real(wp), allocatable, dimension(:,:) :: h_sic   !! sea ice thickness over ice covered area [m]
       real(wp), allocatable, dimension(:,:) :: f_sic   !! sea ice fraction of available ocean fraction (f_ocn) []
       real(wp), allocatable, dimension(:,:) :: dh_sic_dt_dyn   !! grid cell mean sea ice thickness change from dynamics (transport) [m/s]
+      real(wp), allocatable, dimension(:,:) :: r_open_shear   !! opening rate by shear deformation 0.5*(del-|div|) from the EVP dynamics [1/s]
+      real(wp), allocatable, dimension(:,:) :: df_sic_shear   !! sea ice fraction change from shear opening (ridging) [1/s]
       real(wp), allocatable, dimension(:,:) :: dh_sic_dt_therm   !! grid cell mean sea ice thickness change from thermodynamics [m/s]
       real(wp), allocatable, dimension(:,:) :: dh_sic_sic  !! change in sea ice thickness from thermodynamics over ice-covered areas [m]
       real(wp), allocatable, dimension(:,:) :: dh_sic_ocn  !! change in sea ice thickness from thermodynamics over ice-free areas [m]

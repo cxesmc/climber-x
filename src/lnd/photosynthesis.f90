@@ -99,7 +99,7 @@ contains
     real(wp) :: c_1, c_2, sigma, ca, pa, pi, b, s
     real(wp) :: vm, vm25, je, jc, tstress, beta
     real(wp) :: agd, rd, rm, and, adt, conv_fac
-    real(wp) :: low, high
+    real(wp) :: low, high, f_can
     real(wp) :: ftemp_air, ftemp_soil, t_soil_resp, resp10, wT
     real(wp) :: resp_leaf, resp_stem, resp_root
     real(wp) :: Ratm13
@@ -185,7 +185,7 @@ contains
             ! ratio of leaf-internal and air CO2 concentration
             if (i_ci.eq.1) then
               ! Cowan–Farquhar optimality hypothesis (Medlyn 2011)
-              xi = 1._wp - 1.6_wp / (1._wp + pft_par%g1(n) / (sqrt_vpd*sqrt(1.e-3_wp)))
+              xi = xi_medlyn(pft_par%g1(n),sqrt_vpd)
             else if (i_ci.eq.2) then
               ! least cost optimality model (Prentice 2014)
               if (i_beta.eq.0) then
@@ -226,6 +226,10 @@ contains
               vm = tstress*vm25*2._wp**(0.1_wp*(tleaf-25._wp))
               ! convert to gC/m2/d
               vm = vm * sec_day*cmass
+              ! vm25 is per m2 LEAF at the canopy top, while apar (hence je) is per m2 GROUND:
+              ! integrate over the canopy assuming Vcmax follows the light profile (big-leaf)
+              f_can = fexp/veg_par%ext_coef  ! m2 leaf / m2 ground, effective
+              vm = vm * f_can
             else if (i_vcmax.eq.3) then
               ! coordination hypothesis (acclimation), see e.g. Harrison 2021 Box 2
               !vm = 1.02_wp*apar*(pi+kc*fac)/(pi+2._wp*gamma_star)  ! gC/mol * mol/m2/day = gC/m2/day
@@ -239,7 +243,7 @@ contains
 
             ! ratio of leaf-internal and air CO2 concentration
             ! Cowan–Farquhar optimality hypothesis (Medlyn 2011)
-            xi = 1._wp - 1.6_wp / (1._wp + pft_par%g1(n) / (sqrt_vpd*sqrt(1.e-3_wp)))
+            xi = xi_medlyn(pft_par%g1(n),sqrt_vpd)
 
             ! leaf internal CO2 concentration
             ci(n) = xi * ca  ! mol/mol
@@ -266,6 +270,10 @@ contains
               vm = tstress*vm25*2._wp**(0.1_wp*(tleaf-25._wp))
               ! convert to gC/m2/d
               vm = vm * sec_day*cmass
+              ! vm25 is per m2 LEAF at the canopy top, while apar (hence je) is per m2 GROUND:
+              ! integrate over the canopy assuming Vcmax follows the light profile (big-leaf)
+              f_can = fexp/veg_par%ext_coef  ! m2 leaf / m2 ground, effective
+              vm = vm * f_can
             else if (i_vcmax.eq.3) then
               ! coordination hypothesis (acclimation), see e.g. Harrison 2021 Box 2
               !vm = 1.02_wp*apar*(pi+kc*fac)/(pi+2._wp*gamma_star)  ! gC/mol * mol/m2/day = gC/m2/day
@@ -378,11 +386,14 @@ contains
             endif
           else
             ! C4 path
-            discrimination(n) = 4.4_wp*(ca-ci(n))/ca + (-5.7_wp+20._wp*0.35_wp)*ci(n)/ca ! permil
+            ! Farquhar 1983: a*(1-ci/ca) + (b4 + phi*(b3-s))*ci/ca, b4=-5.7, b3=30, s=1.8, leakiness phi=0.35
+            discrimination(n) = 4.4_wp*(ca-ci(n))/ca + (-5.7_wp+0.35_wp*(30._wp-1.8_wp))*ci(n)/ca ! permil
           endif
 
-          alpha13_gpp = 1._wp-discrimination(n)*1.e-3_wp
-          alpha14_gpp = 1._wp-2._wp*discrimination(n)*1.e-3_wp
+          ! Delta = R_atm/R_plant - 1  =>  R_plant = R_atm/(1+Delta)
+          alpha13_gpp = 1._wp/(1._wp+discrimination(n)*1.e-3_wp)
+          ! 14C fractionation is the square of the 13C one, consistent with the D14C normalisation
+          alpha14_gpp = alpha13_gpp**2
 
           npp13(n) = alpha13_gpp*Ratm13*npp(n)
           npp14(n) = alpha14_gpp*Ratm14*npp(n)
@@ -436,6 +447,27 @@ contains
     return
 
   end subroutine photosynthesis
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function :  x i _ m e d l y n
+  !   Purpose  :  ci/ca ratio from the Medlyn 2011 optimal stomatal model,
+  !               gs = g0 + 1.6*(1+g1/sqrt(D))*A/ca  =>  ci/ca = g1/(g1+sqrt(D)), eq. 13
+  !               (the 1.6 converts gs for water to CO2 and cancels)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  function xi_medlyn(g1,sqrt_vpd) result(xi)
+
+    implicit none
+
+    real(wp), intent(in) :: g1        ! kPa^0.5
+    real(wp), intent(in) :: sqrt_vpd  ! Pa^0.5
+    real(wp) :: xi
+    real(wp) :: sqrt_vpd_kpa
+
+    sqrt_vpd_kpa = sqrt_vpd*sqrt(1.e-3_wp)
+    xi = g1 / (g1 + sqrt_vpd_kpa)
+
+  end function xi_medlyn
 
 end module photosynthesis_mod
 

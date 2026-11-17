@@ -103,6 +103,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: pressure
      real(wp), allocatable, dimension(:) :: rough_m, rough_h, Ch, z0m, Ri
      real(wp), allocatable, dimension(:) :: r_a, r_s, beta_s
+     real(wp) :: f_sub_soil   ! share of the soil-surface evaporation sublimated from a thin snow pack (mask_snow=0)
      real(wp), allocatable, dimension(:) :: r_a_can, r_s_can, beta_s_can
      real(wp), allocatable, dimension(:) :: alb_snow_vis_dir, alb_snow_vis_dif, alb_snow_nir_dir, alb_snow_nir_dif
      real(wp), allocatable, dimension(:) :: albedo, alb_vis_dir, alb_vis_dif, alb_nir_dir, alb_nir_dif
@@ -122,7 +123,7 @@ module lnd_def
      real(wp), allocatable, dimension(:) :: cwd_mon
      real(wp), allocatable, dimension(:) :: ci, g_can, gpp, npp, npp13, npp14, aresp
      real(wp), allocatable, dimension(:) :: discrimination
-     real(wp), allocatable, dimension(:) :: lai, sai, phen, phen_acc, gdd, gamma_leaf, lambda, lai_bal
+     real(wp), allocatable, dimension(:) :: lai, sai, phen, phen_acc, gdd, gamma_leaf, f_deciduous, lambda, lai_bal
      real(wp), allocatable, dimension(:) :: npp_cum, npp13_cum, npp14_cum
      real(wp), allocatable, dimension(:) :: npp_ann, npp13_ann, npp14_ann
      real(wp), allocatable, dimension(:) :: veg_c, veg_h, pft_frac, seed_frac

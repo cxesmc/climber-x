@@ -48,7 +48,7 @@ contains
   !   Purpose    :  compute skin temperature and diagnose surface energy fluxes
   !              :  by solving the surface energy balance equation
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine ebal_veg(frac_surf, mask_snow, h_snow, w_snow, lambda_veg, evap_canopy, subl_canopy, &
+  subroutine ebal_veg(frac_surf, mask_snow, h_snow, w_snow, f_sub_soil, lambda_veg, evap_canopy, subl_canopy, &
                      t_skin, t_skin_old, t_soil, tatm, qatm, pressure, swnet, swnet_min, lwdown, &
                      beta_s, r_s, beta_s_can, r_s_can, r_a, r_a_can, &
                      flx_g, dflxg_dT, flx_melt, flx_g_mean, dflxg_dT_mean, flx_melt_mean, t_skin_amp, &
@@ -61,6 +61,7 @@ contains
     integer, intent(in) :: mask_snow
     real(wp), intent(in) :: h_snow
     real(wp), intent(in) :: w_snow
+    real(wp), intent(in) :: f_sub_soil   ! share of the soil-surface evaporation sublimated from a thin snow pack (mask_snow=0)
     real(wp), dimension(:), intent(in) :: frac_surf, evap_canopy, subl_canopy
     real(wp), dimension(0:), intent(in) :: t_soil, lambda_veg
     real(wp), dimension(:), intent(in) :: tatm, qatm, lwdown, swnet, swnet_min
@@ -110,7 +111,7 @@ contains
           if (mask_snow.eq.0) then
             tsoil = t_soil(1) ! first soil layer temperature
             emiss = surf_par%emissivity(n)
-            L_v_skin = Le
+            L_v_skin = Le + f_sub_soil*(Ls-Le)   ! the share taken from a thin snow pack sublimates
             qsat_e(n) = q_sat_w(t_skin_old(n),p)
             dqsatdT_e(n) = dqsat_dT_w(t_skin_old(n),p)
           else
@@ -359,7 +360,7 @@ contains
 
           if (mask_snow.eq.0) then
             tsoil = t_soil(1) ! first soil layer temperature
-            L_v_sur = Le
+            L_v_sur = Le + f_sub_soil*(Ls-Le)   ! the share taken from a thin snow pack sublimates
             qsat_e(n) = q_sat_w(t_skin_old(n),p)
             dqsatdT_e(n) = dqsat_dT_w(t_skin_old(n),p)
             emiss_soil = surf_par%emissivity(i_bare)

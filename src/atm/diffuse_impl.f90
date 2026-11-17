@@ -16,7 +16,7 @@
 !            where conv_expl = (fdx(i)-fdx(i+1))/sqr is adifa's EXACT zonal
 !            diffusive flux convergence (the original layer-resolved physics; the
 !            gad*z term cancels because adifa differences tp at common height
-!            levels and zeroes sub-surface layers via the face mass dplx), and L
+!            levels and zeroes sub-surface layers via the face mass dplx_dif), and L
 !            is a column Laplacian present ONLY on the LHS, so it does not change
 !            WHAT is diffused - it only damps the stiff polar grid-scale modes.
 !
@@ -44,7 +44,7 @@ module diffuse_impl_mod
   use atm_params, only : wp
   use atm_params, only : tstep, hatm, ra, cp, l_dust
   use atm_grid, only : im, jm, jmc
-  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat
+  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat, diffx_eq
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   !$ use omp_lib
 
@@ -60,7 +60,8 @@ contains
   !   Purpose    :  implicit diffusion of the prognostic columns
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine diffuse_impl(diffx, diffy, &  ! in
-      ra2a, hdust, fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &      ! in
+      ra2a, hdust, &                                                                      ! in
+      fdxdse, fdxwtr, fdxdst, fdxco2, fdydse, fdywtr, fdydst, fdyco2, &                   ! inout
       tam, wcon, dam, cam, &                                                              ! inout
       convwtr_dif)                                                                        ! out
 
@@ -69,10 +70,12 @@ contains
     real(wp), intent(in   ) :: diffx(:,:), diffy(:,:)
     real(wp), intent(in   ) :: ra2a(:,:)
     real(wp), intent(in   ) :: hdust(:,:)
-    real(wp), intent(in   ) :: fdxdse(:,:), fdydse(:,:)   ! adifa exact DSE diffusive fluxes (zonal/merid)
-    real(wp), intent(in   ) :: fdxwtr(:,:), fdywtr(:,:)   ! adifa exact water diffusive fluxes
-    real(wp), intent(in   ) :: fdxdst(:,:), fdydst(:,:)   ! adifa exact dust diffusive fluxes
-    real(wp), intent(in   ) :: fdxco2(:,:), fdyco2(:,:)   ! adifa exact CO2 diffusive fluxes
+    ! in: adifa's explicit diffusive fluxes of the current state; out: the fluxes actually
+    ! realized by the implicit solve, whose convergence is exactly the applied increment
+    real(wp), intent(inout) :: fdxdse(:,:), fdydse(:,:)   ! DSE diffusive fluxes (zonal/merid)
+    real(wp), intent(inout) :: fdxwtr(:,:), fdywtr(:,:)   ! water diffusive fluxes
+    real(wp), intent(inout) :: fdxdst(:,:), fdydst(:,:)   ! dust diffusive fluxes
+    real(wp), intent(inout) :: fdxco2(:,:), fdyco2(:,:)   ! CO2 diffusive fluxes
 
     real(wp), intent(inout) :: tam(:,:)
     real(wp), intent(inout) :: wcon(:,:)
@@ -81,8 +84,8 @@ contains
 
     real(wp), intent(out  ) :: convwtr_dif(:,:)
 
-    integer :: i, j
-    real(wp) :: fac(im,jm)
+    integer :: i, j, n, nt
+    real(wp), dimension(im,jm) :: fac_dse, fac_wtr, fac_dst, fac_co2
     real(wp) :: heff
     real(wp) :: wcon_old(im,jm)
 
@@ -94,55 +97,76 @@ contains
     ! on the LHS only and provides the unconditionally-stable implicit damping of the
     ! stiff polar grid-scale modes; it does not change what is diffused.
 
-    !---------------------------------------------------------------
+    ! Conversion factors from the flux convergence to the tendency of each column variable.
     ! dry static energy: dtam = dt * cp/cheat * conv.  The transport carries DSE (cp*T per
     ! unit mass) and the reservoir is the column enthalpy cheat=pzsa*amas*cp, so the ratio
     ! is simply 1/M, M being the local column mass.  Same conversion time_step applies to
-    ! the advective convdse (deba/cheat), so the implicit and explicit diffusion paths and
+    ! the advective convdse (deba/cheat), so the diffusion, the advection and
     ! the column energy budget all use one and the same heat capacity.
-    !---------------------------------------------------------------
-    fac(:,:) = cp/cheat(:,:)
-    call zonal_diffuse(tam, diffx, fac, .true., fdxdse)
-    call merid_diffuse(tam, diffy, fac, .true., fdydse)
+    ! column water content: 1
+    ! dust: ddam = dt * 1/(heff*ra) * conv_expl
+    ! CO2: dcam = dt * 1/(hatm*ra2a) * conv
+    !$omp parallel do private(i,j,heff)
+    do j=1,jm
+      do i=1,im
+        fac_dse(i,j) = cp/cheat(i,j)
+        fac_wtr(i,j) = 1._wp
+        if (l_dust) then
+          heff = hdust(i,j)*hatm/(hdust(i,j)+hatm)   ! m
+          fac_dst(i,j) = 1._wp/(heff*ra)
+        endif
+        fac_co2(i,j) = 1._wp/(hatm*ra2a(i,j))
+        wcon_old(i,j) = wcon(i,j)
+      enddo
+    enddo
+    !$omp end parallel do
 
-    !---------------------------------------------------------------
-    ! column water content 
-    !---------------------------------------------------------------
-    wcon_old(:,:) = wcon(1:im,1:jm)
-    fac(:,:) = 1._wp
-    call zonal_diffuse(wcon, diffx, fac, .false., fdxwtr)
-    call merid_diffuse(wcon, diffy, fac, .false., fdywtr)
+    ! The rows (zonal sweep) and then the columns (meridional sweep) of all tracers are
+    ! independent, so each sweep is one parallel loop over tracers x rows (columns).
+    ! Tracers: 1 dse, 2 water, 3 CO2, 4 dust (only if l_dust).
+    nt = 3
+    if (l_dust) nt = 4
+
+    !$omp parallel do private(n,j)
+    do n=1,nt*jm
+      j = mod(n-1,jm)+1
+      select case ((n-1)/jm+1)
+      case (1)
+        call zonal_row(j, tam, diffx, fac_dse, .true., fdxdse)
+      case (2)
+        call zonal_row(j, wcon, diffx, fac_wtr, .false., fdxwtr)
+      case (3)
+        call zonal_row(j, cam, diffx, fac_co2, .true., fdxco2)
+      case (4)
+        call zonal_row(j, dam, diffx, fac_dst, .true., fdxdst)
+      end select
+    enddo
+    !$omp end parallel do
+
+    !$omp parallel do private(n,i)
+    do n=1,nt*im
+      i = mod(n-1,im)+1
+      select case ((n-1)/im+1)
+      case (1)
+        call merid_col(i, tam, diffy, fac_dse, .true., fdydse)
+      case (2)
+        call merid_col(i, wcon, diffy, fac_wtr, .false., fdywtr)
+      case (3)
+        call merid_col(i, cam, diffy, fac_co2, .true., fdyco2)
+      case (4)
+        call merid_col(i, dam, diffy, fac_dst, .true., fdydst)
+      end select
+    enddo
+    !$omp end parallel do
+
     ! realized implicit diffusive moisture convergence (zonal+meridional, for precip)
+    !$omp parallel do private(i,j)
     do j=1,jm
       do i=1,im
         convwtr_dif(i,j) = (wcon(i,j) - wcon_old(i,j))/tstep   ! kg/m2/s
       enddo
     enddo
-
-    !---------------------------------------------------------------
-    ! dust: ddam = dt * 1/(heff*ra) * conv_expl
-    !---------------------------------------------------------------
-    if (l_dust) then
-      do j=1,jm
-        do i=1,im
-          heff = hdust(i,j)*hatm/(hdust(i,j)+hatm)   ! m
-          fac(i,j) = 1._wp/(heff*ra)
-        enddo
-      enddo
-      call zonal_diffuse(dam, diffx, fac, .true., fdxdst)
-      call merid_diffuse(dam, diffy, fac, .true., fdydst)
-    endif
-
-    !---------------------------------------------------------------
-    ! CO2: dcam = dt * 1/(hatm*ra2a) * conv
-    !---------------------------------------------------------------
-    do j=1,jm
-      do i=1,im
-        fac(i,j) = 1._wp/(hatm*ra2a(i,j))
-      enddo
-    enddo
-    call zonal_diffuse(cam, diffx, fac, .true., fdxco2)
-    call merid_diffuse(cam, diffy, fac, .true., fdyco2)
+    !$omp end parallel do
 
     return
 
@@ -150,8 +174,8 @@ contains
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  z o n a l _ d i f f u s e
-  !   Purpose    :  one implicit zonal diffusion step of a 2D column field x,
+  !   Subroutine :  z o n a l _ r o w
+  !   Purpose    :  one implicit zonal diffusion step of latitude row j of a 2D column field x,
   !                 solving directly for the increment dprog:
   !                   (I - dt*fac*L) dprog = dt*fac*conv_expl ,  x := x + dprog
   !                 conv_expl = (fdx(i)-fdx(i+1))/sqr is adifa's zonal
@@ -160,24 +184,22 @@ contains
   !                 and provides the unconditionally-stable implicit damping of
   !                 the stiff polar grid-scale modes. Conservative (flux form).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine zonal_diffuse(x, diffx, fac, mass_weight, fdx)
+  subroutine zonal_row(j, x, diffx, fac, mass_weight, fdx)
 
     implicit none
 
+    integer,  intent(in   ) :: j          ! latitude row
     real(wp), intent(inout) :: x(:,:)
     real(wp), intent(in   ) :: diffx(:,:)
     real(wp), intent(in   ) :: fac(:,:)
     logical,  intent(in   ) :: mass_weight
-    real(wp), intent(in   ) :: fdx(:,:)   ! (imc,jm) adifa exact zonal diffusive flux
+    real(wp), intent(inout) :: fdx(:,:)   ! (imc,jm) zonal diffusive flux: in explicit (adifa), out realized
 
-    integer :: i, j, ip
+    integer :: i, ip, imi
     real(wp) :: g
     real(wp) :: dxf(im), wx(im)
     real(wp) :: a(im), b(im), c(im), r(im), sol(im)
 
-
-    !$omp parallel do private(i,j,ip,g,dxf,wx,a,b,c,r,sol)
-    do j=1,jm
 
       ! zonal face weights and diffusion coefficients (face i lies west of cell i)
       do i=1,im
@@ -186,7 +208,8 @@ contains
         else
           wx(i) = 1._wp
         endif
-        dxf(i) = diffx(i,j)*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
+        ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq, as in adifa
+        dxf(i) = (diffx(i,j)+diffx_eq(j))*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
       enddo
 
       do i=1,im
@@ -205,17 +228,24 @@ contains
         x(i,j) = x(i,j) + sol(i)    ! x + dprog
       enddo
 
-    enddo
-    !$omp end parallel do
+      ! realized flux through face i (west of cell i): the explicit flux plus the implicit
+      ! correction of the LHS operator, F_i = fdx_i + dxf_i*(dprog_{i-1}-dprog_i), so that
+      ! dprog_i = dt*fac*(F_i - F_{i+1})/sqr exactly
+      do i=1,im
+        imi = i-1
+        if (imi.lt.1) imi = im
+        fdx(i,j) = fdx(i,j) + dxf(i)*(sol(imi)-sol(i))
+      enddo
+      fdx(im+1,j) = fdx(1,j)
 
     return
 
-  end subroutine zonal_diffuse
+  end subroutine zonal_row
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  m e r i d _ d i f f u s e
-  !   Purpose    :  one implicit meridional diffusion step of a 2D column field
+  !   Subroutine :  m e r i d _ c o l
+  !   Purpose    :  one implicit meridional diffusion step of longitude column i of a 2D column field
   !                 x, solving directly for the increment dprog:
   !                   (I - dt*fac*L) dprog = dt*fac*conv_expl ,  x := x + dprog
   !                 conv_expl = (fdy(j+1)-fdy(j))/sqr is adifa's meridional
@@ -223,24 +253,22 @@ contains
   !                 per longitude, no-flux poles) is on the LHS only, providing
   !                 the implicit stabilization. Conservative (flux form).
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine merid_diffuse(x, diffy, fac, mass_weight, fdy)
+  subroutine merid_col(i, x, diffy, fac, mass_weight, fdy)
 
     implicit none
 
+    integer,  intent(in   ) :: i          ! longitude column
     real(wp), intent(inout) :: x(:,:)
     real(wp), intent(in   ) :: diffy(:,:)
     real(wp), intent(in   ) :: fac(:,:)
     logical,  intent(in   ) :: mass_weight
-    real(wp), intent(in   ) :: fdy(:,:)   ! (im,jmc) adifa exact meridional diffusive flux
+    real(wp), intent(inout) :: fdy(:,:)   ! (im,jmc) meridional diffusive flux: in explicit (adifa), out realized
 
-    integer :: i, j, jp
+    integer :: j, jp
     real(wp) :: g
     real(wp) :: dyf(jm+1), wy(jm)
     real(wp) :: a(jm), b(jm), c(jm), r(jm), sol(jm)
 
-
-    !$omp parallel do private(i,j,jp,g,dyf,wy,a,b,c,r,sol)
-    do i=1,im
 
       ! meridional face weights and diffusion coefficients (face j lies south of
       ! cell j); diffy is zero at j=1 and j=jmc -> automatic no-flux at the poles
@@ -269,11 +297,15 @@ contains
         x(i,j) = x(i,j) + sol(j)    ! x + dprog
       enddo
 
-    enddo
-    !$omp end parallel do
+      ! realized flux through face j (south of cell j, positive towards j-1),
+      ! F_j = fdy_j + dyf_j*(dprog_j-dprog_{j-1}), so that dprog_j = dt*fac*(F_{j+1}-F_j)/sqr
+      ! exactly; dyf(1) = dyf(jm+1) = 0 keeps the pole faces at zero
+      do j=2,jm
+        fdy(i,j) = fdy(i,j) + dyf(j)*(sol(j)-sol(j-1))
+      enddo
 
     return
 
-  end subroutine merid_diffuse
+  end subroutine merid_col
 
 end module diffuse_impl_mod

@@ -159,7 +159,7 @@ module lnd_out
  
   type carbon_out
     real(wp), dimension(nx,ny) :: fpeat, fpeatpot, dCpeatdt, acroh, catoh
-    real(wp), dimension(nx,ny,npft) :: lai, sai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, veg_h, pfts, seeds, vegc, lambda
+    real(wp), dimension(nx,ny,npft) :: lai, sai, xi, wue, gcan, gpp, npp, npp13, npp14, aresp, veg_h, pfts, seeds, vegc, lambda, f_deciduous
     real(wp), dimension(nx,ny,npft) :: gamma_dist, gamma_luc, gamma_ice, gamma_fire
     real(wp), dimension(nx,ny,npft) :: fire_c, fire_c13, fire_c14
     real(wp), dimension(nx,ny) :: fuel, f_fire_fuel, f_fire_cwd
@@ -1770,6 +1770,7 @@ contains
                 ann_c%seeds(i,j,:)  = lnd(i,j)%seed_frac
                 ann_c%sai(i,j,:)   = lnd(i,j)%sai
                 ann_c%lambda(i,j,:)   = lnd(i,j)%lambda
+                ann_c%f_deciduous(i,j,:) = lnd(i,j)%f_deciduous
                 ann_c%gamma_dist(i,j,:)  = lnd(i,j)%gamma_dist*sec_year    ! 1/years
                 ann_c%gamma_fire(i,j,:)  = lnd(i,j)%gamma_fire*sec_year    ! 1/years
                 ann_c%gamma_luc(i,j,:)   = lnd(i,j)%gamma_luc*sec_year     ! 1/years
@@ -3132,6 +3133,7 @@ end do
     call nc_write(fnm,"pfts",      sngl(vars%pfts),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="pft fraction of icefree area",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"bare",      sngl(vars%bare),  dims=[dim_lon,dim_lat,dim_time],start=[1,1,nout],count=[nx,ny,1],long_name="bare soil fraction of icefree area",units="/",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"lambda",sngl(vars%lambda),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="NPP partitioning factor",units="1",missing_value=missing_value,ncid=ncid)
+    call nc_write(fnm,"f_deciduous",sngl(vars%f_deciduous),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="deciduous fraction of PFT",units="1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"gamma_dist",sngl(vars%gamma_dist), dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate",units="years^-1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"gamma_luc",sngl(vars%gamma_luc),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from land use change",units="years^-1",missing_value=missing_value,ncid=ncid)
     call nc_write(fnm,"gamma_ice",sngl(vars%gamma_ice),  dims=[dim_lon,dim_lat,dim_npft,dim_time],start=[1,1,1,nout],count=[nx,ny,npft,1],long_name="disturbance rate from ice sheets",units="years^-1",missing_value=missing_value,ncid=ncid)

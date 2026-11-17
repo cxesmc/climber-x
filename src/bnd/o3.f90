@@ -32,6 +32,7 @@ module o3_mod
 
    real(wp), dimension(:), allocatable :: time
    real(wp), dimension(:,:,:,:), allocatable :: o3_data
+   real(wp), dimension(:), allocatable :: o3_pl    !! relative pressure (p/1000 hPa) of the O3 levels, surface first
 
 contains
 
@@ -43,26 +44,49 @@ contains
    character (len=*), intent(in), optional :: o3_file
 
    integer :: ntime, nlon, nlat, nlev
+   real(wp), dimension(:), allocatable :: lev
+   character (len=64) :: lev_units
 
 
-   if (io3.eq.1) then
+   if (io3.eq.1 .or. io3.eq.2) then
 
      nlon  = nc_size(trim(o3_file),"lon")
      nlat  = nc_size(trim(o3_file),"lat")
      nlev  = nc_size(trim(o3_file),"lev")
-     allocate( o3_data(nlon,nlat,nlev,1) )
-     call nc_read(trim(o3_file),"o3",o3_data) 
-
-   else if (io3.eq.2) then
-
-     ntime = nc_size(trim(o3_file),"time")
-     nlon  = nc_size(trim(o3_file),"lon")
-     nlat  = nc_size(trim(o3_file),"lat")
-     nlev  = nc_size(trim(o3_file),"lev")
-     allocate( time(ntime) )
+     if (io3.eq.1) then
+       ntime = 1
+     else
+       ntime = nc_size(trim(o3_file),"time")
+       allocate( time(ntime) )
+       call nc_read(trim(o3_file),"time",time)    ! time in years BP
+     endif
      allocate( o3_data(nlon,nlat,nlev,ntime) )
-     call nc_read(trim(o3_file),"time",time)    ! time in years BP
      call nc_read(trim(o3_file),"o3",o3_data) 
+
+     ! vertical levels of the O3 field from the file, as relative pressure p/p0 (p0 = 1000 hPa)
+     allocate( lev(nlev) )
+     allocate( o3_pl(nlev) )
+     call nc_read(trim(o3_file),"lev",lev)
+     call nc_read_attr(trim(o3_file),"lev","units",lev_units)
+     select case (trim(lev_units))
+     case ("hPa", "mbar", "millibar")
+       o3_pl = lev/1000._wp
+     case ("Pa")
+       o3_pl = lev/1.e5_wp
+     case default
+       print *,'ERROR: unknown units of lev in O3 file ',trim(o3_file),': ',trim(lev_units)
+       stop
+     end select
+
+     ! surface first, as expected by the interpolation to the atmospheric levels in the coupler
+     if (nlev.gt.1 .and. o3_pl(1).lt.o3_pl(nlev)) then
+       o3_pl = o3_pl(nlev:1:-1)
+       o3_data = o3_data(:,:,nlev:1:-1,:)
+     endif
+     if (any(o3_pl(2:nlev).ge.o3_pl(1:nlev-1))) then
+       print *,'ERROR: O3 levels in ',trim(o3_file),' are not strictly monotonic'
+       stop
+     endif
 
    endif
 

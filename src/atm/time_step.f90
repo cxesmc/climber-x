@@ -29,7 +29,7 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, l_diff_impl, rh_max_ocn, rh_max_lnd, tsl_gams_min_lnd, tsl_gams_min_ice, i_tsl, c_tsl_gam, c_tsl_gam_ice, hgams
+  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, rh_max_ocn, rh_max_lnd, i_tsl, c_tsl_gam, tsl_gams_min, gams_min, hgams
   use atm_params, only : z_q2, z_q2_ocn, p0
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr, cheat
@@ -144,7 +144,7 @@ contains
     ! global atmospheric energy budget accumulators (for check_energy)
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
-    !$omp parallel do private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
+    !$omp parallel do collapse(2) private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
     !$omp private(rh_max,frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,tam_old_loc,z_ab,t_ab,r_ab,q_ab,rho_ab,cq2l,gq2,ddtcol) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
@@ -171,15 +171,10 @@ contains
         ! update prognostic atmospheric humidity
         !-------------------------------------
 
-        ! moisture convergence applied to the column-water budget: in implicit-
-        ! diffusion mode the diffusive convergence is already in wcon (from
-        ! diffuse_impl), so only the advective part is added here; in explicit mode
-        ! the diffusion is part of the tendency, so the total convergence is used.
-        if (l_diff_impl) then
-          convwtr_bdg = convwtr_adv(i,j)
-        else
-          convwtr_bdg = convwtr(i,j)
-        endif
+        ! moisture convergence applied to the column-water budget: the diffusive
+        ! convergence is already in wcon (from diffuse_impl), so only the advective
+        ! part is added here.
+        convwtr_bdg = convwtr_adv(i,j)
 
         ! column water content tendency
         dwdt = evpa(i,j)-prc_tmp+convwtr_bdg  ! kg/m2/s
@@ -208,9 +203,9 @@ contains
           wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
 
-        ! underflow: cap qam at 1e-6
-        if (qam(i,j).lt.1.e-6_wp) then
-          qam(i,j) = 1.e-6_wp
+        ! underflow: cap qam at 1e-7
+        if (qam(i,j).lt.1.e-7_wp) then
+          qam(i,j) = 1.e-7_wp
           if (qsat.gt.0._wp) ram(i,j) = qam(i,j)/qsat
           wcon(i,j) = ram(i,j)*A_loc + W_strat(i,j)
         endif
@@ -385,13 +380,16 @@ contains
           ! the air temperature profile reduced to sea level, with no skin contribution at all
           tsksl(i,j) = tsl(i,j)
         else if (i_tsl.eq.1) then
-          ! built from the skin temperature instead: the warmer of tam and tskina, carried down
-          ! through the surface layer and then to sea level
-          tsksl(i,j) = tskina(i,j) &
-            - max(frst(i,j,i_lnd)*tsl_gams_min_lnd+frst(i,j,i_ice)*tsl_gams_min_ice,gams(i,j))*hgams &
-            + ((1._wp-frst(i,j,i_ice))*c_tsl_gam + frst(i,j,i_ice)*c_tsl_gam_ice)*zsa(i,j)
+          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
+          tsksl(i,j) = tskina(i,j) - max(tsl_gams_min,gams(i,j))*hgams + c_tsl_gam*zsa(i,j)
         else if (i_tsl.eq.2) then
-          tsksl(i,j) = tam(i,j) + c_tsl_gam*zsa(i,j)
+          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
+          tsksl(i,j) = t_prof(zsa(i,j), 0._wp, tskina(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
+            - max(tsl_gams_min,gams(i,j))*hgams
+        else if (i_tsl.eq.3) then
+          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
+          tsksl(i,j) = t_prof(zsa(i,j), 0._wp, tskina(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
+            - max(frst(i,j,i_ice)*tsl_gams_min+(1._wp-frst(i,j,i_ice))*gams_min,gams(i,j))*hgams
         endif
 
         !-------------------------------------

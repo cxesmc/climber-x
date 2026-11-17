@@ -34,11 +34,10 @@ module atm_out
   use timer, only : time_soy_atm, time_eoy_atm, time_eom_atm, time_out_atm
   use control, only : out_dir
   use climber_grid, only : lon, lat, lon0, lat0, dlon, dlat
-  use atm_grid, only : im, jm, km, imc, jmc, kmc, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, pl, cheat, &
+  use atm_grid, only : im, jm, km, imc, jmc, kmc, nm, aim, k850, k500, dpl, sqr, esqr, zl, zc, z3l, pl, cheat, &
   dxt, dy, cost, sint, i_ice
   use atm_params, only : l_daily_output
   use atm_params, only : p0, ra, gad, cle, cls, cp, hatm, sigma_so4, c_syn_6, l_co2d
-  use atm_params, only : l_diff_impl
   use atm_params, only : l_output_flx3d, l_output_extended
   use vesta_mod, only : t_prof, rh_prof
   use atm_def, only : atm_class
@@ -151,6 +150,8 @@ module atm_out
     real(wp) :: itcz
     real(wp) :: itcz_min
     real(wp) :: itcz_max
+    real(wp) :: efe
+    real(wp) :: aht_eq
     real(wp) :: had_width
   end type
 
@@ -162,15 +163,20 @@ module atm_out
 
     real(wp) :: had_fi
     real(wp) :: had_width
+    real(wp) :: aht_eq
+    real(wp) :: efe
+    real(wp) :: ficz
 
     real(wp), allocatable, dimension(:) :: ptrop
     real(wp), allocatable, dimension(:) :: tslz
     real(wp), allocatable, dimension(:) :: tskslz
     real(wp), allocatable, dimension(:) :: ekez
     real(wp), allocatable, dimension(:) :: slpz
+    real(wp), allocatable, dimension(:) :: mtz
     real(wp), allocatable, dimension(:) :: vabz
     real(wp), allocatable, dimension(:) :: acbarz
     real(wp), allocatable, dimension(:) :: uz850
+    real(wp), allocatable, dimension(:,:) :: u3fz
     real(wp), allocatable, dimension(:) :: uz500
 
     real(wp), allocatable, dimension(:,:,:) :: zs
@@ -181,6 +187,7 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: slope_y
     real(wp), allocatable, dimension(:,:) :: frlnd
     real(wp), allocatable, dimension(:,:) :: frocn
+    real(wp), allocatable, dimension(:,:,:) :: o3     !! O3 concentration at the atmospheric levels (mol/mol), annual only
 
     real(wp), allocatable, dimension(:,:) :: tam        !! extrapolated surface temperature (K)
     real(wp), allocatable, dimension(:,:) :: qam        !! extrapolated surface specific humidity (kg/kg)
@@ -262,6 +269,8 @@ module atm_out
 
     ! 3D longitude-latitude-height
     real(wp), allocatable, dimension(:,:,:) :: t3   !! atmospheric temperature (K)
+    real(wp), allocatable, dimension(:,:,:) :: z3   !! geometric height of the levels (m), from the hypsometric equation (vesta)
+    real(wp), allocatable, dimension(:,:,:) :: zg   !! geopotential height of the levels (m), z3 - z3(p0) + Rd*T(p0)/g*ln(slp/p0)
     real(wp), allocatable, dimension(:,:,:) :: q3   !! atmospheric specific humidity (kg/kg)
     real(wp), allocatable, dimension(:,:,:) :: r3   !! atmospheric relative humidity
     real(wp), allocatable, dimension(:,:,:) :: tp   !! potential temperature
@@ -279,7 +288,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: aslp
     real(wp), allocatable, dimension(:,:) :: aslp_temp
     real(wp), allocatable, dimension(:,:) :: aslp_topo
-    real(wp), allocatable, dimension(:,:) :: dz500
+    real(wp), allocatable, dimension(:,:) :: aslp_eddy
+    real(wp), allocatable, dimension(:,:) :: aslp_gill
     real(wp), allocatable, dimension(:,:) :: us
     real(wp), allocatable, dimension(:,:) :: vs
     real(wp), allocatable, dimension(:,:) :: usk
@@ -290,6 +300,8 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: vab
     real(wp), allocatable, dimension(:,:,:) :: taux
     real(wp), allocatable, dimension(:,:,:) :: tauy
+    real(wp), allocatable, dimension(:,:) :: tauxa      !! grid-cell mean zonal surface stress, all surface types (N/m2)
+    real(wp), allocatable, dimension(:,:) :: tauya      !! grid-cell mean meridional surface stress, all surface types (N/m2)
     real(wp), allocatable, dimension(:,:) :: wcld
     real(wp), allocatable, dimension(:,:) :: woro
     real(wp), allocatable, dimension(:,:) :: wsyn       !! vertical synoptic wind component (m/s)
@@ -390,9 +402,6 @@ module atm_out
     real(wp), allocatable, dimension(:,:) :: eke
     real(wp), allocatable, dimension(:,:) :: sam
     real(wp), allocatable, dimension(:,:) :: synprod
-    real(wp), allocatable, dimension(:,:) :: syndiss
-    real(wp), allocatable, dimension(:,:) :: synadv
-    real(wp), allocatable, dimension(:,:) :: syndif
     real(wp), allocatable, dimension(:,:) :: synsur
     real(wp), allocatable, dimension(:,:) :: cdif     
     real(wp), allocatable, dimension(:,:) :: diffx
@@ -448,9 +457,11 @@ contains
      allocate(ann_a%tskslz(jm))
      allocate(ann_a%ekez(jm))
      allocate(ann_a%slpz(jm))
+     allocate(ann_a%mtz(jm))
      allocate(ann_a%vabz(jmc))
      allocate(ann_a%acbarz(jm))
      allocate(ann_a%uz850(jm))
+     allocate(ann_a%u3fz(jm,km))
      allocate(ann_a%uz500(jm))
 
      allocate(ann_a%zs(im,jm,nm))
@@ -461,6 +472,7 @@ contains
      allocate(ann_a%slope_y(im,jm))
      allocate(ann_a%frlnd(im,jm))
      allocate(ann_a%frocn(im,jm))
+     allocate(ann_a%o3(im,jm,kmc))
 
      allocate(ann_a%tam(im,jm))  
      allocate(ann_a%qam(im,jm))  
@@ -541,6 +553,8 @@ contains
      allocate(ann_a%so4_ot(im,jm)) 
 
      allocate(ann_a%t3(im,jm,kmc))
+     allocate(ann_a%z3(im,jm,kmc))
+     allocate(ann_a%zg(im,jm,kmc))
      allocate(ann_a%q3(im,jm,kmc))
      allocate(ann_a%r3(im,jm,kmc))
      allocate(ann_a%tp(im,jm,kmc)) 
@@ -556,7 +570,8 @@ contains
      allocate(ann_a%aslp(im,jm))
      allocate(ann_a%aslp_temp(im,jm))
      allocate(ann_a%aslp_topo(im,jm))
-     allocate(ann_a%dz500(im,jm))
+     allocate(ann_a%aslp_eddy(im,jm))
+     allocate(ann_a%aslp_gill(im,jm))
      allocate(ann_a%slp(im,jm))
      allocate(ann_a%slp1(im,jm))
      allocate(ann_a%us(im,jm))
@@ -569,6 +584,8 @@ contains
      allocate(ann_a%vab(im,jmc))
      allocate(ann_a%taux(im,jm,nm))
      allocate(ann_a%tauy(im,jm,nm))
+     allocate(ann_a%tauxa(im,jm))
+     allocate(ann_a%tauya(im,jm))
      allocate(ann_a%wcld(im,jm))
      allocate(ann_a%woro(im,jm))
      allocate(ann_a%wsyn(im,jm))
@@ -671,9 +688,6 @@ contains
      allocate(ann_a%eke(im,jm))
      allocate(ann_a%sam(im,jm))
      allocate(ann_a%synprod(im,jm))
-     allocate(ann_a%syndiss(im,jm))
-     allocate(ann_a%synadv(im,jm))
-     allocate(ann_a%syndif(im,jm))
      allocate(ann_a%synsur(im,jm))
      allocate(ann_a%cdif(im,jm) )    
      allocate(ann_a%diffx(imc,jm))
@@ -688,9 +702,11 @@ contains
      allocate(mon_a(k)%tskslz(jm))
      allocate(mon_a(k)%ekez(jm))
      allocate(mon_a(k)%slpz(jm))
+     allocate(mon_a(k)%mtz(jm))
      allocate(mon_a(k)%vabz(jmc))
      allocate(mon_a(k)%acbarz(jm))
      allocate(mon_a(k)%uz850(jm))
+     allocate(mon_a(k)%u3fz(jm,km))
      allocate(mon_a(k)%uz500(jm))
      allocate(mon_a(k)%tam(im,jm))  
      allocate(mon_a(k)%qam(im,jm))  
@@ -771,6 +787,8 @@ contains
      allocate(mon_a(k)%so4_ot(im,jm)) 
 
      allocate(mon_a(k)%t3(im,jm,kmc))
+     allocate(mon_a(k)%z3(im,jm,kmc))
+     allocate(mon_a(k)%zg(im,jm,kmc))
      allocate(mon_a(k)%q3(im,jm,kmc))
      allocate(mon_a(k)%r3(im,jm,kmc))
      allocate(mon_a(k)%tp(im,jm,kmc)) 
@@ -786,7 +804,8 @@ contains
      allocate(mon_a(k)%aslp(im,jm))
      allocate(mon_a(k)%aslp_temp(im,jm))
      allocate(mon_a(k)%aslp_topo(im,jm))
-     allocate(mon_a(k)%dz500(im,jm))
+     allocate(mon_a(k)%aslp_eddy(im,jm))
+     allocate(mon_a(k)%aslp_gill(im,jm))
      allocate(mon_a(k)%slp(im,jm))
      allocate(mon_a(k)%slp1(im,jm))
      allocate(mon_a(k)%us(im,jm))
@@ -799,6 +818,8 @@ contains
      allocate(mon_a(k)%vab(im,jmc))
      allocate(mon_a(k)%taux(im,jm,nm))
      allocate(mon_a(k)%tauy(im,jm,nm))
+     allocate(mon_a(k)%tauxa(im,jm))
+     allocate(mon_a(k)%tauya(im,jm))
      allocate(mon_a(k)%wcld(im,jm))
      allocate(mon_a(k)%woro(im,jm))
      allocate(mon_a(k)%wsyn(im,jm))
@@ -901,9 +922,6 @@ contains
      allocate(mon_a(k)%eke(im,jm))
      allocate(mon_a(k)%sam(im,jm))
      allocate(mon_a(k)%synprod(im,jm))
-     allocate(mon_a(k)%syndiss(im,jm))
-     allocate(mon_a(k)%synadv(im,jm))
-     allocate(mon_a(k)%syndif(im,jm))
      allocate(mon_a(k)%synsur(im,jm))
      allocate(mon_a(k)%cdif(im,jm) )    
      allocate(mon_a(k)%diffx(imc,jm))
@@ -950,7 +968,7 @@ contains
     integer :: i, j, m, k, y, ind, imi, jmi, ipl, jpl
     character (len=256) :: fnm
     real(wp) :: mon_avg, ann_avg, jja_avg, favg, favgl, favg6090, fcum, xsum, lsqr, esqr6090
-    real(wp) :: t, rh
+    real(wp) :: t, rh, t_p0, dz_slp
     real(wp) :: faxmasi, faymasi
     real(wp) :: tup
     real(wp) :: ps, slp
@@ -1134,6 +1152,8 @@ contains
       ann_ts(y)%itcz =0
       ann_ts(y)%itcz_min =0
       ann_ts(y)%itcz_max =0
+      ann_ts(y)%efe =0
+      ann_ts(y)%aht_eq =0
       ann_ts(y)%had_width =0
     endif
 
@@ -1398,6 +1418,8 @@ contains
     ann_ts(y)%itcz          = ann_ts(y)%itcz          + atm%had_fi*180./pi * ann_avg
     ann_ts(y)%itcz_min      = min(ann_ts(y)%itcz_min, atm%had_fi*180./pi)
     ann_ts(y)%itcz_max      = max(ann_ts(y)%itcz_max, atm%had_fi*180./pi)
+    ann_ts(y)%efe           = ann_ts(y)%efe           + atm%efe * ann_avg
+    ann_ts(y)%aht_eq        = ann_ts(y)%aht_eq        + atm%aht_eq * ann_avg
     ann_ts(y)%had_width     = ann_ts(y)%had_width     + atm%had_width*180./pi * ann_avg
 
     if( time_eoy_atm ) then
@@ -1473,14 +1495,19 @@ contains
         do m=1,nmon_year
           mon_a(m)%had_fi      = 0. 
           mon_a(m)%had_width   = 0. 
+          mon_a(m)%aht_eq      = 0. 
+          mon_a(m)%efe         = 0. 
+          mon_a(m)%ficz        = 0. 
           mon_a(m)%ptrop       = 0. 
           mon_a(m)%tslz        = 0. 
           mon_a(m)%tskslz       = 0. 
           mon_a(m)%ekez        = 0. 
           mon_a(m)%slpz        = 0. 
+          mon_a(m)%mtz         = 0. 
           mon_a(m)%vabz        = 0. 
           mon_a(m)%acbarz      = 0. 
           mon_a(m)%uz850       = 0. 
+          mon_a(m)%u3fz        = 0. 
           mon_a(m)%uz500       = 0. 
           mon_a(m)%tam         = 0. 
           mon_a(m)%qam         = 0. 
@@ -1543,6 +1570,8 @@ contains
           mon_a(m)%evpa        = 0. 
           mon_a(m)%Ri          = 0. 
           mon_a(m)%t3          = 0. 
+          mon_a(m)%z3          = 0. 
+          mon_a(m)%zg          = 0. 
           mon_a(m)%q3          = 0. 
           mon_a(m)%r3          = 0. 
           mon_a(m)%tp          = 0. 
@@ -1557,7 +1586,8 @@ contains
           mon_a(m)%aslp        = 0. 
           mon_a(m)%aslp_temp   = 0. 
           mon_a(m)%aslp_topo   = 0. 
-          mon_a(m)%dz500       = 0. 
+          mon_a(m)%aslp_eddy   = 0. 
+          mon_a(m)%aslp_gill   = 0. 
           mon_a(m)%slp         = 0. 
           mon_a(m)%slp1        = 0. 
           mon_a(m)%us         = 0. 
@@ -1570,6 +1600,8 @@ contains
           mon_a(m)%vab        = 0. 
           mon_a(m)%taux        = 0. 
           mon_a(m)%tauy        = 0. 
+          mon_a(m)%tauxa       = 0. 
+          mon_a(m)%tauya       = 0. 
           mon_a(m)%wcld        = 0. 
           mon_a(m)%woro        = 0. 
           mon_a(m)%weff        = 0. 
@@ -1664,9 +1696,6 @@ contains
           mon_a(m)%eke         = 0. 
           mon_a(m)%sam         = 0. 
           mon_a(m)%synprod     = 0. 
-          mon_a(m)%syndiss     = 0. 
-          mon_a(m)%synadv      = 0. 
-          mon_a(m)%syndif      = 0. 
           mon_a(m)%synsur      = 0. 
           mon_a(m)%cdif        = 0. 
           mon_a(m)%xz          = 0. 
@@ -1688,14 +1717,19 @@ contains
 
       mon_a(mon)%had_fi      = mon_a(mon)%had_fi      + mon_avg * atm%had_fi*180./pi    ! deg
       mon_a(mon)%had_width   = mon_a(mon)%had_width   + mon_avg * atm%had_width*180./pi ! deg
+      mon_a(mon)%aht_eq      = mon_a(mon)%aht_eq      + mon_avg * atm%aht_eq     ! PW
+      mon_a(mon)%efe         = mon_a(mon)%efe         + mon_avg * atm%efe        ! deg
+      mon_a(mon)%ficz        = mon_a(mon)%ficz        + mon_avg * atm%ficz*180./pi ! deg
       mon_a(mon)%ptrop       = mon_a(mon)%ptrop       + mon_avg * atm%ptrop
       mon_a(mon)%tslz        = mon_a(mon)%tslz        + mon_avg * sum(atm%tsl,1)/im
       mon_a(mon)%tskslz       = mon_a(mon)%tskslz       + mon_avg * sum(atm%tsksl,1)/im
       mon_a(mon)%ekez        = mon_a(mon)%ekez        + mon_avg * sum(atm%sam,1)/im
       mon_a(mon)%slpz        = mon_a(mon)%slpz        + mon_avg * sum(atm%slp,1)/im
+      mon_a(mon)%mtz         = mon_a(mon)%mtz         + mon_avg * atm%mtz
       mon_a(mon)%vabz        = mon_a(mon)%vabz        + mon_avg * sum(atm%vab,1)/im
       mon_a(mon)%acbarz      = mon_a(mon)%acbarz      + mon_avg * sum(atm%acbar,1)/im
       mon_a(mon)%uz850       = mon_a(mon)%uz850       + mon_avg * sum(atm%u3(:,:,k850),1)/im
+      mon_a(mon)%u3fz        = mon_a(mon)%u3fz        + mon_avg * sum(atm%u3f,1)/im
       mon_a(mon)%uz500       = mon_a(mon)%uz500       + mon_avg * sum(atm%u3(:,:,k500),1)/im
       mon_a(mon)%tam         = mon_a(mon)%tam         + mon_avg * atm%tam
       mon_a(mon)%qam         = mon_a(mon)%qam         + mon_avg * atm%qam
@@ -1773,7 +1807,8 @@ contains
       mon_a(mon)%aslp        = mon_a(mon)%aslp        + mon_avg * atm%aslp
       mon_a(mon)%aslp_temp   = mon_a(mon)%aslp_temp   + mon_avg * atm%aslp_temp
       mon_a(mon)%aslp_topo   = mon_a(mon)%aslp_topo   + mon_avg * atm%aslp_topo
-      mon_a(mon)%dz500       = mon_a(mon)%dz500       + mon_avg * atm%dz500 
+      mon_a(mon)%aslp_eddy   = mon_a(mon)%aslp_eddy   + mon_avg * atm%aslp_eddy
+      mon_a(mon)%aslp_gill   = mon_a(mon)%aslp_gill   + mon_avg * atm%aslp_gill
       mon_a(mon)%slp         = mon_a(mon)%slp         + mon_avg * atm%slp
       mon_a(mon)%us         = mon_a(mon)%us         + mon_avg * sum(atm%us*atm%frst,3)
       mon_a(mon)%vs         = mon_a(mon)%vs         + mon_avg * sum(atm%vs*atm%frst,3)
@@ -1785,6 +1820,8 @@ contains
       mon_a(mon)%vab        = mon_a(mon)%vab        + mon_avg * atm%vab
       mon_a(mon)%taux        = mon_a(mon)%taux        + mon_avg * atm%taux
       mon_a(mon)%tauy        = mon_a(mon)%tauy        + mon_avg * atm%tauy
+      mon_a(mon)%tauxa       = mon_a(mon)%tauxa       + mon_avg * sum(atm%taux*atm%frst,3)
+      mon_a(mon)%tauya       = mon_a(mon)%tauya       + mon_avg * sum(atm%tauy*atm%frst,3)
       mon_a(mon)%wcld        = mon_a(mon)%wcld        + mon_avg * atm%wcld
       mon_a(mon)%woro        = mon_a(mon)%woro        + mon_avg * atm%woro
       mon_a(mon)%weff        = mon_a(mon)%weff        + mon_avg * atm%weff
@@ -2034,9 +2071,6 @@ contains
       mon_a(mon)%eke         = mon_a(mon)%eke         + mon_avg * atm%eke
       mon_a(mon)%sam         = mon_a(mon)%sam         + mon_avg * atm%sam
       mon_a(mon)%synprod     = mon_a(mon)%synprod     + mon_avg * atm%synprod
-      mon_a(mon)%syndiss     = mon_a(mon)%syndiss     + mon_avg * atm%syndiss
-      mon_a(mon)%synadv      = mon_a(mon)%synadv      + mon_avg * atm%synadv            
-      mon_a(mon)%syndif      = mon_a(mon)%syndif      + mon_avg * atm%syndif
       mon_a(mon)%synsur      = mon_a(mon)%synsur      + mon_avg * sum(atm%synsur*atm%frst,3)
       mon_a(mon)%cdif        = mon_a(mon)%cdif        + mon_avg * atm%cdif           
 
@@ -2077,18 +2111,34 @@ contains
           ctt = t_prof(atm%zsa(i,j), atm%hcld(i,j), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
           mon_a(mon)%ctt(i,j) = mon_a(mon)%ctt(i,j) + mon_avg * ctt
 
-          ! recalculation of 3d fields to levels
+          ! Geopotential height of the levels. z3 is anchored at the surface pressure
+          ! p0*exp(-zsa/hatm) of the layer masses and so carries only the thickness. The winds
+          ! are the geostrophic wind of slp at the p0 level plus the thermal wind integrated
+          ! from that level (u2d, u3d), so the geopotential is the thickness above the p0 level,
+          ! z3 - z3l(1), plus the height of the p0 level in a column with sea level pressure
+          ! slp, which with T held on the pressure levels is a layer with the temperature of the
+          ! p0 level (z3l(1) = 0 over the ocean, a sub-surface extrapolation over land):
+          !   zg = z3 - z3l(1) + Rd*T(p0)/g*ln(slp/p0)
+          t_p0 = t_prof(atm%zsa(i,j), z3l(i,j,1), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
+          dz_slp = Rd*t_p0/g*log(atm%slp(i,j)/p0) - z3l(i,j,1)
+
+          ! recalculation of 3d fields to levels: the interfaces, i.e. the pressures pl*p0,
+          ! at their geometric heights z3l (vesta)
           do k=1,kmc
 
+            ! geometric and geopotential height
+            mon_a(mon)%z3(i,j,k) = mon_a(mon)%z3(i,j,k) + mon_avg * z3l(i,j,k)
+            mon_a(mon)%zg(i,j,k) = mon_a(mon)%zg(i,j,k) + mon_avg * (z3l(i,j,k)+dz_slp)
+
             ! temperature
-            t = t_prof(atm%zsa(i,j), zl(k), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
+            t = t_prof(atm%zsa(i,j), z3l(i,j,k), atm%tam(i,j), atm%gams(i,j), atm%gamb(i,j), atm%gamt(i,j), atm%htrop(i,j), 1)
             mon_a(mon)%t3(i,j,k) = mon_a(mon)%t3(i,j,k) + mon_avg * t
 
             ! potential temperature
-            mon_a(mon)%tp(i,j,k) = mon_a(mon)%tp(i,j,k) + mon_avg * (t+gad*zl(k))
+            mon_a(mon)%tp(i,j,k) = mon_a(mon)%tp(i,j,k) + mon_avg * (t+gad*z3l(i,j,k))
 
             ! relative humidity
-            rh = rh_prof(atm%zsa(i,j), zl(k), atm%ram(i,j), atm%hrm(i,j), atm%htrop(i,j))
+            rh = rh_prof(atm%zsa(i,j), z3l(i,j,k), atm%ram(i,j), atm%hrm(i,j), atm%htrop(i,j))
             mon_a(mon)%r3(i,j,k) = mon_a(mon)%r3(i,j,k) + mon_avg * rh 
 
             ! specific humidity 
@@ -2098,13 +2148,11 @@ contains
           if (time_eom_atm) then
             do k=1,km
               ! lapse rate
-              mon_a(mon)%gamma(i,j,k) = - (mon_a(mon)%t3(i,j,k+1)-mon_a(mon)%t3(i,j,k))/(zl(k+1)-zl(k))
+              mon_a(mon)%gamma(i,j,k) = - (mon_a(mon)%t3(i,j,k+1)-mon_a(mon)%t3(i,j,k))/(mon_a(mon)%z3(i,j,k+1)-mon_a(mon)%z3(i,j,k))
             enddo
             do k=1,kmc
-              ! density, eq. 4.70 in PIK-Report
-              mon_a(mon)%rho(i,j,k) = ra*exp(-zl(k)/hatm) &
-                * (1.-1./T0*(mon_a(mon)%t3(i,j,1)-T0)) &
-                * (1.-1./mon_a(mon)%t3(i,j,1)*(mon_a(mon)%t3(i,j,k)-mon_a(mon)%t3(i,j,1)))
+              ! density at the level pressure p0*exp(-zl/hatm) and temperature
+              mon_a(mon)%rho(i,j,k) = p0*exp(-zl(k)/hatm)/(Rd*mon_a(mon)%t3(i,j,k))
             enddo
           endif
 
@@ -2226,6 +2274,7 @@ contains
       ann_a%slope_y     = atm%slope_y
       ann_a%frlnd       = atm%frlnd
       ann_a%frocn       = atm%frocn
+      ann_a%o3          = atm%o3      ! prescribed, updated once per year
 
       ! reference 2m temperature for the bias diagnostic: CMIP6 piControl multi-model median
       ! (benchmark/scripts/make_cmip6_t2m_median.jl), pre-industrial like the model's control
@@ -2403,6 +2452,8 @@ contains
     call nc_write(fnm,"itcz", vars%itcz , dims=[dim_time],start=[nout],count=[y],long_name="Latitude of the ITCZ (annual average)",units="deg",ncid=ncid)
     call nc_write(fnm,"itcz_min", vars%itcz_min , dims=[dim_time],start=[nout],count=[y],long_name="Min latitude of the ITCZ",units="deg",ncid=ncid)
     call nc_write(fnm,"itcz_max", vars%itcz_max , dims=[dim_time],start=[nout],count=[y],long_name="Max latitude of the ITCZ",units="deg",ncid=ncid)
+    call nc_write(fnm,"efe", vars%efe , dims=[dim_time],start=[nout],count=[y],long_name="Energy flux equator (annual average)",units="deg",ncid=ncid)
+    call nc_write(fnm,"aht_eq", vars%aht_eq , dims=[dim_time],start=[nout],count=[y],long_name="Northward atmospheric energy transport across the equator from boundary fluxes (annual average)",units="PW",ncid=ncid)
     call nc_write(fnm,"had_width", vars%had_width , dims=[dim_time],start=[nout],count=[y],long_name="Width of the Hadley cells (annual average)",units="deg",ncid=ncid)
 
     call nc_write(fnm,"tg_l      ", vars%t2m_l     , dims=[dim_time],start=[nout],count=[y],long_name="temperature",units="degC",ncid=ncid)
@@ -2457,11 +2508,16 @@ contains
     call nc_write_dim(fnm,"lon", x=lon, axis="x", ncid=ncid)
     call nc_write_dim(fnm,"doy",x=1._wp,dx=1._wp,nx=nday_year,ncid=ncid)
     call nc_write_dim(fnm,"hour",x=1._wp,dx=1._wp,nx=24,ncid=ncid)
-    call nc_write_dim(fnm,"zlay",x=zc(1:km),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"zlev",x=zl(1:km),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"zlevw",x=zl(1:kmc),units="m",ncid=ncid)
-    call nc_write_dim(fnm,"plev",x=pl(1:km)*1000._wp,units="hPa",ncid=ncid)
-    call nc_write_dim(fnm,"plevw",x=pl(1:kmc)*1000._wp,units="hPa",ncid=ncid)
+    ! Vertical coordinates: the model levels are fixed fractions pl = p/p0 of the global mean sea
+    ! level pressure p0 (variable p0, it changes with the atmospheric mass over the topography).
+    ! They are written as the nominal pressure 1000 hPa*p/p0; the actual pressure is
+    ! plev*p0/1000 hPa. Their geometric heights are z3 and their geopotential heights zg.
+    call nc_write_dim(fnm,"play",x=exp(-zc(1:km)/hatm)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the layer centres, 1000 hPa*p/p0 (actual pressure: play*p0/1000 hPa)",ncid=ncid)
+    call nc_write_dim(fnm,"plev",x=pl(1:km)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the levels, 1000 hPa*p/p0 (actual pressure: plev*p0/1000 hPa)",ncid=ncid)
+    call nc_write_dim(fnm,"plevw",x=pl(1:kmc)*1000._wp,units="hPa",axis="z", &
+      long_name="nominal pressure of the levels incl. the top, 1000 hPa*p/p0 (actual pressure: plevw*p0/1000 hPa)",ncid=ncid)
     call nc_write_dim(fnm,"lonu",x=lon0,dx=dlon,nx=imc,ncid=ncid)
     call nc_write_dim(fnm,"latv",x=lat0,dx=dlat,nx=jmc,ncid=ncid)
     call nc_write_dim(fnm,"st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
@@ -2486,8 +2542,13 @@ contains
     character (len=*) :: fnm
     integer :: ndat, nout, ncid
 
+    integer :: i, j, ipl, imi
+    real(wp) :: curl_tau(im,jm)
+
 
     if (ndat.eq.13) then
+      call nc_write(fnm,"p0         ", p0*0.01_wp, dims=["time"],start=[nout],count=[1], &
+        long_name="global mean sea level pressure, reference of the pressure levels (actual pressure = plev*p0/1000 hPa)",units="hPa",ncid=ncid)
 
       call nc_write(fnm,"solar      ", sngl(vars%solar     (:,:,jm:1:-1)), dims=["doy ","hour","lat ","time"], &
         start=[1,1,1,nout],count=[nday_year,24,jm,1],long_name="TOA incoming solar radiation",units="W/m2",ncid=ncid)
@@ -2512,6 +2573,8 @@ contains
         start=[1,1,nout],count=[im,jm,1],long_name="land fraction in grid cell",units="1",ncid=ncid)
       call nc_write(fnm,"frocn      ", sngl(vars%frocn     (:,jm:1:-1) ), dims=["lon ","lat ","time"], &
         start=[1,1,nout],count=[im,jm,1],long_name="ocean fraction in grid cell",units="1",ncid=ncid)
+      call nc_write(fnm,"o3         ", sngl(vars%o3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","time "], &
+        start=[1,1,1,nout],count=[im,jm,kmc,1],long_name="O3 concentration at the atmospheric levels",units="mol/mol",ncid=ncid)
       call nc_write(fnm,"zs         ", sngl(vars%zs        (:,jm:1:-1,:) ), dims=["lon ","lat ","st  ","time"], &
         start=[1,1,1,nout],count=[im,jm,nm,1],long_name="surface elevation for each macro surface type",units="m",ncid=ncid)
 
@@ -2526,6 +2589,12 @@ contains
       start=[ndat,nout],count=[1,1],long_name="",units="deg",ncid=ncid)
     call nc_write(fnm,"had_width  ", sngl(vars%had_width  ), dims=["mon ","time"], &
       start=[ndat,nout],count=[1,1],long_name="",units="deg",ncid=ncid)
+    call nc_write(fnm,"aht_eq     ", sngl(vars%aht_eq     ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="northward atmospheric energy transport across the equator implied by the boundary fluxes",units="PW",ncid=ncid)
+    call nc_write(fnm,"efe        ", sngl(vars%efe        ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="energy flux equator (zero of the implied atmospheric energy transport)",units="deg",ncid=ncid)
+    call nc_write(fnm,"ficz       ", sngl(vars%ficz       ), dims=["mon ","time"], &
+      start=[ndat,nout],count=[1,1],long_name="ITCZ latitude of the meridional cell geometry (boundary between the Hadley cells)",units="deg",ncid=ncid)
 
     call nc_write(fnm,"ptrop      ", sngl(vars%ptrop      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="relative pressure at tropopause",units="/",ncid=ncid)
@@ -2537,12 +2606,16 @@ contains
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean eddy kinetic energy",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"slpz       ", sngl(vars%slpz       (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean sea level pressure",units="Pa",ncid=ncid)
+    call nc_write(fnm,"mtz        ", sngl(vars%mtz        (jm:1:-1)), dims=["lat ","mon ","time"], &
+      start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean mountain torque [p_s dz_s/dx] (form drag of the orography, eastward on the ground)",units="N/m2",ncid=ncid)
     call nc_write(fnm,"vabz       ", sngl(vars%vabz       (jmc:1:-1)), dims=["latv","mon ","time"], &
       start=[1,ndat,nout],count=[jmc,1,1],long_name="zonal mean meridional ageostrophic wind in PBL",units="m/s",ncid=ncid)
     call nc_write(fnm,"acbarz     ", sngl(vars%acbarz     (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean cross-isobar angle",units="rad",ncid=ncid)
     call nc_write(fnm,"uz850      ", sngl(vars%uz850      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 850 hPa zonal wind",units="m/s",ncid=ncid)
+    call nc_write(fnm,"u3fz       ", sngl(vars%u3fz       (jm:1:-1,:)), dims=["lat ","plev","mon ","time"], &
+      start=[1,1,ndat,nout],count=[jm,km,1,1],long_name="zonal mean zonal wind with undamped thermal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"uz500      ", sngl(vars%uz500      (jm:1:-1)), dims=["lat ","mon ","time"], &
       start=[1,ndat,nout],count=[jm,1,1],long_name="zonal mean 500 hPa zonal wind",units="m/s",ncid=ncid)
 
@@ -2627,6 +2700,25 @@ contains
       start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="zonal surface wind stress",units="N/m2",ncid=ncid)
     call nc_write(fnm,"tauy       ", sngl(vars%tauy      (:,jm:1:-1,:) ), dims=["lon ","lat ","st  ","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="meridional surface wind stress",units="N/m2",ncid=ncid)
+    call nc_write(fnm,"tauxa      ", sngl(vars%tauxa     (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean zonal surface stress (all surface types)",units="N/m2",ncid=ncid)
+    call nc_write(fnm,"tauya      ", sngl(vars%tauya     (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="grid-cell mean meridional surface stress (all surface types)",units="N/m2",ncid=ncid)
+    ! curl of the grid-cell mean surface stress at T-points (centred differences; j=1 is the northernmost row).
+    ! Unlike curl_tau in ocn.nc (the stress felt by the ocean, i.e. the ice-ocean stress under sea ice, at cell corners)
+    ! this is the curl of the total atmospheric surface stress, comparable with reanalysis iews/inss.
+    curl_tau = -9999._wp
+    do j=2,jm-1
+      do i=1,im
+        ipl = modulo(i,im) + 1
+        imi = modulo(i - 2, im) + 1
+        curl_tau(i,j) = (vars%tauya(ipl,j)-vars%tauya(imi,j))/(2._wp*dxt(j)) &
+                      - (vars%tauxa(i,j-1)*cost(j-1)-vars%tauxa(i,j+1)*cost(j+1))/(2._wp*dy*cost(j))
+      enddo
+    enddo
+    call nc_write(fnm,"curl_tau   ", sngl(curl_tau(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="curl of the grid-cell mean surface stress (all surface types)",units="N/m3", &
+      missing_value=-9999.,ncid=ncid)
 
     call nc_write(fnm,"tsl        ", sngl(vars%tsl       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level temperature",units="K",ncid=ncid)
@@ -2657,17 +2749,21 @@ contains
     call nc_write(fnm,"tskin_tam  ", sngl(vars%tskina(:,jm:1:-1)-vars%tam(:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="skin temperature - atmospheric temperature",units="K",ncid=ncid)
 
-    call nc_write(fnm,"t3         ", sngl(vars%t3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"t3         ", sngl(vars%t3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D atmospheric temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"q3         ", sngl(vars%q3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"z3         ", sngl(vars%z3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
+      start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="geometric height of the levels",units="m",ncid=ncid)
+    call nc_write(fnm,"zg         ", sngl(vars%zg        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
+      start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="geopotential height of the levels, z3 - z3(p0) + Rd*T(p0)/g*ln(slp/p0)",units="m",ncid=ncid)
+    call nc_write(fnm,"q3         ", sngl(vars%q3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D specific humidity",units="kg/kg",ncid=ncid)
-    call nc_write(fnm,"r3         ", sngl(vars%r3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"r3         ", sngl(vars%r3        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D relative humidity",units="1",ncid=ncid)
-    call nc_write(fnm,"tp         ", sngl(vars%tp        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"tp         ", sngl(vars%tp        (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D potential temperature",units="K",ncid=ncid)
-    call nc_write(fnm,"gamma      ", sngl(vars%gamma     (:,jm:1:-1,:) ), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"gamma      ", sngl(vars%gamma     (:,jm:1:-1,:) ), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D atmospheric temperature lapse rate",units="K/m",ncid=ncid)
-    call nc_write(fnm,"rho        ", sngl(vars%rho       (:,jm:1:-1,:) ), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"rho        ", sngl(vars%rho       (:,jm:1:-1,:) ), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D atmospheric density",units="kg/m3",ncid=ncid)
 
     call nc_write(fnm,"convdse    ", sngl(vars%convdse    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2715,12 +2811,14 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal sea level pressure from azonal temperature",units="Pa",ncid=ncid)
     call nc_write(fnm,"aslp_topo  ", sngl(vars%aslp_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal sea level pressure from topographic stationary waves",units="Pa",ncid=ncid)
+    call nc_write(fnm,"aslp_eddy  ", sngl(vars%aslp_eddy  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="transient-eddy part of the stationary-wave azonal sea level pressure (included in aslp_topo)",units="Pa",ncid=ncid)
+    call nc_write(fnm,"aslp_gill  ", sngl(vars%aslp_gill  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="Gill-type baroclinic response to the azonal latent heating",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp        ", sngl(vars%slp        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure",units="Pa",ncid=ncid)
     call nc_write(fnm,"slp1       ", sngl(vars%slp1       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="sea level pressure derived using constant 6.5 K/km lapse rate",units="Pa",ncid=ncid)
-    call nc_write(fnm,"dz500      ", sngl(vars%dz500      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="azonal geopotential height at 500 hPa",units="m",ncid=ncid)
     call nc_write(fnm,"us        ", sngl(vars%us        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="zonal 10m wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"vs        ", sngl(vars%vs        (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2811,12 +2909,6 @@ contains
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="eddy kinetic energy",units="m2/s2",ncid=ncid)
     call nc_write(fnm,"ekeprod    ", sngl(vars%synprod    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="production of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekediss    ", sngl(vars%syndiss    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="dissipation of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekeadv     ", sngl(vars%synadv     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="advection of eddy kinetic energy",units="",ncid=ncid)
-    call nc_write(fnm,"ekedif     ", sngl(vars%syndif     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="diffusion of eddy kinetic energy",units="",ncid=ncid)
     call nc_write(fnm,"wind_syn   ", sngl(vars%synsur     (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="synoptic 10m wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"cdif       ", sngl(vars%cdif       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
@@ -2826,14 +2918,14 @@ contains
     call nc_write(fnm,"diffy   ", sngl(vars%diffy   (:,jmc:1:-1)), dims=["lon ","latv","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jmc,1,1],long_name="meridional effective macrodiffusivity",units="m2/s",ncid=ncid)
 
-    call nc_write(fnm,"u3         ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","zlev","mon ","time"], &
+    call nc_write(fnm,"u3         ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D zonal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"v3         ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","zlev","mon ","time"], &
+    call nc_write(fnm,"v3         ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D meridional wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"w3         ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"w3         ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","plevw","mon  ","time "], &
       start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="3D vertical velocity",units="m/s",ncid=ncid)
 
-    call nc_write(fnm,"xz         ", sngl(vars%xz         (jmc:1:-1,:)), dims=["latv ","zlevw","mon  ","time "], &
+    call nc_write(fnm,"xz         ", sngl(vars%xz         (jmc:1:-1,:)), dims=["latv ","plevw","mon  ","time "], &
       start=[1,1,ndat,nout],count=[jmc,kmc,1,1],long_name="mean meridional mass streamfunction",units="10**10 kg/s",ncid=ncid)
 
     call nc_write(fnm,"fayg      ", sngl(vars%fayg      (jmc:1:-1)), dims=["latv","mon ","time"], &
@@ -2901,15 +2993,16 @@ contains
     call nc_write(fnm,"so4_ot      ", sngl(vars%so4_ot      (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="SO4 optical thickness",units="1",ncid=ncid)
 
+
     if (l_output_extended) then
     call nc_write(fnm,"psi        ", sngl(vars%psi       (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the column mass correction, F_c = grad(psi)",units="kg/s",ncid=ncid)
     call nc_write(fnm,"psi_topo   ", sngl(vars%psi_topo  (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the topographic part of the column mass correction, zero unless i_mass_com_topo=1",units="kg/s",ncid=ncid)
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="flux potential of the topographic part of the column mass correction, zero unless i_mass_com=1",units="kg/s",ncid=ncid)
     call nc_write(fnm,"convdse_psi", sngl(vars%convdse_psi(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="excess dry static energy convergence from the level at which the grad(psi) mass correction is applied, relative to spreading it through the troposphere by layer mass",units="W/m2",ncid=ncid)
     call nc_write(fnm,"convdse_psi_topo", sngl(vars%convdse_psi_topo(:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="excess dry static energy convergence from the level at which the grad(psi_topo) mass correction is applied, relative to spreading it through the troposphere by layer mass; zero unless i_mass_com_topo=1",units="W/m2",ncid=ncid)
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="excess dry static energy convergence from the level at which the grad(psi_topo) mass correction is applied, relative to spreading it through the troposphere by layer mass; zero unless i_mass_com=1",units="W/m2",ncid=ncid)
     call nc_write(fnm,"prc_conv   ", sngl(vars%prc_conv  (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="precipitation generated by moisture convergence",units="kg/m2/day",ncid=ncid)
     call nc_write(fnm,"prc_over   ", sngl(vars%prc_over  (:,jm:1:-1) ), dims=["lon ","lat ","mon ","time"], &
@@ -2927,26 +3020,26 @@ contains
     call nc_write(fnm,"dswd_dz_ir_cld  ", sngl(vars%dswd_dz_ir_cld  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="partial derivative of shortwave surface down radiation wrt surface albedo",units="W/m2",ncid=ncid)
     if (l_output_flx3d) then
-    call nc_write(fnm,"fax       ", sngl(vars%fax       (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"fax       ", sngl(vars%fax       (:,jm:1:-1,:)), dims=["lonu","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"faxo      ", sngl(vars%faxo      (:,jm:1:-1,:)), dims=["lonu","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"faxo      ", sngl(vars%faxo      (:,jm:1:-1,:)), dims=["lonu","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[imc,jm,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fay       ", sngl(vars%fay       (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
+    call nc_write(fnm,"fay       ", sngl(vars%fay       (:,jmc:1:-1,:)), dims=["lon ","latv","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"fayo      ", sngl(vars%fayo      (:,jmc:1:-1,:)), dims=["lon ","latv","zlay","mon ","time"], &
+    call nc_write(fnm,"fayo      ", sngl(vars%fayo      (:,jmc:1:-1,:)), dims=["lon ","latv","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jmc,km,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fac       ", sngl(vars%fac       (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"fac_topo  ", sngl(vars%fac_topo  (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
-      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="topographic part of the column convergence, -V.grad(p_s), zero unless i_mass_com_topo=1",units="kg/s",ncid=ncid)
+      start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="topographic part of the column convergence, -V.grad(p_s), zero unless i_mass_com=1",units="kg/s",ncid=ncid)
       endif
-    call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"u3a        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic zonal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"v3a        ", sngl(vars%va        (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"v3a        ", sngl(vars%va        (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="3D ageostrophic meridional wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"uter       ", sngl(vars%uter       (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"uter       ", sngl(vars%uter       (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="zonal thermal wind",units="m/s",ncid=ncid)
-    call nc_write(fnm,"vter       ", sngl(vars%vter       (:,jm:1:-1,:)), dims=["lon ","lat ","zlay","mon ","time"], &
+    call nc_write(fnm,"vter       ", sngl(vars%vter       (:,jm:1:-1,:)), dims=["lon ","lat ","play","mon ","time"], &
       start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="meridional thermal wind",units="m/s",ncid=ncid)
     call nc_write(fnm,"faxmas    ", sngl(vars%faxmas    (:,jm:1:-1)), dims=["lon ","lat ","mon ","time"], &
       start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="column integrated zonal mass flux",units="",ncid=ncid)
@@ -3001,10 +3094,12 @@ contains
     units="days", ncid=ncid)
     call nc_write_dim(fnm, "lon", x=lon, axis="x", ncid=ncid)
     call nc_write_dim(fnm, "lat", x=lat, axis="y", ncid=ncid)
-    call nc_write_dim(fnm, "lev", x=zl(1:km), units="m", ncid=ncid)
+    call nc_write_dim(fnm, "plev", x=pl(1:km)*1000._wp, units="hPa", &
+      long_name="nominal pressure of the levels, 1000 hPa*p/p0 (actual pressure: plev*p0/1000 hPa)", ncid=ncid)
     call nc_write_dim(fnm, "lonu",x=-180._wp,dx=5._wp,nx=imc,ncid=ncid)
     call nc_write_dim(fnm, "latv",x=-90._wp,dx=5._wp,nx=jmc,ncid=ncid)
-    call nc_write_dim(fnm, "levw",x=zl,units="m",ncid=ncid)
+    call nc_write_dim(fnm, "plevw",x=pl*1000._wp,units="hPa", &
+      long_name="nominal pressure of the levels incl. the top, 1000 hPa*p/p0 (actual pressure: plevw*p0/1000 hPa)", ncid=ncid)
     call nc_write_dim(fnm, "st",x=1._wp,dx=1._wp,nx=nm,ncid=ncid)
     call nc_close(ncid)
 
@@ -3031,7 +3126,7 @@ contains
     call nc_write(fnm,"tam        ", sngl(vars%tam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"tskina     ", sngl(vars%tskina    (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"qam        ", sngl(vars%qam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
-    call nc_write(fnm,"cam        ", sngl(vars%cam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
+    !call nc_write(fnm,"cam        ", sngl(vars%cam       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"lha        ", sngl(vars%lha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"sha        ", sngl(vars%sha       (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"weff       ", sngl(vars%weff      (:,jm:1:-1) ), dims=["lon ","lat ","doy ","time"],start=[1,1,ndat,nout],count=[im,jm,1,1],long_name="",units="",ncid=ncid)
@@ -3059,11 +3154,11 @@ contains
     call nc_write(fnm,"flwr_dw_sur_cs         ", sngl(vars%flwr_dw_sur_cs         (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
     call nc_write(fnm,"flwr_dw_sur_cld        ", sngl(vars%flwr_dw_sur_cld        (:,jm:1:-1,:)), dims=["lon ","lat ","st  ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,nm,1,1],long_name="",units="",ncid=ncid)
 
-!    call nc_write(fnm,"ua        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"va        ", sngl(vars%va        (:,jmc:1:-1,:)),dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"u3        ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"v3        ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","lev ","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
-!    call nc_write(fnm,"w3        ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon ","lat ","levw","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"ua        ", sngl(vars%ua        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"va        ", sngl(vars%va        (:,jmc:1:-1,:)),dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"u3        ", sngl(vars%u3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"v3        ", sngl(vars%v3        (:,jm:1:-1,:)), dims=["lon ","lat ","plev","doy ","time"],start=[1,1,1,ndat,nout],count=[im,jm,km,1,1],long_name="",units="",ncid=ncid)
+!    call nc_write(fnm,"w3        ", sngl(vars%w3        (:,jm:1:-1,:)), dims=["lon  ","lat  ","plevw","doy  ","time "],start=[1,1,1,ndat,nout],count=[im,jm,kmc,1,1],long_name="",units="",ncid=ncid)
 
    return
 
@@ -3089,14 +3184,19 @@ contains
     ! Set all values to zero
     ave%had_fi      = 0._wp
     ave%had_width   = 0._wp
+    ave%aht_eq      = 0._wp
+    ave%efe         = 0._wp
+    ave%ficz        = 0._wp
     ave%ptrop       = 0._wp
     ave%tslz        = 0._wp
     ave%tskslz      = 0._wp
     ave%ekez        = 0._wp
     ave%slpz        = 0._wp
+    ave%mtz         = 0._wp
     ave%vabz        = 0._wp
     ave%acbarz      = 0._wp
     ave%uz850       = 0._wp
+    ave%u3fz        = 0._wp
     ave%uz500       = 0._wp
     ave%tam         = 0._wp
     ave%qam         = 0._wp
@@ -3159,6 +3259,8 @@ contains
     ave%evpa        = 0._wp
     ave%Ri          = 0._wp
     ave%t3          = 0._wp
+    ave%z3          = 0._wp
+    ave%zg          = 0._wp
     ave%q3          = 0._wp
     ave%r3          = 0._wp
     ave%tp          = 0._wp
@@ -3173,7 +3275,8 @@ contains
     ave%aslp        = 0._wp
     ave%aslp_temp   = 0._wp
     ave%aslp_topo   = 0._wp
-    ave%dz500       = 0._wp
+    ave%aslp_eddy   = 0._wp
+    ave%aslp_gill   = 0._wp
     ave%slp         = 0._wp
     ave%slp1        = 0._wp
     ave%us         = 0._wp
@@ -3186,6 +3289,8 @@ contains
     ave%vab        = 0._wp
     ave%taux        = 0._wp
     ave%tauy        = 0._wp
+    ave%tauxa       = 0._wp
+    ave%tauya       = 0._wp
     ave%wcld        = 0._wp
     ave%woro        = 0._wp
     ave%weff        = 0._wp
@@ -3281,9 +3386,6 @@ contains
     ave%sam         = 0._wp
     ave%eke         = 0._wp
     ave%synprod     = 0._wp
-    ave%syndiss     = 0._wp
-    ave%synadv      = 0._wp
-    ave%syndif      = 0._wp
     ave%synsur      = 0._wp
     ave%cdif        = 0._wp
     ave%fw_pac_atl  = 0.
@@ -3304,14 +3406,19 @@ contains
     do k = 1, n
        ave%had_fi      = ave%had_fi      + d(k)%had_fi      / div
        ave%had_width   = ave%had_width   + d(k)%had_width   / div
+       ave%aht_eq      = ave%aht_eq      + d(k)%aht_eq      / div
+       ave%efe         = ave%efe         + d(k)%efe         / div
+       ave%ficz        = ave%ficz        + d(k)%ficz        / div
        ave%ptrop       = ave%ptrop       + d(k)%ptrop       / div
        ave%tslz        = ave%tslz        + d(k)%tslz        / div
        ave%tskslz       = ave%tskslz       + d(k)%tskslz       / div
        ave%ekez        = ave%ekez        + d(k)%ekez        / div
        ave%slpz        = ave%slpz        + d(k)%slpz        / div
+       ave%mtz         = ave%mtz         + d(k)%mtz         / div
        ave%vabz        = ave%vabz        + d(k)%vabz        / div
        ave%acbarz      = ave%acbarz      + d(k)%acbarz      / div
        ave%uz850       = ave%uz850       + d(k)%uz850       / div
+       ave%u3fz        = ave%u3fz        + d(k)%u3fz        / div
        ave%uz500       = ave%uz500       + d(k)%uz500       / div
        ave%tam         = ave%tam         + d(k)%tam         / div
        ave%qam         = ave%qam         + d(k)%qam         / div
@@ -3374,6 +3481,8 @@ contains
        ave%evpa        = ave%evpa        + d(k)%evpa        / div
        ave%Ri          = ave%Ri          + d(k)%Ri          / div
        ave%t3          = ave%t3          + d(k)%t3          / div
+       ave%z3          = ave%z3          + d(k)%z3          / div
+       ave%zg          = ave%zg          + d(k)%zg          / div
        ave%q3          = ave%q3          + d(k)%q3          / div
        ave%r3          = ave%r3          + d(k)%r3          / div
        ave%tp          = ave%tp          + d(k)%tp          / div
@@ -3390,7 +3499,8 @@ contains
        ave%aslp        = ave%aslp        + d(k)%aslp        / div
        ave%aslp_temp   = ave%aslp_temp   + d(k)%aslp_temp   / div
        ave%aslp_topo   = ave%aslp_topo   + d(k)%aslp_topo   / div
-       ave%dz500       = ave%dz500       + d(k)%dz500       / div
+       ave%aslp_eddy   = ave%aslp_eddy   + d(k)%aslp_eddy   / div
+       ave%aslp_gill   = ave%aslp_gill   + d(k)%aslp_gill   / div
        ave%us         = ave%us         + d(k)%us         / div
        ave%vs         = ave%vs         + d(k)%vs         / div
        ave%usk        = ave%usk        + d(k)%usk        / div
@@ -3401,6 +3511,8 @@ contains
        ave%vab        = ave%vab        + d(k)%vab        / div
        ave%taux        = ave%taux        + d(k)%taux        / div
        ave%tauy        = ave%tauy        + d(k)%tauy        / div
+       ave%tauxa       = ave%tauxa       + d(k)%tauxa       / div
+       ave%tauya       = ave%tauya       + d(k)%tauya       / div
        ave%wcld        = ave%wcld        + d(k)%wcld        / div
        ave%woro        = ave%woro        + d(k)%woro        / div
        ave%weff        = ave%weff        + d(k)%weff        / div
@@ -3496,9 +3608,6 @@ contains
        ave%eke         = ave%eke         + d(k)%eke         / div
        ave%sam         = ave%sam         + d(k)%sam         / div
        ave%synprod     = ave%synprod     + d(k)%synprod     / div
-       ave%syndiss     = ave%syndiss     + d(k)%syndiss     / div
-       ave%synadv      = ave%synadv      + d(k)%synadv      / div
-       ave%syndif      = ave%syndif      + d(k)%syndif      / div
        ave%synsur      = ave%synsur      + d(k)%synsur      / div
        ave%cdif        = ave%cdif        + d(k)%cdif        / div
        ave%fw_pac_atl  = ave%fw_pac_atl  + d(k)%fw_pac_atl  / div

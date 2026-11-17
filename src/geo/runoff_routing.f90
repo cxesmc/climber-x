@@ -187,8 +187,11 @@ contains
                 stop 'problem calculating runoff'
              endif
 
-             ! flow accumulation, upstream drainage area
-             flow_acc(ir,jr) = flow_acc(ir,jr) + area(ir,jr)
+             ! flow accumulation, upstream drainage area: add the area of the source cell (i,j)
+             ! to every cell downstream of it; atomic because paths from different j rows
+             ! (threads) can pass through the same cell
+             !$omp atomic
+             flow_acc(ir,jr) = flow_acc(ir,jr) + area(i,j)
 
           enddo
           ! save the indexes of the runoff destination point (ocean point)

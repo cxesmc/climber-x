@@ -28,7 +28,6 @@ module soil_carbon_par_mod
   use precision, only : wp
   use timer, only : doy, mon, year, nday_mon, nmon_year, nstep_mon_lnd, time_eoy_lnd, sec_year
   use constants, only : T0, k_boltz
-  use control, only : lnd_restart
   use lnd_grid, only : z_int, z, dz, nl
   use lnd_grid, only : z_int_c, z_c, dz_c, nlc
   use lnd_params, only : soilc_par, peat_par, ch4_par, dust_par, nmonwet
@@ -98,8 +97,8 @@ contains
       ! add monthly wetland fraction of the current year
       f_wet_long(nmonwet-nmon_year+1:nmonwet) = f_wet_mon
 
-      if (lnd_restart .and. year.eq.1) then
-        ! fill with current year
+      if (f_wet_long(1).lt.0._wp) then
+        ! history unknown (restart file without f_wet_long): fill with current year
         do n=1,peat_par%nyearwet_peat
           f_wet_long((n-1)*nmon_year+1:nmon_year*n) = f_wet_mon
         enddo

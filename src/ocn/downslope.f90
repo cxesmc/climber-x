@@ -33,7 +33,8 @@ module downslope_mod
   ! i.e. the maximum-entrainment limit. This routine provides the missing pathway following
   ! Campin and Goosse (1999):
   !
-  !  - for every ocean cell whose bottom is shallower than that of a horizontal neighbour, the water
+  !  - for every ocean cell whose bottom is shallower than that of a horizontal neighbour (and not deeper
+  !    than z_downslope_max), the water
   !    in its bottom layer is compared with the neighbour's water at the same level. If it is
   !    denser (by more than drho_downslope_min), a downslope volume flux
   !        Q = c_downslope * sqrt(g' H) * H * L,   g' = g*drho/rho0
@@ -56,9 +57,9 @@ module downslope_mod
 
   use precision, only : wp
   use constants, only : g
-  use ocn_grid, only : maxi, maxj, maxk, k1, mask_ocn, zro, dz, dy, dxv, ocn_vol
+  use ocn_grid, only : maxi, maxj, maxk, k1, mask_ocn, zro, zw, dz, dy, dxv, ocn_vol
   use ocn_params, only : dt, rho0, n_tracers_tot
-  use ocn_params, only : c_downslope, ent_downslope, drho_downslope_min, f_downslope_max
+  use ocn_params, only : c_downslope, ent_downslope, drho_downslope_min, f_downslope_max, z_downslope_max
   use eos_mod
 
   implicit none
@@ -97,6 +98,9 @@ contains
       do i=1,maxi
         if (mask_ocn(i,j).ne.1) cycle
         ks = k1(i,j)    ! bottom level of the (potential) shelf cell
+        ! only shelves and upper slopes are sources: in the nearly homogeneous deep ocean any step between two
+        ! deep columns would pass the density test and drive a spurious open-ocean flow
+        if (-zw(ks-1).gt.z_downslope_max) cycle
 
         do n=1,4
           ii = i+di(n)
