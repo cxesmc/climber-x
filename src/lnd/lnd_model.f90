@@ -1231,54 +1231,38 @@ end subroutine lnd_update
           ! hydraulic properties
           lnd%l2d(i,j)%psi_sat(k) = mineral(i,j)%psi_sat
           lnd%l2d(i,j)%k_sat(k) = mineral(i,j)%k_sat
-          lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
           lnd%l2d(i,j)%psi_exp(k) = -nint(mineral(i,j)%Bi)
-          ! field capacity
-          lnd%l2d(i,j)%theta_field(k) = lnd%l2d(i,j)%theta_sat(k) * (0.1_wp / (86400._wp * lnd%l2d(i,j)%k_sat(k)))**(1._wp/lnd%l2d(i,j)%k_exp(k))
-          ! wilting point
-          lnd%l2d(i,j)%theta_wilt(k) = lnd%l2d(i,j)%theta_sat(k) * (hydro_par%p_psi_min / lnd%l2d(i,j)%psi_sat(k))**(1._wp/lnd%l2d(i,j)%psi_exp(k))
+
+          if (soil_par%uniform_soil_par_hydro) then
+             ! field capacity
+             lnd%l2d(i,j)%theta_field(k) = soil_par%theta_field_u
+             ! wilting point
+             lnd%l2d(i,j)%theta_wilt(k) = soil_par%theta_wilt_u
+
+             ! the exponent of the hydraulic conductivity curve is decoupled from the exponent of the
+             ! retention curve: k_exp_u<0 restores the Clapp-Hornberger/Burdine relation k_exp = 2*b+3,
+             ! a smaller value gives an effective grid-scale conductivity curve flatter than the
+             ! point-scale one (see below)
+             if (soil_par%k_exp_u.lt.0) then
+                lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
+             else
+                lnd%l2d(i,j)%k_exp(k) = soil_par%k_exp_u   
+             endif
+          else
+             ! field capacity
+             lnd%l2d(i,j)%theta_field(k) = lnd%l2d(i,j)%theta_sat(k) * (0.1_wp / (86400._wp * lnd%l2d(i,j)%k_sat(k)))**(1._wp/lnd%l2d(i,j)%k_exp(k))
+             ! wilting point
+             lnd%l2d(i,j)%theta_wilt(k) = lnd%l2d(i,j)%theta_sat(k) * (hydro_par%p_psi_min / lnd%l2d(i,j)%psi_sat(k))**(1._wp/lnd%l2d(i,j)%psi_exp(k))
+
+             lnd%l2d(i,j)%k_exp(k) = 2*nint(mineral(i,j)%Bi)+3
+          endif
+          
           ! thermal properties
           lnd%l2d(i,j)%lambda_s(k) = mineral(i,j)%lambda_s
           lnd%l2d(i,j)%lambda_dry(k) = mineral(i,j)%lambda_dry
         enddo
       enddo
     enddo
-
-    if (soil_par%uniform_porosity) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%theta_sat(k) = soil_par%theta_sat_u
-          enddo
-        enddo
-      enddo
-    endif
-
-    if (soil_par%uniform_soil_par_therm) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%lambda_s(k) = soil_par%lambda_s_u
-            lnd%l2d(i,j)%lambda_dry(k) = soil_par%lambda_dry_u
-          enddo
-        enddo
-      enddo
-    endif
-
-    if (soil_par%uniform_soil_par_hydro) then
-      do i = 1,ni
-        do j = 1,nj
-          do k=1,nl
-            lnd%l2d(i,j)%psi_sat(k) = soil_par%psi_sat_u
-            lnd%l2d(i,j)%k_sat(k) = soil_par%k_sat_u
-            lnd%l2d(i,j)%k_exp(k) = soil_par%k_exp_u
-            lnd%l2d(i,j)%psi_exp(k) = -soil_par%b_u
-            lnd%l2d(i,j)%theta_field(k) = soil_par%theta_field_u
-            lnd%l2d(i,j)%theta_wilt(k) = soil_par%theta_wilt_u
-          enddo
-        enddo
-      enddo
-    endif
 
     ! Handle mcwd_clim based on i_mcwd_clim setting after restart read
     if (veg_par%i_mcwd_clim == 0) then
