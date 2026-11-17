@@ -185,7 +185,6 @@
 /
 
 &ymat
-    flow_law                = "glen"        ! Only "glen" is possible right now
     rf_method               = 1             ! -1: set externally; 0: rf_const everywhere; 1: standard function 
     rf_const                = 1e-18         ! [Pa^-3 a^-1]
     rf_use_eismint2         = False         ! Only applied for rf_method=1
@@ -230,7 +229,6 @@
     method          = "enth"            ! "fixed", "robin", "temp", "enth"
     qb_method       = 2                 ! 1: simple-stagger, 2: quadrature
     dt_method       = "FE"              ! "FE", "AB", "SAM"
-    solver_advec    = "impl-upwind"     ! "expl", "impl-upwind"
     advecxy_order   = 2                 ! Horizontal advection order: 1=upwind, 2=flux-limited 2nd-order upwind
     gamma           = 1.0               ! [K] Scalar for the pressure melting point decay function
     strain_heating  = "full"            ! "full": from 3D viscosity and strain rate, "sia": SIA approx., "none": no strain heating
