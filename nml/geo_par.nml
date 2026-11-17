@@ -13,7 +13,7 @@
  !-------------------------------------------------------
  ! land-sea mask and Straits settings  
  !-------------------------------------------------------
- f_crit           = 0.15        ! minimum ocean fraction for grid cell to be ocean on the coarse grid
+ f_crit           = 0.1         ! minimum ocean fraction for grid cell to be ocean on the coarse grid
  l_ocn_topo       = T           ! topology-preserving coarse ocean mask: close coarse shortcuts across high resolution land/ice
                                 ! explicit l_close_* closures set below are respected
  z_sill_ocn_topo  = 0.          ! m, high resolution ocean connects across a coarse cell face only where deeper than this, used only if l_ocn_topo=T
@@ -22,7 +22,7 @@
  n_excess_ocn_topo = 6          ! tolerated excess path length (cells) between coarse and high resolution connectivity, used only if l_ocn_topo=T
  l_close_panama   = F           ! enforce closed Panama strait?
  l_close_bering   = F           ! enforce closed Bering strait?
- l_close_iberia   = F           ! close the strait through Iberia (Alboran-Biscay v-face at 40N) by removing the Biscay cell (-2.5E,42.5N)?
+ l_close_iberia   = T           ! close the strait through Iberia (Alboran-Biscay v-face at 40N) by removing the Biscay cell (-2.5E,42.5N)?
  l_close_hudson   = F           ! enforce closed Hudson strait?
  l_close_baltic   = F           ! enforce disconnected Baltic Sea?
  i_fix_cell_grl   = 0
