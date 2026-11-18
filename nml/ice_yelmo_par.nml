@@ -75,12 +75,12 @@
 
 &ycalv
     ! === calving method & law ===
-    use_lsf             = False             ! use level-set method
+    use_lsf             = True              ! use level-set method
     lsf_method          = "snap"            ! "snap" (legacy neighbour-snap) or "redist" (Sussman/Osher)
     dt_lsf              = -1                ! [yr] lsf update timescale. If negative: no reset.
     lsf_redist_n_iter   = 5                 ! Sussman/Osher LSF redistancing iterations. redist mode only.
-    calv_flt_method     = "vm-l19"          ! "zero", "simple", "flux", "vm-l19", "kill"
-    calv_grnd_method    = "zero"            ! "zero", "stress-b12"
+    calv_flt_method     = "vm-m16"          ! use_lsf=F: "zero"/"none","threshold","vm-l19","eigen","kill","kill-pos" | use_lsf=T: "zero"/"none","equil","threshold","vm-m16","vm-m16-old","exp1"-"exp5"
+    calv_grnd_method    = "vm-m16"          ! use_lsf=F: "zero"/"none","stress-b12" | use_lsf=T: "zero"/"none","equil","threshold","vm-m16","vm-m16-old","ismip7"
     
     ! === numeric noise === 
     H_min_grnd          = 0.1               ! [m] Minimum ice thickness at grounded margin (thinner ice is ablated) - helps with stability, smaller value will lead to more precise summit
@@ -97,8 +97,8 @@
     w2                  = 0.0               ! Weighting coefficient of 2nd principal strain/stress
     kt_ref              = 0.0025            ! [m yr-1 Pa-1] vm-l19 calving scaling parameter
     kt_deep             = 0.1               ! [m yr-1 Pa-1] vm-l19 calving scaling parameter for deep ocean
-    tau_ice_flt         = 85.0e3            ! [Pa] Ice strength failure, floating fronts (vm-m16)
-    tau_ice_grnd        = 85.0e3            ! [Pa] Ice strength failure, marine-grounded fronts (vm-m16)
+    tau_ice_flt         = 100.0e3           ! [Pa] Ice strength failure, floating fronts (vm-m16)
+    tau_ice_grnd        = 1.0e6             ! [Pa] Ice strength failure, marine-grounded fronts (vm-m16)
 
     ! === threshold method ===
     Hc_ref_flt          = 50.0              ! [m] Calving limit in ice thickness (thinner ice calves)

@@ -34,7 +34,8 @@ module ice_model
     use ice_def, only : ice_class
     use yelmo, only : yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
-                      yelmo_write_step_model_metrics, yelmo_restart_write 
+                      yelmo_write_step_model_metrics, yelmo_restart_write
+    use lsf_module, only : LSFinit
     use sicopolis, only : sico_class, sico_init, sico_update, sico_end, sico_write_restart
     use sico_out, only : sico_diag_init, sico_diag
     use ice_id_mod, only : set_ice_id
@@ -376,6 +377,11 @@ contains
                   ylmo%bnd%smb         = 0.0_wp 
                   ylmo%bnd%bmb_shlf    = 0.0_wp 
                   ylmo%bnd%H_sed       = H_sed
+
+                  ! Level-set function from this topography: yelmo_init (load_topo=.FALSE.)
+                  ! initialised it before H_ice and z_bed were set, as for any driver
+                  ! that defines the topography itself (cf. yelmo tests/yelmo_calving.f90)
+                  call LSFinit(ylmo%tpo%now%lsf,ylmo%tpo%now%H_ice,ylmo%bnd%z_bed,ylmo%bnd%z_sl,ylmo%tpo%par%dx)
                 endif
                 
                 ! Allow ice to grow over the whole domain by default
