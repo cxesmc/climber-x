@@ -431,14 +431,8 @@ contains
       call topograd_2(ice%state,ice%grid, 1)
     endif
 
-    call boundary(ice%state, ice%grid, ice%timer, ice%par)
-
-    where ((ice%state%maske==0).or.(ice%state%maske==3))
-      ! grounded or floating ice
-      ice%state%as_perp_apl = ice%state%as_perp
-    elsewhere        ! maske==1 or 2, ice-free land or sea
-      ice%state%as_perp_apl = 0.0_wp
-    end where
+    ! no call to boundary here: the restart holds the applied fluxes (as_perp_apl, calving_apl, Q_b_apl)
+    ! and the discharge geometry, and sico_update calls boundary first
 
     ice%state%Q_b_tot = ice%state%Q_bm + ice%state%Q_tld
 
@@ -795,6 +789,10 @@ contains
 
   call calc_temp_melt(ice%state,ice%grid)
 
+  ! On restart, velocities, strain rates and enthalpies are read from the restart file:
+  ! recomputing them here would add an extra dynamics solve and break bit-reproducibility
+  if (.not.l_restart) then
+
   ice%state%vx_m = 0._wp
   ice%state%vy_m = 0._wp
 
@@ -894,6 +892,8 @@ contains
     stop ' >>> sico_init: Parameter CALCMOD must be either -1, 0, 1, 2 or 3!'
 
   endif
+
+  endif   ! .not.l_restart
 
   print*
   print*,'======================================================='
@@ -1426,6 +1426,7 @@ contains
 
     character (len=*) :: fnm
     integer :: ncid, i, j, kc, kt
+    integer :: nx, ny, nkc, nkt
     real(wp), dimension(:,:), allocatable :: H, H_cold, H_temp
 
 
@@ -1751,9 +1752,63 @@ contains
       dims=[dim_kt,dim_y,dim_x],start=[1,1,1],count=[ice%grid%KTMAX+1,ice%grid%JMAX+1,ice%grid%IMAX+1], &
       long_name="Age in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="a",ncid=ncid)
 
+    !-------- Fields carried from the dynamics of the previous step into the next temperature step --------
+    ! (computed before the thickness update, so they cannot be recomputed from the restored state)
+
+    nx = ice%grid%IMAX+1
+    ny = ice%grid%JMAX+1
+    nkc = ice%grid%KCMAX+1
+    nkt = ice%grid%KTMAX+1
+
+    call nc_write(fnm,"vx_m", ice%state%vx_m, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="depth-averaged velocity vx",units="m/s",ncid=ncid)
+    call nc_write(fnm,"vy_m", ice%state%vy_m, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="depth-averaged velocity vy",units="m/s",ncid=ncid)
+    call nc_write(fnm,"beta_drag", ice%state%beta_drag, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="basal drag coefficient of the SSA",units="",ncid=ncid)
+    call nc_write(fnm,"c_drag", ice%state%c_drag, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="basal drag auxiliary quantity",units="",ncid=ncid)
+    call nc_write(fnm,"p_weert_inv", ice%state%p_weert_inv, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="inverse Weertman exponent p",units="",ncid=ncid)
+    call nc_write(fnm,"de_ssa", ice%state%de_ssa, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="effective strain rate of the SSA",units="1/s",ncid=ncid)
+    call nc_write(fnm,"flag_shelfy_stream", merge(1,0,ice%state%flag_shelfy_stream), dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="shelfy stream flag",units="/",ncid=ncid)
+    call nc_write(fnm,"sigma_c", ice%state%sigma_c, dims=[dim_kc,dim_y,dim_x],start=[1,1,1],count=[nkc,ny,nx], &
+      long_name="effective stress in the upper (kc) ice layer",units="Pa",ncid=ncid)
+    call nc_write(fnm,"de_c", ice%state%de_c, dims=[dim_kc,dim_y,dim_x],start=[1,1,1],count=[nkc,ny,nx], &
+      long_name="effective strain rate in the upper (kc) ice layer",units="1/s",ncid=ncid)
+    call nc_write(fnm,"lambda_shear_c", ice%state%lambda_shear_c, dims=[dim_kc,dim_y,dim_x],start=[1,1,1],count=[nkc,ny,nx], &
+      long_name="shear fraction in the upper (kc) ice layer",units="1",ncid=ncid)
+    call nc_write(fnm,"de_t", ice%state%de_t, dims=[dim_kt,dim_y,dim_x],start=[1,1,1],count=[nkt,ny,nx], &
+      long_name="effective strain rate in the lower (kt) ice layer",units="1/s",ncid=ncid)
+    call nc_write(fnm,"lambda_shear_t", ice%state%lambda_shear_t, dims=[dim_kt,dim_y,dim_x],start=[1,1,1],count=[nkt,ny,nx], &
+      long_name="shear fraction in the lower (kt) ice layer",units="1",ncid=ncid)
+
+    !-------- Discharge parameterisation: coastal geometry, recomputed every iter_mar_coa calls --------
+
+    call nc_write(fnm,"mask_mar", ice%state%mask_mar, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="marginal ring mask",units="/",ncid=ncid)
+    call nc_write(fnm,"cos_grad_tc", ice%state%cos_grad_tc, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="cosine of angle between surface gradient and direction to coast",units="1",ncid=ncid)
+    call nc_write(fnm,"cst_dist", ice%state%cst_dist, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="distance to the coast",units="m",ncid=ncid)
+    call nc_write(fnm,"i_cst", ice%state%i_cst, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="i index of nearest coastal point",units="/",ncid=ncid)
+    call nc_write(fnm,"j_cst", ice%state%j_cst, dims=[dim_y,dim_x],start=[1,1],count=[ny,nx], &
+      long_name="j index of nearest coastal point",units="/",ncid=ncid)
+
+    !-------- Iteration counters (phase of the temperature and discharge sub-cycles) --------
+
+    call nc_write_dim(fnm,"n1",x=1,dx=1,nx=1,units="#",ncid=ncid)
+    call nc_write(fnm,"itercount", [ice%timer%itercount], dims=["n1"],start=[1],count=[1], &
+      long_name="ice time step counter",units="/",ncid=ncid)
+    call nc_write(fnm,"n_discharge_call", [ice%timer%n_discharge_call], dims=["n1"],start=[1],count=[1], &
+      long_name="discharge call counter",units="/",ncid=ncid)
+
     call nc_write(fnm,"q_geo", real(ice%state%q_geo,wp), &
       dims=[dim_y,dim_x],start=[1,1],count=[ice%grid%JMAX+1,ice%grid%IMAX+1], &
-      long_name="geothermal heat flux",grid_mapping="polar_stereographic",units="W/m2",ncid=ncid)    
+      long_name="geothermal heat flux",grid_mapping="polar_stereographic",units="W/m2",ncid=ncid)
 
     call nc_write(fnm,"h_sed", real(ice%state%h_sed,wp), &
       dims=[dim_y,dim_x],start=[1,1],count=[ice%grid%JMAX+1,ice%grid%IMAX+1], &
@@ -1777,6 +1832,8 @@ contains
 
     character (len=*) :: fnm
     real(wp), dimension(:,:), allocatable :: H, H_cold, H_temp
+    integer, dimension(:,:), allocatable :: iflag
+    integer :: icount(1)
 
 
     call nc_read(fnm,"x", ice%grid%xi)
@@ -1922,6 +1979,36 @@ contains
     call nc_read(fnm,"q_geo", ice%state%q_geo)
 
     call nc_read(fnm,"h_sed", ice%state%h_sed)
+
+    ! fields carried from the previous dynamics step into the next temperature step
+    call nc_read(fnm,"vx_m", ice%state%vx_m)
+    call nc_read(fnm,"vy_m", ice%state%vy_m)
+    call nc_read(fnm,"beta_drag", ice%state%beta_drag)
+    call nc_read(fnm,"c_drag", ice%state%c_drag)
+    call nc_read(fnm,"p_weert_inv", ice%state%p_weert_inv)
+    call nc_read(fnm,"de_ssa", ice%state%de_ssa)
+    allocate(iflag(0:ice%grid%JMAX,0:ice%grid%IMAX))
+    call nc_read(fnm,"flag_shelfy_stream", iflag)
+    ice%state%flag_shelfy_stream = (iflag.eq.1)
+    deallocate(iflag)
+    call nc_read(fnm,"sigma_c", ice%state%sigma_c)
+    call nc_read(fnm,"de_c", ice%state%de_c)
+    call nc_read(fnm,"lambda_shear_c", ice%state%lambda_shear_c)
+    call nc_read(fnm,"de_t", ice%state%de_t)
+    call nc_read(fnm,"lambda_shear_t", ice%state%lambda_shear_t)
+
+    ! discharge parameterisation coastal geometry
+    call nc_read(fnm,"mask_mar", ice%state%mask_mar)
+    call nc_read(fnm,"cos_grad_tc", ice%state%cos_grad_tc)
+    call nc_read(fnm,"cst_dist", ice%state%cst_dist)
+    call nc_read(fnm,"i_cst", ice%state%i_cst)
+    call nc_read(fnm,"j_cst", ice%state%j_cst)
+
+    ! iteration counters
+    call nc_read(fnm,"itercount", icount)
+    ice%timer%itercount = icount(1)
+    call nc_read(fnm,"n_discharge_call", icount)
+    ice%timer%n_discharge_call = icount(1)
 
   end subroutine sico_read_restart
 

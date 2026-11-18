@@ -28,7 +28,7 @@ module atm_model
     use atm_params, only : wp
     use ncio
     use constants, only : T0, fqsat, pi, frac_vu
-    use timer, only: nday_year, doy, time_soy_atm, time_eoy_atm
+    use timer, only: nday_year, doy, mon, nmon_year, nstep_mon_atm, time_soy_atm, time_eoy_atm
     use timer, only : time_feedback_save, time_feedback_analysis
     use timer, only : time_feedback_save_tg, time_feedback_analysis_tg
     use timer, only : monthly2daily
@@ -478,6 +478,18 @@ contains
         fb)
     endif
 
+    !-------------------------------------------------
+    ! monthly mean 2m temperature of the current year (grid cell mean and over land)
+    !-------------------------------------------------
+    if (time_soy_atm) then
+      atm%t2m_mon = 0._wp
+      atm%t2m_mon_lnd = 0._wp
+    endif
+    atm%t2m_mon(:,:,mon) = atm%t2m_mon(:,:,mon) + sum(atm%t2*atm%frst,3)/nstep_mon_atm
+    where (atm%frst(:,:,i_lnd).gt.0._wp)
+      atm%t2m_mon_lnd(:,:,mon) = atm%t2m_mon_lnd(:,:,mon) + atm%t2(:,:,i_lnd)/nstep_mon_atm
+    endwhere
+
    return
 
   end subroutine atm_update
@@ -727,6 +739,8 @@ contains
          atm%uab(i,j) = 0._wp
          atm%vab(i,j) = 0._wp
          atm%wsyn(i,j) = 0._wp
+         atm%t2m_mon(i,j,:) = T0+15._wp       ! first-year global mean temperature
+         atm%t2m_mon_lnd(i,j,:) = T0+20._wp   ! first-year coldest month temperature over land
          atm%synsur(i,j,:) = synsurmin   ! read by usur on the first substep, before synop sets it
          atm%wcld(i,j) = 0._wp
          atm%weff(i,j) = 0._wp
@@ -1071,6 +1085,8 @@ contains
      allocate(atm%sam(im,jm))
      allocate(atm%synprod(im,jm))
      allocate(atm%synsur(im,jm,nm))
+     allocate(atm%t2m_mon(im,jm,nmon_year))
+     allocate(atm%t2m_mon_lnd(im,jm,nmon_year))
      allocate(atm%cdif(im,jm) )    
      allocate(atm%diffx(imc,jm))
      allocate(atm%diffy(im,jmc))
@@ -1346,6 +1362,8 @@ contains
      deallocate(atm%sam)
      deallocate(atm%synprod)
      deallocate(atm%synsur)
+     deallocate(atm%t2m_mon)
+     deallocate(atm%t2m_mon_lnd)
      deallocate(atm%cdif)    
 
    return
@@ -1373,6 +1391,7 @@ contains
     call nc_write_dim(fnm,"plevc",x=pl(1:kmc),axis="z")
     call nc_write_dim(fnm,"latc",x=1,dx=1,nx=jmc)
     call nc_write_dim(fnm,"x",x=[1])
+    call nc_write_dim(fnm,"mon",x=1,dx=1,nx=nmon_year)
 
     call nc_write(fnm,"had_fi   ",     atm%had_fi   ,     dim1="x",  long_name="",units="")
     call nc_write(fnm,"had_width",     atm%had_width,     dim1="x",  long_name="",units="")
@@ -1457,6 +1476,8 @@ contains
     call nc_write(fnm,"z3",            z3,                dims=["lon ","lat ","plev"],long_name="geometric height of the layer centres, from vesta",units="m")
     call nc_write(fnm,"z3l",           z3l,               dims=["lon  ","lat  ","plevc"],long_name="geometric height of the level interfaces, from vesta",units="m")
     call nc_write(fnm,"synsur",        atm%synsur,        dims=["lon","lat","nm "],long_name="synoptic surface wind speed",units="m/s")
+    call nc_write(fnm,"t2m_mon",       atm%t2m_mon,       dims=["lon","lat","mon"],long_name="monthly mean 2m temperature",units="K")
+    call nc_write(fnm,"t2m_mon_lnd",   atm%t2m_mon_lnd,   dims=["lon","lat","mon"],long_name="monthly mean 2m temperature over land",units="K")
 
 
    return
@@ -1474,9 +1495,6 @@ contains
 
     character (len=*) :: fnm
     type(atm_class) :: atm
-
-    real(wp), allocatable :: tmp_a(:,:), tmp_w(:,:), tmp_dt(:,:), tmp_tt(:,:)
-    real(wp), allocatable :: tmp_t3(:,:,:), tmp_q3(:,:,:), tmp_tp(:,:,:), tmp_d3(:,:,:)
 
 
     call nc_read(fnm,"had_fi   ",     atm%had_fi   )
@@ -1583,22 +1601,11 @@ contains
     call nc_read(fnm,"tp       ",     atm%tp      ) 
     call nc_read(fnm,"q3       ",     atm%q3      ) 
     call nc_read(fnm,"d3       ",     atm%d3      ) 
-    if (nc_exists_var(fnm,"z3")) then
-      call nc_read(fnm,"z3",  z3 )
-      call nc_read(fnm,"z3l", z3l)
-    else
-      ! older restart: rebuild the layer heights from the restored state, discarding the other vesta outputs
-      allocate(tmp_a(im,jm), tmp_w(im,jm), tmp_dt(im,jm), tmp_tt(im,jm))
-      allocate(tmp_t3(im,jm,km), tmp_q3(im,jm,km), tmp_tp(im,jm,km), tmp_d3(im,jm,km))
-      call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &
-        tmp_a, tmp_w, tmp_dt, tmp_t3, tmp_q3, tmp_tp, tmp_d3, tmp_tt)
-      deallocate(tmp_a, tmp_w, tmp_dt, tmp_tt, tmp_t3, tmp_q3, tmp_tp, tmp_d3)
-    endif
-    if (nc_exists_var(fnm,"synsur")) then
-      call nc_read(fnm,"synsur", atm%synsur)
-    else
-      atm%synsur = synsurmin
-    endif
+    call nc_read(fnm,"z3",          z3 )
+    call nc_read(fnm,"z3l",         z3l)
+    call nc_read(fnm,"synsur",      atm%synsur)
+    call nc_read(fnm,"t2m_mon",     atm%t2m_mon)
+    call nc_read(fnm,"t2m_mon_lnd", atm%t2m_mon_lnd)
 
     print *,'read restart file ',fnm
 

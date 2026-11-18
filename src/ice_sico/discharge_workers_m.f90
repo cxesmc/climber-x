@@ -90,7 +90,10 @@ contains
 
   tmr%n_discharge_call = tmr%n_discharge_call + 1
 
-  if ((mod(tmr%n_discharge_call, tmr%iter_mar_coa)==0).or.(tmr%n_discharge_call==1)) then
+  ! Recompute on the first call of a run and then every iter_mar_coa calls, so that
+  ! a restart written at a multiple of dtime_mar_coa recomputes on the same call as
+  ! the continuous run (checked by timer_check_restart_years).
+  if (mod(tmr%n_discharge_call, tmr%iter_mar_coa)==0) then
      ! define marginal ring
      call marginal_ring(st, grd, tmr, par)
      ! compute distance to coast and save indexes of nearest coastal point

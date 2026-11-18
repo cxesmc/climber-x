@@ -59,13 +59,13 @@ module geo_mod
   use hires_to_lowres_mod, only : hires_to_lowres
   use coast_cells_mod, only : coast_cells
   use drainage_basins_mod, only : drainage_basins
-  use hypso_topo_mod, only : hypso_topo, hypso_topo_factor, n_hypso, n_coral_fine, n_topo_update
+  use hypso_topo_mod, only : hypso_topo, hypso_topo_factor, n_hypso, n_coral_fine
   !$ use omp_lib
 
   implicit none
 
    private
-   public :: geo_init, geo_update, geo_end
+   public :: geo_init, geo_update, geo_derive, geo_end
    public :: geo_write_restart
 
 contains
@@ -135,6 +135,7 @@ contains
     allocate( geo%hires%h_ice_eq(ni_topo,nj_topo))
     allocate( geo%hires%rsl(ni_topo,nj_topo))
     allocate( geo%hires%mask(ni_topo,nj_topo))
+    allocate( geo%hires%mask_prev(ni_topo,nj_topo))
     allocate( geo%hires%q_geo(ni_topo,nj_topo))
     allocate( geo%hires%q_geo_ice(ni_topo,nj_topo))
     allocate( geo%hires%h_sed(ni_topo,nj_topo))
@@ -245,6 +246,12 @@ contains
       ! read restart file
       !------------------------------------------------------------------------
       call geo_read_restart(trim(restart_in_dir)//"/geo_restart.nc",geo)
+
+      if (.not.flag_lakes) then
+        ! no lakes, as in the initialisation below (geo_update does not set these without lakes)
+        geo%n_lakes = 0
+        geo%hires%z_lake = 0._wp
+      endif
 
     else  
 
@@ -570,6 +577,14 @@ contains
       call vilma2_init(geo%hires%grid, geo%hires%z_bed_eq, geo%hires%h_ice_eq)
     endif
 
+    if (.not.geo_restart) then
+      ! the initial mask is the one the first derivation (geo_derive at the end of the
+      ! initialisation) starts from; no ice volume handed on yet
+      geo%hires%mask_prev = geo%hires%mask
+      geo%V_ice_af = 0._wp
+      geo%d_sea_level = 0._wp
+    endif
+
     print*
     print*,'======================================================='
     print*,' Initialisation of GEOGRAPHY complete'
@@ -587,15 +602,36 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine geo_update(geo)
 
+  ! A geo update: advance sea level and the solid Earth (geo_step), then derive the masks,
+  ! topographies, fractions and runoff routing from the new state (geo_derive).
+
   implicit none
 
   type(geo_class), intent(inout) :: geo
 
-  integer :: i, j, n
-  logical :: l_was_ice_grd
-  real(wp) :: A_bering, dx
-  logical, save :: firstcall = .true.
-  integer, save :: n_hypso_topo_call = 0
+
+  ! the mask the derivation starts from (part of the restart, so that the initialisation of a
+  ! restart derives exactly the same state as this update)
+  geo%hires%mask_prev = geo%hires%mask
+
+  call geo_step(geo)
+
+  call geo_derive(geo)
+
+  return
+
+  end subroutine geo_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  g e o _ s t e p
+  ! Purpose    :  advance sea level and bedrock elevation by one geo time step
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine geo_step(geo)
+
+  implicit none
+
+  type(geo_class), intent(inout) :: geo
 
   !$ real(wp) :: time1,time2
 
@@ -632,23 +668,19 @@ contains
       !-------------------------------------------------------------------
       ! VILMA1 solid Earth model
 
-      if (.not.firstcall) then
-        ! takes current ice load (thickness) as input
-        ! returns relative sea level and new bedrock elevation
-        call vilma1_update(geo%hires%grid, geo%hires%h_ice, & ! in
-          geo%hires%rsl, geo%hires%z_bed)    ! out
-      endif
+      ! takes current ice load (thickness) as input
+      ! returns relative sea level and new bedrock elevation
+      call vilma1_update(geo%hires%grid, geo%hires%h_ice, & ! in
+        geo%hires%rsl, geo%hires%z_bed)    ! out
 
     else if (i_geo==3) then
       !-------------------------------------------------------------------
       ! VILMA2 solid Earth model
 
-      if (.not.firstcall) then
-        ! takes current ice load (thickness) as input
-        ! returns relative sea level and new bedrock elevation
-        call vilma2_update(geo%hires%h_ice, &  ! in
-          geo%hires%rsl, geo%hires%z_bed)    ! out
-      endif
+      ! takes current ice load (thickness) as input
+      ! returns relative sea level and new bedrock elevation
+      call vilma2_update(geo%hires%h_ice, &  ! in
+        geo%hires%rsl, geo%hires%z_bed)    ! out
 
     endif
     !$ time2 = omp_get_wtime()
@@ -669,6 +701,30 @@ contains
     endwhere
   endif
 
+  return
+
+  end subroutine geo_step
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  g e o _ d e r i v e
+  ! Purpose    :  derive masks, topographies, surface fractions, lakes, runoff routing and
+  !               seafloor hypsometry from bedrock elevation, ice thickness, sea level and the
+  !               previous mask (geo%hires%mask_prev, which sets the grounded/floating hysteresis).
+  !               A pure function of state: used by every geo update and at initialisation.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine geo_derive(geo)
+
+  implicit none
+
+  type(geo_class), intent(inout) :: geo
+
+  integer :: i, j, n
+  logical :: l_was_ice_grd
+  real(wp) :: A_bering, dx
+
+  !$ real(wp) :: time1,time2
+
   !-------------------------------------------------------------------
   ! derive ocean/land/ice mask and topography
   !-------------------------------------------------------------------
@@ -676,7 +732,7 @@ contains
   !$omp parallel do private(i,j,l_was_ice_grd)
   do j=1,nj_topo
     do i=1,ni_topo
-      l_was_ice_grd = geo%hires%mask(i,j)==0
+      l_was_ice_grd = geo%hires%mask_prev(i,j)==0
       ! initially land everywhere
       geo%hires%mask(i,j) = 1 
       ! preliminary set all ice to grounded
@@ -959,18 +1015,13 @@ contains
   !-------------------------------------------------------------------
   if (flag_bgc) then
     call hypso_topo(geo%hires%z_bed, geo%hypso_f_depth, geo%hypso_f_fine)
-    n_hypso_topo_call = n_hypso_topo_call + 1
-    if (mod(n_hypso_topo_call,n_topo_update)==0) then
-      call hypso_topo_factor(geo%hires%z_bed, geo%hypso_f_topo)
-    endif
+    call hypso_topo_factor(geo%hires%z_bed, geo%hypso_f_topo)
   endif
-
-  if (firstcall) firstcall = .false.
 
 
   return
 
-  end subroutine geo_update
+  end subroutine geo_derive
 
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1028,6 +1079,7 @@ contains
     deallocate(geo%hires%h_ice_eq)
     deallocate(geo%hires%rsl)
     deallocate(geo%hires%mask)
+    deallocate(geo%hires%mask_prev)
     deallocate(geo%hires%q_geo)
     deallocate(geo%hires%q_geo_ice)
     deallocate(geo%hires%h_sed)
@@ -1122,6 +1174,7 @@ contains
     call nc_write(fnm,"h_ice_eq ", geo%hires%h_ice_eq , dims=["lon","lat"],long_name="h_ice_eq ",units="m")
     call nc_write(fnm,"rsl   ", geo%hires%rsl   , dims=["lon","lat"],long_name="rsl   ",units="m")
     call nc_write(fnm,"mask  ", geo%hires%mask  , dims=["lon","lat"],long_name="mask  ",units="1")
+    call nc_write(fnm,"mask_prev", geo%hires%mask_prev, dims=["lon","lat"],long_name="mask at entry to the last geo update",units="1")
 
     if (flag_geo .and. i_geo.eq.2) then
       call vilma1_write_restart(dir)
@@ -1158,6 +1211,7 @@ contains
     call nc_read(fnm,"h_ice_eq ", geo%hires%h_ice_eq )
     call nc_read(fnm,"rsl      ", geo%hires%rsl      )
     call nc_read(fnm,"mask     ", geo%hires%mask     )
+    call nc_read(fnm,"mask_prev", geo%hires%mask_prev)
 
     print *,'read restart file ',fnm
 

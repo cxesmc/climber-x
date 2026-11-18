@@ -253,6 +253,15 @@ module smb_def
       type(grid_class) :: grid
       type(grid_class) :: grid_latlon
       type(grid_smb_to_cmn_type) :: grid_smb_to_cmn
+
+      ! fields handed on to the coupler, on the coupler grid (where the domain covers it); they persist
+      ! between smb calls (n_year_smb) and are part of the smb restart
+      real(wp), dimension(:,:,:), allocatable :: alb_vis_dir_cmn  !! daily ice sheet albedo, visible direct beam [/] (ni,nj,nday_year)
+      real(wp), dimension(:,:,:), allocatable :: alb_vis_dif_cmn  !! daily ice sheet albedo, visible diffuse [/]
+      real(wp), dimension(:,:,:), allocatable :: alb_nir_dir_cmn  !! daily ice sheet albedo, near infrared direct beam [/]
+      real(wp), dimension(:,:,:), allocatable :: alb_nir_dif_cmn  !! daily ice sheet albedo, near infrared diffuse [/]
+      real(wp), dimension(:,:,:), allocatable :: runoff_ice_cmn   !! monthly ice sheet runoff, time relaxed [kg/s] (ni,nj,nmon_year)
+      real(wp), dimension(:,:,:), allocatable :: melt_ice_cmn     !! monthly ice sheet melt, time relaxed [kg/s]
       type(map_class) :: map_cmn_to_ice
       type(map_class) :: map_to_latlon
       type(map_class) :: map_from_latlon

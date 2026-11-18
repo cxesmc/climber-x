@@ -39,7 +39,7 @@ module coupler
     use control, only : ocn_restore_temp, ocn_restore_sal, atm_fix_tau
     use control, only : flag_co2, flag_ch4, flag_n2o, flag_atm, flag_ocn, flag_bgc, flag_sic, flag_lnd, flag_dust, flag_smb, flag_bmb, flag_ice, flag_geo, flag_lakes
     use control, only : check_water
-    use control, only : geo_restart
+    use control, only : geo_restart, lnd_restart, ocn_restart
     use control, only : ifake_ice
     use control, only : l_spinup_cc
     use control, only : l_weathering
@@ -287,10 +287,10 @@ module coupler
       real(wp), dimension(:,:,:), allocatable :: alb_vis_dif    !! visible diffuse surface albedo of each surface type []
       real(wp), dimension(:,:,:), allocatable :: alb_nir_dir    !! near infrared direct beam surface albedo of each surface type []
       real(wp), dimension(:,:,:), allocatable :: alb_nir_dif    !! near infrared diffuse surface albedo of each surface type []
-      real(wp), dimension(:,:,:), allocatable :: alb_vis_dir_ice_semi    !! ice sheet visible direct beam albedo from SEMI interpolate to cmn grid []
-      real(wp), dimension(:,:,:), allocatable :: alb_vis_dif_ice_semi    !! ice sheet visible diffuse albedo from SEMI interpolate to cmn grid[]
-      real(wp), dimension(:,:,:), allocatable :: alb_nir_dir_ice_semi    !! ice sheet near infrared direct beam albedo from SEMI interpolate to cmn grid []
-      real(wp), dimension(:,:,:), allocatable :: alb_nir_dif_ice_semi    !! ice sheet near infrared diffuse albedo from SEMI interpolate to cmn grid []
+      real(wp), dimension(:,:), allocatable :: alb_vis_dir_ice_semi    !! ice sheet visible direct beam albedo from SEMI interpolate to cmn grid []
+      real(wp), dimension(:,:), allocatable :: alb_vis_dif_ice_semi    !! ice sheet visible diffuse albedo from SEMI interpolate to cmn grid[]
+      real(wp), dimension(:,:), allocatable :: alb_nir_dir_ice_semi    !! ice sheet near infrared direct beam albedo from SEMI interpolate to cmn grid []
+      real(wp), dimension(:,:), allocatable :: alb_nir_dif_ice_semi    !! ice sheet near infrared diffuse albedo from SEMI interpolate to cmn grid []
       real(wp), dimension(:,:,:), allocatable :: lwd    !! surface downward flux of longwave radiation [W/m2]
       real(wp), dimension(:,:,:), allocatable :: lwd_cs    !! surface downward flux of longwave radiation, clear sky [W/m2]
       real(wp), dimension(:,:,:), allocatable :: lwd_cld    !! surface downward flux of longwave radiation, cloudy sky [W/m2]
@@ -319,7 +319,6 @@ module coupler
       real(wp), dimension(:,:),   allocatable :: bmelt_grd_i !! basal melt from grounded ice sheets computed by ice model [kg/s]
       real(wp), dimension(:,:),   allocatable :: bmelt_flt_i !! basal melt from floating ice shelfs computed by ice model [kg/s]
       real(wp), dimension(:,:),   allocatable :: runoff_o  !! runoff on ocean domain [kg/m2/s]
-      real(wp), dimension(:,:),   allocatable :: runoff_o_ann  !! annual runoff on ocean domain [kg/m2/s]
       real(wp), dimension(:,:),   allocatable :: calving_o !! calving on ocean domain [kg/m2/s]
       real(wp), dimension(:,:),   allocatable :: bmelt_o !! basal melt from ice sheets on ocean domain [kg/m2/s]
       real(wp), dimension(:,:),   allocatable :: bmelt_grd_o !! basal melt from grounded ice sheets on ocean domain [kg/m2/s]
@@ -735,18 +734,9 @@ contains
           cmn%dust_dep(i,j) = atm%dust_dep(i,ja)
         endif
 
-        if (time_soy_atm) then         
-          cmn%t2m_mon(i,j,:) = 0._wp
-          cmn%t2m_mon_lnd(i,j,:) = 0._wp
-        endif
-        if (doy.gt.0) then
-          cmn%t2m_mon(i,j,mon) = cmn%t2m_mon(i,j,mon) &
-            + sum(cmn%t2m(i,j,:)*cmn%f_stp(i,j,:)) / nstep_mon_atm
-          if (atm%frst(i,ja,i_surf_macro_lnd).gt.0._wp) then
-            cmn%t2m_mon_lnd(i,j,mon) = cmn%t2m_mon_lnd(i,j,mon) &
-              + sum(cmn%t2m(i,j,:)*cmn%f_stp(i,j,:), mask=(st2ast==i_surf_macro_lnd))/atm%frst(i,ja,i_surf_macro_lnd) / nstep_mon_atm
-          endif
-        endif
+        ! monthly mean 2m temperature of the current year, accumulated by atm
+        cmn%t2m_mon(i,j,:) = atm%t2m_mon(i,ja,:)
+        cmn%t2m_mon_lnd(i,j,:) = atm%t2m_mon_lnd(i,ja,:)
         if (time_eoy_atm) then
           cmn%t2m_min_mon(i,j) = minval(cmn%t2m_mon_lnd(i,j,:))
         endif
@@ -783,6 +773,11 @@ contains
     real(wp) :: taux_ow(ni,nj), tauy_ow(ni,nj), fsic(ni,nj)   ! open-water part of the stress and sea ice fraction (0 on land)
     logical :: l_face
 
+
+    ! annual mean runoff into the ocean, accumulated by the ocean (ocn%runoff_ann at end of year),
+    ! used to distribute the weathering input to bgc
+    if (time_soy_ocn) ocn%runoff_ann_act = 0._wp
+    ocn%runoff_ann_act = ocn%runoff_ann_act + cmn%runoff_o/real(nstep_year_ocn,wp)
 
     ! update masks and sea level at beginning of year
     if (time_soy_ocn) then
@@ -1043,7 +1038,8 @@ contains
       k_bmb = minloc(abs(ocn%grid%zro+1000._wp),1)
       nk = ocn%grid%nk - k_bmb + 1
     endif
-    if (flag_bmb .and. time_soy_ocn) then
+    ! (re)allocate when the number of levels in the top 1 km changes, and at initialisation
+    if (flag_bmb .and. (time_soy_ocn .or. .not.allocated(cmn%z_ocn_bmb))) then
       if (allocated(cmn%z_ocn_bmb))    deallocate(cmn%z_ocn_bmb)
       if (allocated(cmn%mask_ocn_bmb)) deallocate(cmn%mask_ocn_bmb)
       if (allocated(cmn%t_ocn_bmb))    deallocate(cmn%t_ocn_bmb)
@@ -1501,10 +1497,10 @@ contains
           ! overwrite ice sheet albedo with albedo computed in SEMI if required
           if (flag_smb .and. l_ice_albedo_semi) then
             if (cmn%mask_smb(i,j).eq.1) then
-              cmn%alb_vis_dir(i,j,i_surf_ice) = cmn%alb_vis_dir_ice_semi(i,j,max(1,doy))
-              cmn%alb_vis_dif(i,j,i_surf_ice) = cmn%alb_vis_dif_ice_semi(i,j,max(1,doy))
-              cmn%alb_nir_dir(i,j,i_surf_ice) = cmn%alb_nir_dir_ice_semi(i,j,max(1,doy))
-              cmn%alb_nir_dif(i,j,i_surf_ice) = cmn%alb_nir_dif_ice_semi(i,j,max(1,doy))
+              cmn%alb_vis_dir(i,j,i_surf_ice) = cmn%alb_vis_dir_ice_semi(i,j)
+              cmn%alb_vis_dif(i,j,i_surf_ice) = cmn%alb_vis_dif_ice_semi(i,j)
+              cmn%alb_nir_dir(i,j,i_surf_ice) = cmn%alb_nir_dir_ice_semi(i,j)
+              cmn%alb_nir_dif(i,j,i_surf_ice) = cmn%alb_nir_dif_ice_semi(i,j)
             endif
           endif
         endif
@@ -1741,7 +1737,7 @@ contains
 
     ! total runoff
     if (time_soy_bgc) then
-      runoff_tot = sum(cmn%runoff_o_ann * area*cmn%f_ocn)  ! kg/s
+      runoff_tot = sum(ocn%runoff_ann * area*cmn%f_ocn)  ! kg/s, last year
     endif
 
     !$omp parallel do collapse(2) private(i,j,n,l,bgc_k1,ocn_k1,albedo,runoff_weight)
@@ -1791,7 +1787,8 @@ contains
           !endif
 
           ! input from continental weathering 
-          if (time_soy_bgc .and. year.gt.1) then
+          ! (last year's weathering: not available in the first year of a cold start)
+          if (time_soy_bgc .and. (year.gt.1 .or. (lnd_restart .and. ocn_restart))) then
 
             if (.not.l_sediments) then
               ! sediment model not active
@@ -1811,8 +1808,7 @@ contains
             else
               ! sediment model active
 
-              runoff_weight = cmn%runoff_o_ann(i,j)/runoff_tot ! kg/m2/s / kg *s = m-2
-              cmn%runoff_o_ann(i,j) = 0._wp
+              runoff_weight = ocn%runoff_ann(i,j)/runoff_tot ! kg/m2/s / kg *s = m-2
 
               if (l_spinup_bgc) then
                 ! balance net sediment fluxes during bgc spinup to conserve water colum inventories
@@ -2460,98 +2456,35 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine smb_to_cmn(smb,cmn)
 
+    ! Hands the smb fields on to the coupler, where the smb domain covers the coupler grid (so that
+    ! several ice sheet domains do not overwrite each other). The fields are smb state, aggregated to
+    ! the coupler grid by smb itself (smb_coupler_fields); this only copies them, every time step, also
+    ! in the years without smb call (n_year_smb) and at initialisation.
+
     implicit none
 
     type(smb_class) :: smb
     type(cmn_class) :: cmn
 
-    integer :: i, j, ii, jj, ncells_ice
-    logical, save :: firstcall = .true.
-
-    real(wp), allocatable, dimension(:,:,:) :: runoff_ice_i_mon
-    real(wp), allocatable, dimension(:,:,:) :: melt_ice_i_mon
+    integer :: i, j
 
 
-    if (firstcall .or. time_eoy_smb) then
-
-      ! aggregate monthly runoff from ice sheets computed in smb to coupler grid
-
-      ! initialize runoff to 0 only where smb domain covers coupler grid (to avoid overwriting possible other ice sheet domains)
-      allocate(runoff_ice_i_mon(cmn%grid%G%nx,cmn%grid%G%ny,nmon_year))
-      allocate(melt_ice_i_mon(cmn%grid%G%nx,cmn%grid%G%ny,nmon_year))
-      do i=1,cmn%grid%G%nx
-        do j=1,cmn%grid%G%ny
-          if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
-            runoff_ice_i_mon(i,j,:) = 0._wp
-            melt_ice_i_mon(i,j,:) = 0._wp
-          endif
-        enddo
-      enddo
-
-      ! integrate runoff and icemelt over grid-cell smb ice sheet area
-      !!$omp parallel do private(ii,jj,i,j)
-      do ii=1,smb%grid%G%nx
-        do jj=1,smb%grid%G%ny
-          if (smb%mask_ice(ii,jj).eq.1) then
-          !if (smb%mask_ice(ii,jj).eq.1 .and. smb%h_ice(ii,jj).gt.h_ice_min) then
-            i = smb%grid_smb_to_cmn%i_lowres(ii,jj)
-            j = smb%grid_smb_to_cmn%j_lowres(ii,jj)
-            runoff_ice_i_mon(i,j,:) = runoff_ice_i_mon(i,j,:) + smb%mon_runoff(ii,jj,:)*smb%grid%area(ii,jj)*1.e6_wp  ! kg/m2/s * m2 -> kg/s 
-            melt_ice_i_mon(i,j,:)   = melt_ice_i_mon(i,j,:)   + smb%mon_icemelt(ii,jj,:)*smb%grid%area(ii,jj)*1.e6_wp  ! kg/m2/s * m2 -> kg/s 
-          endif
-        enddo
-      enddo
-      !!$omp end parallel do
-
-      ! smooth runoff in time 
-      do i=1,cmn%grid%G%nx
-        do j=1,cmn%grid%G%ny
-          if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
-            cmn%runoff_ice_i_mon(i,j,:) = relax_run*cmn%runoff_ice_i_mon(i,j,:) + (1._wp-relax_run)*runoff_ice_i_mon(i,j,:)
-            cmn%melt_ice_i_mon(i,j,:)   = relax_run*cmn%melt_ice_i_mon(i,j,:)   + (1._wp-relax_run)*melt_ice_i_mon(i,j,:)
-          endif
-        enddo
-      enddo
-
-      deallocate(runoff_ice_i_mon)
-      deallocate(melt_ice_i_mon)
-
-    endif
-
-    ! compute average albedo over ice sheet over climate model coarse grid
-    ! initialize to 0 only where smb domain covers coupler grid (to avoid overwriting possible other ice sheet domains)
     do i=1,cmn%grid%G%nx
       do j=1,cmn%grid%G%ny
         if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
-          cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) = 0._wp
-          cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) = 0._wp
-          cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) = 0._wp
-          cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) = 0._wp
+          ! ice sheet albedo of the current day
+          cmn%alb_vis_dir_ice_semi(i,j) = smb%alb_vis_dir_cmn(i,j,doy)
+          cmn%alb_vis_dif_ice_semi(i,j) = smb%alb_vis_dif_cmn(i,j,doy)
+          cmn%alb_nir_dir_ice_semi(i,j) = smb%alb_nir_dir_cmn(i,j,doy)
+          cmn%alb_nir_dif_ice_semi(i,j) = smb%alb_nir_dif_cmn(i,j,doy)
+          ! monthly runoff and melt from the ice sheet, time relaxed
+          cmn%runoff_ice_i_mon(i,j,:) = smb%runoff_ice_cmn(i,j,:)
+          cmn%melt_ice_i_mon(i,j,:)   = smb%melt_ice_cmn(i,j,:)
         endif
       enddo
     enddo
-    !!$omp parallel do private(ii,jj,i,j,ncells_ice)
-    do ii=1,smb%grid%G%nx
-      do jj=1,smb%grid%G%ny
-        if (smb%mask_ice(ii,jj).eq.1) then
-          i = smb%grid_smb_to_cmn%i_lowres(ii,jj)
-          j = smb%grid_smb_to_cmn%j_lowres(ii,jj)
-          ncells_ice = smb%grid_smb_to_cmn%ncells_ice(i,j)
-          if (ncells_ice.gt.0) then
-            cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) = cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) + smb%alb_vis_dir(ii,jj)/ncells_ice
-            cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) = cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) + smb%alb_vis_dif(ii,jj)/ncells_ice
-            cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) = cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) + smb%alb_nir_dir(ii,jj)/ncells_ice
-            cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) = cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) + smb%alb_nir_dif(ii,jj)/ncells_ice
-          endif
-        endif
-      enddo
-    enddo
-    !!$omp end parallel do
-
-    firstcall = .false.
 
   return
-
   end subroutine smb_to_cmn
 
 
@@ -2945,7 +2878,6 @@ contains
 
     integer :: i, j, n
     real(wp) :: V_grounded, V_gr_redu, V_ice_af
-    real(wp), save :: V_ice_af_old
     real(wp), allocatable, dimension(:,:) :: mask_ice
     real(wp), allocatable, dimension(:,:) :: mask_ice_geo
     type(map_class), save, allocatable, dimension(:) :: maps_hice_to_geo
@@ -3025,21 +2957,10 @@ contains
     ! total ice volume above floatation (which contributes to sea level)
     V_ice_af    = V_grounded - V_gr_redu
 
-    if (firstcall) then
-      if (geo_restart) then
-        V_ice_af_old = geo%V_ice_af
-      else
-        V_ice_af_old = V_ice_af
-      endif
-    endif
-
+    ! sea level change from the ice volume change since the ice was last handed to geo (geo%V_ice_af,
+    ! part of the geo restart); at initialisation it is not used, the next geo update recomputes it
+    geo%d_sea_level = -(V_ice_af-geo%V_ice_af)*(rho_i/rho_w)/geo%ocn_area_tot     ! m^3 ice equiv./m^2 -> m water equiv. -> sea level equivalent
     geo%V_ice_af = V_ice_af
-
-    ! change in sea level (m)
-    geo%d_sea_level = -(V_ice_af-V_ice_af_old)*(rho_i/rho_w)/geo%ocn_area_tot     ! m^3 ice equiv./m^2 -> m water equiv. -> sea level equivalent
-
-    ! save ice volume above floatation
-    V_ice_af_old = V_ice_af
 
     if (firstcall) firstcall = .false.
 
@@ -4026,8 +3947,6 @@ contains
     cmn%calving_o = cmn%calving_veg_o + cmn%calving_ice_o + cmn%calving_lake_o
     cmn%bmelt_o   = cmn%bmelt_grd_o   + cmn%bmelt_flt_o
 
-    ! annual mean runoff
-    cmn%runoff_o_ann = cmn%runoff_o_ann + cmn%runoff_o/real(nday_year,wp)
 
     ! water-conservation check for the lnd/ice/lake -> ocean routing.
     if (check_water) then
@@ -4358,7 +4277,6 @@ contains
     cmn%bmelt_grd_i = 0._wp
     cmn%bmelt_flt_i = 0._wp
     cmn%runoff_o = 0._wp
-    cmn%runoff_o_ann = 0._wp
     cmn%calving_o = 0._wp
     cmn%bmelt_o = 0._wp
     cmn%bmelt_grd_o = 0._wp
@@ -4510,10 +4428,10 @@ contains
     allocate(cmn%alb_vis_dif(ni,nj,nsurf))
     allocate(cmn%alb_nir_dir(ni,nj,nsurf))
     allocate(cmn%alb_nir_dif(ni,nj,nsurf))
-    allocate(cmn%alb_vis_dir_ice_semi(ni,nj,nday_year))
-    allocate(cmn%alb_vis_dif_ice_semi(ni,nj,nday_year))
-    allocate(cmn%alb_nir_dir_ice_semi(ni,nj,nday_year))
-    allocate(cmn%alb_nir_dif_ice_semi(ni,nj,nday_year))
+    allocate(cmn%alb_vis_dir_ice_semi(ni,nj))
+    allocate(cmn%alb_vis_dif_ice_semi(ni,nj))
+    allocate(cmn%alb_nir_dir_ice_semi(ni,nj))
+    allocate(cmn%alb_nir_dif_ice_semi(ni,nj))
     allocate(cmn%prc(ni,nj))
     allocate(cmn%rain(ni,nj,nsurf))
     allocate(cmn%snow(ni,nj,nsurf))
@@ -4561,7 +4479,6 @@ contains
     allocate(cmn%bmelt_grd_i(ni,nj))
     allocate(cmn%bmelt_flt_i(ni,nj))
     allocate(cmn%runoff_o(ni,nj)) 
-    allocate(cmn%runoff_o_ann(ni,nj)) 
     allocate(cmn%calving_o(ni,nj)) 
     allocate(cmn%dist_runoff(ni,nj))
     allocate(cmn%dist_calving(ni,nj))
@@ -4614,6 +4531,8 @@ contains
    return
 
   end subroutine cmn_alloc
+
+
 
 end module coupler
  
