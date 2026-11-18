@@ -124,6 +124,8 @@ module ocn_def
      real(wp), allocatable :: dts_dt_diff(:,:,:,:)   !! tracer tendency due to diffusion [tracer conc/s]
      real(wp), allocatable :: sst_min(:,:)  !! minimum annual surface layer temperature for corals [degC]
      real(wp), allocatable :: sst_max(:,:)  !! maximum annual surface layer temperature for corals [degC]
+     real(wp), allocatable :: runoff_ann(:,:)      !! annual mean runoff into the ocean of the last complete year [kg/m2/s]
+     real(wp), allocatable :: runoff_ann_act(:,:)  !! annual mean runoff into the ocean, current year (accumulating) [kg/m2/s]
      real(wp), allocatable :: rho(:,:,:)    !! density [kg/m3]
      real(wp), allocatable :: ke_tau(:,:) !! kinetic energy by wind input into the mixed layer []
      real(wp), allocatable :: mld(:,:)      !! mixed layer depth [m]

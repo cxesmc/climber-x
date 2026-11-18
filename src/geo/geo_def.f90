@@ -74,6 +74,7 @@ module geo_def
       real(wp), dimension(:,:), allocatable :: h_ice_eq  !! ice thickness associated with equilibrium bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: rsl     !! relative sea level [m]
       integer, dimension(:,:), allocatable :: mask        !! ice/land/ocean/floating ice mask (following sicopolis convention)
+      integer, dimension(:,:), allocatable :: mask_prev   !! mask at entry to the last geo_update, from which mask was derived (restart)
       real(wp), dimension(:,:), allocatable :: z_bed  !! bedrock elevation [m]
       real(wp), dimension(:,:), allocatable :: z_bed_eq  !! equilibrium bedrock elevation (can deviate from h_bed_ref due to ice history) [m]
       real(wp), dimension(:,:), allocatable :: z_bed_rel  !! isostatically relaxed bedrock elevation for icefree conditions [m]

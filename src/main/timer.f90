@@ -30,6 +30,7 @@ module timer
   use control, only : flag_atm, flag_ocn, flag_lnd, flag_sic, flag_ice, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo
   use control, only : l_spinup_cc, nyears_spinup_bgc, year_start_offline, nyear_avg_offline
   use control, only : i_write_restart, n_year_write_restart, years_write_restart
+  use control, only : atm_restart, smb_restart
 
   implicit none
 
@@ -306,8 +307,10 @@ contains
       time_spinup_cc_2 = .false. 
     endif
 
-    year_call_accel = (mod(year,n_accel) .eq. 0).or.(year.eq.1)
-    year_call_smb   = (mod(year,n_year_smb).eq.0).or.(year.eq.1)
+    ! components with a multi-year call frequency are called every n years; on a cold start also in
+    ! year 1, to create the state they hand on (a restart holds that state already)
+    year_call_accel = (mod(year,n_accel) .eq. 0).or.(year.eq.1 .and. .not.atm_restart)
+    year_call_smb   = (mod(year,n_year_smb).eq.0).or.(year.eq.1 .and. .not.smb_restart)
 
     if (flag_atm .and. year_call_accel) then
       time_call_atm = (mod(step,step_atm) .eq. 1) .or. (step_atm.eq.1)
@@ -542,17 +545,7 @@ contains
     endif
 
     ! control of writing of restart files
-    time_write_restart = .false.
-    if (i_write_restart.eq.0) then
-      ! end of simulation only
-      time_write_restart = (mod(soy,nstep_year).eq.0) .and. year.eq.nyears
-    else if (i_write_restart.eq.1) then
-      ! regular with frequency n_year_write_restart
-      time_write_restart = (mod(soy,nstep_year).eq.0) .and. (mod(year,n_year_write_restart).eq.0 .or. year.eq.nyears)
-    else if (i_write_restart.eq.2) then
-      ! at specified times
-      time_write_restart = (mod(soy,nstep_year).eq.0) .and. any(years_write_restart==year_now)
-    endif
+    time_write_restart = (mod(soy,nstep_year).eq.0) .and. is_restart_year(year)
 
 !    print *
 !    write(6,'(4(a,i6))') "step = ", step, ", year = ", year, ", year_clim = ", year_clim, &
@@ -573,6 +566,71 @@ contains
    return
 
   end subroutine timer_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function   :  i s _ r e s t a r t _ y e a r
+  !   Purpose    :  true if restart files are written at the end of (run) year y
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  logical function is_restart_year(y)
+
+    implicit none
+
+    integer, intent(in) :: y
+
+    if (i_write_restart.eq.0) then
+      ! end of simulation only
+      is_restart_year = y.eq.nyears
+    else if (i_write_restart.eq.1) then
+      ! regular with frequency n_year_write_restart
+      is_restart_year = mod(y,n_year_write_restart).eq.0 .or. y.eq.nyears
+    else if (i_write_restart.eq.2) then
+      ! at specified times
+      is_restart_year = any(years_write_restart==year_ini+y)
+    else
+      is_restart_year = .false.
+    endif
+
+  end function is_restart_year
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  t i m e r _ c h e c k _ r e s t a r t _ y e a r s
+  !   Purpose    :  warn if restart files are written at years from which a restart cannot
+  !                 reproduce the continuous run, because a multi-year call frequency
+  !                 (n_year_smb, n_year_geo, n_accel, ...) is counted from the start of each run
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine timer_check_restart_years(periods)
+
+    implicit none
+
+    integer, intent(in) :: periods(:)   !! active multi-year periods [years]
+
+    integer :: y, k, n_bad, y_bad
+
+    n_bad = 0
+    y_bad = 0
+    do y=1,nyears
+      if (is_restart_year(y)) then
+        do k=1,size(periods)
+          if (periods(k).gt.1 .and. mod(y,periods(k)).ne.0) then
+            n_bad = n_bad + 1
+            if (y_bad.eq.0) y_bad = y
+            exit
+          endif
+        enddo
+      endif
+    enddo
+    if (n_bad.gt.0) then
+      print *
+      print *,'WARNING: ',n_bad,' restart file sets (the first after run year ',y_bad,') are written at years'
+      print *,'         that are not a multiple of every multi-year call frequency ',pack(periods,periods.gt.1)
+      print *,'         (n_year_smb, n_year_geo, n_accel, ...). Restarts from them run, but do not reproduce'
+      print *,'         the continuous run exactly.'
+      print *
+    endif
+
+  end subroutine timer_check_restart_years
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   ! Subroutine :  m o n t h l y 2 d a i l y

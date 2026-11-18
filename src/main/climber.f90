@@ -33,11 +33,13 @@ program climber
   use timer, only : time_call_bgc, doy, soy
   use timer, only : time_spinup_cc_1, time_spinup_cc_2
   use timer, only : time_out_ice 
-  use timer, only : time_write_restart, timer_print
-  use timer, only : n_year_ice
+  use timer, only : time_write_restart, timer_print, is_restart_year, nyears, timer_check_restart_years
+  use timer, only : n_year_ice, n_year_smb, n_year_geo, n_accel
+  use smb_params, only : l_Tvar_ann, Tvar_ann_period
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
   use control, only: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_ocn, flag_lnd, flag_sic, flag_smb, flag_bmb, flag_bgc, flag_geo, ifake_geo, flag_lakes
   use control, only: flag_ice, ice_model_name, ice_domain_name, n_ice_domain, ice_restart
+  use control, only: geo_restart
   use control, only: l_aquaplanet
   use control, only : l_spinup_cc, l_daily_input_save_ocn, l_daily_input_save_bgc
   use coords, only : grid_class
@@ -89,7 +91,7 @@ program climber
   use lnd_def, only: lnd_class
   use lnd_out, only: lnd_diag, lnd_diag_init
 
-  use ice_model, only : ice_init_domains, ice_init, ice_update, ice_write_restart
+  use ice_model, only : ice_init_domains, ice_init, ice_update, ice_write_restart, ice_restart_period
   use ice_def, only : ice_class
 
   use smb_model, only: smb_init, smb_update, smb_end, smb_write_restart
@@ -115,7 +117,7 @@ program climber
   use bnd_mod, only: bnd_init, bnd_update
   use bnd_mod, only: bnd_class
 
-  use geo_mod, only: geo_init, geo_update, geo_end, geo_write_restart
+  use geo_mod, only: geo_init, geo_update, geo_derive, geo_end, geo_write_restart
   use geo_def, only: geo_class
   use geo_out, only: geo_diag, geo_diag_init
 
@@ -189,6 +191,12 @@ program climber
     ! initialize restart directories
     call restart_init(trim(out_dir))
 
+    ! The initialisation is done at the end of 'year 0': the state each component starts from (initial
+    ! or restart) is the state at the end of a year, and the coupling calls at the end of the
+    ! initialisation are the exchanges made after the last time step of a year in a continuous run.
+    step = 0
+    call timer_update
+
     ! initialize climber grid
     call climber_grid_init
 
@@ -223,11 +231,13 @@ program climber
           cmn%mask_ice = 1
         endwhere
       enddo
-      call ice_to_geo(n_ice_domain,ice,geo)
+      ! on a geo+ice restart geo keeps the restored ice thickness, the one its last update was built from;
+      ! the continuous run hands the ice to geo only at the next geo update
+      if (.not.(geo_restart .and. ice_restart)) call ice_to_geo(n_ice_domain,ice,geo)
     endif
 
-    ! update geography
-    call geo_update(geo)
+    ! derive the geography from the initial or restart state (no geo time step at initialisation)
+    call geo_derive(geo)
     call geo_diag(geo)
 
     if (flag_ice) then
@@ -307,6 +317,12 @@ program climber
           cmn%mask_smb = 1
         endwhere
       enddo
+      ! surface forcing of the ice sheet model, from the initial or restart smb state
+      if (flag_ice) then
+        do n=1,n_ice_domain
+          call smb_to_ice(smb(n),ice(n))
+        enddo
+      endif
     endif
 
     ! Initialize bmb
@@ -364,6 +380,11 @@ program climber
         call ice_to_cmn(ice(n),cmn)
       enddo
     endif
+
+    ! restarts are exact only at years that are a multiple of every multi-year call frequency
+    call timer_check_restart_years([merge(n_year_smb,1,flag_smb), merge(n_year_geo,1,flag_geo .or. ifake_geo.eq.1), &
+      n_accel, merge(Tvar_ann_period,1,flag_smb .and. l_Tvar_ann), &
+      (merge(ice_restart_period(ice_model_name,n),1,flag_ice), n=1,max(1,n_ice_domain))])
 
     print*
     print*,'*******************************************************'
@@ -473,13 +494,18 @@ program climber
           endif
           call smb_update(smb_in,smb(n))
           call smb_diag(smb(n))
-          call smb_to_cmn(smb(n),cmn)
           if (flag_ice .and. time_eoy_smb) then
             call smb_to_ice(smb(n),ice(n))
           endif
         enddo
         !$ time_end = omp_get_wtime()
         !$ time_smb = time_smb + (time_end-time_ini)
+      endif
+      ! smb fields for the climate model, every step (they persist between smb calls)
+      if (flag_smb) then
+        do n=1,n_ice_domain
+          call smb_to_cmn(smb(n),cmn)
+        enddo
       endif
 
       !---------------------------------------------------------
@@ -725,7 +751,7 @@ subroutine restart_init(folder)
 
   character(len=*), intent(in) :: folder
 
-  integer :: cstat, estat
+  integer :: cstat, estat, y
   character(len=10) :: year_now_str
   character(len=256) :: rest_dir, cmsg
 
@@ -739,13 +765,11 @@ subroutine restart_init(folder)
   else
     print *, 'command execution failed with error ', trim(cmsg)
   end if
-  do step=1,nstep
+  do y=1,nyears
 
-    call timer_update
-
-    if (time_write_restart) then
+    if (is_restart_year(y)) then
       ! cast year_now to string
-      write (year_now_str, '(I10)')  year_now
+      write (year_now_str, '(I10)')  year_ini+y
 
       rest_dir = adjustl(trim(folder))//"/restart_out/"//"/year_"//adjustl(trim(year_now_str))
 
@@ -773,13 +797,6 @@ subroutine restart_init(folder)
     end if
 
   end do
-
-  ! reset timer
-  doy = 0
-  mon = 0
-  year = 0
-  step = 1
-  call timer_update
 
   return
 

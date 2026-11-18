@@ -42,6 +42,7 @@ module smb_model
   use smb_params, only : l_Tvar_day, Tvar_day_amp, Tvar_day_period
   use smb_params, only : l_write_timer
   use smb_def, only : smb_in_class, smb_class
+  use ocn_params, only : relax_run
 
   use fake_atm_hires_mod, only : fake_atm_hires_type, fake_atm_hires_init, fake_atm_hires_update
   use coords, only : grid_allocate, grid_init, grid_class
@@ -701,10 +702,91 @@ contains
     endif
   endif
 
+  ! fields handed on to the coupler
+  call smb_coupler_fields(smb)
+
 
   return
 
   end subroutine smb_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  s m b _ c o u p l e r _ f i e l d s
+  ! Purpose    :  aggregate the fields smb hands on to the climate model to the coupler
+  !               grid: the daily ice sheet albedo (every call) and the time-relaxed monthly
+  !               ice sheet runoff and melt (end of year). They are smb state: smb_to_cmn
+  !               only copies them, also in the years without smb call.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine smb_coupler_fields(smb)
+
+    implicit none
+
+    type(smb_class), intent(inout) :: smb
+
+    integer :: i, j, ii, jj, ncells_ice, nx_c, ny_c
+    real(wp), allocatable, dimension(:,:,:) :: runoff_mon, melt_mon
+
+
+    nx_c = size(smb%alb_vis_dir_cmn,1)
+    ny_c = size(smb%alb_vis_dir_cmn,2)
+
+    ! average albedo over the ice sheet cells of each coupler grid cell, for the current day
+    do i=1,nx_c
+      do j=1,ny_c
+        if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
+          smb%alb_vis_dir_cmn(i,j,doy) = 0._wp
+          smb%alb_vis_dif_cmn(i,j,doy) = 0._wp
+          smb%alb_nir_dir_cmn(i,j,doy) = 0._wp
+          smb%alb_nir_dif_cmn(i,j,doy) = 0._wp
+        endif
+      enddo
+    enddo
+    do ii=1,smb%grid%G%nx
+      do jj=1,smb%grid%G%ny
+        if (smb%mask_ice(ii,jj).eq.1) then
+          i = smb%grid_smb_to_cmn%i_lowres(ii,jj)
+          j = smb%grid_smb_to_cmn%j_lowres(ii,jj)
+          ncells_ice = smb%grid_smb_to_cmn%ncells_ice(i,j)
+          if (ncells_ice.gt.0) then
+            smb%alb_vis_dir_cmn(i,j,doy) = smb%alb_vis_dir_cmn(i,j,doy) + smb%alb_vis_dir(ii,jj)/ncells_ice
+            smb%alb_vis_dif_cmn(i,j,doy) = smb%alb_vis_dif_cmn(i,j,doy) + smb%alb_vis_dif(ii,jj)/ncells_ice
+            smb%alb_nir_dir_cmn(i,j,doy) = smb%alb_nir_dir_cmn(i,j,doy) + smb%alb_nir_dir(ii,jj)/ncells_ice
+            smb%alb_nir_dif_cmn(i,j,doy) = smb%alb_nir_dif_cmn(i,j,doy) + smb%alb_nir_dif(ii,jj)/ncells_ice
+          endif
+        endif
+      enddo
+    enddo
+
+    if (time_eoy_smb) then
+      ! integrate monthly runoff and ice melt over the ice sheet area of each coupler grid cell
+      allocate(runoff_mon(nx_c,ny_c,nmon_year), source=0._wp)
+      allocate(melt_mon(nx_c,ny_c,nmon_year), source=0._wp)
+      do ii=1,smb%grid%G%nx
+        do jj=1,smb%grid%G%ny
+          if (smb%mask_ice(ii,jj).eq.1) then
+            i = smb%grid_smb_to_cmn%i_lowres(ii,jj)
+            j = smb%grid_smb_to_cmn%j_lowres(ii,jj)
+            runoff_mon(i,j,:) = runoff_mon(i,j,:) + smb%mon_runoff(ii,jj,:)*smb%grid%area(ii,jj)*1.e6_wp   ! kg/m2/s * m2 -> kg/s
+            melt_mon(i,j,:)   = melt_mon(i,j,:)   + smb%mon_icemelt(ii,jj,:)*smb%grid%area(ii,jj)*1.e6_wp  ! kg/m2/s * m2 -> kg/s
+          endif
+        enddo
+      enddo
+      ! smooth in time
+      do i=1,nx_c
+        do j=1,ny_c
+          if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
+            smb%runoff_ice_cmn(i,j,:) = relax_run*smb%runoff_ice_cmn(i,j,:) + (1._wp-relax_run)*runoff_mon(i,j,:)
+            smb%melt_ice_cmn(i,j,:)   = relax_run*smb%melt_ice_cmn(i,j,:)   + (1._wp-relax_run)*melt_mon(i,j,:)
+          endif
+        enddo
+      enddo
+      deallocate(runoff_mon, melt_mon)
+    endif
+
+    return
+
+  end subroutine smb_coupler_fields
       
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -747,6 +829,12 @@ contains
     allocate(smb%grid_smb_to_cmn%j_lowres(smb%grid%G%nx,smb%grid%G%ny))
     allocate(smb%grid_smb_to_cmn%ncells(cmn_grid%G%nx,cmn_grid%G%ny))
     allocate(smb%grid_smb_to_cmn%ncells_ice(cmn_grid%G%nx,cmn_grid%G%ny))
+    allocate(smb%alb_vis_dir_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nday_year), source=0._wp)
+    allocate(smb%alb_vis_dif_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nday_year), source=0._wp)
+    allocate(smb%alb_nir_dir_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nday_year), source=0._wp)
+    allocate(smb%alb_nir_dif_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nday_year), source=0._wp)
+    allocate(smb%runoff_ice_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nmon_year), source=0._wp)
+    allocate(smb%melt_ice_cmn(cmn_grid%G%nx,cmn_grid%G%ny,nmon_year), source=0._wp)
     dlon_sur = cmn_grid%lon(2,1)-cmn_grid%lon(1,1)
     dlat_sur = cmn_grid%lat(1,2)-cmn_grid%lat(1,1)
     smb%grid_smb_to_cmn%ncells = 0
@@ -900,6 +988,7 @@ contains
     call grid_allocate(smb%grid, smb%z_sur_eff        )
     call grid_allocate(smb%grid, smb%z_sur_fil        )
     call grid_allocate(smb%grid, smb%z_bed_std        )
+    call grid_allocate(smb%grid, smb%z_sur_std        )
     call grid_allocate(smb%grid, smb%h_ice            )
     call grid_allocate(smb%grid, smb%dz_dx_sur        )
     call grid_allocate(smb%grid, smb%dz_dy_sur        )
@@ -1238,6 +1327,14 @@ contains
       smb%snow_grain       = snow_par%snow_grain_fresh
       smb%dust_con         = 0._wp 
 
+      ! fields handed on to the ice sheet model (no surface forcing before the first smb call)
+      smb%ann_smb    = 0._wp
+      smb%ann_prc    = 0._wp
+      smb%ann_evp    = 0._wp
+      smb%ann_runoff = 0._wp
+      smb%t_ground   = 0._wp
+      smb%z_sur_std  = 0._wp
+
       smb%alb_ice = surf_par%alb_firn
       smb%alb_vis_dir = 0._wp 
       smb%alb_nir_dir = 0._wp 
@@ -1559,6 +1656,11 @@ contains
     call nc_write_dim(fnm,dim_x,x=smb%grid%G%x0,dx=smb%grid%G%dx,nx=nx,axis="x",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_y,x=smb%grid%G%y0,dx=smb%grid%G%dy,nx=ny,axis="y",units="m",ncid=ncid)
     call nc_write_dim(fnm,dim_month,x=1,dx=1,nx=nmon_year,units="mon",ncid=ncid)
+    call nc_write_dim(fnm,"g",x=1,dx=1,nx=1,ncid=ncid)
+    call nc_write_dim(fnm,"lon_cmn",x=1,dx=1,nx=size(smb%alb_vis_dir_cmn,1),ncid=ncid)
+    call nc_write_dim(fnm,"lat_cmn",x=1,dx=1,nx=size(smb%alb_vis_dir_cmn,2),ncid=ncid)
+    call nc_write_dim(fnm,"day",x=1,dx=1,nx=nday_year,units="doy",ncid=ncid)
+    call nc_write_dim(fnm,"mon",x=1,dx=1,nx=nmon_year,units="mon",ncid=ncid)
     call nc_write_dim(fnm,dim_depth,x=0,dx=1,nx=nl+1,axis="z",units="#",ncid=ncid)
 
     call nc_write(fnm,"mask_smb", smb%mask_smb, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
@@ -1639,6 +1741,36 @@ contains
     call nc_write(fnm,"alb_nir_dif", smb%alb_nir_dif, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
       long_name="diffuse near-infrared albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
 
+    ! annual fields handed on to the ice sheet model (smb_to_ice), which keeps them until the next smb call
+    call nc_write(fnm,"ann_smb", smb%ann_smb, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="annual surface mass balance",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+    call nc_write(fnm,"ann_prc", smb%ann_prc, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="annual precipitation",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+    call nc_write(fnm,"ann_evp", smb%ann_evp, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="annual evaporation",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+    call nc_write(fnm,"ann_runoff", smb%ann_runoff, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="annual runoff",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+    call nc_write(fnm,"t_ground", smb%t_ground, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="ground temperature",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+    call nc_write(fnm,"z_sur_std", smb%z_sur_std, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
+      long_name="sub-grid standard deviation of surface elevation",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+
+    call nc_write(fnm,"dTvar_ann", smb%dTvar_ann, dim1="g", long_name="imposed annual temperature variability",units="K",ncid=ncid)
+
+    ! fields handed on to the coupler, on the coupler grid
+    call nc_write(fnm,"alb_vis_dir_cmn", smb%alb_vis_dir_cmn, dims=["lon_cmn","lat_cmn","day    "], &
+      long_name="daily ice sheet albedo on the coupler grid, visible direct",units="/",ncid=ncid)
+    call nc_write(fnm,"alb_vis_dif_cmn", smb%alb_vis_dif_cmn, dims=["lon_cmn","lat_cmn","day    "], &
+      long_name="daily ice sheet albedo on the coupler grid, visible diffuse",units="/",ncid=ncid)
+    call nc_write(fnm,"alb_nir_dir_cmn", smb%alb_nir_dir_cmn, dims=["lon_cmn","lat_cmn","day    "], &
+      long_name="daily ice sheet albedo on the coupler grid, near infrared direct",units="/",ncid=ncid)
+    call nc_write(fnm,"alb_nir_dif_cmn", smb%alb_nir_dif_cmn, dims=["lon_cmn","lat_cmn","day    "], &
+      long_name="daily ice sheet albedo on the coupler grid, near infrared diffuse",units="/",ncid=ncid)
+    call nc_write(fnm,"runoff_ice_cmn", smb%runoff_ice_cmn, dims=["lon_cmn","lat_cmn","mon    "], &
+      long_name="monthly ice sheet runoff on the coupler grid, time relaxed",units="kg/s",ncid=ncid)
+    call nc_write(fnm,"melt_ice_cmn", smb%melt_ice_cmn, dims=["lon_cmn","lat_cmn","mon    "], &
+      long_name="monthly ice sheet melt on the coupler grid, time relaxed",units="kg/s",ncid=ncid)
+
     call nc_close(ncid)
 
 
@@ -1706,6 +1838,23 @@ contains
     call nc_read(fnm,"alb_vis_dif", smb%alb_vis_dif)
     call nc_read(fnm,"alb_nir_dir", smb%alb_nir_dir)
     call nc_read(fnm,"alb_nir_dif", smb%alb_nir_dif)
+
+    ! annual fields handed on to the ice sheet model
+    call nc_read(fnm,"ann_smb",    smb%ann_smb)
+    call nc_read(fnm,"ann_prc",    smb%ann_prc)
+    call nc_read(fnm,"ann_evp",    smb%ann_evp)
+    call nc_read(fnm,"ann_runoff", smb%ann_runoff)
+    call nc_read(fnm,"t_ground",   smb%t_ground)
+    call nc_read(fnm,"z_sur_std",  smb%z_sur_std)
+    call nc_read(fnm,"dTvar_ann",  smb%dTvar_ann)
+
+    ! fields handed on to the coupler, on the coupler grid
+    call nc_read(fnm,"alb_vis_dir_cmn", smb%alb_vis_dir_cmn)
+    call nc_read(fnm,"alb_vis_dif_cmn", smb%alb_vis_dif_cmn)
+    call nc_read(fnm,"alb_nir_dir_cmn", smb%alb_nir_dir_cmn)
+    call nc_read(fnm,"alb_nir_dif_cmn", smb%alb_nir_dif_cmn)
+    call nc_read(fnm,"runoff_ice_cmn",  smb%runoff_ice_cmn)
+    call nc_read(fnm,"melt_ice_cmn",    smb%melt_ice_cmn)
 
 
     return

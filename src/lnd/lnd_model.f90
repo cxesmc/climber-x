@@ -236,13 +236,14 @@ contains
      endif
 
      ! average land-atmosphere carbon flux
-     if (time_eoy_lnd .and. year>1) then
-       if (year==2) lnd%l0d%Cflx_avg = lnd%l0d%Cflx_atm_lnd ! kgC/yr
+     ! (a cold start skips its first year and seeds the means in the second; a restart continues them)
+     if (time_eoy_lnd .and. (year>1 .or. lnd_restart)) then
+       if (year==2 .and. .not.lnd_restart) lnd%l0d%Cflx_avg = lnd%l0d%Cflx_atm_lnd ! kgC/yr
        lnd%l0d%Cflx_avg = 0.99_wp*lnd%l0d%Cflx_avg + 0.01_wp*lnd%l0d%Cflx_atm_lnd
      endif
 
      ! average global weathering fluxes
-     if (time_eoy_lnd .and. year>1) then
+     if (time_eoy_lnd .and. (year>1 .or. lnd_restart)) then
        ! compute global weathering fluxes
        weath_carb_glob = 0._wp
        weath_sil_glob  = 0._wp
@@ -257,9 +258,9 @@ contains
          enddo
        enddo
        ! average global weathering fluxes
-       if (year==2) lnd%l0d%weath_carb_avg = weath_carb_glob ! kgC/yr
+       if (year==2 .and. .not.lnd_restart) lnd%l0d%weath_carb_avg = weath_carb_glob ! kgC/yr
        lnd%l0d%weath_carb_avg = 0.99_wp*lnd%l0d%weath_carb_avg + 0.01_wp*weath_carb_glob
-       if (year==2) lnd%l0d%weath_sil_avg = weath_sil_glob ! kgC/yr
+       if (year==2 .and. .not.lnd_restart) lnd%l0d%weath_sil_avg = weath_sil_glob ! kgC/yr
        lnd%l0d%weath_sil_avg = 0.99_wp*lnd%l0d%weath_sil_avg + 0.01_wp*weath_sil_glob
      endif
 
@@ -1207,6 +1208,7 @@ end subroutine lnd_update
 
     integer :: i, j, n, k
     real(wp), allocatable :: f_veg(:,:)
+    real(wp), allocatable :: f_ice_grd_l(:,:)
 
 
     ! initialize grid
@@ -1282,15 +1284,22 @@ end subroutine lnd_update
 
       call lnd_read_restart(trim(restart_in_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
 
-      ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake
+      ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake,
+      ! exactly as cmn_to_lnd does, so that a restart into the same geography reproduces the continuous run
+      ! grounded ice fraction can not be larger than land fraction
+      allocate(f_ice_grd_l(ni,nj))
+      f_ice_grd_l = min(f_ice_grd, f_lnd)
       ! potentially vegetated fraction
-      where (f_lnd.gt.0._wp) 
-        f_veg = f_lnd - f_ice_grd - f_lake
+      where (lnd%l2d%mask_lnd.eq.1) 
+        f_veg = f_lnd - f_ice_grd_l - f_lake
       elsewhere
         f_veg = 0._wp
       endwhere
       ! f_veg can be negative for numerical reasons
       where (f_veg.lt.0._wp)
+        f_veg = 0._wp
+      endwhere
+      where (f_veg.lt.1.e-10_wp)
         f_veg = 0._wp
       endwhere
       ! if prescribed vegetation read PFT fractions from file
@@ -1312,9 +1321,10 @@ end subroutine lnd_update
       ! get surface fractions
       do i = 1,ni
         do j = 1,nj
-          call surface_frac_up(f_ice(i,j),f_ice_grd(i,j),f_ocn(i,j),f_lake(i,j),f_veg(i,j),lnd%l2d(i,j)%pft_frac,lnd%l2d(i,j)%frac_surf)
+          call surface_frac_up(f_ice(i,j),f_ice_grd_l(i,j),f_ocn(i,j),f_lake(i,j),f_veg(i,j),lnd%l2d(i,j)%pft_frac,lnd%l2d(i,j)%frac_surf)
         enddo
       enddo
+      deallocate(f_ice_grd_l)
 
     else ! initialize
 
@@ -1343,6 +1353,11 @@ end subroutine lnd_update
       lnd%l2d(:,:)%C14flx_atm_lnd = 0._wp
 
       lnd%l0d%landc = 0._wp
+      lnd%l0d%Cflx_atm_lnd = 0._wp
+      lnd%l0d%C13flx_atm_lnd = 0._wp
+      lnd%l0d%C14flx_atm_lnd = 0._wp
+      lnd%l0d%ch4_emis = 0._wp
+      lnd%l0d%n2o_emis = 0._wp
       lnd%l0d%landc13 = 0._wp
       lnd%l0d%landc14 = 0._wp
 
@@ -2211,6 +2226,12 @@ end subroutine lnd_update
    call nc_write(fnm,"Cflx_avg",  l0d%Cflx_avg,dim1="p",long_name="average land-atm carbon flux",ncid=ncid)
    call nc_write(fnm,"weath_carb_avg",  l0d%weath_carb_avg,dim1="p",long_name="average carbonate weathering flux",ncid=ncid)
    call nc_write(fnm,"weath_sil_avg",   l0d%weath_sil_avg, dim1="p",long_name="average silicate weathering flux",ncid=ncid)
+   ! annual global fluxes of the last year, handed on to the carbon cycle and atmospheric chemistry
+   call nc_write(fnm,"Cflx_atm_lnd",   l0d%Cflx_atm_lnd,   dim1="p",long_name="annual land-atm carbon flux",units="kgC/yr",ncid=ncid)
+   call nc_write(fnm,"C13flx_atm_lnd", l0d%C13flx_atm_lnd, dim1="p",long_name="annual land-atm carbon-13 flux",units="kgC/yr",ncid=ncid)
+   call nc_write(fnm,"C14flx_atm_lnd", l0d%C14flx_atm_lnd, dim1="p",long_name="annual land-atm carbon-14 flux",units="kgC/yr",ncid=ncid)
+   call nc_write(fnm,"ch4_emis",       l0d%ch4_emis,       dim1="p",long_name="annual land methane emissions",units="kgCH4/yr",ncid=ncid)
+   call nc_write(fnm,"n2o_emis",       l0d%n2o_emis,       dim1="p",long_name="annual land N2O emissions",units="kgN/yr",ncid=ncid)
 
    call nc_write(fnm,"landc",  l0d%landc,dim1="p",long_name="total land carbon",ncid=ncid)
    call nc_write(fnm,"landc13",l0d%landc13,dim1="p",long_name="total land carbon 13",ncid=ncid)
@@ -2282,6 +2303,7 @@ end subroutine lnd_update
        var_n(:,i,j) = lnd(i,j)%seed_frac(:)
      enddo
    enddo
+   call nc_write(fnm,"seed_frac",        var_n, dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="seed fraction",units="/",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%npp_ann(:)
@@ -2300,7 +2322,6 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"npp14_ann",              var_n,       dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="leaf area index",units="kgC/m2/s",ncid=ncid)
-   call nc_write(fnm,"seed_frac",        var_n, dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="seed fraction",units="/",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%pft_frac(:)
@@ -2910,6 +2931,17 @@ end subroutine lnd_update
    call nc_write(fnm,"litter_c14_peat",   lnd%litter_c14_peat,  dims=[dim_lon,dim_lat],long_name="peatland litter carbon 14",units="kgC/m2",ncid=ncid)
    call nc_write(fnm,"acro_c14",         lnd%acro_c14,        dims=[dim_lon,dim_lat],long_name="acrotelm carbon 14",units="kgC/m2",ncid=ncid)
    call nc_write(fnm,"f_peat",           lnd%f_peat,          dims=[dim_lon,dim_lat],long_name="peatland fraction",units="/",ncid=ncid)
+   ! rates updated by the carbon calls (every dt_day_c days), used every time step in between
+   call nc_write(fnm,"f_wetland", lnd%f_wetland, dims=[dim_lon,dim_lat],long_name="wetland fraction",units="/",ncid=ncid)
+   call nc_write(fnm,"ch4_emis_wetland", lnd%ch4_emis_wetland, dims=[dim_lon,dim_lat],long_name="CH4 emission rate from wetlands",units="kgCH4/m2/s",ncid=ncid)
+   call nc_write(fnm,"ch4_emis_shelf", lnd%ch4_emis_shelf, dims=[dim_lon,dim_lat],long_name="CH4 emission rate from shelf",units="kgCH4/m2/s",ncid=ncid)
+   call nc_write(fnm,"ch4_emis_lake", lnd%ch4_emis_lake, dims=[dim_lon,dim_lat],long_name="CH4 emission rate from lakes",units="kgCH4/m2/s",ncid=ncid)
+   call nc_write(fnm,"ch4_emis_peat", lnd%ch4_emis_peat, dims=[dim_lon,dim_lat],long_name="CH4 emission rate from peatlands",units="kgCH4/m2/s",ncid=ncid)
+   call nc_write(fnm,"c13h4_emis_wetland", lnd%c13h4_emis_wetland, dims=[dim_lon,dim_lat],long_name="13CH4 emission rate from wetlands",units="kgC13/m2/s",ncid=ncid)
+   call nc_write(fnm,"c13h4_emis_shelf", lnd%c13h4_emis_shelf, dims=[dim_lon,dim_lat],long_name="13CH4 emission rate from shelf",units="kgC13/m2/s",ncid=ncid)
+   call nc_write(fnm,"c13h4_emis_lake", lnd%c13h4_emis_lake, dims=[dim_lon,dim_lat],long_name="13CH4 emission rate from lakes",units="kgC13/m2/s",ncid=ncid)
+   call nc_write(fnm,"c13h4_emis_peat", lnd%c13h4_emis_peat, dims=[dim_lon,dim_lat],long_name="13CH4 emission rate from peatlands",units="kgC13/m2/s",ncid=ncid)
+   call nc_write(fnm,"n2o_emis_rate", lnd%n2o_emis, dims=[dim_lon,dim_lat],long_name="N2O emission rate",units="kgN/m2/s",ncid=ncid)
    call nc_write(fnm,"f_peat_pot",       lnd%f_peat_pot,      dims=[dim_lon,dim_lat],long_name="potential peatland fraction",units="/",ncid=ncid)
    call nc_write(fnm,"dCpeat_dt",       lnd%dCpeat_dt,        dims=[dim_lon,dim_lat],long_name="peat accumulation rate",units="kgC/m2/s",ncid=ncid)
    call nc_write(fnm,"w_table",          lnd%w_table,         dims=[dim_lon,dim_lat],long_name="water table depth",units="m",ncid=ncid)
@@ -3026,6 +3058,11 @@ end subroutine lnd_update
     call nc_open(fnm,ncid,writable=.false.)
     call nc_read(fnm,"Cflx_avg",l0d%Cflx_avg,ncid=ncid)
     call nc_read(fnm,"weath_carb_avg",l0d%weath_carb_avg,ncid=ncid)
+    call nc_read(fnm,"Cflx_atm_lnd",   l0d%Cflx_atm_lnd,  ncid=ncid)
+    call nc_read(fnm,"C13flx_atm_lnd", l0d%C13flx_atm_lnd,ncid=ncid)
+    call nc_read(fnm,"C14flx_atm_lnd", l0d%C14flx_atm_lnd,ncid=ncid)
+    call nc_read(fnm,"ch4_emis",       l0d%ch4_emis,      ncid=ncid)
+    call nc_read(fnm,"n2o_emis",       l0d%n2o_emis,      ncid=ncid)
     call nc_read(fnm,"weath_sil_avg",l0d%weath_sil_avg,ncid=ncid)
 
     call nc_read(fnm,"landc",l0d%landc,ncid=ncid)
@@ -3308,6 +3345,16 @@ end subroutine lnd_update
     call nc_read(fnm,"litter_c14_peat",  lnd%litter_c14_peat,ncid=ncid)
     call nc_read(fnm,"acro_c14",         lnd%acro_c14,ncid=ncid)
     call nc_read(fnm,"f_peat",           lnd%f_peat,ncid=ncid)
+    call nc_read(fnm,"f_wetland", lnd%f_wetland,ncid=ncid)
+    call nc_read(fnm,"ch4_emis_wetland", lnd%ch4_emis_wetland,ncid=ncid)
+    call nc_read(fnm,"ch4_emis_shelf", lnd%ch4_emis_shelf,ncid=ncid)
+    call nc_read(fnm,"ch4_emis_lake", lnd%ch4_emis_lake,ncid=ncid)
+    call nc_read(fnm,"ch4_emis_peat", lnd%ch4_emis_peat,ncid=ncid)
+    call nc_read(fnm,"c13h4_emis_wetland", lnd%c13h4_emis_wetland,ncid=ncid)
+    call nc_read(fnm,"c13h4_emis_shelf", lnd%c13h4_emis_shelf,ncid=ncid)
+    call nc_read(fnm,"c13h4_emis_lake", lnd%c13h4_emis_lake,ncid=ncid)
+    call nc_read(fnm,"c13h4_emis_peat", lnd%c13h4_emis_peat,ncid=ncid)
+    call nc_read(fnm,"n2o_emis_rate", lnd%n2o_emis,ncid=ncid)
     call nc_read(fnm,"f_peat_pot",       lnd%f_peat_pot,ncid=ncid)
     call nc_read(fnm,"dCpeat_dt",        lnd%dCpeat_dt,ncid=ncid)
     call nc_read(fnm,"w_table",          lnd%w_table,ncid=ncid)

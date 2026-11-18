@@ -135,6 +135,7 @@ contains
 
     real(wp) :: sol
     real(wp) :: year_orb
+    real(wp) :: fco2_ramp
 
 
     ! updates at start of new year
@@ -177,8 +178,10 @@ contains
       endif
       ! if feedback analysis
       if (l_feedbacks) then
-        if (year.le.nyears/2)   bnd%co2 = min(2._wp*co2_const, bnd%co2*(1._wp+dco2_dt/100._wp))
-        if (year.gt.nyears/2)   bnd%co2 = max(co2_const, bnd%co2*(1._wp-dco2_dt/100._wp)) 
+        ! exponential ramp-up/down between co2_const and 2*co2_const over nyears/10 years
+        fco2_ramp = 2._wp**(1._wp/real(max(1,nyears/10),wp))
+        if (year.le.nyears/2)   bnd%co2 = min(2._wp*co2_const, bnd%co2*fco2_ramp)
+        if (year.gt.nyears/2)   bnd%co2 = max(co2_const, bnd%co2/fco2_ramp)
       endif
 
       ! update atmospheric CO2 concentration for radiation if required

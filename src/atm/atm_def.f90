@@ -65,6 +65,8 @@ module atm_def
       real(wp) :: obliquity
 
       real(wp) :: t2m_glob_ann
+      real(wp), allocatable, dimension(:,:,:) :: t2m_mon      !! monthly mean 2m temperature, grid cell mean [K], accumulated during the year
+      real(wp), allocatable, dimension(:,:,:) :: t2m_mon_lnd  !! monthly mean 2m temperature over land [K], accumulated during the year
       real(wp) :: dt2m_glob_ann_cum
 
       real(wp), allocatable, dimension(:,:,:) :: solar

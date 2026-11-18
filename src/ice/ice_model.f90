@@ -60,6 +60,7 @@ module ice_model
     public :: ice_init 
     public :: ice_end 
     public :: ice_write_restart
+    public :: ice_restart_period
 
 contains 
     
@@ -388,10 +389,19 @@ contains
                 ! (later this will be set by ice%mask_extent)
                 ylmo%bnd%mask_ice = 2
 
-                ! Set reference ice thickness and bed elevation to initial one
-                ! (only useful for comparisons, probably not used in climber) 
-                ylmo%bnd%H_ice_ref   = ylmo%tpo%now%H_ice 
-                ylmo%bnd%z_bed_ref   = ylmo%bnd%z_bed 
+                ! Reference ice thickness and bed elevation: the initial ones of the
+                ! run that started from cold (only useful for comparisons, probably not
+                ! used in climber). Yelmo resets them to its present-day data on a
+                ! restart, so take them back from the restart file.
+                if (ylmo%par%use_restart) then
+                  call nc_read(trim(ylmo%par%restart),"H_ice_ref",ylmo%bnd%H_ice_ref, &
+                    start=[1,1,1],count=[size(ylmo%bnd%H_ice_ref,1),size(ylmo%bnd%H_ice_ref,2),1])
+                  call nc_read(trim(ylmo%par%restart),"z_bed_ref",ylmo%bnd%z_bed_ref, &
+                    start=[1,1,1],count=[size(ylmo%bnd%H_ice_ref,1),size(ylmo%bnd%H_ice_ref,2),1])
+                else
+                  ylmo%bnd%H_ice_ref = ylmo%tpo%now%H_ice 
+                  ylmo%bnd%z_bed_ref = ylmo%bnd%z_bed 
+                endif
 
 
                 ! Report where CLIMBER-X's own physical constants differ from
@@ -1015,5 +1025,23 @@ contains
         return 
 
     end subroutine yelmo_write_step_2D
+
+    integer function ice_restart_period(model,idx_dom)
+        ! Multi-year cadence [years] of the ice model's internal recomputations, which
+        ! restart years must be a multiple of to reproduce the continuous run (1 if none).
+
+        implicit none
+
+        character(len=*), intent(IN) :: model
+        integer,          intent(IN) :: idx_dom
+
+        ice_restart_period = 1
+        if (trim(model).eq."sico" .and. allocated(sico_doms)) then
+            if (idx_dom.lt.1 .or. idx_dom.gt.size(sico_doms)) return
+            ! marginal ring and coastal distance for the discharge parameterisation
+            ice_restart_period = max(1,nint(sico_doms(idx_dom)%par%dtime_mar_coa))
+        endif
+
+    end function ice_restart_period
 
 end module ice_model

@@ -65,9 +65,10 @@ module transport_ocn_mod
   real(wp), dimension(:,:,:), allocatable :: u_mle, v_mle, w_mle   !! mixed-layer eddy (Fox-Kemper) velocities on the u-, v- and w-grid [m/s]
   real(wp), dimension(:,:), allocatable :: hbl     !! surface boundary layer depth for the isoneutral diffusion and GM (positive) [m]
   real(wp), dimension(:,:), allocatable :: sx_bl, sy_bl   !! tapered isoneutral slopes at the base of the boundary layer []
+  real(wp), dimension(:,:), allocatable :: z_topo_std_dl  !! standard deviation of bathymetry, for i_diff_dia==4 [m]
 
   private
-  public :: transport, transport_init, drho_dx, drho_dy, drho_dz, Ri, v_gm, v_mle
+  public :: transport, transport_init, transport_coef_update, drho_dx, drho_dy, drho_dz, Ri, v_gm, v_mle
 
 contains
 
@@ -753,11 +754,7 @@ contains
 
     implicit none
 
-    integer :: i, j, k
-    real(wp) :: r, K_b, h0
     character (len=256) :: fnm
-
-    real(wp), dimension(maxi,maxj) :: z_topo_std
 
     allocate(slope_crit(maxj,maxk))
     allocate(mlddec(maxk))
@@ -783,7 +780,34 @@ contains
     drho_dy = 0._wp
     Ri = 0._wp
     v_gm = 0._wp
-  
+
+    if (i_diff_dia.eq.4) then
+      ! read standard deviation of bathymetry
+      allocate(z_topo_std_dl(maxi,maxj))
+      fnm = "input/RTopo-2.0.1_2min_std_30.nc"
+      call nc_read(fnm,"topo_r",z_topo_std_dl)
+    endif
+
+    call transport_coef_update
+
+    return
+
+  end subroutine transport_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  t r a n s p o r t _ c o e f _ u p d a t e
+  ! Purpose    :  coefficients that depend on the vertical grid (zro, zw, dz, k1);
+  !               recomputed after every ocean grid update, so that they follow the
+  !               current grid both in a continuous run and after a restart
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine transport_coef_update
+
+    implicit none
+
+    integer :: i, j, k
+    real(wp) :: r, K_b, h0
+
     ! mld scheme - calculate wind decay efficiency
     do k=maxk,1,-1
        mlddec(k) = exp(zro(k)/ke_wind_dec)
@@ -835,14 +859,9 @@ contains
       enddo
     else if (i_diff_dia.eq.4) then
       ! vertical profile dependent on roughness at the ocean floor, Decloedt & Luther 2010
-
-      ! read standard deviation of bathymetry
-      fnm = "input/RTopo-2.0.1_2min_std_30.nc"
-      call nc_read(fnm,"topo_r",z_topo_std)
-
       do i=1,maxi
         do j=1,maxj
-          r = z_topo_std(i,j)
+          r = z_topo_std_dl(i,j)
           if (r.lt.830._wp) then
             K_b = 1.87e-5_wp*exp(3.e-8*r**3-5.8e-5*r**2+0.0325*r)
           else
@@ -886,6 +905,6 @@ contains
     
     return
 
-  end subroutine transport_init
+  end subroutine transport_coef_update
 
 end module transport_ocn_mod

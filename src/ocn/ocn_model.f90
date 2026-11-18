@@ -54,7 +54,7 @@ module ocn_model
 
     use eos_mod, only : eos
     use momentum_mod, only : momentum_init, momentum
-    use transport_ocn_mod, only : transport_init, transport
+    use transport_ocn_mod, only : transport_init, transport, transport_coef_update
     use hosing_mod, only : hosing_init, hosing_update
     use flux_adj_mod, only : flux_adj_init, flux_adj_update
     use noise_mod, only : noise_init, noise_fw_update, noise_flx_update
@@ -121,6 +121,8 @@ contains
       ! update ocean area and volume accounting for actual ocean fraction
       !------------------------------------------------------------------------
       call ocn_grid_update(ocn%f_ocn,ocn%z_ocn,ocn%grid)
+      ! coefficients of the transport that depend on the vertical grid
+      call transport_coef_update
 
       !------------------------------------------------------------------------
       ! adjust velocities and tracer concentrations after changes in ocean mask/volume
@@ -560,10 +562,14 @@ contains
     !$ time1 = omp_get_wtime()
     if (time_soy_ocn) sst_min_act(:,:) = ocn%ts(:,:,maxk,1)
     if (time_soy_ocn) sst_max_act(:,:) = ocn%ts(:,:,maxk,1)
-    where (ocn%ts(:,:,maxk,1).lt.ocn%sst_min) sst_min_act = ocn%ts(:,:,maxk,1)
-    where (ocn%ts(:,:,maxk,1).gt.ocn%sst_max) sst_max_act = ocn%ts(:,:,maxk,1)
+    ! running extremes of the current year (compared against the running values, not last year's)
+    where (ocn%ts(:,:,maxk,1).lt.sst_min_act) sst_min_act = ocn%ts(:,:,maxk,1)
+    where (ocn%ts(:,:,maxk,1).gt.sst_max_act) sst_max_act = ocn%ts(:,:,maxk,1)
     if (time_eoy_ocn) ocn%sst_min = sst_min_act 
     if (time_eoy_ocn) ocn%sst_max = sst_max_act
+
+    ! annual mean runoff of the completed year (accumulated in cmn_to_ocn)
+    if (time_eoy_ocn) ocn%runoff_ann = ocn%runoff_ann_act
     !$ time2 = omp_get_wtime()
     !$ if(print_omp) print *,'sst',time2-time1
 
@@ -848,8 +854,13 @@ contains
       ocn%saln0 = sum(ocn%ts(:,:,:,2)*ocn%grid%ocn_vol(:,:,:))/ocn%grid%ocn_vol_tot ! psu
     endif
     
-    ocn%sst_min = ocn%ts(:,:,maxk,1)-1._wp
-    ocn%sst_max = ocn%ts(:,:,maxk,1)+1._wp
+    if (.not.ocn_restart) then
+      ! last year's statistics, otherwise read from the restart file
+      ocn%sst_min = ocn%ts(:,:,maxk,1)-1._wp
+      ocn%sst_max = ocn%ts(:,:,maxk,1)+1._wp
+      ocn%runoff_ann = 0._wp
+    endif
+    ocn%runoff_ann_act = 0._wp
 
     ! compute density
     do i=1,maxi
@@ -888,7 +899,14 @@ contains
     ocn%bmelt_grd   = 0._wp 
     ocn%bmelt_flt   = 0._wp 
     ocn%bmelt       = 0._wp 
-    ocn%fw_dhdt_ice = 0._wp 
+    ocn%fw_dhdt_ice = 0._wp
+
+    ! bring the grid to the state ocn_grid_update produces, as at every start of year: ocn_grid_init
+    ! leaves grid%mask_c unset and builds the levels with different round-off, which the coupling
+    ! (cmn%mask_ocn_bmb, z_ocn_bmb) and the first-year volume change (ocn_vol_old) would otherwise see
+    ocn%f_ocn = f_ocn
+    ocn%grid%ocn_vol_tot_real = ocn_vol_tot_real
+    call ocn_grid_update(ocn%f_ocn,ocn%z_ocn,ocn%grid)
 
     ! initialize variables for frictional geostrophic balance equation
     call momentum_init
@@ -999,6 +1017,8 @@ contains
     allocate(ocn%dts_dt_diff(maxi,maxj,maxk,n_tracers_tot), source=0._wp)
     allocate(ocn%sst_min(maxi,maxj))
     allocate(ocn%sst_max(maxi,maxj))
+    allocate(ocn%runoff_ann(maxi,maxj))
+    allocate(ocn%runoff_ann_act(maxi,maxj))
     allocate(ocn%flx_sur(maxi,maxj,n_tracers_tot))
     allocate(ocn%flx_bot(maxi,maxj,n_tracers_tot))
     allocate(ocn%tau(2,maxi,maxj))
@@ -1245,6 +1265,9 @@ contains
 
     call nc_write(fnm,"fw_glob", ocn%fw_glob,   dims=["c"],long_name="net ocean freshwater flux",units="kg/m2/s")
     call nc_write(fnm,"mld", ocn%mld,   dims=["lon  ","lat  "],long_name="mixed layer depth from the mixed layer scheme (boundary layer of the diffusion at the next step)",units="m")
+    call nc_write(fnm,"sst_min", ocn%sst_min, dims=["lon  ","lat  "],long_name="minimum surface layer temperature of the last year",units="degC")
+    call nc_write(fnm,"sst_max", ocn%sst_max, dims=["lon  ","lat  "],long_name="maximum surface layer temperature of the last year",units="degC")
+    call nc_write(fnm,"runoff_ann", ocn%runoff_ann, dims=["lon  ","lat  "],long_name="annual mean runoff into the ocean of the last year",units="kg/m2/s")
 
    return
 
@@ -1296,6 +1319,10 @@ contains
     else
       ocn%mld = 0._wp   ! older restart files: no boundary layer at the first step
     endif
+
+    call nc_read(fnm,"sst_min", ocn%sst_min)
+    call nc_read(fnm,"sst_max", ocn%sst_max)
+    call nc_read(fnm,"runoff_ann", ocn%runoff_ann)
 
     print *,'read restart file ',fnm
 
