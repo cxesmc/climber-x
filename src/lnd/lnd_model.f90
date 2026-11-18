@@ -1207,6 +1207,7 @@ end subroutine lnd_update
 
     integer :: i, j, n, k
     real(wp), allocatable :: f_veg(:,:)
+    real(wp), allocatable :: f_ice_grd_l(:,:)
 
 
     ! initialize grid
@@ -1282,15 +1283,22 @@ end subroutine lnd_update
 
       call lnd_read_restart(trim(restart_in_dir)//"/lnd_restart.nc",lnd%l2d,lnd%l0d)
 
-      ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake
+      ! update surface fractions given the prescribed input fractions of land/ocean/ice/lake,
+      ! exactly as cmn_to_lnd does, so that a restart into the same geography reproduces the continuous run
+      ! grounded ice fraction can not be larger than land fraction
+      allocate(f_ice_grd_l(ni,nj))
+      f_ice_grd_l = min(f_ice_grd, f_lnd)
       ! potentially vegetated fraction
-      where (f_lnd.gt.0._wp) 
-        f_veg = f_lnd - f_ice_grd - f_lake
+      where (lnd%l2d%mask_lnd.eq.1) 
+        f_veg = f_lnd - f_ice_grd_l - f_lake
       elsewhere
         f_veg = 0._wp
       endwhere
       ! f_veg can be negative for numerical reasons
       where (f_veg.lt.0._wp)
+        f_veg = 0._wp
+      endwhere
+      where (f_veg.lt.1.e-10_wp)
         f_veg = 0._wp
       endwhere
       ! if prescribed vegetation read PFT fractions from file
@@ -1312,9 +1320,10 @@ end subroutine lnd_update
       ! get surface fractions
       do i = 1,ni
         do j = 1,nj
-          call surface_frac_up(f_ice(i,j),f_ice_grd(i,j),f_ocn(i,j),f_lake(i,j),f_veg(i,j),lnd%l2d(i,j)%pft_frac,lnd%l2d(i,j)%frac_surf)
+          call surface_frac_up(f_ice(i,j),f_ice_grd_l(i,j),f_ocn(i,j),f_lake(i,j),f_veg(i,j),lnd%l2d(i,j)%pft_frac,lnd%l2d(i,j)%frac_surf)
         enddo
       enddo
+      deallocate(f_ice_grd_l)
 
     else ! initialize
 
@@ -2282,6 +2291,7 @@ end subroutine lnd_update
        var_n(:,i,j) = lnd(i,j)%seed_frac(:)
      enddo
    enddo
+   call nc_write(fnm,"seed_frac",        var_n, dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="seed fraction",units="/",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%npp_ann(:)
@@ -2300,7 +2310,6 @@ end subroutine lnd_update
      enddo
    enddo
    call nc_write(fnm,"npp14_ann",              var_n,       dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="leaf area index",units="kgC/m2/s",ncid=ncid)
-   call nc_write(fnm,"seed_frac",        var_n, dims=[dim_npft,dim_lon,dim_lat],start=[1,1,1],count=[npft,ni,nj],long_name="seed fraction",units="/",ncid=ncid)
    do i=1,nx
      do j=1,ny
        var_n(:,i,j) = lnd(i,j)%pft_frac(:)

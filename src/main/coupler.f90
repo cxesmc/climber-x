@@ -1501,10 +1501,10 @@ contains
           ! overwrite ice sheet albedo with albedo computed in SEMI if required
           if (flag_smb .and. l_ice_albedo_semi) then
             if (cmn%mask_smb(i,j).eq.1) then
-              cmn%alb_vis_dir(i,j,i_surf_ice) = cmn%alb_vis_dir_ice_semi(i,j,doy)
-              cmn%alb_vis_dif(i,j,i_surf_ice) = cmn%alb_vis_dif_ice_semi(i,j,doy)
-              cmn%alb_nir_dir(i,j,i_surf_ice) = cmn%alb_nir_dir_ice_semi(i,j,doy)
-              cmn%alb_nir_dif(i,j,i_surf_ice) = cmn%alb_nir_dif_ice_semi(i,j,doy)
+              cmn%alb_vis_dir(i,j,i_surf_ice) = cmn%alb_vis_dir_ice_semi(i,j,max(1,doy))
+              cmn%alb_vis_dif(i,j,i_surf_ice) = cmn%alb_vis_dif_ice_semi(i,j,max(1,doy))
+              cmn%alb_nir_dir(i,j,i_surf_ice) = cmn%alb_nir_dir_ice_semi(i,j,max(1,doy))
+              cmn%alb_nir_dif(i,j,i_surf_ice) = cmn%alb_nir_dif_ice_semi(i,j,max(1,doy))
             endif
           endif
         endif
@@ -2523,10 +2523,10 @@ contains
     do i=1,cmn%grid%G%nx
       do j=1,cmn%grid%G%ny
         if (smb%grid_smb_to_cmn%ncells(i,j)>0) then
-          cmn%alb_vis_dir_ice_semi(i,j,doy) = 0._wp
-          cmn%alb_vis_dif_ice_semi(i,j,doy) = 0._wp
-          cmn%alb_nir_dir_ice_semi(i,j,doy) = 0._wp
-          cmn%alb_nir_dif_ice_semi(i,j,doy) = 0._wp
+          cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) = 0._wp
+          cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) = 0._wp
+          cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) = 0._wp
+          cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) = 0._wp
         endif
       enddo
     enddo
@@ -2538,10 +2538,10 @@ contains
           j = smb%grid_smb_to_cmn%j_lowres(ii,jj)
           ncells_ice = smb%grid_smb_to_cmn%ncells_ice(i,j)
           if (ncells_ice.gt.0) then
-            cmn%alb_vis_dir_ice_semi(i,j,doy) = cmn%alb_vis_dir_ice_semi(i,j,doy) + smb%alb_vis_dir(ii,jj)/ncells_ice
-            cmn%alb_vis_dif_ice_semi(i,j,doy) = cmn%alb_vis_dif_ice_semi(i,j,doy) + smb%alb_vis_dif(ii,jj)/ncells_ice
-            cmn%alb_nir_dir_ice_semi(i,j,doy) = cmn%alb_nir_dir_ice_semi(i,j,doy) + smb%alb_nir_dir(ii,jj)/ncells_ice
-            cmn%alb_nir_dif_ice_semi(i,j,doy) = cmn%alb_nir_dif_ice_semi(i,j,doy) + smb%alb_nir_dif(ii,jj)/ncells_ice
+            cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) = cmn%alb_vis_dir_ice_semi(i,j,max(1,doy)) + smb%alb_vis_dir(ii,jj)/ncells_ice
+            cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) = cmn%alb_vis_dif_ice_semi(i,j,max(1,doy)) + smb%alb_vis_dif(ii,jj)/ncells_ice
+            cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) = cmn%alb_nir_dir_ice_semi(i,j,max(1,doy)) + smb%alb_nir_dir(ii,jj)/ncells_ice
+            cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) = cmn%alb_nir_dif_ice_semi(i,j,max(1,doy)) + smb%alb_nir_dif(ii,jj)/ncells_ice
           endif
         endif
       enddo

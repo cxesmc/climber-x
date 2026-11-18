@@ -43,12 +43,13 @@ module atm_model
     use atm_params, only : i_swr_gas, a_gas_vu
     use atm_params, only : i_rbstr
     use atm_params, only : l_write_timer
+    use atm_params, only : synsurmin
     use atm_params, only : i_adv
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update
-    use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, nm, cost, pl, zl
+    use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, nm, cost, pl, zl, z3, z3l
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
     use atm_grid, only : dxt, dy, fit, sqr, dplt, diffx_eq
     use atm_params, only : tstep
@@ -726,6 +727,7 @@ contains
          atm%uab(i,j) = 0._wp
          atm%vab(i,j) = 0._wp
          atm%wsyn(i,j) = 0._wp
+         atm%synsur(i,j,:) = synsurmin   ! read by usur on the first substep, before synop sets it
          atm%wcld(i,j) = 0._wp
          atm%weff(i,j) = 0._wp
          atm%woro(i,j) = 0._wp
@@ -1451,6 +1453,10 @@ contains
     call nc_write(fnm,"tp      ",     atm%tp      ,     dims=["lon ","lat ","plev"],long_name="",units="")
     call nc_write(fnm,"q3      ",     atm%q3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
     call nc_write(fnm,"d3      ",     atm%d3      ,     dims=["lon ","lat ","plev"],long_name="",units="")
+    ! read before they are recomputed on the first step: z3 by zslp (before vesta), synsur by usur (before synop)
+    call nc_write(fnm,"z3",            z3,                dims=["lon ","lat ","plev"],long_name="geometric height of the layer centres, from vesta",units="m")
+    call nc_write(fnm,"z3l",           z3l,               dims=["lon  ","lat  ","plevc"],long_name="geometric height of the level interfaces, from vesta",units="m")
+    call nc_write(fnm,"synsur",        atm%synsur,        dims=["lon","lat","nm "],long_name="synoptic surface wind speed",units="m/s")
 
 
    return
@@ -1468,6 +1474,9 @@ contains
 
     character (len=*) :: fnm
     type(atm_class) :: atm
+
+    real(wp), allocatable :: tmp_a(:,:), tmp_w(:,:), tmp_dt(:,:), tmp_tt(:,:)
+    real(wp), allocatable :: tmp_t3(:,:,:), tmp_q3(:,:,:), tmp_tp(:,:,:), tmp_d3(:,:,:)
 
 
     call nc_read(fnm,"had_fi   ",     atm%had_fi   )
@@ -1574,6 +1583,22 @@ contains
     call nc_read(fnm,"tp       ",     atm%tp      ) 
     call nc_read(fnm,"q3       ",     atm%q3      ) 
     call nc_read(fnm,"d3       ",     atm%d3      ) 
+    if (nc_exists_var(fnm,"z3")) then
+      call nc_read(fnm,"z3",  z3 )
+      call nc_read(fnm,"z3l", z3l)
+    else
+      ! older restart: rebuild the layer heights from the restored state, discarding the other vesta outputs
+      allocate(tmp_a(im,jm), tmp_w(im,jm), tmp_dt(im,jm), tmp_tt(im,jm))
+      allocate(tmp_t3(im,jm,km), tmp_q3(im,jm,km), tmp_tp(im,jm,km), tmp_d3(im,jm,km))
+      call vesta(atm%zsa, atm%tam, atm%gams, atm%gamb, atm%gamt, atm%htrop, atm%ram, atm%hrm, atm%dam, atm%hdust, &
+        tmp_a, tmp_w, tmp_dt, tmp_t3, tmp_q3, tmp_tp, tmp_d3, tmp_tt)
+      deallocate(tmp_a, tmp_w, tmp_dt, tmp_tt, tmp_t3, tmp_q3, tmp_tp, tmp_d3)
+    endif
+    if (nc_exists_var(fnm,"synsur")) then
+      call nc_read(fnm,"synsur", atm%synsur)
+    else
+      atm%synsur = synsurmin
+    endif
 
     print *,'read restart file ',fnm
 
