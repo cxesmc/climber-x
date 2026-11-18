@@ -26,7 +26,7 @@
 module ice_model
     
     use precision, only : wp, sp, dp 
-    use control, only : out_dir
+    use control, only : out_dir, restart_in_dir
     use coords, only : grid_class, grid_init
     use coords, only : map_class, map_init, map_field
     use constants, only : map_gen, constants_phys_const
@@ -34,7 +34,8 @@ module ice_model
     use ice_def, only : ice_class
     use yelmo, only : yelmo_class, yregions_class, yelmo_init_grid, yelmo_init, yelmo_init_state, &
                       yelmo_update, yelmo_end, yelmo_write_init, yelmo_write_reg_init, yelmo_write_reg_step, &
-                      yelmo_write_step_model_metrics, yelmo_restart_write 
+                      yelmo_write_step_model_metrics, yelmo_restart_write
+    use lsf_module, only : LSFinit
     use sicopolis, only : sico_class, sico_init, sico_update, sico_end, sico_write_restart
     use sico_out, only : sico_diag_init, sico_diag
     use ice_id_mod, only : set_ice_id
@@ -351,8 +352,16 @@ contains
 
                 ! Now initialize remaining Yelmo components
                 ! (set `grid_def="none"` to use the grid definition from above)
-                call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
-                            load_topo=.FALSE.,domain=domain,grid_name=grid%name)
+                ! ctl.ice_restart: Yelmo restarts from the set in restart_in_dir (the file
+                ! ice_write_restart writes); otherwise yelmo.restart of the par file decides.
+                if (l_restart) then
+                    call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
+                                load_topo=.FALSE.,domain=domain,grid_name=grid%name, &
+                                restart=trim(restart_in_dir)//"/ice_yelmo_"//trim(grid%name)//"_restart.nc")
+                else
+                    call yelmo_init(ylmo,par_path,grid_def="none",time=time, &
+                                load_topo=.FALSE.,domain=domain,grid_name=grid%name)
+                end if
 
                 if (.not. ylmo%par%use_restart) then                          
                   ! Define topography based on input data
@@ -368,6 +377,11 @@ contains
                   ylmo%bnd%smb         = 0.0_wp 
                   ylmo%bnd%bmb_shlf    = 0.0_wp 
                   ylmo%bnd%H_sed       = H_sed
+
+                  ! Level-set function from this topography: yelmo_init (load_topo=.FALSE.)
+                  ! initialised it before H_ice and z_bed were set, as for any driver
+                  ! that defines the topography itself (cf. yelmo tests/yelmo_calving.f90)
+                  call LSFinit(ylmo%tpo%now%lsf,ylmo%tpo%now%H_ice,ylmo%bnd%z_bed,ylmo%bnd%z_sl,ylmo%tpo%par%dx)
                 endif
                 
                 ! Allow ice to grow over the whole domain by default
