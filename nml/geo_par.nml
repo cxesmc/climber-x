@@ -27,6 +27,9 @@
  l_close_baltic   = F           ! enforce disconnected Baltic Sea?
  i_fix_cell_grl   = 0
  n_coast_cells = 10             ! number of coastal cells over which runoff is spread
+ l_runoff_frac = T              ! split the runoff of each coarse cell among its high resolution destination cells, by fraction of points (T),
+                                ! or send it all to the most frequent destination (F)?
+ n_runoff_dst  = 16             ! maximum number of destination cells per coarse cell (the rarest are dropped and the rest renormalised), used only if l_runoff_frac=T
  h_ice_min = 10.                ! m, minimum ice thickness for grid cell to be considered covered by ice sheet
 
  !-------------------------------------------------------

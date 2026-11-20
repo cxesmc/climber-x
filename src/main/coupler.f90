@@ -336,6 +336,11 @@ module coupler
       integer, dimension(:,:), allocatable :: i_runoff_ice, j_runoff_ice  !! i and j indexes of ice sheet runoff destination gridcell 
       real(wp), dimension(:,:,:),   allocatable :: f_drain_veg !! drainage fractions from land to lakes and ocean []
       real(wp), dimension(:,:,:),   allocatable :: f_drain_ice !! drainage fractions from lice sheets to lakes and ocean []
+      ! all runoff destinations of a cell (most frequent first) and the fraction of its runoff each receives, see geo_def
+      integer, dimension(:,:,:), allocatable :: i_runoff_dst, j_runoff_dst
+      integer, dimension(:,:,:), allocatable :: i_runoff_veg_dst, j_runoff_veg_dst
+      integer, dimension(:,:,:), allocatable :: i_runoff_ice_dst, j_runoff_ice_dst
+      real(wp), dimension(:,:,:), allocatable :: f_runoff_dst, f_runoff_veg_dst, f_runoff_ice_dst
       type(lake_type), dimension(:), allocatable :: lake  !! lake derived type
       real(wp), dimension(:,:),   allocatable :: lake_p_e  !! P-E for lake [kg/m2/s]
       real(wp), dimension(:,:),   allocatable :: h_lake  !! average lake(s) depth on coupler grid [m]
@@ -1449,8 +1454,8 @@ contains
     type(cmn_class), intent(inout) :: cmn
     type(lnd_class), intent(inout) :: lnd
 
-    integer :: i, j, ii, jj, ir, jr, n, nk
-    real(wp) :: lnd_cell_area, avg
+    integer :: i, j, ii, jj, ir, jr, n, nk, d
+    real(wp) :: lnd_cell_area, avg, fd
 
 
     ! find index of top 1 km ocean layers for basal melt
@@ -1558,27 +1563,31 @@ contains
       do j=1,nj
         do i=1,ni
           if (lnd%l2d(i,j)%f_veg.gt.0._wp) then
-            ! index of runoff destination cells (i,j) -> (ir,jr)
-            ir = cmn%i_runoff(i,j)
-            jr = cmn%j_runoff(i,j)
-            ! transfer weathering to ocean domain
-            lnd_cell_area = area(i,j)*lnd%l2d(i,j)%f_veg 
-            ! organic carbon fluxes (DOC and POC)
-            call dist_add(cmn%doc_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc_export*lnd_cell_area)
-            call dist_add(cmn%doc13_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc13_export*lnd_cell_area)
-            call dist_add(cmn%doc14_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc14_export*lnd_cell_area)
-            call dist_add(cmn%poc_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc_export*lnd_cell_area)
-            call dist_add(cmn%poc13_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc13_export*lnd_cell_area)
-            call dist_add(cmn%poc14_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc14_export*lnd_cell_area)
-            ! carbonate and silicate weathering
-            if (l_weathering) then
-                call dist_add(cmn%weath_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath_carb*lnd_cell_area)
-                call dist_add(cmn%weath_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath_sil*lnd_cell_area)
-                call dist_add(cmn%weath13_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath13_carb*lnd_cell_area)
-                call dist_add(cmn%weath13_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath13_sil*lnd_cell_area)
-                call dist_add(cmn%weath14_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath14_carb*lnd_cell_area)
-                call dist_add(cmn%weath14_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath14_sil*lnd_cell_area)
-            endif
+            ! runoff destination cells (i,j) -> (ir,jr), each taking the fraction fd of the cell's export
+            do d=1,size(cmn%i_runoff_dst,1)
+              fd = cmn%f_runoff_dst(d,i,j)
+              if (fd.le.0._wp) exit
+              ir = cmn%i_runoff_dst(d,i,j)
+              jr = cmn%j_runoff_dst(d,i,j)
+              ! transfer weathering to ocean domain
+              lnd_cell_area = area(i,j)*lnd%l2d(i,j)%f_veg * fd
+              ! organic carbon fluxes (DOC and POC)
+              call dist_add(cmn%doc_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc_export*lnd_cell_area)
+              call dist_add(cmn%doc13_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc13_export*lnd_cell_area)
+              call dist_add(cmn%doc14_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%doc14_export*lnd_cell_area)
+              call dist_add(cmn%poc_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc_export*lnd_cell_area)
+              call dist_add(cmn%poc13_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc13_export*lnd_cell_area)
+              call dist_add(cmn%poc14_export, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%poc14_export*lnd_cell_area)
+              ! carbonate and silicate weathering
+              if (l_weathering) then
+                  call dist_add(cmn%weath_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath_carb*lnd_cell_area)
+                  call dist_add(cmn%weath_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath_sil*lnd_cell_area)
+                  call dist_add(cmn%weath13_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath13_carb*lnd_cell_area)
+                  call dist_add(cmn%weath13_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath13_sil*lnd_cell_area)
+                  call dist_add(cmn%weath14_carb, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath14_carb*lnd_cell_area)
+                  call dist_add(cmn%weath14_sil, cmn%dist_weath(ir,jr), lnd%l2d(i,j)%weath14_sil*lnd_cell_area)
+              endif
+            enddo
           endif
         enddo
       enddo
@@ -3229,6 +3238,18 @@ contains
     cmn%j_runoff_veg = geo%j_runoff_veg
     cmn%i_runoff_ice = geo%i_runoff_ice 
     cmn%j_runoff_ice = geo%j_runoff_ice
+    ! all runoff destinations and their fractions (a single one with fraction 1 unless l_runoff_frac)
+    if (allocated(cmn%i_runoff_dst)) deallocate(cmn%i_runoff_dst, cmn%j_runoff_dst, cmn%f_runoff_dst, &
+      cmn%i_runoff_veg_dst, cmn%j_runoff_veg_dst, cmn%f_runoff_veg_dst, cmn%i_runoff_ice_dst, cmn%j_runoff_ice_dst, cmn%f_runoff_ice_dst)
+    allocate(cmn%i_runoff_dst, source=geo%i_runoff_dst)
+    allocate(cmn%j_runoff_dst, source=geo%j_runoff_dst)
+    allocate(cmn%f_runoff_dst, source=geo%f_runoff_dst)
+    allocate(cmn%i_runoff_veg_dst, source=geo%i_runoff_veg_dst)
+    allocate(cmn%j_runoff_veg_dst, source=geo%j_runoff_veg_dst)
+    allocate(cmn%f_runoff_veg_dst, source=geo%f_runoff_veg_dst)
+    allocate(cmn%i_runoff_ice_dst, source=geo%i_runoff_ice_dst)
+    allocate(cmn%j_runoff_ice_dst, source=geo%j_runoff_ice_dst)
+    allocate(cmn%f_runoff_ice_dst, source=geo%f_runoff_ice_dst)
 
     ! number of lakes
     cmn%n_lakes = geo%n_lakes
@@ -3835,7 +3856,8 @@ contains
 
     type(cmn_class) :: cmn
 
-    integer :: i, j, ir, jr, n
+    integer :: i, j, ir, jr, n, d
+    real(wp) :: fd
     logical :: lake_cal_run
     ! source fluxes summed per destination cell (ir,jr) before spreading: the spreading is linear, so each
     ! destination is spread once instead of once per source cell (~10x fewer updates with i_runoff_dist=2)
@@ -3866,29 +3888,37 @@ contains
 
         ! runoff and calving from ice-free and lake-free land 
         if (cmn%f_drain_veg(0,i,j)>0._wp) then
-          ! index of runoff destination cells (i,j) -> (ir,jr)
-          ir = cmn%i_runoff_veg(i,j)
-          jr = cmn%j_runoff_veg(i,j)
-          ldst(ir,jr) = .true.
-          ! kg/m2/s
-          acc(1,ir,jr) = acc(1,ir,jr) + cmn%runoff_veg(i,j)  * cmn%f_drain_veg(0,i,j)
-          acc(2,ir,jr) = acc(2,ir,jr) + cmn%calving_veg(i,j) * cmn%f_drain_veg(0,i,j)
+          ! runoff destination cells (i,j) -> (ir,jr), each taking the fraction fd of the cell's runoff
+          do d=1,size(cmn%i_runoff_veg_dst,1)
+            fd = cmn%f_runoff_veg_dst(d,i,j)
+            if (fd.le.0._wp) exit
+            ir = cmn%i_runoff_veg_dst(d,i,j)
+            jr = cmn%j_runoff_veg_dst(d,i,j)
+            ldst(ir,jr) = .true.
+            ! kg/m2/s
+            acc(1,ir,jr) = acc(1,ir,jr) + cmn%runoff_veg(i,j)  * cmn%f_drain_veg(0,i,j) * fd
+            acc(2,ir,jr) = acc(2,ir,jr) + cmn%calving_veg(i,j) * cmn%f_drain_veg(0,i,j) * fd
+          enddo
         endif
 
         ! runoff and calving from ice-sheets
         if (cmn%f_drain_ice(0,i,j)>0._wp) then
-          ! index of runoff destination cells (i,j) -> (ir,jr)
-          ir = cmn%i_runoff_ice(i,j)
-          jr = cmn%j_runoff_ice(i,j)
-          ldst(ir,jr) = .true.
-          ! runoff, melt and basal melt, kg/m2/s
-          acc(3,ir,jr) = acc(3,ir,jr) + cmn%runoff_ice(i,j)  * cmn%f_drain_ice(0,i,j)
-          acc(4,ir,jr) = acc(4,ir,jr) + cmn%melt_ice(i,j)    * cmn%f_drain_ice(0,i,j)
-          acc(5,ir,jr) = acc(5,ir,jr) + cmn%bmelt_grd(i,j)   * cmn%f_drain_ice(0,i,j)
-          acc(6,ir,jr) = acc(6,ir,jr) + cmn%bmelt_flt(i,j)   * cmn%f_drain_ice(0,i,j)
-          acc(7,ir,jr) = acc(7,ir,jr) + cmn%fw_dhdt_ice(i,j) * cmn%f_drain_ice(0,i,j)
-          ! calving, kg/m2/s
-          acc(8,ir,jr) = acc(8,ir,jr) + cmn%calving_ice(i,j) * cmn%f_drain_ice(0,i,j)
+          ! runoff destination cells (i,j) -> (ir,jr), each taking the fraction fd of the cell's runoff
+          do d=1,size(cmn%i_runoff_ice_dst,1)
+            fd = cmn%f_runoff_ice_dst(d,i,j)
+            if (fd.le.0._wp) exit
+            ir = cmn%i_runoff_ice_dst(d,i,j)
+            jr = cmn%j_runoff_ice_dst(d,i,j)
+            ldst(ir,jr) = .true.
+            ! runoff, melt and basal melt, kg/m2/s
+            acc(3,ir,jr) = acc(3,ir,jr) + cmn%runoff_ice(i,j)  * cmn%f_drain_ice(0,i,j) * fd
+            acc(4,ir,jr) = acc(4,ir,jr) + cmn%melt_ice(i,j)    * cmn%f_drain_ice(0,i,j) * fd
+            acc(5,ir,jr) = acc(5,ir,jr) + cmn%bmelt_grd(i,j)   * cmn%f_drain_ice(0,i,j) * fd
+            acc(6,ir,jr) = acc(6,ir,jr) + cmn%bmelt_flt(i,j)   * cmn%f_drain_ice(0,i,j) * fd
+            acc(7,ir,jr) = acc(7,ir,jr) + cmn%fw_dhdt_ice(i,j) * cmn%f_drain_ice(0,i,j) * fd
+            ! calving, kg/m2/s
+            acc(8,ir,jr) = acc(8,ir,jr) + cmn%calving_ice(i,j) * cmn%f_drain_ice(0,i,j) * fd
+          enddo
         endif
       enddo
     enddo
@@ -3912,11 +3942,15 @@ contains
       do j=1,nj
         do i=1,ni
           if (cmn%f_drain_veg(0,i,j) > 0._wp .and. cmn%f_lake(i,j) > 0._wp) then
-            ir = cmn%i_runoff_veg(i,j)
-            jr = cmn%j_runoff_veg(i,j)
-            ldst(ir,jr) = .true.
-            acc(9,ir,jr)  = acc(9,ir,jr)  + cmn%runoff_lake(i,j)  * cmn%f_drain_veg(0,i,j)
-            acc(10,ir,jr) = acc(10,ir,jr) + cmn%calving_lake(i,j) * cmn%f_drain_veg(0,i,j)
+            do d=1,size(cmn%i_runoff_veg_dst,1)
+              fd = cmn%f_runoff_veg_dst(d,i,j)
+              if (fd.le.0._wp) exit
+              ir = cmn%i_runoff_veg_dst(d,i,j)
+              jr = cmn%j_runoff_veg_dst(d,i,j)
+              ldst(ir,jr) = .true.
+              acc(9,ir,jr)  = acc(9,ir,jr)  + cmn%runoff_lake(i,j)  * cmn%f_drain_veg(0,i,j) * fd
+              acc(10,ir,jr) = acc(10,ir,jr) + cmn%calving_lake(i,j) * cmn%f_drain_veg(0,i,j) * fd
+            enddo
           endif
         enddo
       enddo

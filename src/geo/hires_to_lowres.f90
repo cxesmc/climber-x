@@ -45,7 +45,9 @@ contains
     f_ocn, f_lnd, f_ice, f_ice_grd, f_lake, f_lake_n, &   ! out
     z_sur, z_ocn, z_ocn_min, z_ocn_max, z_ocn_max_q, z_ocn_min_q, z_ice, z_lake, z_veg, z_veg_min, z_veg_max, z_bed, &   ! out
     z_sur_std, z_sur_smooth_std, z_veg_std, &    ! out
-    f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice)   ! out
+    f_drain_veg, f_drain_ice, i_runoff, j_runoff, i_runoff_veg, j_runoff_veg, i_runoff_ice, j_runoff_ice, &   ! out
+    i_runoff_dst, j_runoff_dst, f_runoff_dst, i_runoff_veg_dst, j_runoff_veg_dst, f_runoff_veg_dst, &  ! out
+    i_runoff_ice_dst, j_runoff_ice_dst, f_runoff_ice_dst)   ! out
 
   implicit none
 
@@ -91,6 +93,12 @@ contains
   integer, intent(out) :: j_runoff_veg(:,:)
   integer, intent(out) :: i_runoff_ice(:,:)
   integer, intent(out) :: j_runoff_ice(:,:)
+  ! all destinations (most frequent first) and their fraction of the cell's runoff; size(.,1) = 1 gives the
+  ! single most frequent destination with fraction 1
+  integer, intent(out) :: i_runoff_dst(:,:,:), j_runoff_dst(:,:,:)
+  integer, intent(out) :: i_runoff_veg_dst(:,:,:), j_runoff_veg_dst(:,:,:)
+  integer, intent(out) :: i_runoff_ice_dst(:,:,:), j_runoff_ice_dst(:,:,:)
+  real(wp), intent(out) :: f_runoff_dst(:,:,:), f_runoff_veg_dst(:,:,:), f_runoff_ice_dst(:,:,:)
 
   integer :: i, j, ii, jj, n, nocn, nice, nice_grd, nice_flt, nveg, nlake, nlaken, ncells, nrun_veg, nrun_ice, dir_loc, dir_loc_save, nrun_tot
   real(wp) :: df_ocn
@@ -272,6 +280,9 @@ contains
         ! set most frequent runoff destination point
         i_runoff(i,j) = i_runoff_cell(dir_loc)
         j_runoff(i,j) = j_runoff_cell(dir_loc)
+        ! all destinations, most frequent first (the first is the one above)
+        call runoff_destinations(dir_count, i_runoff_cell, j_runoff_cell, &
+          i_runoff_dst(:,i,j), j_runoff_dst(:,i,j), f_runoff_dst(:,i,j))
 
         if (i_runoff(i,j).eq.0) then
           print *,'ERROR i_runoff==0'
@@ -282,6 +293,9 @@ contains
 
         i_runoff(i,j) = 0 
         j_runoff(i,j) = 0
+        i_runoff_dst(:,i,j) = 0
+        j_runoff_dst(:,i,j) = 0
+        f_runoff_dst(:,i,j) = 0._wp
 
       endif
 
@@ -321,6 +335,9 @@ contains
         ! set most frequent runoff destination points 
         i_runoff_veg(i,j) = i_runoff_cell(dir_loc)
         j_runoff_veg(i,j) = j_runoff_cell(dir_loc)
+        ! all destinations, most frequent first (the first is the one above)
+        call runoff_destinations(dir_count, i_runoff_cell, j_runoff_cell, &
+          i_runoff_veg_dst(:,i,j), j_runoff_veg_dst(:,i,j), f_runoff_veg_dst(:,i,j))
 
         !print *,''
         !print *,'i,j',i,j
@@ -344,6 +361,9 @@ contains
 
         i_runoff_veg(i,j) = 0 
         j_runoff_veg(i,j) = 0
+        i_runoff_veg_dst(:,i,j) = 0
+        j_runoff_veg_dst(:,i,j) = 0
+        f_runoff_veg_dst(:,i,j) = 0._wp
 
       endif
 
@@ -381,6 +401,9 @@ contains
         ! set most frequent runoff destination points and relative fraction
         i_runoff_ice(i,j) = i_runoff_cell(dir_loc)
         j_runoff_ice(i,j) = j_runoff_cell(dir_loc)
+        ! all destinations, most frequent first (the first is the one above)
+        call runoff_destinations(dir_count, i_runoff_cell, j_runoff_cell, &
+          i_runoff_ice_dst(:,i,j), j_runoff_ice_dst(:,i,j), f_runoff_ice_dst(:,i,j))
 
         !print *,''
         !print *,'i,j',i,j
@@ -401,6 +424,9 @@ contains
 
         i_runoff_ice(i,j) = 0 
         j_runoff_ice(i,j) = 0
+        i_runoff_ice_dst(:,i,j) = 0
+        j_runoff_ice_dst(:,i,j) = 0
+        f_runoff_ice_dst(:,i,j) = 0._wp
 
       endif
 
@@ -511,6 +537,58 @@ contains
 
 
   end subroutine hires_to_lowres
+
+
+  !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  ! Subroutine :  r u n o f f _ d e s t i n a t i o n s
+  ! Purpose    :  the size(i_dst) most frequent runoff destinations of a coarse
+  !               cell and the fraction of its high resolution points draining
+  !               to each, renormalised over the destinations kept.
+  !               dir_count holds the number of points draining to destination
+  !               (i_cell(n),j_cell(n)) at the first occurrence n of each
+  !               destination and 0 elsewhere. Ties go to the lowest n, so the
+  !               first destination is maxloc(dir_count), the single-destination
+  !               choice, and size(i_dst)=1 gives that one with fraction 1.
+  !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine runoff_destinations(dir_count, i_cell, j_cell, i_dst, j_dst, f_dst)
+
+    implicit none
+
+    integer, intent(in) :: dir_count(:)
+    integer, intent(in) :: i_cell(:), j_cell(:)
+    integer, intent(out) :: i_dst(:), j_dst(:)
+    real(wp), intent(out) :: f_dst(:)
+
+    integer :: n, k, nu, loc, ntot
+    integer :: idx(size(dir_count)), cnt(size(dir_count))
+
+    ! compress to the unique destinations, keeping their order
+    nu = 0
+    do n=1,size(dir_count)
+      if (dir_count(n).gt.0) then
+        nu = nu+1
+        idx(nu) = n
+        cnt(nu) = dir_count(n)
+      endif
+    enddo
+
+    i_dst = 0
+    j_dst = 0
+    f_dst = 0._wp
+    ntot = 0
+    do k=1,min(size(i_dst),nu)
+      loc = maxloc(cnt(1:nu),1)
+      i_dst(k) = i_cell(idx(loc))
+      j_dst(k) = j_cell(idx(loc))
+      f_dst(k) = real(cnt(loc),wp)
+      ntot = ntot + cnt(loc)
+      cnt(loc) = 0
+    enddo
+    if (ntot.gt.0) f_dst = f_dst/real(ntot,wp)
+
+    return
+
+  end subroutine runoff_destinations
 
   SUBROUTINE Bubble_Sort(a)
   REAL(wp), INTENT(in out), DIMENSION(:) :: a
