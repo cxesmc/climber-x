@@ -40,6 +40,7 @@ module geo_mod
   use geo_params, only : l_close_hudson, l_close_baltic
   use geo_params, only : lon_ocn_origin, lat_ocn_origin
   use geo_params, only : l_write_timer
+  use geo_params, only : l_runoff_frac, n_runoff_dst
   use geo_grid, only : geo_grid_init
   use geo_grid, only : ni, nj, ni_topo, nj_topo, n_topo_sur, lon ,lat, lon_topo, lat_topo, area, area_dp
   use geo_grid, only : i0_topo, i1_topo, j0_topo, j1_topo, i_lowres, j_lowres
@@ -719,7 +720,8 @@ contains
 
   type(geo_class), intent(inout) :: geo
 
-  integer :: i, j, n
+  integer :: i, j, n, nd
+  integer, allocatable :: idst(:,:,:), jdst(:,:,:)
   logical :: l_was_ice_grd
   real(wp) :: A_bering, dx
 
@@ -914,6 +916,15 @@ contains
   allocate(geo%f_drain_veg(0:geo%n_lakes,ni,nj))
   allocate(geo%f_drain_ice(0:geo%n_lakes,ni,nj))
 
+  ! runoff destinations per cell: all of them (up to n_runoff_dst) with l_runoff_frac, else the most frequent one
+  nd = 1
+  if (l_runoff_frac) nd = max(1,n_runoff_dst)
+  if (allocated(geo%i_runoff_dst)) deallocate(geo%i_runoff_dst, geo%j_runoff_dst, geo%f_runoff_dst, &
+    geo%i_runoff_veg_dst, geo%j_runoff_veg_dst, geo%f_runoff_veg_dst, geo%i_runoff_ice_dst, geo%j_runoff_ice_dst, geo%f_runoff_ice_dst)
+  allocate(geo%i_runoff_dst(nd,ni,nj), geo%j_runoff_dst(nd,ni,nj), geo%f_runoff_dst(nd,ni,nj))
+  allocate(geo%i_runoff_veg_dst(nd,ni,nj), geo%j_runoff_veg_dst(nd,ni,nj), geo%f_runoff_veg_dst(nd,ni,nj))
+  allocate(geo%i_runoff_ice_dst(nd,ni,nj), geo%j_runoff_ice_dst(nd,ni,nj), geo%f_runoff_ice_dst(nd,ni,nj))
+
   !-------------------------------------------------------------------
   ! derive fractions, topography and runoff on coarse resolution
   !-------------------------------------------------------------------
@@ -924,7 +935,9 @@ contains
     geo%f_ocn, geo%f_lnd, geo%f_ice, geo%f_ice_grd, geo%f_lake, geo%f_lake_n, &
     geo%z_sur, geo%z_ocn, geo%z_ocn_min, geo%z_ocn_max, geo%z_ocn_max_q, geo%z_ocn_min_q, geo%z_ice, geo%z_lake, geo%z_veg, geo%z_veg_min, geo%z_veg_max, geo%z_bed, & ! out
     geo%z_sur_std, geo%z_sur_smooth_std, geo%z_veg_std, &    ! out
-    geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice)   ! out
+    geo%f_drain_veg, geo%f_drain_ice, geo%i_runoff, geo%j_runoff, geo%i_runoff_veg, geo%j_runoff_veg, geo%i_runoff_ice, geo%j_runoff_ice, &   ! out
+    geo%i_runoff_dst, geo%j_runoff_dst, geo%f_runoff_dst, geo%i_runoff_veg_dst, geo%j_runoff_veg_dst, geo%f_runoff_veg_dst, &   ! out
+    geo%i_runoff_ice_dst, geo%j_runoff_ice_dst, geo%f_runoff_ice_dst)   ! out
   !$ time2 = omp_get_wtime()
   !$ if(l_write_timer) print *,'hires_to_lowres',time2-time1
 
@@ -940,6 +953,12 @@ contains
   ! runoff from ice sheets
   call fix_runoff(geo%f_ocn, &
     geo%i_runoff_ice, geo%j_runoff_ice)
+  ! same for every destination of the fractional routing (the first one is identical to the above)
+  do n=1,size(geo%i_runoff_dst,1)
+    call fix_runoff(geo%f_ocn, geo%i_runoff_dst(n,:,:), geo%j_runoff_dst(n,:,:))
+    call fix_runoff(geo%f_ocn, geo%i_runoff_veg_dst(n,:,:), geo%j_runoff_veg_dst(n,:,:))
+    call fix_runoff(geo%f_ocn, geo%i_runoff_ice_dst(n,:,:), geo%j_runoff_ice_dst(n,:,:))
+  enddo
 
   ! make sure lake runoff reaches ocean
   do n=1,geo%n_lakes
@@ -962,8 +981,20 @@ contains
   ! find coastal cells 
   !-------------------------------------------------------------------
   !$ time1 = omp_get_wtime()
-  call coast_cells(geo%f_lnd, geo%i_runoff, geo%j_runoff, &      ! in
-    geo%mask_coast, geo%mask_coast2, geo%i_coast_nbr, geo%j_coast_nbr, geo%coast_nbr)   ! out
+  if (l_runoff_frac) then
+    ! every destination of the fractional routing must be a coastal cell, so that it gets a spreading map
+    nd = size(geo%i_runoff_dst,1)
+    allocate(idst(3*nd,ni,nj), jdst(3*nd,ni,nj))
+    idst(1:nd,:,:) = geo%i_runoff_dst ; idst(nd+1:2*nd,:,:) = geo%i_runoff_veg_dst ; idst(2*nd+1:3*nd,:,:) = geo%i_runoff_ice_dst
+    jdst(1:nd,:,:) = geo%j_runoff_dst ; jdst(nd+1:2*nd,:,:) = geo%j_runoff_veg_dst ; jdst(2*nd+1:3*nd,:,:) = geo%j_runoff_ice_dst
+    call coast_cells(geo%f_lnd, geo%i_runoff, geo%j_runoff, &      ! in
+      geo%mask_coast, geo%mask_coast2, geo%i_coast_nbr, geo%j_coast_nbr, geo%coast_nbr, &   ! out
+      i_runoff_dst=idst, j_runoff_dst=jdst)   ! in
+    deallocate(idst, jdst)
+  else
+    call coast_cells(geo%f_lnd, geo%i_runoff, geo%j_runoff, &      ! in
+      geo%mask_coast, geo%mask_coast2, geo%i_coast_nbr, geo%j_coast_nbr, geo%coast_nbr)   ! out
+  endif
   !$ time2 = omp_get_wtime()
   !$ if(l_write_timer) print *,'coast_cells',time2-time1
 
@@ -1130,6 +1161,8 @@ contains
     deallocate(geo%j_runoff_veg)
     deallocate(geo%i_runoff_ice)
     deallocate(geo%j_runoff_ice)
+    if (allocated(geo%i_runoff_dst)) deallocate(geo%i_runoff_dst, geo%j_runoff_dst, geo%f_runoff_dst, &
+      geo%i_runoff_veg_dst, geo%j_runoff_veg_dst, geo%f_runoff_veg_dst, geo%i_runoff_ice_dst, geo%j_runoff_ice_dst, geo%f_runoff_ice_dst)
     deallocate(geo%drain_basins_ocn)
     deallocate(geo%idivide_pac_atl)
     deallocate(geo%idivide_atl_indpac)

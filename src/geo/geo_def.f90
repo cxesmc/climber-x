@@ -147,6 +147,12 @@ module geo_def
       integer, dimension(:,:), allocatable :: i_runoff, j_runoff
       integer, dimension(:,:), allocatable :: i_runoff_veg, j_runoff_veg 
       integer, dimension(:,:), allocatable :: i_runoff_ice, j_runoff_ice
+      ! all runoff destinations of a cell, most frequent first (index 1 = i_runoff*, j_runoff*), and the fraction of the
+      ! cell's runoff each receives; one destination with fraction 1 unless l_runoff_frac
+      integer, dimension(:,:,:), allocatable :: i_runoff_dst, j_runoff_dst
+      integer, dimension(:,:,:), allocatable :: i_runoff_veg_dst, j_runoff_veg_dst
+      integer, dimension(:,:,:), allocatable :: i_runoff_ice_dst, j_runoff_ice_dst
+      real(wp), dimension(:,:,:), allocatable :: f_runoff_dst, f_runoff_veg_dst, f_runoff_ice_dst
       integer, dimension(:,:), allocatable :: drain_basins_ocn 
       integer, dimension(:), allocatable :: idivide_pac_atl 
       integer, dimension(:), allocatable :: idivide_atl_indpac

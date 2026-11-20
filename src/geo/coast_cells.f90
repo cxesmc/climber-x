@@ -36,7 +36,7 @@ module coast_cells_mod
 contains
 
   subroutine coast_cells(f_lnd, i_runoff, j_runoff, &
-      mask_coast, mask_coast2, i_coast_nbr, j_coast_nbr, coast_nbr)
+      mask_coast, mask_coast2, i_coast_nbr, j_coast_nbr, coast_nbr, i_runoff_dst, j_runoff_dst)
 
     implicit none
 
@@ -48,6 +48,8 @@ contains
     integer, intent(out) :: i_coast_nbr(:,:,:)
     integer, intent(out) :: j_coast_nbr(:,:,:)
     integer, intent(out) :: coast_nbr(:,:)
+    integer, intent(in), optional :: i_runoff_dst(:,:,:)   !! further runoff destinations (n,i,j) that must be coastal too, 0 = none
+    integer, intent(in), optional :: j_runoff_dst(:,:,:)
 
     integer :: i, j, ii, jj, iii, jjj, ni, nj, n, no, nbr, n_nbr_lnd, n_nbr_ocn, n_nbr_lnd2
     integer :: ip1, im1, jp1, jm1, ip2, im2, jp2, jm2, ip3, im3, ip4, im4
@@ -107,6 +109,13 @@ contains
       do j=1,nj
         if (i_runoff(i,j).ne.0 .and. j_runoff(i,j).ne.0) then
           mask_coast(i_runoff(i,j),j_runoff(i,j)) = 1
+        endif
+        if (present(i_runoff_dst)) then
+          do n=1,size(i_runoff_dst,1)
+            if (i_runoff_dst(n,i,j).ne.0 .and. j_runoff_dst(n,i,j).ne.0) then
+              mask_coast(i_runoff_dst(n,i,j),j_runoff_dst(n,i,j)) = 1
+            endif
+          enddo
         endif
       enddo
     enddo

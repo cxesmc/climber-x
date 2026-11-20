@@ -84,6 +84,8 @@ module geo_params
   real(wp) :: lat_ocn_origin
 
   integer :: n_coast_cells
+  logical :: l_runoff_frac       !! split the runoff of a coarse cell among all its high resolution destinations (T) or send it all to the most frequent one (F)?
+  integer :: n_runoff_dst        !! maximum number of runoff destination cells per coarse cell, used only if l_runoff_frac=T
 
   real(wp) :: gia_time_lag
 
@@ -167,6 +169,8 @@ subroutine geo_par_load(filename)
     call nml_read(filename,"geo_par","lon_ocn_origin",lon_ocn_origin)
     call nml_read(filename,"geo_par","lat_ocn_origin",lat_ocn_origin)
     call nml_read(filename,"geo_par","n_coast_cells",n_coast_cells)
+    call nml_read(filename,"geo_par","l_runoff_frac",l_runoff_frac)
+    call nml_read(filename,"geo_par","n_runoff_dst",n_runoff_dst)
     call nml_read(filename,"geo_par","gia_time_lag",gia_time_lag)
     call nml_read(filename,"geo_par","i_q_geo",i_q_geo)
     call nml_read(filename,"geo_par","q_geo_const",q_geo_const)
