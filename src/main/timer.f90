@@ -319,7 +319,7 @@ contains
       time_eod_atm = (mod((soy-1)/step_atm, nstep_day_atm) .eq. nstep_day_atm-1) 
       time_eom_atm = (mod(doy,nday_mon) .eq. 0) .and. time_eod_atm
       time_eoy_atm = (mod(doy,nday_year) .eq. 0) .and. time_eod_atm
-      time_out_atm = (mod(year,nyout_atm) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_atm = (mod(year,nyout_atm).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
       time_feedback_save     = year.eq.nyears/2  ! save fields
       time_feedback_analysis = year.eq.nyears    ! do feedback analysis
       ! windows over which the global mean temperature of the two climate states is averaged
@@ -348,7 +348,7 @@ contains
       time_eod_ocn = (mod((soy-1)/step_ocn, nstep_day_ocn) .eq. nstep_day_ocn-1) 
       time_eom_ocn = (mod(doy,nday_mon) .eq. 0) .and. time_eod_ocn
       time_eoy_ocn = (mod(doy,nday_year) .eq. 0) .and. time_eod_ocn
-      time_out_ocn = (mod(year,nyout_ocn) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_ocn = (mod(year,nyout_ocn).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_ocn =.false. 
       time_soy_ocn = .false.
@@ -366,7 +366,7 @@ contains
       time_eod_bgc = (mod((soy-1)/step_bgc, nstep_day_bgc) .eq. nstep_day_bgc-1) 
       time_eom_bgc = (mod(doy,nday_mon) .eq. 0) .and. time_eod_bgc
       time_eoy_bgc = (mod(doy,nday_year) .eq. 0) .and. time_eod_bgc
-      time_out_bgc = (mod(year,nyout_bgc) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_bgc = (mod(year,nyout_bgc).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_bgc =.false. 
       time_soy_bgc = .false.
@@ -384,7 +384,7 @@ contains
       time_eod_lnd = (mod((soy-1)/step_lnd, nstep_day_lnd) .eq. nstep_day_lnd-1) 
       time_eom_lnd = (mod(doy,nday_mon) .eq. 0) .and. time_eod_lnd
       time_eoy_lnd = (mod(doy,nday_year) .eq. 0) .and. time_eod_lnd
-      time_out_lnd = (mod(year,nyout_lnd) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_lnd = (mod(year,nyout_lnd).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_lnd =.false. 
       time_soy_lnd = .false.
@@ -402,7 +402,7 @@ contains
       time_eod_sic = (mod((soy-1)/step_sic, nstep_day_sic) .eq. nstep_day_sic-1) 
       time_eom_sic = (mod(doy,nday_mon) .eq. 0) .and. time_eod_sic
       time_eoy_sic = (mod(doy,nday_year) .eq. 0) .and. time_eod_sic
-      time_out_sic = (mod(year,nyout_sic) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_sic = (mod(year,nyout_sic).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_sic =.false. 
       time_soy_sic = .false.
@@ -420,7 +420,7 @@ contains
       time_eod_smb = (mod((soy-1)/step_smb, nstep_day_smb) .eq. nstep_day_smb-1) 
       time_eom_smb = (mod(doy,nday_mon) .eq. 0) .and. time_eod_smb
       time_eoy_smb = (mod(doy,nday_year) .eq. 0) .and. time_eod_smb
-      time_out_smb = (mod(year,nyout_smb) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_smb = (mod(year,nyout_smb).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_smb =.false. 
       time_soy_smb = .false.
@@ -438,7 +438,7 @@ contains
       time_eod_bmb = (mod((soy-1)/step_bmb, nstep_day_bmb) .eq. nstep_day_bmb-1) 
       time_eom_bmb = (mod(soy,(nstep_mon_bmb-1)*step_bmb+1) .eq. 0) .or. (nstep_mon_bmb.eq.1)
       time_eoy_bmb = (mod(soy,(nstep_year_bmb-1)*step_bmb+1) .eq. 0) 
-      time_out_bmb = (mod(year,nyout_bmb) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_bmb = (mod(year,nyout_bmb).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_bmb =.false. 
       time_soy_bmb = .false.
@@ -449,7 +449,7 @@ contains
     
     if (flag_ice) then
       time_call_ice = (mod(step+nstep_day-1,step_ice) .eq. 0)
-      time_out_ice = (mod(year,nyout_ice) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_ice = (mod(year,nyout_ice).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_ice =.false. 
       time_out_ice = .false.
@@ -457,7 +457,7 @@ contains
 
     if (flag_geo .or. ifake_geo.eq.1) then
       time_call_geo = soy.eq.1 .and. mod(year,n_year_geo).eq.0
-      time_out_geo = (mod(year,nyout_geo) .eq. 0) .and. year_now.ge.year_out_start
+      time_out_geo = (mod(year,nyout_geo).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
     else
       time_call_geo =.false. 
       time_out_geo = .false.
@@ -484,8 +484,8 @@ contains
       time_eoy = .false.
     end if
 
-    ! time flags for writing output
-    time_out_cmn = (mod(year,nyout_cmn) .eq. 0) .and. year_now.ge.year_out_start
+    ! time flags for writing output (2D output is always written in the last simulation year)
+    time_out_cmn = (mod(year,nyout_cmn).eq.0 .or. year.eq.nyears) .and. year_now.ge.year_out_start
 
     ! control for time series output for geo
     if (time_soy) then
