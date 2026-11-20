@@ -908,6 +908,23 @@ contains
     ocn%grid%ocn_vol_tot_real = ocn_vol_tot_real
     call ocn_grid_update(ocn%f_ocn,ocn%z_ocn,ocn%grid)
 
+    if (ocn_restart) then
+      ! the update above takes the restart's ocn_vol as the old grid, so a geometry change between the
+      ! restart and this run (e.g. PI restart -> LGM) is seen here and not at the first start of year:
+      ! fill newly wet cells (T=S=0 in the restart), conserve tracer inventories and adjust velocities now.
+      call ocn_grid_update_state(ocn%grid,ocn%ts,ocn%u)
+      do i=1,maxi
+        do j=1,maxj
+          do k=1,maxk
+            ocn%rho(i,j,k) = eos(ocn%ts(i,j,k,1),ocn%ts(i,j,k,2),zro(k))
+          enddo
+        enddo
+      enddo
+      if (i_saln0.eq.2) then
+        ocn%saln0 = sum(ocn%ts(:,:,:,2)*ocn%grid%ocn_vol(:,:,:))/ocn%grid%ocn_vol_tot ! psu
+      endif
+    endif
+
     ! initialize variables for frictional geostrophic balance equation
     call momentum_init
 
