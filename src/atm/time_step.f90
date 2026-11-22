@@ -29,7 +29,7 @@ module time_step_mod
   use precision, only : dp
   use constants, only : T0, Rd, fqsat, q_sat_w, q_sat_i
   use timer, only : sec_day, year, doy
-  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, rh_max_ocn, rh_max_lnd, i_tsl, c_tsl_gam, tsl_gams_min, gams_min, hgams
+  use atm_params, only : tstep, hatm, ra, cle, cls, l_dust, rh_max_ocn, rh_max_lnd, gams_min, hgams
   use atm_params, only : z_q2, z_q2_ocn, p0
   use control, only : check_water, check_energy
   use atm_grid, only : im, jm, nm, i_ocn, i_sic, i_ice, i_lnd, sqr, cheat
@@ -56,7 +56,7 @@ contains
       convco2, co2flx, &
       dtcol_prev, &
       tam, qam, dam, cam, prc, prcw, prcs, prc_conv, prc_over, &
-      q2, q2a, ram, r2, r2a, tsl, tsksl, t2, t2a, tskina, error)
+      q2, q2a, ram, r2, r2a, tsl, tlay, t2, t2a, tskina, error)
 
     implicit none
 
@@ -111,14 +111,16 @@ contains
     real(wp), intent(out  ) :: r2(:,:,:)
     real(wp), intent(out  ) :: r2a(:,:)
     real(wp), intent(out  ) :: tsl(:,:)
-    real(wp), intent(out  ) :: tsksl(:,:)
+    real(wp), intent(out  ) :: tlay(:,:)
     real(wp), intent(inout) :: t2(:,:,:)
     real(wp), intent(inout) :: t2a(:,:)
     real(wp), intent(out  ) :: tskina(:,:)
 
     logical, intent(inout) :: error
 
-    integer :: i, j, n
+    integer :: i, j, n, k
+    integer, parameter :: n_tsl_lay = 20                   !! layers for the sea level-500 hPa layer mean
+    real(wp), parameter :: z500 = hatm*log(2._wp)          !! m, height of the p0/2 (500 hPa) level
     real(wp) :: dwdt, q2sat, qsat, deba, dtdt, dddt, dcdt, frsnw, heff, rh, tam_zs
     real(wp) :: rr
     real(wp) :: ddtcol
@@ -144,7 +146,7 @@ contains
     ! global atmospheric energy budget accumulators (for check_energy)
     e_dh = 0._dp; e_conv = 0._dp; e_rad = 0._dp; e_sha = 0._dp; e_lat = 0._dp
 
-    !$omp parallel do collapse(2) private(i,j,n,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
+    !$omp parallel do collapse(2) private(i,j,n,k,rr,convwtr_bdg,prc_tmp,prcw_tmp,prcs_tmp,prc_over_tmp) &
     !$omp private(rh_max,frocn,heff,qold,A_loc,wcon_budget,wcon_in,water_res,dwdt,q2sat,qsat,frsnw,deba,dtdt,dddt,dcdt,tam_zs,rh,tam_old_loc,z_ab,t_ab,r_ab,q_ab,rho_ab,cq2l,gq2,ddtcol) &
     !$omp reduction(+:e_dh,e_conv,e_rad,e_sha,e_lat)
     do j=1,jm
@@ -375,22 +377,18 @@ contains
         ! reduce temperature to sea level
         tsl(i,j) = t_prof(zsa(i,j), 0._wp, tam(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0)
 
-        ! sea level temperature for azonal sea level pressure
-        if (i_tsl.eq.0) then
-          ! the air temperature profile reduced to sea level, with no skin contribution at all
-          tsksl(i,j) = tsl(i,j)
-        else if (i_tsl.eq.1) then
-          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = tskina(i,j) - max(tsl_gams_min,gams(i,j))*hgams + c_tsl_gam*zsa(i,j)
-        else if (i_tsl.eq.2) then
-          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = t_prof(zsa(i,j), 0._wp, tskina(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
-            - max(tsl_gams_min,gams(i,j))*hgams
-        else if (i_tsl.eq.3) then
-          ! built from the skin temperature instead, carried down through the surface layer and then to sea level
-          tsksl(i,j) = t_prof(zsa(i,j), 0._wp, tskina(i,j), gams(i,j), gamb(i,j), gamt(i,j), 30.e3_wp, 0) &
-            - max(frst(i,j,i_ice)*tsl_gams_min+(1._wp-frst(i,j,i_ice))*gams_min,gams(i,j))*hgams
-        endif
+        ! temperature for the azonal sea level pressure: hypsometric layer-mean temperature between sea level
+        ! and the 500 hPa height z500 = hatm*ln(2) of the model's own column (the t3 profile incl. the surface
+        ! layer, extrapolated below ground): with p = p0*exp(-z/hatm) the ln(p)-weighted mean of the hypsometric
+        ! equation is the height mean, evaluated with the midpoint rule. (Sea level temperatures built from the
+        ! profile reduced to sea level or from the skin temperature, tried before, gave a surface-anchored
+        ! thermal SLP about twice the ERA thermal part.)
+        tlay(i,j) = 0._wp
+        do k=1,n_tsl_lay
+          tlay(i,j) = tlay(i,j) + t_prof(zsa(i,j), (real(k,wp)-0.5_wp)*z500/real(n_tsl_lay,wp), tam(i,j), &
+            gams(i,j), gamb(i,j), gamt(i,j), htrop(i,j), 1)
+        enddo
+        tlay(i,j) = tlay(i,j)/real(n_tsl_lay,wp)
 
         !-------------------------------------
         ! check for NaNs

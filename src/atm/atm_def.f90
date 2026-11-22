@@ -184,13 +184,14 @@ module atm_def
       real(wp), allocatable, dimension(:,:,:) :: cos_acbar
       real(wp), allocatable, dimension(:,:,:) :: sin_acbar
       real(wp), allocatable, dimension(:,:,:) :: epsa
-      real(wp), allocatable, dimension(:,:) :: atsl
       real(wp), allocatable, dimension(:,:) :: aslp
       real(wp), allocatable, dimension(:,:) :: aslp_temp
       real(wp), allocatable, dimension(:,:) :: aslp_topo
-      real(wp), allocatable, dimension(:,:) :: aslp_eddy
-      real(wp), allocatable, dimension(:,:) :: aslp_gill
-      real(wp), allocatable, dimension(:,:) :: aslp_temp_slow   !! slowly relaxed aslp_temp, used only if c_slp_trop_f<1
+      real(wp), allocatable, dimension(:,:,:) :: aslp_temp_hcoef  !! Pa, harmonic coefficients of the aslp_temp seasonal climatology (mean, cos/sin pairs), used only if c_slp_clim_f<1
+      real(wp), allocatable, dimension(:,:,:) :: aslp_temp_hacc   !! Pa, running projection of the current year's aslp_temp on the harmonics
+      real(wp) :: aslp_temp_hnday  !! days accumulated in aslp_temp_hacc this year
+      real(wp) :: aslp_temp_hnyr   !! complete years entered into aslp_temp_hcoef
+      real(wp), allocatable, dimension(:) :: aslp_temp_lc  !! K, time-relaxed land-mean azonal sea level temperature per row (weight of the upstream shift, c_aslp_temp_dT>0)
       real(wp), allocatable, dimension(:,:) :: slp
       real(wp), allocatable, dimension(:,:) :: slp_dat
       real(wp), allocatable, dimension(:,:) :: tsl_dat
@@ -298,7 +299,7 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: lwr_cld
 
       real(wp), allocatable, dimension(:,:) :: tsl
-      real(wp), allocatable, dimension(:,:) :: tsksl
+      real(wp), allocatable, dimension(:,:) :: tlay
 
       real(wp), allocatable, dimension(:,:) :: eke
       real(wp), allocatable, dimension(:,:) :: sam

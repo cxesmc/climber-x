@@ -29,7 +29,7 @@ module vesta_mod
   use constants, only : fqsat, pi, Rd, g
   use atm_params, only : cp, gad, hatm, p0, ra, zmax
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
-  use atm_params, only : gams_min, gams_max, sh_gams_pos, sh_gams_0, sh_gams_neg
+  use atm_params, only : gams_min, gams_max, gams_max_lnd, sh_gams_pos, sh_gams_0, sh_gams_neg
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
@@ -50,7 +50,7 @@ contains
   !   Subroutine :  h s c a l e s
   !   Purpose    :  computation of lapse rate and height scales of moisture and dust
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine hscales(frst, ra2a, sha, tskina, tam, qam, wcon, wcld, had_fi, had_width, &
+  subroutine hscales(frst, ra2a, sha, tskina, tam, qam, ram, tsl, wcon, wcld, had_fi, had_width, &
       gams, gamb, gamt, hrm, &
       hqeff, hdust)
 
@@ -62,6 +62,8 @@ contains
     real(wp), intent(in) :: tskina(:,:)
     real(wp), intent(in) :: tam(:,:)
     real(wp), intent(in) :: qam(:,:)
+    real(wp), intent(in) :: ram(:,:)   !! surface relative humidity
+    real(wp), intent(in) :: tsl(:,:)   !! sea level temperature (K), extrapolated with the previous gamb/gamt
     real(wp), intent(in) :: wcon(:,:)
     real(wp), intent(in) :: wcld(:,:)
     real(wp), intent(in) :: had_fi
@@ -77,7 +79,7 @@ contains
 
     integer :: i, j
     real(wp) :: hrs, fi, f_trop, cgam, chrm
-    real(wp) :: sh_w
+    real(wp) :: sh_w, q_gam, gmax
     real(wp), dimension(im,jm) :: gam_s, gam_b, gam_t
 
     real(wp), parameter :: hrs_min = 1.e3_wp
@@ -88,7 +90,7 @@ contains
     cgam = min(1._wp, tstep/(c_gam_tau*sec_day))
     chrm = min(1._wp, tstep/(c_hrm_tau*sec_day))
 
-    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,sh_w)
+    !$omp parallel do collapse(2) private(i,j,hrs,fi,f_trop,sh_w,q_gam,gmax)
     do j=1,jm
       do i=1,im
 
@@ -109,13 +111,24 @@ contains
         else
           sh_w = sh_gams_neg
         endif
-        gam_s(i,j) = gams_min + (gams_max-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
+        ! well-mixed limit, separate over land (ice-free land surface type), blended by its fraction
+        gmax = gams_max + (gams_max_lnd-gams_max)*frst(i,j,i_lnd)
+        gam_s(i,j) = gams_min + (gmax-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
+
+        ! humidity controlling the free-tropospheric lapse rate.
+        ! gamb is the lapse rate at sea level (t_prof is linear in absolute z), so it uses the humidity
+        ! at sea level, ram*qsat(tsl,p0), not the surface value qam, which over high terrain is the much
+        ! drier air at zsa. Over ocean and lowlands the two are nearly identical.
+        ! tsl is the previous step's value, extrapolated below zsa with gamb itself. The loop is a
+        ! negative feedback (larger gamb -> warmer tsl -> moister -> smaller gamb) and is damped by the
+        ! c_gam_tau relaxation of gamb.
+        q_gam = ram(i,j)*fqsat(tsl(i,j),p0)
 
         ! bottom
-        gam_b(i,j) = c_gam_1 - c_gam_2*qam(i,j)
+        gam_b(i,j) = c_gam_1 - c_gam_2*q_gam
 
         ! top
-        gam_t(i,j) = gam_b(i,j) - c_gam_2*qam(i,j) + c_gam_3
+        gam_t(i,j) = gam_b(i,j) - c_gam_2*q_gam + c_gam_3
 
         !----------------------------------------------
         ! height scale for relative humidity       

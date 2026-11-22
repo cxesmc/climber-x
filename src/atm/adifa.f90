@@ -27,12 +27,13 @@
 module adifa_mod
 
   use atm_params, only : wp
+  use atm_params, only : f_diff_wtr, diff_stab
   use atm_params, only : cp
   use atm_params, only : tstep
   use atm_params, only : l_dust, i_adv, c_adv_polar, lat_adv_polar
   use atm_params, only : l_write_timer
-  use atm_grid, only : im, imc, jm, jmc, km
-  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit, diffx_eq
+  use atm_grid, only : im, imc, jm, jmc, km, kdif_top
+  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit
   use constants, only : pi
   use adv_fct_mod, only : fct_level, fct_diag_add
   !$ use omp_lib
@@ -345,15 +346,16 @@ contains
           ! diffusive fluxes
           !-----------------------------------
 
-          if (k.le.km-2) then   ! limit to troposphere
+          if (k.le.kdif_top) then   ! km-2 (0.2*p0) for i_diff_prof=0, km-1 for i_diff_prof=1,2,3 (profile ends at the tropopause)
 
             !-----------------------------------
             ! zonal diffusive fluxes; the face mass carries the vertical profile of the diffusivity (h_diff).
-            ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq
+            ! zonal diffusivity = EKE macro-diffusivity diffx + uniform numerical-stabilisation diffusivity diff_stab
             dpl_x = dplx_dif(i,j,k)
-            kx = diffx(i,j)+diffx_eq(j)
+            kx = diffx(i,j)+diff_stab
             fdxdse(i,j) = fdxdse(i,j) + kx*dy*dpl_x*(tp_i1jk-tp_ijk)/dxt(j) ! m2/s * K * kg/m2 = kg/s * K
-            fdxwtr(i,j) = fdxwtr(i,j) + kx*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j) 
+            ! water vapour: EKE part of the diffusivity scaled by f_diff_wtr (moisture mixes along isentropes, K_q > K_s)
+            fdxwtr(i,j) = fdxwtr(i,j) + (f_diff_wtr*diffx(i,j)+diff_stab)*dy*dpl_x*(q3_i1jk-q3_ijk)/dxt(j)
             fdxdst(i,j) = fdxdst(i,j) + kx*dy*dpl_x*(d3_i1jk-d3_ijk)/dxt(j)
             fdxco2(i,j) = fdxco2(i,j) + kx*dy*dpl_x*(c3_i1j-c3_ij)/dxt(j)
 
@@ -361,7 +363,7 @@ contains
             ! meridional diffusive fluxes
             dpl_y = dply_dif(i,j,k)
             fdydse(i,j) = fdydse(i,j) + diffy(i,j)*dxu(j)*dpl_y*(tp_ijk-tp_ij1k)/dy
-            fdywtr(i,j) = fdywtr(i,j) + diffy(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
+            fdywtr(i,j) = fdywtr(i,j) + f_diff_wtr*diffy(i,j)*dxu(j)*dpl_y*(q3_ijk-q3_ij1k)/dy
             fdydst(i,j) = fdydst(i,j) + diffy(i,j)*dxu(j)*dpl_y*(d3_ijk-d3_ij1k)/dy
             fdyco2(i,j) = fdyco2(i,j) + diffy(i,j)*dxu(j)*dpl_y*(c3_ij-c3_ij1)/dy
 

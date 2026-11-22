@@ -42,9 +42,9 @@
 module diffuse_impl_mod
 
   use atm_params, only : wp
-  use atm_params, only : tstep, hatm, ra, cp, l_dust
+  use atm_params, only : tstep, hatm, ra, cp, l_dust, f_diff_wtr, diff_stab
   use atm_grid, only : im, jm, jmc
-  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat, diffx_eq
+  use atm_grid, only : plx_dif, ply_dif, sqr, dxt, dxu, dy, cheat
   use tridiag, only : tridiag_solve, cyclic_tridiag_solve
   !$ use omp_lib
 
@@ -88,6 +88,7 @@ contains
     real(wp), dimension(im,jm) :: fac_dse, fac_wtr, fac_dst, fac_co2
     real(wp) :: heff
     real(wp) :: wcon_old(im,jm)
+    real(wp) :: diffx_wtr(size(diffx,1),size(diffx,2)), diffy_wtr(size(diffy,1),size(diffy,2))   ! water vapour diffusivities (EKE part x f_diff_wtr, as in adifa)
 
 
     ! implicit diffusion (zonal sweep then meridional sweep) 
@@ -121,6 +122,9 @@ contains
     enddo
     !$omp end parallel do
 
+    diffx_wtr = f_diff_wtr*diffx
+    diffy_wtr = f_diff_wtr*diffy
+
     ! The rows (zonal sweep) and then the columns (meridional sweep) of all tracers are
     ! independent, so each sweep is one parallel loop over tracers x rows (columns).
     ! Tracers: 1 dse, 2 water, 3 CO2, 4 dust (only if l_dust).
@@ -134,7 +138,7 @@ contains
       case (1)
         call zonal_row(j, tam, diffx, fac_dse, .true., fdxdse)
       case (2)
-        call zonal_row(j, wcon, diffx, fac_wtr, .false., fdxwtr)
+        call zonal_row(j, wcon, diffx_wtr, fac_wtr, .false., fdxwtr)
       case (3)
         call zonal_row(j, cam, diffx, fac_co2, .true., fdxco2)
       case (4)
@@ -150,7 +154,7 @@ contains
       case (1)
         call merid_col(i, tam, diffy, fac_dse, .true., fdydse)
       case (2)
-        call merid_col(i, wcon, diffy, fac_wtr, .false., fdywtr)
+        call merid_col(i, wcon, diffy_wtr, fac_wtr, .false., fdywtr)
       case (3)
         call merid_col(i, cam, diffy, fac_co2, .true., fdyco2)
       case (4)
@@ -208,8 +212,8 @@ contains
         else
           wx(i) = 1._wp
         endif
-        ! zonal diffusivity = EKE macro-diffusivity diffx + additional tropical diffx_eq, as in adifa
-        dxf(i) = (diffx(i,j)+diffx_eq(j))*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
+        ! zonal diffusivity = EKE macro-diffusivity diffx + uniform stabilisation diffusivity diff_stab, as in adifa
+        dxf(i) = (diffx(i,j)+diff_stab)*dy*wx(i)/dxt(j)   ! kg/s per unit tracer gradient
       enddo
 
       do i=1,im

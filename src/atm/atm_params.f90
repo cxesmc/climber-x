@@ -84,6 +84,7 @@ module atm_params
   real(wp) :: c_mmc_dt1
   real(wp) :: hdv_mmc_ref
   real(wp) :: c_mmc_mt        !! weight of the mountain torque in the lower-branch momentum budget of zslp (0 = off)
+  integer  :: nsmooth_mtz     !! passes of the meridional 1-2-1 smoothing of the zonal mean mountain torque (0 = off)
   real(wp) :: pbl             !! relative pressure of the PBL top (p/ps), uniform in latitude
 
   real(wp) :: c_uter_pol
@@ -94,17 +95,15 @@ module atm_params
 
   real(wp) :: c_slp_1
   real(wp) :: c_slp_2
-  real(wp) :: c_slp_4
-  real(wp) :: c_slp_5
-  integer  :: i_aslp_eq
   real(wp) :: c_aslp_eq_hb
   real(wp) :: c_aslp_eq_lat0
-  real(wp) :: c_slp_trop_f
-  real(wp) :: c_slp_trop_tau
-  real(wp) :: c_slp_trop_lat0
-  real(wp) :: c_slp_trop_lat1
+  real(wp) :: c_slp_clim_f
+  real(wp) :: c_slp_clim_tau
+  integer  :: n_slp_clim_harm
   logical :: l_aslp_temp_adv
   real(wp) :: c_aslp_temp_tau
+  real(wp) :: c_aslp_temp_dT
+  real(wp) :: c_aslp_temp_wtau
   real(wp) :: c_uz500_pol
   logical :: l_aslp_topo
   real(wp) :: c_aslp_sw_amp
@@ -114,19 +113,7 @@ module atm_params
   real(wp) :: c_aslp_sw_fr
   real(wp) :: c_aslp_sw_nbv
   real(wp) :: c_aslp_sw_lateq
-  real(wp) :: c_aslp_sw_eddy
-  integer :: i_aslp_sw_eddy
   integer :: n_aslp_sw
-  integer :: n_aslp_sw_eddy
-  logical :: l_aslp_gill
-  real(wp) :: c_aslp_gill
-  real(wp) :: c_aslp_gill_tau
-  real(wp) :: c_aslp_gill_trel
-  real(wp) :: c_aslp_gill_c
-  real(wp) :: c_aslp_gill_lat0
-  real(wp) :: c_aslp_gill_lat1
-  integer :: n_aslp_gill
-  integer :: i_aslp_gill_lat
 
   real(wp) :: zmax
   real(wp) :: dpc
@@ -166,6 +153,7 @@ module atm_params
   real(wp) :: c_gam_3
   real(wp) :: gams_min
   real(wp) :: gams_max
+  real(wp) :: gams_max_lnd   !! K/m, well-mixed limit of gams over land (blended by land fraction); < 0: = gams_max
   real(wp) :: sh_gams_pos
   real(wp) :: sh_gams_0
   real(wp) :: sh_gams_neg
@@ -174,9 +162,6 @@ module atm_params
   integer :: nsmooth_gam
   real(wp) :: c_gam_tau
   real(wp) :: c_hrm_tau
-  integer :: i_tsl
-  real(wp) :: c_tsl_gam
-  real(wp) :: tsl_gams_min
 
 
   real(wp) :: c_hrs_1   
@@ -200,6 +185,7 @@ module atm_params
   real(wp) :: syn_e0       !! m2/s2, reference synoptic energy of the linear dissipation (i_syn_diss=2)
   real(wp) :: dz_syn_min   !! m, minimum depth of the layer over which the EKE production shear and stability are taken
   real(wp) :: c_eke_slope  !! sloping-boundary reduction of EKE production: x max(0,1-c_eke_slope*delta), delta = terrain slope / isentrope slope (0 = off)
+  real(wp) :: L_eke_slope  !! m, e-folding scale of the Gaussian terrain smoothing for the EKE slope term (eddy scale; 0 = local grid slope)
   real(wp) :: c_syn_5      !! s, macro-diffusivity factor for the synoptic energy, K = c_syn_5*EKE
   real(wp) :: c_syn_6
   real(wp) :: c_syn_7
@@ -213,8 +199,9 @@ module atm_params
   real(wp) :: c_diff       !! s, macro-diffusivity factor, K = c_diff*EKE
   real(wp) :: h_diff       !! m, e-folding height of the macro-diffusivity, K(z) = K*exp(-z/h_diff) (Branscome 1983); <=0 = vertically uniform
   integer  :: i_hdiff_ref  !! reference height for h_diff: 1 = local (face) surface, 2 = sea level
-  real(wp) :: diff_eq     !! m2/s, additional ZONAL macro-diffusivity (all tracers) at the equator, gaussian in latitude; 0 = off
-  real(wp) :: fi_diff_eq  !! deg, e-folding latitude of diff_eq
+  real(wp) :: f_diff_wtr   !! factor on the EKE macro-diffusivity for water vapour (not dust/CO2), K_q = f_diff_wtr*K; 1 = same K as DSE
+  integer  :: i_diff_prof  !! vertical profile of the macro-diffusivity: 0 = exp(-z/h_diff) up to 0.2*p0, 1 = linear from 1 at the surface to 0 at the tropopause, 2 = as 1 but linear from 1 at sea level, 3 = uniform up to the tropopause
+  real(wp) :: diff_stab   !! m2/s, uniform additional ZONAL macro-diffusivity (all tracers) for numerical stability of i_adv=2; 0 = off
   integer :: i_adv         !! advection scheme: 1 = first order upstream (donor cell), 2 = flux corrected transport (Zalesak 1979)
   real(wp) :: c_adv_polar  !! zonal inflow-mass Courant threshold (and target per sub-step) for the zonal sub-cycling of the tracer advection in polar rows
   real(wp) :: lat_adv_polar  !! deg, the zonal sub-cycling acts only on rows poleward of this latitude
@@ -298,7 +285,7 @@ module atm_params
 
   integer :: nsmooth_cda
   integer :: nsmooth_weff
-  integer :: nsmooth_aslp
+  integer :: n_aslp_shapiro
   real(wp) :: aslp_polar_lat
   integer :: nsmooth_acbar
 
@@ -398,6 +385,8 @@ contains
     call nml_read(filename,"atm_par","c_mmc_dt1",c_mmc_dt1)
     call nml_read(filename,"atm_par","hdv_mmc_ref",hdv_mmc_ref)
     call nml_read(filename,"atm_par","c_mmc_mt",c_mmc_mt)
+    nsmooth_mtz = 1
+    call nml_read(filename,"atm_par","nsmooth_mtz",nsmooth_mtz)
     call nml_read(filename,"atm_par","c_uter_pol",c_uter_pol)
     call nml_read(filename,"atm_par","c_uter_eq",c_uter_eq)
     call nml_read(filename,"atm_par","i_mass_com",i_mass_com)
@@ -407,18 +396,21 @@ contains
     call nml_read(filename,"atm_par","p0",p0)
     call nml_read(filename,"atm_par","c_slp_1",c_slp_1)
     call nml_read(filename,"atm_par","c_slp_2",c_slp_2)
-    call nml_read(filename,"atm_par","c_slp_4",c_slp_4)
-    call nml_read(filename,"atm_par","c_slp_5",c_slp_5)
-    call nml_read(filename,"atm_par","i_aslp_eq",i_aslp_eq)
     call nml_read(filename,"atm_par","c_aslp_eq_hb",c_aslp_eq_hb)
     call nml_read(filename,"atm_par","c_aslp_eq_lat0",c_aslp_eq_lat0)
-    call nml_read(filename,"atm_par","c_slp_trop_f",c_slp_trop_f)
-    call nml_read(filename,"atm_par","c_slp_trop_tau",c_slp_trop_tau)
-    call nml_read(filename,"atm_par","c_slp_trop_lat0",c_slp_trop_lat0)
-    call nml_read(filename,"atm_par","c_slp_trop_lat1",c_slp_trop_lat1)
+    c_slp_clim_f = 1._wp
+    call nml_read(filename,"atm_par","c_slp_clim_f",c_slp_clim_f)
+    c_slp_clim_tau = 5._wp
+    call nml_read(filename,"atm_par","c_slp_clim_tau",c_slp_clim_tau)
+    n_slp_clim_harm = 4
+    call nml_read(filename,"atm_par","n_slp_clim_harm",n_slp_clim_harm)
     call nml_read(filename,"atm_par","l_aslp_temp_adv",l_aslp_temp_adv)
     call nml_read(filename,"atm_par","c_aslp_temp_tau",c_aslp_temp_tau)
     c_aslp_temp_tau = c_aslp_temp_tau * sec_day
+    c_aslp_temp_dT = 0._wp
+    call nml_read(filename,"atm_par","c_aslp_temp_dT",c_aslp_temp_dT)
+    c_aslp_temp_wtau = 20._wp
+    call nml_read(filename,"atm_par","c_aslp_temp_wtau",c_aslp_temp_wtau)
     call nml_read(filename,"atm_par","c_uz500_pol",c_uz500_pol)
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
     call nml_read(filename,"atm_par","c_aslp_sw_amp",c_aslp_sw_amp)
@@ -429,19 +421,7 @@ contains
     call nml_read(filename,"atm_par","c_aslp_sw_fr",c_aslp_sw_fr)
     call nml_read(filename,"atm_par","c_aslp_sw_nbv",c_aslp_sw_nbv)
     call nml_read(filename,"atm_par","c_aslp_sw_lateq",c_aslp_sw_lateq)
-    call nml_read(filename,"atm_par","c_aslp_sw_eddy",c_aslp_sw_eddy)
-    call nml_read(filename,"atm_par","i_aslp_sw_eddy",i_aslp_sw_eddy)
     call nml_read(filename,"atm_par","n_aslp_sw",n_aslp_sw)
-    call nml_read(filename,"atm_par","n_aslp_sw_eddy",n_aslp_sw_eddy)
-    call nml_read(filename,"atm_par","l_aslp_gill",l_aslp_gill)
-    call nml_read(filename,"atm_par","c_aslp_gill",c_aslp_gill)
-    call nml_read(filename,"atm_par","c_aslp_gill_tau",c_aslp_gill_tau)
-    call nml_read(filename,"atm_par","c_aslp_gill_trel",c_aslp_gill_trel)
-    call nml_read(filename,"atm_par","c_aslp_gill_c",c_aslp_gill_c)
-    call nml_read(filename,"atm_par","c_aslp_gill_lat0",c_aslp_gill_lat0)
-    call nml_read(filename,"atm_par","c_aslp_gill_lat1",c_aslp_gill_lat1)
-    call nml_read(filename,"atm_par","n_aslp_gill",n_aslp_gill)
-    call nml_read(filename,"atm_par","i_aslp_gill_lat",i_aslp_gill_lat)
     call nml_read(filename,"atm_par","zmax",zmax)
     call nml_read(filename,"atm_par","dpc",dpc)
     call nml_read(filename,"atm_par","i_dpc",i_dpc)
@@ -454,6 +434,8 @@ contains
     call nml_read(filename,"atm_par","c_gam_3",c_gam_3)
     call nml_read(filename,"atm_par","gams_min",gams_min)
     call nml_read(filename,"atm_par","gams_max",gams_max)
+    call nml_read(filename,"atm_par","gams_max_lnd",gams_max_lnd)
+    if (gams_max_lnd.lt.0._wp) gams_max_lnd = gams_max
     call nml_read(filename,"atm_par","sh_gams_pos",sh_gams_pos)
     call nml_read(filename,"atm_par","sh_gams_0",sh_gams_0)
     call nml_read(filename,"atm_par","sh_gams_neg",sh_gams_neg)
@@ -464,9 +446,6 @@ contains
     call nml_read(filename,"atm_par","c_hrm_tau",c_hrm_tau)
     call nml_read(filename,"atm_par","nsmooth_gam",nsmooth_gam)
     call nml_read(filename,"atm_par","nsmooth_cld",nsmooth_cld)
-    call nml_read(filename,"atm_par","i_tsl",i_tsl)
-    call nml_read(filename,"atm_par","c_tsl_gam",c_tsl_gam)
-    call nml_read(filename,"atm_par","tsl_gams_min",tsl_gams_min)
     call nml_read(filename,"atm_par","hcld_base",hcld_base)
     call nml_read(filename,"atm_par","i_lw_cld",i_lw_cld)
     call nml_read(filename,"atm_par","c_lw_clot",c_lw_clot)
@@ -529,6 +508,7 @@ contains
     call nml_read(filename,"atm_par","c_syn_4",c_syn_4)
     call nml_read(filename,"atm_par","i_syn_diss",i_syn_diss)
     call nml_read(filename,"atm_par","c_eke_slope",c_eke_slope)
+    call nml_read(filename,"atm_par","L_eke_slope",L_eke_slope)
     call nml_read(filename,"atm_par","dz_syn_min",dz_syn_min)
     call nml_read(filename,"atm_par","syn_e0",syn_e0)
     call nml_read(filename,"atm_par","c_syn_5",c_syn_5)
@@ -544,8 +524,9 @@ contains
     call nml_read(filename,"atm_par","c_diff",c_diff)
     call nml_read(filename,"atm_par","h_diff",h_diff)
     call nml_read(filename,"atm_par","i_hdiff_ref",i_hdiff_ref)
-    call nml_read(filename,"atm_par","diff_eq",diff_eq)
-    call nml_read(filename,"atm_par","fi_diff_eq",fi_diff_eq)
+    call nml_read(filename,"atm_par","i_diff_prof",i_diff_prof)
+    call nml_read(filename,"atm_par","f_diff_wtr",f_diff_wtr)
+    call nml_read(filename,"atm_par","diff_stab",diff_stab)
     call nml_read(filename,"atm_par","i_adv",i_adv)
     call nml_read(filename,"atm_par","c_adv_polar",c_adv_polar)
     call nml_read(filename,"atm_par","lat_adv_polar",lat_adv_polar)
@@ -628,7 +609,7 @@ contains
     call nml_read(filename,"atm_par","h_ars",h_ars)
     call nml_read(filename,"atm_par","nsmooth_cda",nsmooth_cda)
     call nml_read(filename,"atm_par","nsmooth_weff",nsmooth_weff)
-    call nml_read(filename,"atm_par","nsmooth_aslp",nsmooth_aslp)
+    call nml_read(filename,"atm_par","n_aslp_shapiro",n_aslp_shapiro)
     call nml_read(filename,"atm_par","aslp_polar_lat",aslp_polar_lat)
     call nml_read(filename,"atm_par","nsmooth_acbar",nsmooth_acbar)
 

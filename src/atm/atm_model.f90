@@ -38,6 +38,8 @@ module atm_model
 
     use atm_params, only : atm_params_init
     use atm_params, only : nstep_fast
+    use atm_params, only : n_slp_clim_harm
+    use atm_params, only : i_diff_prof
     use atm_params, only : p0, ra, nsmooth_cda
     use atm_params, only : ars_ot, ars_im, h_ars, l_dust, l_dust_rad
     use atm_params, only : i_swr_gas, a_gas_vu
@@ -48,11 +50,11 @@ module atm_model
     use atm_params, only : c_filt_conv, nord_filt_conv
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
-    use atm_grid, only : atm_grid_init, atm_grid_update
+    use atm_grid, only : atm_grid_init, atm_grid_update, diff_prof_update
     use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, nm, cost, pl, zl, z3, z3l
     use atm_grid, only : i_ocn, i_sic, i_lnd, i_ice, i_lake
-    use atm_grid, only : dxt, dy, fit, sqr, dplt, diffx_eq
-    use atm_params, only : tstep
+    use atm_grid, only : dxt, dy, fit, sqr, dplt
+    use atm_params, only : tstep, diff_stab
     use constants, only : pi
     use atm_def, only : atm_class
     use adv_fct_mod, only : fct_acc, fct_diag_reset
@@ -240,9 +242,10 @@ contains
     !-------------------------------------------------
     ! azonal sea level pressure
     !$ time1 = omp_get_wtime()
-    call azslp(atm%tsksl, atm%htrop, atm%zsa, atm%uz500, atm%u3f, atm%sam, atm%eke, atm%prc, atm%ficz, &  ! in
+    call azslp(doy, atm%tlay, atm%htrop, atm%zsa, atm%uz500, atm%u3f, atm%frlnd, atm%tsl, &  ! in
       atm%aslp, &   ! inout
-      atm%aslp_temp, atm%aslp_topo, atm%aslp_eddy, atm%aslp_gill, atm%aslp_temp_slow, atm%atsl) ! out
+      atm%aslp_temp, atm%aslp_topo, &
+      atm%aslp_temp_hcoef, atm%aslp_temp_hacc, atm%aslp_temp_hnday, atm%aslp_temp_hnyr, atm%aslp_temp_lc) ! out
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'azslp',(time2-time1)
 
@@ -337,7 +340,7 @@ contains
 
       ! lapse rate and height scales of moisture and dust
       !$ time1 = omp_get_wtime()
-      call hscales(atm%frst, atm%ra2a, atm%sha, atm%tskina, atm%tam, atm%qam, atm%wcon, atm%wcld, &  ! in
+      call hscales(atm%frst, atm%ra2a, atm%sha, atm%tskina, atm%tam, atm%qam, atm%ram, atm%tsl, atm%wcon, atm%wcld, &  ! in
         atm%had_fi, atm%had_width, &   ! in
         atm%gams, atm%gamb, atm%gamt, atm%hrm, &    ! inout
         atm%hqeff, atm%hdust)    ! out
@@ -380,6 +383,9 @@ contains
       !-------------------------------------------------
       ! advection-diffusion
       !-------------------------------------------------
+      ! vertical profile of the macro-diffusivity ending at the current tropopause (i_diff_prof=1,2,3),
+      ! from the hypsometric level heights z3l just updated by vesta
+      if (i_diff_prof.ge.1) call diff_prof_update(atm%zsa, atm%pzsa, atm%htrop)
       !$ time1 = omp_get_wtime()
       call adifa(atm%fax, atm%fay, &
         atm%fax_psi, atm%fay_psi, atm%fax_psi_topo, atm%fay_psi_topo, &   ! in
@@ -441,7 +447,7 @@ contains
         atm%convco2, atm%co2flx, &     ! in
         atm%dtcol_prev, &   ! inout
         atm%tam, atm%qam, atm%dam, atm%cam, atm%prc, atm%prcw, atm%prcs, atm%prc_conv, atm%prc_over, &   ! inout
-        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%tsl, atm%tsksl, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
+        atm%q2, atm%q2a, atm%ram, atm%r2, atm%r2a, atm%tsl, atm%tlay, atm%t2, atm%t2a, atm%tskina, atm%error)  ! out
       !$ time2 = omp_get_wtime()
       !$ if(l_write_timer .and. niter.eq.1) print *,'time_Step',(time2-time1)*nstep_fast
 
@@ -547,7 +553,7 @@ contains
         enddo
       enddo
       do i=1,im
-        dxmax = max(dxmax, diffx(i,j)+diffx_eq(j))   ! worst diffusivity over tracers
+        dxmax = max(dxmax, diffx(i,j)+diff_stab)   ! worst diffusivity over tracers
         dymax = max(dymax, diffy(i,j))
       enddo
       cx_max(j) = max(cx_max(j), umax*tstep/dxt(j))
@@ -672,6 +678,9 @@ contains
       
       atm%had_fi   = 0._wp
       atm%had_width = pi/3._wp
+      atm%aslp_temp_hnday = 0._wp
+      atm%aslp_temp_hnyr = 0._wp
+      atm%aslp_temp_lc = 9999._wp   ! not yet initialised: set from the first call's contrast
 
        do i=1,im
         do j=1,jm
@@ -689,7 +698,7 @@ contains
          atm%t2a(i,j) = atm%tam(i,j)
          atm%tskina(i,j) = atm%tam(i,j)
          atm%tsl(i,j) = atm%tam(i,j)
-         atm%tsksl(i,j) = atm%tam(i,j)
+         atm%tlay(i,j) = atm%tam(i,j)
          atm%gams(i,j) = 5.e-3_wp
          atm%gamb(i,j) = 5.e-3_wp
          atm%gamt(i,j) = 8.e-3_wp
@@ -724,9 +733,8 @@ contains
          atm%slp(i,j) = p0
          atm%aslp(i,j) = 0._wp      
          atm%aslp_topo(i,j) = 0._wp      
-         atm%aslp_eddy(i,j) = 0._wp
-         atm%aslp_gill(i,j) = 0._wp
-         atm%aslp_temp_slow(i,j) = 1.e20_wp   ! not set, initialised with aslp_temp at the first call
+         atm%aslp_temp_hcoef(i,j,:) = 0._wp
+         atm%aslp_temp_hacc(i,j,:) = 0._wp
 
          atm%winda(i,j) = 1._wp
          atm%wind(i,j,:) = 1._wp
@@ -968,13 +976,12 @@ contains
      allocate(atm%tsl_dat(im,jm))
      allocate(atm%ps(im,jm,nm))
      allocate(atm%psa(im,jm))
-     allocate(atm%atsl(im,jm))
      allocate(atm%aslp(im,jm))
      allocate(atm%aslp_temp(im,jm))
      allocate(atm%aslp_topo(im,jm))
-     allocate(atm%aslp_eddy(im,jm))
-     allocate(atm%aslp_gill(im,jm))
-     allocate(atm%aslp_temp_slow(im,jm))
+     allocate(atm%aslp_temp_hcoef(im,jm,2*n_slp_clim_harm+1))
+     allocate(atm%aslp_temp_hacc(im,jm,2*n_slp_clim_harm+1))
+     allocate(atm%aslp_temp_lc(jm))
      allocate(atm%us(im,jm,nm))
      allocate(atm%vs(im,jm,nm))
      allocate(atm%usk(im,jm))
@@ -1079,7 +1086,7 @@ contains
      allocate(atm%lwr_cld(im,jm))
 
      allocate(atm%tsl(im,jm))
-     allocate(atm%tsksl(im,jm))
+     allocate(atm%tlay(im,jm))
 
      allocate(atm%eke(im,jm))
      allocate(atm%sam(im,jm))
@@ -1245,13 +1252,12 @@ contains
      deallocate(atm%tsl_dat)
      deallocate(atm%ps)
      deallocate(atm%psa)
-     deallocate(atm%atsl)
      deallocate(atm%aslp)
      deallocate(atm%aslp_temp)
      deallocate(atm%aslp_topo)
-     deallocate(atm%aslp_eddy)
-     deallocate(atm%aslp_gill)
-     deallocate(atm%aslp_temp_slow)
+     deallocate(atm%aslp_temp_hcoef)
+     deallocate(atm%aslp_temp_hacc)
+     deallocate(atm%aslp_temp_lc)
      deallocate(atm%us)
      deallocate(atm%vs)
      deallocate(atm%usk)
@@ -1356,7 +1362,7 @@ contains
      deallocate(atm%lwr_cld)
 
      deallocate(atm%tsl)
-     deallocate(atm%tsksl)
+     deallocate(atm%tlay)
 
      deallocate(atm%eke)
      deallocate(atm%sam)
@@ -1392,6 +1398,7 @@ contains
     call nc_write_dim(fnm,"latc",x=1,dx=1,nx=jmc)
     call nc_write_dim(fnm,"x",x=[1])
     call nc_write_dim(fnm,"mon",x=1,dx=1,nx=nmon_year)
+    call nc_write_dim(fnm,"nharm",x=1,dx=1,nx=2*n_slp_clim_harm+1)
 
     call nc_write(fnm,"had_fi   ",     atm%had_fi   ,     dim1="x",  long_name="",units="")
     call nc_write(fnm,"had_width",     atm%had_width,     dim1="x",  long_name="",units="")
@@ -1402,7 +1409,7 @@ contains
     call nc_write(fnm,"t2       ",     atm%t2       ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"tskin    ",     atm%tskin    ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"tsl      ",     atm%tsl      ,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"tsksl     ",     atm%tsksl     ,     dims=["lon","lat"],long_name="",units="")
+    call nc_write(fnm,"tlay     ",     atm%tlay     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gams     ",     atm%gams     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gamb     ",     atm%gamb     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"gamt     ",     atm%gamt     ,     dims=["lon","lat"],long_name="",units="")
@@ -1434,8 +1441,11 @@ contains
     call nc_write(fnm,"ps       ",     atm%ps       ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"aslp     ",     atm%aslp     ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"aslp_topo",     atm%aslp_topo,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"aslp_gill",     atm%aslp_gill,     dims=["lon","lat"],long_name="",units="")
-    call nc_write(fnm,"aslp_temp_slow",atm%aslp_temp_slow,dims=["lon","lat"],long_name="",units="")
+    call nc_write(fnm,"aslp_temp_hcoef",atm%aslp_temp_hcoef,dims=["lon  ","lat  ","nharm"],long_name="",units="")
+    call nc_write(fnm,"aslp_temp_hacc",atm%aslp_temp_hacc,dims=["lon  ","lat  ","nharm"],long_name="",units="")
+    call nc_write(fnm,"aslp_temp_hnday",atm%aslp_temp_hnday,dim1="x",long_name="",units="")
+    call nc_write(fnm,"aslp_temp_hnyr",atm%aslp_temp_hnyr,dim1="x",long_name="",units="")
+    call nc_write(fnm,"aslp_temp_lc",atm%aslp_temp_lc,dims=["lat"],long_name="",units="K")
     call nc_write(fnm,"winda    ",     atm%winda    ,     dims=["lon","lat"],long_name="",units="")
     call nc_write(fnm,"wind     ",     atm%wind     ,     dims=["lon","lat","nm "],long_name="",units="")
     call nc_write(fnm,"us       ",     atm%us       ,     dims=["lon","lat","nm "],long_name="",units="")
@@ -1506,7 +1516,14 @@ contains
     call nc_read(fnm,"tskina   ",     atm%tskina  ) 
     call nc_read(fnm,"tskin    ",     atm%tskin   ) 
     call nc_read(fnm,"tsl      ",     atm%tsl     ) 
-    call nc_read(fnm,"tsksl     ",     atm%tsksl    ) 
+    ! sea level-500 hPa layer-mean temperature (named tsksl in older restarts; recomputed at the first step)
+    if (nc_exists_var(fnm,"tlay")) then
+      call nc_read(fnm,"tlay",     atm%tlay    )
+    else if (nc_exists_var(fnm,"tsksl")) then
+      call nc_read(fnm,"tsksl",    atm%tlay    )
+    else
+      atm%tlay = atm%tam
+    endif
     call nc_read(fnm,"gams     ",     atm%gams    ) 
     call nc_read(fnm,"gamb     ",     atm%gamb    ) 
     call nc_read(fnm,"gamt     ",     atm%gamt    ) 
@@ -1538,16 +1555,22 @@ contains
     call nc_read(fnm,"ps       ",     atm%ps      ) 
     call nc_read(fnm,"aslp     ",     atm%aslp    ) 
     call nc_read(fnm,"aslp_topo",     atm%aslp_topo) 
-    if (nc_exists_var(fnm,"aslp_gill")) then
-      call nc_read(fnm,"aslp_gill",     atm%aslp_gill)
-    else
-      atm%aslp_gill = 0._wp
+    ! seasonal climatology of aslp_temp (c_slp_clim_f<1); restarted from scratch if absent or with another n_slp_clim_harm
+    atm%aslp_temp_hcoef = 0._wp
+    atm%aslp_temp_hacc  = 0._wp
+    atm%aslp_temp_hnday = 0._wp
+    atm%aslp_temp_hnyr  = 0._wp
+    if (nc_exists_var(fnm,"aslp_temp_hcoef")) then
+      if (nc_size(fnm,"nharm").eq.2*n_slp_clim_harm+1) then
+        call nc_read(fnm,"aslp_temp_hcoef",atm%aslp_temp_hcoef)
+        call nc_read(fnm,"aslp_temp_hacc",atm%aslp_temp_hacc)
+        call nc_read(fnm,"aslp_temp_hnday",atm%aslp_temp_hnday)
+        call nc_read(fnm,"aslp_temp_hnyr",atm%aslp_temp_hnyr)
+      endif
     endif
-    if (nc_exists_var(fnm,"aslp_temp_slow")) then
-      call nc_read(fnm,"aslp_temp_slow",atm%aslp_temp_slow)
-    else
-      atm%aslp_temp_slow = 1.e20_wp   ! not set, initialised with aslp_temp at the first call
-    endif
+    ! land contrast weighting the upstream shift of aslp_temp; re-initialised from the first call if absent
+    atm%aslp_temp_lc = 9999._wp
+    if (nc_exists_var(fnm,"aslp_temp_lc")) call nc_read(fnm,"aslp_temp_lc",atm%aslp_temp_lc)
     call nc_read(fnm,"winda    ",     atm%winda   ) 
     call nc_read(fnm,"wind     ",     atm%wind    ) 
     call nc_read(fnm,"us       ",     atm%us      ) 

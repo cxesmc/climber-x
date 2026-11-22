@@ -30,7 +30,8 @@ module atm_grid
   use constants, only : pi, r_earth, omega, g, Rd, T0
   use climber_grid, only: ni, nj, dlat
   use control, only : out_dir
-  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref, diff_eq, fi_diff_eq
+  use atm_params, only : atm_mass, hatm, amas, ra, hcld_base, fcormin, i_fcorg, h_diff, i_hdiff_ref
+  use atm_params, only : i_diff_prof
   use atm_params, only : l_p0_var, p0, ps0, cp, ptopdyn
   use smooth_atm_mod, only : smooth2
 
@@ -68,7 +69,6 @@ module atm_grid
   integer :: llwr4
       
   real(wp) :: fit(jm)
-  real(wp) :: diffx_eq(jm)   !! m2/s, additional zonal macro-diffusivity, diff_eq*exp(-(lat/fi_diff_eq)^2)
   real(wp) :: fiu(jmc)
   real(wp) :: thetat(jm)
   real(wp) :: cost(jm)
@@ -94,6 +94,7 @@ module atm_grid
        
   real(wp) :: plx(imc,jm)
   real(wp) :: plx_trop(imc,jm)   !! tropospheric (k<=km-2) zonal column mass
+  integer  :: kdif_top           !! highest layer with macro-diffusion: km-2 (top 0.2*p0) for i_diff_prof=0, km-1 for i_diff_prof=1,2,3 (the profile ends at the tropopause)
   real(wp) :: plx_dif(imc,jm)    !! tropospheric zonal column mass weighted by the vertical profile of the diffusivity, for implicit zonal diffusion
   real(wp) :: ply(im,jmc)
   real(wp) :: ply_trop(im,jmc)   !! tropospheric (k<=km-2) meridional column mass
@@ -208,8 +209,6 @@ contains
       costhetat(j) = cos(thetat(j))
       sinthetat(j) = sin(thetat(j))
       dxt(j) = dy*cost(j)
-      ! additional tropical zonal macro-diffusivity, added to diffx in the diffusion of all tracers
-      diffx_eq(j) = diff_eq*exp(-(fit(j)*180._wp/pi/fi_diff_eq)**2)
     enddo
 
     do j=1,jmc
@@ -347,6 +346,13 @@ contains
 
     ! initialize, needed by vesta
     kweff(:,:) = 4
+
+    ! highest layer reached by the macro-diffusion
+    if (i_diff_prof.ge.1) then
+      kdif_top = km-1
+    else
+      kdif_top = km-2
+    endif
 
     return
 
@@ -531,11 +537,10 @@ contains
           else
             dplx_dif(i,j,k) = dpld
           endif
-          ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
-          if (k.le.km-2) then
-            plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
-            plx_dif(i,j)  = plx_dif(i,j)+dplx_dif(i,j,k)
-          endif
+          ! tropospheric column mass (k<=km-2) and diffused column mass (k<=kdif_top, see adifa);
+          ! for i_diff_prof=1,2,3 dplx_dif/plx_dif are rebuilt every step from the tropopause (diff_prof_update)
+          if (k.le.km-2) plx_trop(i,j) = plx_trop(i,j)+dplx(i,j,k)
+          if (k.le.kdif_top) plx_dif(i,j) = plx_dif(i,j)+dplx_dif(i,j,k)
           ! orographic component
           dplxo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(imi,j),pzsa(i,j)))-pl(k+1))*amas
         enddo
@@ -578,11 +583,9 @@ contains
           else
             dply_dif(i,j,k) = dpld
           endif
-          ! tropospheric column mass (diffusion is limited to k<=km-2, see adifa)
-          if (k.le.km-2) then
-            ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
-            ply_dif(i,j)  = ply_dif(i,j)+dply_dif(i,j,k)
-          endif
+          ! tropospheric column mass (k<=km-2) and diffused column mass (k<=kdif_top, see adifa)
+          if (k.le.km-2) ply_trop(i,j) = ply_trop(i,j)+dply(i,j,k)
+          if (k.le.kdif_top) ply_dif(i,j) = ply_dif(i,j)+dply_dif(i,j,k)
           ! orographic component
           dplyo(i,j,k) = max(0._wp,min(pl(k),max(pzsa(i,j-1),pzsa(i,j)))-pl(k+1))*amas
         enddo
@@ -623,5 +626,110 @@ contains
     return
 
   end subroutine atm_grid_update
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  diff_prof_update
+  !   Purpose    :  face layer masses of the macro-diffusion for the linear
+  !                 tropopause profile (i_diff_prof=1,2,3)
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine diff_prof_update(zsa, pzsa, htrop)
+
+    ! K(z) = K * max(0, 1 - (z-z_r)/(z_t-z_r)), zero at the tropopause z_t (mean htrop of the two columns) and
+    ! equal to 1 at the reference height z_r:
+    !   i_diff_prof=1: z_r = z_s, the face surface (the higher of the two surfaces, as for the face mass);
+    !   i_diff_prof=2: z_r = 0, sea level, so that K at the ground decreases linearly with surface elevation
+    !                  (as exp(-z/h_diff) with i_hdiff_ref=2); layers below the face surface carry no weight.
+    !   i_diff_prof=3: K(z) = K uniform from the face surface up to the tropopause z_t, zero above
+    !                  (same minimum diffused depth of 1 km above the surface).
+    ! z are the hypsometric geometric heights of the layer interfaces (z3l, mean of the two columns),
+    ! so that a pure thermal expansion of the column (tropopause pressure unchanged) leaves the weight of
+    ! every pressure layer unchanged; only a rise of the tropopause in pressure deepens the diffused column.
+    ! The weight of a layer is the exact height mean of the profile over its part above the face surface.
+    ! Offline on ERA-Interim (analysis/itsl0_rossby/trop_taper_era.jl) this profile fits the transient
+    ! eddy DSE and latent heat transports better than exp(-z/h_diff) (DSE rms 0.271 vs 0.291-0.308 PW,
+    ! LE 0.097 vs 0.10-0.11), with c_LE/c_DSE = 1.8. A 1 km rise of the tropopause in pressure raises the
+    ! eddy DSE transport by 3-5% (trop_rise_era.jl).
+    ! The layer masses are those of the pressure grid (dpld as in atm_grid_update), so the time-varying
+    ! profile enters only through the weights; plx_dif/ply_dif (implicit damping operator) follow.
+
+    implicit none
+
+    real(wp), intent(in) :: zsa(:,:)
+    real(wp), intent(in) :: pzsa(:,:)     !! relative surface pressure of the smoothed topography, as in atm_grid_update
+    real(wp), intent(in) :: htrop(:,:)
+
+    integer :: i, j, k, imi
+    real(wp) :: pxd, pyd, dpld, zs_f, zt_f, zr_f, w
+
+    !$omp parallel do private(i,j,k,imi,pxd,dpld,zs_f,zt_f,zr_f,w)
+    do j=1,jm
+      do i=1,im
+        imi = i-1
+        if (imi.lt.1) imi = im
+        pxd  = min(pzsa(i,j),pzsa(imi,j))
+        zs_f = max(zsa(i,j),zsa(imi,j))
+        zt_f = 0.5_wp*(htrop(i,j)+htrop(imi,j))
+        zr_f = merge(0._wp, zs_f, i_diff_prof.eq.2)
+        plx_dif(i,j) = 0._wp
+        do k=1,km
+          dpld = max(0._wp,min(pl(k),pxd)-pl(k+1))*amas
+          w = wlin(0.5_wp*(z3l(i,j,k)+z3l(imi,j,k)), 0.5_wp*(z3l(i,j,k+1)+z3l(imi,j,k+1)), zs_f, zr_f, zt_f, i_diff_prof.eq.3)
+          dplx_dif(i,j,k) = dpld*w
+          if (k.le.kdif_top) plx_dif(i,j) = plx_dif(i,j)+dplx_dif(i,j,k)
+        enddo
+      enddo
+    enddo
+    !$omp end parallel do
+    plx_dif(imc,:) = plx_dif(1,:)
+
+    !$omp parallel do private(i,j,k,pyd,dpld,zs_f,zt_f,zr_f,w)
+    do i=1,im
+      do j=2,jm
+        pyd  = min(pzsa(i,j),pzsa(i,j-1))
+        zs_f = max(zsa(i,j),zsa(i,j-1))
+        zt_f = 0.5_wp*(htrop(i,j)+htrop(i,j-1))
+        zr_f = merge(0._wp, zs_f, i_diff_prof.eq.2)
+        ply_dif(i,j) = 0._wp
+        do k=1,km
+          dpld = max(0._wp,min(pl(k),pyd)-pl(k+1))*amas
+          w = wlin(0.5_wp*(z3l(i,j,k)+z3l(i,j-1,k)), 0.5_wp*(z3l(i,j,k+1)+z3l(i,j-1,k+1)), zs_f, zr_f, zt_f, i_diff_prof.eq.3)
+          dply_dif(i,j,k) = dpld*w
+          if (k.le.kdif_top) ply_dif(i,j) = ply_dif(i,j)+dply_dif(i,j,k)
+        enddo
+      enddo
+    enddo
+    !$omp end parallel do
+    ply_dif(:,1)   = 0._wp
+    ply_dif(:,jmc) = 0._wp
+
+    return
+
+  contains
+
+    ! height mean over the part of the layer [zb,zt] above the surface zs of max(0, 1-(z-zr)/(ztr-zr)),
+    ! zr = reference height of the profile (zs or sea level); the diffused column reaches at least 1 km above zs.
+    ! uniform=.true. (i_diff_prof=3): profile = 1 from zs up to the tropopause, 0 above
+    pure function wlin(zb, zt, zs, zr, ztr, uniform) result(wm)
+      real(wp), intent(in) :: zb, zt, zs, zr, ztr
+      logical,  intent(in) :: uniform
+      real(wp) :: wm, lo, hi, d
+      lo = max(zb, zs)
+      if (zt.le.lo) then
+        wm = 0._wp
+        return
+      endif
+      d  = max(ztr-zr, zs-zr+1000._wp)  ! depth of the profile above zr
+      hi = min(zt, zr+d)
+      if (hi.le.lo) then
+        wm = 0._wp
+      else if (uniform) then
+        wm = (hi-lo)/(zt-lo)
+      else
+        wm = (hi-lo)*(1._wp-(0.5_wp*(lo+hi)-zr)/d)/(zt-lo)
+      endif
+    end function wlin
+
+  end subroutine diff_prof_update
 
 end module atm_grid
