@@ -29,13 +29,13 @@ module vesta_mod
   use constants, only : fqsat, pi, Rd, g
   use atm_params, only : cp, gad, hatm, p0, ra, zmax
   use atm_params, only : c_gam_1, c_gam_2, c_gam_3, hgams, hgamt, c_gam_tau, c_hrm_tau, nsmooth_gam, tstep
-  use atm_params, only : gams_min, gams_max, gams_max_lnd, sh_gams_pos, sh_gams_0, sh_gams_neg
+  use atm_params, only : gams_min, dgams, sh_gams_pos, sh_gams_0, sh_gams_neg
   use atm_params, only : c_hrs_1, c_hrs_2, c_hrs_3, c_hrs_4, c_hrs_5, c_hrs_6, rh_strat
   use atm_params, only : c_dhs_1, c_dhs_2
   use atm_params, only : c_trop_1, c_trop_2, c_trop_3
   use atm_params, only : l_dust
   use timer, only : sec_day
-  use atm_grid, only : im, jm, km, kmc, aim, zl, zc, z3, z3l, fit, cost, exp_zc, i_lnd, dplt
+  use atm_grid, only : im, jm, km, kmc, aim, zl, zc, z3, z3l, fit, cost, exp_zc, i_lnd, i_ocn, dplt
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
 
@@ -97,24 +97,6 @@ contains
         !----------------------------------------------
         ! lapse rate
 
-        ! lapse rate in the boundary layer.
-        ! One tanh in the grid-mean sensible heat flux replaces the per-surface-type branching
-        ! (9 constants and a switch over ocean / land / lake / ice). sha > 0 is an unstable
-        ! surface layer and drives gam_s towards the well mixed limit gams_max; sha < 0 is a
-        ! stable, decoupled surface layer and drives it towards gams_min. 
-        ! The tanh is centred at sh_gams_0 (with gams_min = -gams_max this is where gam_s = 0) and has
-        ! the width sh_gams_pos on the unstable side and sh_gams_neg on the stable side. A narrow stable
-        ! width saturates calm, weakly cooled (decoupled) surfaces at gams_min, while the floor
-        ! gams_min caps the inversion of strongly cooled, wind-mixed surfaces (katabatic ice sheets).
-        if (sha(i,j).ge.sh_gams_0) then
-          sh_w = sh_gams_pos
-        else
-          sh_w = sh_gams_neg
-        endif
-        ! well-mixed limit, separate over land (ice-free land surface type), blended by its fraction
-        gmax = gams_max + (gams_max_lnd-gams_max)*frst(i,j,i_lnd)
-        gam_s(i,j) = gams_min + (gmax-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
-
         ! humidity controlling the free-tropospheric lapse rate.
         ! gamb is the lapse rate at sea level (t_prof is linear in absolute z), so it uses the humidity
         ! at sea level, ram*qsat(tsl,p0), not the surface value qam, which over high terrain is the much
@@ -129,6 +111,28 @@ contains
 
         ! top
         gam_t(i,j) = gam_b(i,j) - c_gam_2*q_gam + c_gam_3
+
+        ! lapse rate in the surface layer (zs..zs+hgams), on top of which t_prof adds the same curvature
+        ! term as in the free troposphere.
+        ! One tanh in the grid-mean sensible heat flux, between a stable and an unstable limit:
+        ! - sha > sh_gams_0 (unstable): gam_s -> gam_b + dgams over ice-free ocean and land (gam_b elsewhere).
+        !   Over the ocean the subcloud/cloud layer is ~2 K/km steeper than the free troposphere (ERA 2.2,
+        !   CMIP median 2.0). Over land the daily-mean excess is smaller (ERA +1.2, CMIP median +1.0 K/km,
+        !   SH > 5 W/m2), because the daytime superadiabatic layer cancels against the nocturnal inversion;
+        !   the same dgams is used anyway, the steeper land surface layer partly compensating a too cold
+        !   land column (2 m temperature). The tanh is not fully saturated at typical SH, so the realised
+        !   excess is somewhat below dgams.
+        ! - sha < sh_gams_0 (stable, surface-based inversion): gam_s -> gams_min.
+        ! Width sh_gams_pos on the unstable side and sh_gams_neg on the stable side. A narrow stable
+        ! width saturates calm, weakly cooled (decoupled) surfaces at gams_min, while the floor
+        ! gams_min caps the inversion of strongly cooled, wind-mixed surfaces (katabatic ice sheets).
+        if (sha(i,j).ge.sh_gams_0) then
+          sh_w = sh_gams_pos
+        else
+          sh_w = sh_gams_neg
+        endif
+        gmax = gam_b(i,j) + dgams*(frst(i,j,i_ocn)+frst(i,j,i_lnd))
+        gam_s(i,j) = gams_min + (gmax-gams_min)*0.5_wp*(1._wp+tanh((sha(i,j)-sh_gams_0)/sh_w))
 
         !----------------------------------------------
         ! height scale for relative humidity       

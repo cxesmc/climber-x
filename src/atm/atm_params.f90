@@ -63,7 +63,6 @@ module atm_params
   real(wp) :: sigma_so4
   real(wp) :: r_so4
   real(wp) :: N_so4_nat
-  real(wp) :: N_so4_nat_lnd
 
   integer :: i_mmc_fer
   integer :: i_mmc_fer_shape    !! shape of the Ferrel lower branch: 0 = half-sine, 2 = local psi_F = aferz(j) (requires i_mmc_fer=2)
@@ -152,8 +151,7 @@ module atm_params
   real(wp) :: c_gam_2
   real(wp) :: c_gam_3
   real(wp) :: gams_min
-  real(wp) :: gams_max
-  real(wp) :: gams_max_lnd   !! K/m, well-mixed limit of gams over land (blended by land fraction); < 0: = gams_max
+  real(wp) :: dgams         !! K/m, excess of the unstable surface-layer lapse rate over the free-tropospheric gamb, over ice-free ocean and land
   real(wp) :: sh_gams_pos
   real(wp) :: sh_gams_0
   real(wp) :: sh_gams_neg
@@ -433,9 +431,7 @@ contains
     call nml_read(filename,"atm_par","c_gam_2",c_gam_2)
     call nml_read(filename,"atm_par","c_gam_3",c_gam_3)
     call nml_read(filename,"atm_par","gams_min",gams_min)
-    call nml_read(filename,"atm_par","gams_max",gams_max)
-    call nml_read(filename,"atm_par","gams_max_lnd",gams_max_lnd)
-    if (gams_max_lnd.lt.0._wp) gams_max_lnd = gams_max
+    call nml_read(filename,"atm_par","dgams",dgams)
     call nml_read(filename,"atm_par","sh_gams_pos",sh_gams_pos)
     call nml_read(filename,"atm_par","sh_gams_0",sh_gams_0)
     call nml_read(filename,"atm_par","sh_gams_neg",sh_gams_neg)
@@ -603,7 +599,6 @@ contains
     call nml_read(filename,"atm_par","sigma_so4",sigma_so4)
     call nml_read(filename,"atm_par","r_so4",r_so4)
     call nml_read(filename,"atm_par","N_so4_nat",N_so4_nat)
-    call nml_read(filename,"atm_par","N_so4_nat_lnd",N_so4_nat_lnd)
     call nml_read(filename,"atm_par","ars_ot",ars_ot)
     call nml_read(filename,"atm_par","ars_im",ars_im)
     call nml_read(filename,"atm_par","h_ars",h_ars)

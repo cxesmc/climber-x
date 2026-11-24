@@ -33,7 +33,7 @@ module clouds_mod
   use atm_params, only : cld_max, nsmooth_cld
   use atm_params, only : c_hcld_1, c_hcld_2, c_hcld_3, c_hcld_4
   use atm_params, only : c_clot_1, c_clot_2, c_clot_3, c_clot_4, c_clot_5
-  use atm_params, only : l_so4_ie, r_so4, N_so4_nat, N_so4_nat_lnd
+  use atm_params, only : l_so4_ie, r_so4, N_so4_nat
   use atm_grid, only : im, jm, i_ice, i_ocn, i_sic, i_lnd, i_lake
   use smooth_atm_mod, only : smooth2
   !$ use omp_lib
@@ -185,11 +185,8 @@ contains
         fdyn = max(0.1_wp, 1._wp+c_clot_5*fweff(i,j))
         clotl = c_clot_3*ftemp*(cld(i,j)*wcon(i,j))**c_clot_4 * fdyn
 
-        ! cloud droplet number concentration at the cloud base (m^-3). The natural background is
-        ! higher over land than over ocean because continental air carries far more CCN (observed
-        ! ~250-600 cm-3 against ~60-150 cm-3 over the ocean); at a given water path this is what
-        ! makes continental cloud optically thicker. 
-        N_so4 = N_so4_nat + (N_so4_nat_lnd-N_so4_nat)*frst(i,j,i_lnd)
+        ! natural background cloud droplet number concentration at the cloud base (m^-3)
+        N_so4 = N_so4_nat
 
         ! indirect effect of anthropogenic sulfate aerosols
         if (l_so4_ie) then
@@ -202,8 +199,7 @@ contains
         endif
 
         ! Twomey: at a fixed water path the optical thickness scales as N^(1/3), with the
-        ! Boucher & Lohmann saturation at high N. Normalised to the marine background, so
-        ! N_so4_nat_lnd = N_so4_nat reproduces the previous behaviour exactly.
+        ! Boucher & Lohmann saturation at high N. Normalised to the natural background.
         f_mod = (1._wp-exp(-alpha_c*N_so4))/(1._wp-exp(-alpha_c*N_so4_nat))
         clotl = clotl*f_mod**0.33_wp
 

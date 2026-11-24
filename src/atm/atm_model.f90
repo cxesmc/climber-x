@@ -950,7 +950,7 @@ contains
      allocate(atm%sha(im,jm))
      ! sha is set by the coupler each step, but hscales reads it and it enters a tanh, so it must
      ! not be undefined on the first call. Zero puts gam_s at the midpoint of (gams_min,
-     ! gams_max), which is harmless.
+     ! the unstable limit gamb+dgams), which is harmless.
      atm%sha(:,:) = 0._wp
      allocate(atm%lha(im,jm))
      allocate(atm%evpa(im,jm))
