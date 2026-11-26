@@ -59,6 +59,7 @@ module atm_params
 
   logical :: l_so4_de
   logical :: l_so4_ie
+  logical :: l_diag_rf_so4     !! diagnose the SO4 radiative forcing (extra SW calls without anthropogenic SO4)
   real(wp) :: beta_so4
   real(wp) :: sigma_so4
   real(wp) :: r_so4
@@ -593,6 +594,8 @@ contains
     call nml_read(filename,"atm_par","c_dust_mec",c_dust_mec)
     call nml_read(filename,"atm_par","l_so4_de",l_so4_de)
     call nml_read(filename,"atm_par","l_so4_ie",l_so4_ie)
+    l_diag_rf_so4 = .false.
+    call nml_read(filename,"atm_par","l_diag_rf_so4",l_diag_rf_so4)
     call nml_read(filename,"atm_par","beta_so4",beta_so4)
     call nml_read(filename,"atm_par","sigma_so4",sigma_so4)
     call nml_read(filename,"atm_par","r_so4",r_so4)

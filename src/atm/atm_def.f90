@@ -135,6 +135,9 @@ module atm_def
       real(wp), allocatable, dimension(:,:) :: aerosol_ot !! aerosol optical thickness (.)
       real(wp), allocatable, dimension(:,:) :: aerosol_im !! aerosol imaginary refractive index (.)
       real(wp), allocatable, dimension(:,:) :: so4        !! atmospheric SO4 load (kg/m2)
+      real(wp), allocatable, dimension(:,:) :: clot_nat   !! cloud optical thickness without anthropogenic SO4 (.), for l_diag_rf_so4
+      real(wp), allocatable, dimension(:,:) :: rf_so4_de  !! SO4 direct radiative forcing at TOA (W/m2)
+      real(wp), allocatable, dimension(:,:) :: rf_so4_ie  !! SO4 indirect (Twomey) radiative forcing at TOA (W/m2)
       real(wp), allocatable, dimension(:,:,:) :: o3       !! atmospheric O3 concentration (mol/mol)
 
       real(wp), allocatable, dimension(:,:) :: hdust      !! dust height scale (m)

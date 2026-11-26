@@ -44,6 +44,7 @@ module atm_model
     use atm_params, only : ars_ot, ars_im, h_ars, l_dust, l_dust_rad
     use atm_params, only : i_swr_gas, a_gas_vu
     use atm_params, only : i_rbstr
+    use atm_params, only : l_diag_rf_so4
     use atm_params, only : l_write_timer
     use atm_params, only : synsurmin
     use atm_params, only : i_adv
@@ -110,6 +111,9 @@ contains
     !$ real(wp) :: time1,time2
 
     real(wp), dimension(im,jm) :: prc_save
+    ! scratch output of the SW calls without anthropogenic SO4 (l_diag_rf_so4)
+    real(wp), dimension(im,jm) :: so4_0, alb_cld_x, swr_top_x, swr_top_cs_x, swr_top_cld_x, swr_sur_x
+    real(wp), dimension(im,jm,nm) :: fswr_sur_x, fswr_sur_cs_x, fswr_sur_cld_x
     real(wp), dimension(im,jm,nm) :: q2_lag   ! q2 as it was when the surface models made evp
     real(wp), dimension(im,jm) :: convwtr_raw   ! moisture convergence before the 2dx filter
     ! lowest tropospheric relative humidity the filtered convergence may leave in a column (well above the qam floor of 1e-6)
@@ -176,6 +180,27 @@ contains
       zs=atm%zs)
     !$ time2 = omp_get_wtime()
     !$ if(l_write_timer) print *,'swr',time2-time1
+
+    if (l_diag_rf_so4) then
+      ! SO4 radiative forcing at TOA, diagnosed with the same state but without anthropogenic SO4:
+      ! direct = SW(so4, clot) - SW(0, clot); indirect = SW(0, clot) - SW(0, clot_nat).
+      ! There are no cloud adjustments to SO4 in the model (only Twomey), so this is close to the ERF.
+      !$ time1 = omp_get_wtime()
+      so4_0 = 0._wp
+      call sw_radiation(atm%frst, atm%swr_dw_top, atm%coszm_sw, atm%cld, atm%wcon, atm%zsa, &    ! in
+        atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot, atm%hcld, atm%hqeff, atm%aerosol_ot, atm%aerosol_im, so4_0, &    ! in
+        alb_cld_x, swr_top_x, swr_top_cs_x, swr_top_cld_x, swr_sur_x, fswr_sur_x, fswr_sur_cs_x, fswr_sur_cld_x, & ! out
+        zs=atm%zs)
+      atm%rf_so4_de = atm%swr_top - swr_top_x
+      atm%rf_so4_ie = swr_top_x
+      call sw_radiation(atm%frst, atm%swr_dw_top, atm%coszm_sw, atm%cld, atm%wcon, atm%zsa, &    ! in
+        atm%alb_vu_s, atm%alb_vu_c, atm%alb_ir_s, atm%alb_ir_c, atm%clot_nat, atm%hcld, atm%hqeff, atm%aerosol_ot, atm%aerosol_im, so4_0, &    ! in
+        alb_cld_x, swr_top_x, swr_top_cs_x, swr_top_cld_x, swr_sur_x, fswr_sur_x, fswr_sur_cs_x, fswr_sur_cld_x, & ! out
+        zs=atm%zs)
+      atm%rf_so4_ie = atm%rf_so4_ie - swr_top_x
+      !$ time2 = omp_get_wtime()
+      !$ if(l_write_timer) print *,'swr rf_so4',time2-time1
+    endif
 
     !-------------------------------------------------
     ! total radiation
@@ -328,7 +353,8 @@ contains
         !$ time1 = omp_get_wtime()
         call clouds(atm%frst, atm%weff, atm%wcld, atm%zsa, atm%t2a, atm%ram, atm%qam, atm%r2a, atm%q2a, atm%wcon, atm%htrop, atm%so4, &    ! in
           atm%tam, atm%gams, atm%gamb, atm%gamt, &    ! in
-          atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%hcld_rh, atm%hcld_low, atm%clot) ! out
+          atm%fweff, atm%cld_rh, atm%cld_low, atm%cld, atm%hcld, atm%hcld_rh, atm%hcld_low, atm%clot, &    ! out
+          clot_nat=atm%clot_nat)    ! inout, only used with l_diag_rf_so4
         !$ time2 = omp_get_wtime()
         !$ if(l_write_timer) print *,'cld',time2-time1
       endif
@@ -811,6 +837,11 @@ contains
 
     endif
 
+    ! SO4 forcing diagnostic: not in the restart, start from the current clot (adjusts within ~10 days)
+    atm%clot_nat = atm%clot
+    atm%rf_so4_de = 0._wp
+    atm%rf_so4_ie = 0._wp
+
     if (l_feedbacks) then
       call feedback_init(fb)
       call rad_kernels_init(rk)
@@ -928,6 +959,9 @@ contains
      allocate(atm%aerosol_ot(im,jm)) 
      allocate(atm%aerosol_im(im,jm)) 
      allocate(atm%so4(im,jm))
+     allocate(atm%clot_nat(im,jm))
+     allocate(atm%rf_so4_de(im,jm))
+     allocate(atm%rf_so4_ie(im,jm))
      allocate(atm%o3(im,jm,kmc)) 
 
      allocate(atm%hdust(im,jm)) 
@@ -1208,6 +1242,9 @@ contains
      deallocate(atm%aerosol_ot) 
      deallocate(atm%aerosol_im) 
      deallocate(atm%so4) 
+     deallocate(atm%clot_nat)
+     deallocate(atm%rf_so4_de)
+     deallocate(atm%rf_so4_ie)
      deallocate(atm%o3) 
 
      deallocate(atm%hdust) 
