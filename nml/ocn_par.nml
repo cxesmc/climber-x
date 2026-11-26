@@ -99,6 +99,9 @@
  mle_fac = 20.                ! MLE front-scale factor, effective Delta_s/L_f (grid scale / front length)
  tau_mle = 5.                 ! days, MLE equatorial regularisation, f -> sqrt(f^2+1/tau_mle^2)
  h_mle_max = 500.             ! m, MLE maximum mixed layer depth H
+ cfl_adv_max = 0.8           ! adaptive implicit vertical advection (Shchepetkin 2015), 0 = fully explicit: where the total
+                              ! outflow Courant number of a cell (with its ocean fraction) exceeds cfl_adv_max, the excess vertical
+                              ! advection is done implicitly (upwind); identical to the explicit scheme below the limit
  cfl_mle = 0.25               ! MLE Courant limit per face (horizontal and induced vertical velocity); mle_fac is also scaled by min(dx,dy)/dy
  i_diff_dia = 3               ! ocean diapycnal/vertical diffusivity profile:
                               ! 0 = uniform with value diff_dia_min

@@ -127,6 +127,7 @@ module ocn_params
      real(wp) :: tau_mle       !! MLE equatorial regularisation time scale, f -> sqrt(f^2+1/tau^2) [days]
      real(wp) :: h_mle_max     !! MLE maximum mixed layer depth H used in the streamfunction [m]
      real(wp) :: cfl_mle       !! MLE maximum Courant number of the face and induced vertical velocities []
+     real(wp) :: cfl_adv_max   !! adaptive implicit vertical advection: max explicit outflow Courant number per cell, 0 = fully explicit
      real(wp) :: tau_sst, tau_sss
      integer :: n_cells_dist_runoff
      integer :: n_cells_dist_calving
@@ -358,6 +359,7 @@ subroutine ocn_par_load(filename)
     call nml_read(filename,"ocn_par","tau_mle",tau_mle)
     call nml_read(filename,"ocn_par","h_mle_max",h_mle_max)
     call nml_read(filename,"ocn_par","cfl_mle",cfl_mle)
+    call nml_read(filename,"ocn_par","cfl_adv_max",cfl_adv_max)
 
     call nml_read(filename,"ocn_par","i_conv_shuffle",i_conv_shuffle)
     call nml_read(filename,"ocn_par","l_conv_shuffle_passive",l_conv_shuffle_passive)

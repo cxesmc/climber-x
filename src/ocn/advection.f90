@@ -30,7 +30,7 @@ module advection_mod
 
   use precision, only : wp
   use ocn_grid, only : maxi, maxj, maxk, k1, dx, dxv, dy, dz, mask_ocn, mask_c, mask_u, mask_v, mask_w
-  use ocn_params , only : dt
+  use ocn_params , only : dt, cfl_adv_max
 
   implicit none
 
@@ -147,6 +147,12 @@ contains
     real(wp) :: pp, pm, qp, qm, qdp
     real(wp) :: xmax, xmin
     real(wp) :: tracer_tmp1
+    ! adaptive implicit vertical advection (cfl_adv_max > 0)
+    real(wp), allocatable, dimension(:,:,:) :: fe_c    ! explicit fraction of the vertical outflow of each cell
+    real(wp), allocatable, dimension(:,:,:) :: fe_w    ! explicit fraction of w on each w-face (from its donor cell)
+    logical :: l_impl
+    real(wp) :: vol, ch, cv, wtop, wbot
+    integer :: kd
 
     ! precompute zonally-wrapped i indices once (hoist modulo out of the grid loops below)
     do i=1,maxi
@@ -210,6 +216,54 @@ contains
     fyl(:,maxj,:) = 0._wp
     afy(:,maxj,:) = 0._wp
 
+    ! adaptive implicit vertical advection (Shchepetkin 2015): where the total outflow Courant number of a cell
+    ! (outflow volume per step / cell volume dx*dy*dz*f_ocn, horizontal Ch + vertical Cv) exceeds cfl_adv_max,
+    ! only the fraction (cfl_adv_max-Ch)/Cv of its vertical outflow is advected explicitly (FCT); the rest is
+    ! advected implicitly with upwind after the explicit step. Each w-face takes the fraction of its donor cell.
+    ! The total w is divergence-free, so the explicit and implicit divergences cancel and a constant tracer stays
+    ! constant; the implicit matrix is an M-matrix, so the scheme stays bounded and conservative at any Courant number.
+    ! Identical to the explicit scheme wherever no cell exceeds cfl_adv_max.
+    l_impl = .false.
+    if (cfl_adv_max.gt.0._wp) then
+      allocate(fe_c(maxi,maxj,maxk), fe_w(maxi,maxj,0:maxk))
+      fe_c = 1._wp
+      fe_w = 1._wp
+      !$omp parallel do collapse(2) private(i,j,k,im1,vol,ch,cv,wtop,wbot)
+      do j=1,maxj
+        do i=1,maxi
+          do k=1,maxk
+            if (mask_c(i,j,k).ne.1) cycle
+            im1 = imw(i)
+            vol = dx(j)*dy*dz(k)*f_ocn(i,j)
+            ch = (max(0._wp,u(1,i,j,k)) - min(0._wp,u(1,im1,j,k)))*dy*dz(k)
+            if (j.lt.maxj) ch = ch + max(0._wp,u(2,i,j,k))*dxv(j)*dz(k)
+            if (j.gt.1)    ch = ch - min(0._wp,u(2,i,j-1,k))*dxv(j-1)*dz(k)
+            wtop = 0._wp
+            wbot = 0._wp
+            if (mask_w(i,j,k).eq.1) wtop = u(3,i,j,k)
+            if (k.gt.1) then
+              if (mask_w(i,j,k-1).eq.1) wbot = u(3,i,j,k-1)
+            endif
+            cv = (max(0._wp,wtop) - min(0._wp,wbot))*dx(j)*dy
+            ch = ch*dt/vol
+            cv = cv*dt/vol
+            if (ch+cv.gt.cfl_adv_max) fe_c(i,j,k) = max(0._wp, cfl_adv_max-ch)/cv
+          enddo
+        enddo
+      enddo
+      !$omp end parallel do
+      do j=1,maxj
+        do i=1,maxi
+          do k=1,maxk-1
+            if (mask_w(i,j,k).ne.1) cycle
+            kd = merge(k, k+1, u(3,i,j,k).gt.0._wp)   ! donor cell of the w-face at the top of layer k
+            fe_w(i,j,k) = fe_c(i,j,kd)
+            if (fe_w(i,j,k).lt.1._wp) l_impl = .true.
+          enddo
+        enddo
+      enddo
+    endif
+
     ! Z-direction
     !$omp parallel do collapse(2) private(i,j,k,kp1,wvel,tk,tkp1,fzl_int,fzh,fzl_surf,fzl_bot,is_int,is_surf,is_bot)
     do k=1,maxk
@@ -220,6 +274,9 @@ contains
           ! which includes the surface k=maxk, so the clamped value is never selected).
           kp1 = min(k+1,maxk)
           wvel = u(3,i,j,k)
+          if (l_impl) then
+            if (fe_w(i,j,k).lt.1._wp) wvel = wvel*fe_w(i,j,k)   ! explicit part only
+          endif
           tk   = tracer(i,j,k)
           tkp1 = tracer(i,j,kp1)
           fzl_int  = wvel * merge(tk, tkp1, wvel > 0._wp) * dx(j)*dy * dt   ! interior low-order flux
@@ -363,8 +420,72 @@ contains
     fay(:,0:,:) = fyl(:,0:,:) + afy(:,0:,:)
     faz(:,:,0:) = fzl(:,:,0:) + afz(:,:,0:)
 
+    ! implicit upwind advection with the remaining vertical velocity (1-fe_w)*w, columns with an implicit part only
+    if (l_impl) then
+      !$omp parallel do collapse(2) private(i,j)
+      do j=1,maxj
+        do i=1,maxi
+          if (mask_ocn(i,j).ne.1) cycle
+          if (k1(i,j).ge.maxk) cycle
+          if (all(fe_w(i,j,k1(i,j):maxk-1).ge.1._wp)) cycle
+          call implicit_column(i,j)
+        enddo
+      enddo
+      !$omp end parallel do
+    endif
+    if (allocated(fe_c)) deallocate(fe_c, fe_w)
+
 
    return
+
+  contains
+
+    ! tridiagonal implicit upwind step of column (i,j) with q = (1-fe_w)*w*dx*dy*dt on the w-faces;
+    ! the start value is the explicit result tracer + dt*tracer_tendency, the implicit flux is added to faz
+    subroutine implicit_column(i,j)
+
+      integer, intent(in) :: i, j
+      integer :: k, kb
+      real(wp), dimension(maxk) :: a, b, d, r, c
+      real(wp) :: q, vk, m
+
+      kb = k1(i,j)
+      do k=kb,maxk
+        vk = dx(j)*dy*dz(k)*f_ocn(i,j)
+        d(k) = vk
+        a(k) = 0._wp
+        b(k) = 0._wp
+        r(k) = vk*(tracer(i,j,k) + dt*tracer_tendency(i,j,k))
+      enddo
+      do k=kb,maxk-1
+        q = (1._wp-fe_w(i,j,k))*u(3,i,j,k)*dx(j)*dy*dt   ! m3, implicit volume flux through the top of layer k
+        if (q.gt.0._wp) then
+          d(k)   = d(k) + q          ! upward: leaves k with c(k)
+          a(k+1) = a(k+1) - q        ! enters k+1 with c(k)
+        elseif (q.lt.0._wp) then
+          d(k+1) = d(k+1) - q        ! downward: leaves k+1 with c(k+1)
+          b(k)   = b(k) + q          ! enters k with c(k+1)
+        endif
+      enddo
+      ! Thomas algorithm (a: coefficient of c(k-1), b: of c(k+1))
+      do k=kb+1,maxk
+        m = a(k)/d(k-1)
+        d(k) = d(k) - m*b(k-1)
+        r(k) = r(k) - m*r(k-1)
+      enddo
+      c(maxk) = r(maxk)/d(maxk)
+      do k=maxk-1,kb,-1
+        c(k) = (r(k) - b(k)*c(k+1))/d(k)
+      enddo
+      do k=kb,maxk
+        tracer_tendency(i,j,k) = (c(k) - tracer(i,j,k))/dt
+      enddo
+      do k=kb,maxk-1
+        q = (1._wp-fe_w(i,j,k))*u(3,i,j,k)*dx(j)*dy*dt
+        faz(i,j,k) = faz(i,j,k) + q*merge(c(k), c(k+1), q.gt.0._wp)
+      enddo
+
+    end subroutine implicit_column
 
   end subroutine advection_fct_kernel
 
