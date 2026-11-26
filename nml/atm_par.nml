@@ -369,6 +369,7 @@
   sigma_so4 = 3.5e3             ! m2/kg, scattering efficiency for sulfate aerosols (Bauer et al., 2008)
   r_so4 = 0.17e-6               ! m, sulfate aerosol radius (0.1-0.15 microm in Bauer 2008)
   N_so4_nat = 75e6              ! m^-3, natural cloud condensation nuclei concentration (sulfate aerosols) at cloud base
+  l_diag_rf_so4 = F             ! diagnose SO4 radiative forcing (direct, indirect) at TOA, output in atm_ts (2 extra SW calls per day)
 
   !-----------------------------------------------------------
   ! smoothing options

@@ -39,6 +39,7 @@ module atm_out
   use atm_params, only : l_daily_output
   use atm_params, only : p0, ra, gad, cle, cls, cp, hatm, sigma_so4, c_syn_6, l_co2d
   use atm_params, only : l_output_flx3d, l_output_extended
+  use atm_params, only : l_diag_rf_so4
   use vesta_mod, only : t_prof, rh_prof
   use atm_def, only : atm_class
   use ncio
@@ -74,6 +75,7 @@ module atm_out
     real(wp) :: cfc11
     real(wp) :: cfc12
     real(wp) :: so4
+    real(wp) :: rf_so4, rf_so4_de, rf_so4_ie
     real(wp) :: t2m    
     real(wp) :: tnh
     real(wp) :: tsh    
@@ -1094,6 +1096,8 @@ contains
       ann_ts(y)%sha = 0
       ann_ts(y)%lha = 0
       ann_ts(y)%rbtop = 0
+      ann_ts(y)%rf_so4_de = 0
+      ann_ts(y)%rf_so4_ie = 0
       ann_ts(y)%rbatm = 0
       ann_ts(y)%rbsur = 0
       ann_ts(y)%snettop =0
@@ -1360,6 +1364,10 @@ contains
     ann_ts(y)%sha           = ann_ts(y)%sha           + ann_sha        
     ann_ts(y)%lha           = ann_ts(y)%lha           + ann_lha        
     ann_ts(y)%rbtop         = ann_ts(y)%rbtop         + ann_rbtop      
+    if (l_diag_rf_so4) then
+      ann_ts(y)%rf_so4_de   = ann_ts(y)%rf_so4_de     + sum(atm%rf_so4_de*sqr)/esqr * ann_avg
+      ann_ts(y)%rf_so4_ie   = ann_ts(y)%rf_so4_ie     + sum(atm%rf_so4_ie*sqr)/esqr * ann_avg
+    endif
     ann_ts(y)%rbatm         = ann_ts(y)%rbatm         + ann_rbatm      
     ann_ts(y)%rbsur         = ann_ts(y)%rbsur         + ann_rbsur      
     ann_ts(y)%snettop       = ann_ts(y)%snettop       + ann_snettop    
@@ -1434,6 +1442,7 @@ contains
       ann_ts(y)%cfc11 = atm%cfc11
       ann_ts(y)%cfc12 = atm%cfc12
       ann_ts(y)%so4 = sum(atm%so4(:,:)*sqr(:,:))    ! kg SO4
+      ann_ts(y)%rf_so4 = ann_ts(y)%rf_so4_de + ann_ts(y)%rf_so4_ie
 
       ann_ts(y)%t2m = ann_ts(y)%t2m - T0    ! degC
       ann_ts(y)%tnh = ann_ts(y)%tnh - T0    ! degC
@@ -2385,6 +2394,11 @@ contains
     call nc_write(fnm,"cfc11   ", vars%cfc11   , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric CFC11 concentration",units="ppb",ncid=ncid)
     call nc_write(fnm,"cfc12   ", vars%cfc12   , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric CFC12 concentration",units="ppb",ncid=ncid)
     call nc_write(fnm,"so4     ", vars%so4     , dims=[dim_time],start=[nout],count=[y],long_name="atmospheric SO4 content",units="kg",ncid=ncid)
+    if (l_diag_rf_so4) then
+    call nc_write(fnm,"rf_so4  ", vars%rf_so4  , dims=[dim_time],start=[nout],count=[y],long_name="SO4 radiative forcing at TOA (direct + indirect, relative to no anthropogenic SO4)",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_so4_de", vars%rf_so4_de, dims=[dim_time],start=[nout],count=[y],long_name="SO4 direct radiative forcing at TOA",units="W/m2",ncid=ncid)
+    call nc_write(fnm,"rf_so4_ie", vars%rf_so4_ie, dims=[dim_time],start=[nout],count=[y],long_name="SO4 indirect (cloud albedo) radiative forcing at TOA",units="W/m2",ncid=ncid)
+    endif
     call nc_write(fnm,"tg      ", vars%t2m     , dims=[dim_time],start=[nout],count=[y],long_name="global surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"tnh     ", vars%tnh     , dims=[dim_time],start=[nout],count=[y],long_name="NH surface air temperature",units="degC",ncid=ncid)
     call nc_write(fnm,"tsh     ", vars%tsh     , dims=[dim_time],start=[nout],count=[y],long_name="SH surface air temperature",units="degC",ncid=ncid)

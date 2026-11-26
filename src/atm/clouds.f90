@@ -51,7 +51,7 @@ contains
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   subroutine clouds(frst, weff, wcld, zsa, t2a, ram, qam, r2a, q2a, wcon, htrop, so4, &
       tam, gams, gamb, gamt, &
-      fweff, cld_rh, cld_low, cld, hcld, hcld_rh, hcld_low, clot)
+      fweff, cld_rh, cld_low, cld, hcld, hcld_rh, hcld_low, clot, clot_nat)
 
     implicit none
 
@@ -81,10 +81,12 @@ contains
     real(wp), intent(inout) :: cld(:,:)
     real(wp), intent(inout) :: hcld(:,:)
     real(wp), intent(inout) :: clot(:,:)
+    real(wp), intent(inout), optional :: clot_nat(:,:)   ! clot without anthropogenic SO4 (forcing diagnostic)
 
     integer :: i, j
     real(wp) :: dr, fr, f_freezedry, f1, c_cld_60, f_warm, f_sc, c5_eff
-    real(wp) :: cldn, hcldl, clotl, tcldm, ftemp, fdyn
+    real(wp) :: cldn, hcldl, clotl, clotl_nat, tcldm, ftemp, fdyn
+    logical :: l_nat
     real(wp) :: f_rh, a_rh, a_low
     real(wp) :: L_so4_ant, N_so4_ant_0, N_so4, f_mod
 
@@ -94,7 +96,9 @@ contains
     real(wp), parameter :: H_so4 = 1500._wp        ! m, sulfate aerosol height scale
 
 
-    !$omp parallel do collapse(2) private(i, j, c_cld_60, dr, fr, f_freezedry, f1, f_warm, f_sc, c5_eff, hcldl, clotl, tcldm, ftemp, fdyn) &
+    l_nat = present(clot_nat)
+
+    !$omp parallel do collapse(2) private(i, j, c_cld_60, dr, fr, f_freezedry, f1, f_warm, f_sc, c5_eff, hcldl, clotl, clotl_nat, tcldm, ftemp, fdyn) &
     !$omp private(L_so4_ant, N_so4_ant_0, N_so4, f_mod)
     do j=1,jm
       do i=1,im
@@ -184,6 +188,7 @@ contains
         ftemp = min(1._wp,ftemp)
         fdyn = max(0.1_wp, 1._wp+c_clot_5*fweff(i,j))
         clotl = c_clot_3*ftemp*(cld(i,j)*wcon(i,j))**c_clot_4 * fdyn
+        clotl_nat = min(10._wp, clotl)   ! natural background only (f_mod = 1)
 
         ! natural background cloud droplet number concentration at the cloud base (m^-3)
         N_so4 = N_so4_nat
@@ -207,6 +212,7 @@ contains
 
         ! smooth in time
         clot(i,j) = 0.1_wp*clotl + 0.9_wp*clot(i,j)
+        if (l_nat) clot_nat(i,j) = 0.1_wp*clotl_nat + 0.9_wp*clot_nat(i,j)
 
       enddo
     enddo
