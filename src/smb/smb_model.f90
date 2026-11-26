@@ -27,6 +27,7 @@ module smb_model
 
   use nml
   use ncio
+  use grid_nc, only : grid_nc_write_map
   use precision, only : wp, dp
   use timer, only : year, year_ini, year_now, doy, mon, nmon_year, nday_year, day_year, nstep_mon_smb, nstep_year_smb, sec_year, sec_mon
   use timer, only : time_soy_smb, time_eoy_smb, time_eom_smb
@@ -1653,8 +1654,8 @@ contains
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
     call nc_open(fnm,ncid,writable=.TRUE.)
-    call nc_write_dim(fnm,dim_x,x=smb%grid%G%x0,dx=smb%grid%G%dx,nx=nx,axis="x",units="m",ncid=ncid)
-    call nc_write_dim(fnm,dim_y,x=smb%grid%G%y0,dx=smb%grid%G%dy,nx=ny,axis="y",units="m",ncid=ncid)
+    call nc_write_dim(fnm,dim_x,x=smb%grid%G%x0,dx=smb%grid%G%dx,nx=nx,axis="x",units="km",ncid=ncid)
+    call nc_write_dim(fnm,dim_y,x=smb%grid%G%y0,dx=smb%grid%G%dy,nx=ny,axis="y",units="km",ncid=ncid)
     call nc_write_dim(fnm,dim_month,x=1,dx=1,nx=nmon_year,units="mon",ncid=ncid)
     call nc_write_dim(fnm,"g",x=1,dx=1,nx=1,ncid=ncid)
     call nc_write_dim(fnm,"lon_cmn",x=1,dx=1,nx=size(smb%alb_vis_dir_cmn,1),ncid=ncid)
@@ -1664,96 +1665,96 @@ contains
     call nc_write_dim(fnm,dim_depth,x=0,dx=1,nx=nl+1,axis="z",units="#",ncid=ncid)
 
     call nc_write(fnm,"mask_smb", smb%mask_smb, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="mask where to compute surface mass balance",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="mask where to compute surface mass balance",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"mask_ice", smb%mask_ice, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="ice mask",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="ice mask",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"mask_ice_old", smb%mask_ice_old, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="old ice mask",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="old ice mask",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"f_ice", smb%f_ice, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="ice cover fraction",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="ice cover fraction",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"mask_snow", smb%mask_snow, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="snow mask",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="snow mask",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"t_skin", smb%t_skin, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="skin temperature",grid_mapping="polar_stereographic",units="K",ncid=ncid)    
+      long_name="skin temperature",grid_mapping="crs",units="K",ncid=ncid)    
 
     call nc_write(fnm,"t2m", smb%t2m, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="surface air 2m temperature",grid_mapping="polar_stereographic",units="K",ncid=ncid)    
+      long_name="surface air 2m temperature",grid_mapping="crs",units="K",ncid=ncid)    
 
     call nc_write(fnm,"t_prof", smb%t_prof, dims=[dim_x,dim_y,dim_depth],start=[1,1,1],count=[nx,ny,nl+1], &
-      long_name="snow+ice/soil temperature profile",grid_mapping="polar_stereographic",units="K",ncid=ncid)    
+      long_name="snow+ice/soil temperature profile",grid_mapping="crs",units="K",ncid=ncid)    
 
     call nc_write(fnm,"t_ice", smb%t_ice, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="annual mean surface ice temperature",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+      long_name="annual mean surface ice temperature",grid_mapping="crs",units="degC",ncid=ncid)    
 
     call nc_write(fnm,"runoff", smb%mon_runoff, dims=[dim_x,dim_y,dim_month],start=[1,1,1],count=[nx,ny,nmon_year], &
-      long_name="monthly mean runoff",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="monthly mean runoff",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"mon_icemelt", smb%mon_icemelt, dims=[dim_x,dim_y,dim_month],start=[1,1,1],count=[nx,ny,nmon_year], &
-      long_name="monthly mean icemelt",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="monthly mean icemelt",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"snowmelt", smb%snowmelt, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="snowmelt",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="snowmelt",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"icemelt", smb%icemelt, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="icemelt",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="icemelt",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"evp", smb%evp, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="evaporation",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="evaporation",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"refreezing", smb%refreezing, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="refreezing",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid)    
+      long_name="refreezing",grid_mapping="crs",units="kg/m2/s",ncid=ncid)    
 
     call nc_write(fnm,"refreezing_sum", smb%refreezing_sum, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="refreezing summed up over the year",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="refreezing summed up over the year",grid_mapping="crs",units="kg/m2",ncid=ncid)    
 
     call nc_write(fnm,"w_snow", smb%w_snow, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="snow water equivalent",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="snow water equivalent",grid_mapping="crs",units="kg/m2",ncid=ncid)    
 
     call nc_write(fnm,"w_snow_max", smb%w_snow_max, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="seasonal max snow water equivalent",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="seasonal max snow water equivalent",grid_mapping="crs",units="kg/m2",ncid=ncid)    
 
     call nc_write(fnm,"h_snow", smb%h_snow, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="snow thickness",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+      long_name="snow thickness",grid_mapping="crs",units="m",ncid=ncid)    
 
     call nc_write(fnm,"snow_grain", smb%snow_grain, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="snow grain size",grid_mapping="polar_stereographic",units="um",ncid=ncid)    
+      long_name="snow grain size",grid_mapping="crs",units="um",ncid=ncid)    
 
     call nc_write(fnm,"dust_con", smb%dust_con, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="dust concentration in snow",grid_mapping="polar_stereographic",units="kg/kg",ncid=ncid)    
+      long_name="dust concentration in snow",grid_mapping="crs",units="kg/kg",ncid=ncid)    
 
     call nc_write(fnm,"alb_ice", smb%alb_ice, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="ice albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="ice albedo",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"alb_vis_dir", smb%alb_vis_dir, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="clear-sky visible albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="clear-sky visible albedo",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"alb_nir_dir", smb%alb_nir_dir, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="clear-sky near-infrared albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="clear-sky near-infrared albedo",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"alb_vis_dif", smb%alb_vis_dif, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="diffuse visible albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="diffuse visible albedo",grid_mapping="crs",units="/",ncid=ncid)    
 
     call nc_write(fnm,"alb_nir_dif", smb%alb_nir_dif, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="diffuse near-infrared albedo",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+      long_name="diffuse near-infrared albedo",grid_mapping="crs",units="/",ncid=ncid)    
 
     ! annual fields handed on to the ice sheet model (smb_to_ice), which keeps them until the next smb call
     call nc_write(fnm,"ann_smb", smb%ann_smb, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="annual surface mass balance",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="annual surface mass balance",grid_mapping="crs",units="kg/m2",ncid=ncid)    
     call nc_write(fnm,"ann_prc", smb%ann_prc, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="annual precipitation",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="annual precipitation",grid_mapping="crs",units="kg/m2",ncid=ncid)    
     call nc_write(fnm,"ann_evp", smb%ann_evp, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="annual evaporation",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="annual evaporation",grid_mapping="crs",units="kg/m2",ncid=ncid)    
     call nc_write(fnm,"ann_runoff", smb%ann_runoff, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="annual runoff",grid_mapping="polar_stereographic",units="kg/m2",ncid=ncid)    
+      long_name="annual runoff",grid_mapping="crs",units="kg/m2",ncid=ncid)    
     call nc_write(fnm,"t_ground", smb%t_ground, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="ground temperature",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+      long_name="ground temperature",grid_mapping="crs",units="degC",ncid=ncid)    
     call nc_write(fnm,"z_sur_std", smb%z_sur_std, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="sub-grid standard deviation of surface elevation",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+      long_name="sub-grid standard deviation of surface elevation",grid_mapping="crs",units="m",ncid=ncid)    
 
     call nc_write(fnm,"dTvar_ann", smb%dTvar_ann, dim1="g", long_name="imposed annual temperature variability",units="K",ncid=ncid)
 
@@ -1772,6 +1773,7 @@ contains
       long_name="monthly ice sheet melt on the coupler grid, time relaxed",units="kg/s",ncid=ncid)
 
     call nc_close(ncid)
+    call grid_nc_write_map(fnm, smb%grid, dim_x, dim_y, 1.d-3)
 
 
   end subroutine smb_write_restart

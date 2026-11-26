@@ -10,6 +10,7 @@ module sico_out
   use sico_params, only : pi_180_inv, RHO_SW, RHO, RHO_W, G
   use enth_temp_omega_m, only : enth_fct_temp_omega
   use ncio
+  use grid_nc, only : grid_nc_write_map
 
   implicit none
 
@@ -542,26 +543,27 @@ contains
 
     call nc_write(fnm,"xi", grd%xi, &
           dims=[dim_x],start=[1],count=[grd%IMAX+1], &
-          long_name="x-coordinate",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+          long_name="x-coordinate",grid_mapping="crs",units="m",ncid=ncid)    
     call nc_write(fnm,"eta", grd%eta, &
           dims=[dim_y],start=[1],count=[grd%JMAX+1], &
-          long_name="y-coordinate",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+          long_name="y-coordinate",grid_mapping="crs",units="m",ncid=ncid)    
     call nc_write(fnm,"phi", transpose(grd%phi)*pi_180_inv, &
           dims=[dim_x,dim_y],start=[1,1],count=[grd%IMAX+1,grd%JMAX+1], &
-          long_name="geographic latitude",grid_mapping="polar_stereographic",units="degN",ncid=ncid)    
+          long_name="geographic latitude",grid_mapping="crs",units="degN",ncid=ncid)    
     call nc_write(fnm,"lambda", transpose(grd%lambda)*pi_180_inv, &
           dims=[dim_x,dim_y],start=[1,1],count=[grd%IMAX+1,grd%JMAX+1], &
-          long_name="geographic longitude",grid_mapping="polar_stereographic",units="degE",ncid=ncid)    
+          long_name="geographic longitude",grid_mapping="crs",units="degE",ncid=ncid)    
     call nc_write(fnm,"sigma_level_c", grd%eaz_c_quotient, &
           dims=[dim_kc],start=[1],count=[grd%KCMAX+1], &
-          long_name="sigma level in cold ice",grid_mapping="polar_stereographic",units="1",ncid=ncid)    
+          long_name="sigma level in cold ice",grid_mapping="crs",units="1",ncid=ncid)    
     call nc_write(fnm,"sigma_level_t", grd%zeta_t, &
           dims=[dim_kt],start=[1],count=[grd%KTMAX+1], &
-          long_name="sigma level in temperate ice",grid_mapping="polar_stereographic",units="1",ncid=ncid)    
+          long_name="sigma level in temperate ice",grid_mapping="crs",units="1",ncid=ncid)    
     call nc_write(fnm,"sigma_level_r", grd%zeta_r, &
           dims=[dim_kr],start=[1],count=[grd%KRMAX+1], &
-          long_name="sigma level in litosphere",grid_mapping="polar_stereographic",units="1",ncid=ncid)    
+          long_name="sigma level in litosphere",grid_mapping="crs",units="1",ncid=ncid)    
     call nc_close(ncid)
+    call grid_nc_write_map(fnm, grd%grid1, dim_x, dim_y, 1.d-3)
 
    return
 
@@ -587,173 +589,173 @@ contains
 
   call nc_write(fnm,"temp_s", real(transpose(ice%state%temp_s),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="surface temperature",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+        long_name="surface temperature",grid_mapping="crs",units="degC",ncid=ncid)    
 
   call nc_write(fnm,"temp_g", real(transpose(ice%state%temp_g),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="ground temperature",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+        long_name="ground temperature",grid_mapping="crs",units="degC",ncid=ncid)    
 
   call nc_write(fnm,"mb_source", real(transpose(ice%state%mb_source)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="total mass balance",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="total mass balance",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"mb_source_apl", real(transpose(ice%state%mb_source_apl)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied total mass balance",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied total mass balance",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"as_perp", real(transpose(ice%state%as_perp)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="surface mass balance",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="surface mass balance",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"as_perp_apl", real(transpose(ice%state%as_perp_apl)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied surface mass balance",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied surface mass balance",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"accum", real(transpose(ice%state%accum)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="accumulation flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="accumulation flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"accum_apl", real(transpose(ice%state%accum_apl)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied accumulation flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied accumulation flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"calving", real(transpose(ice%state%calving)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="calving flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="calving flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"calving_apl", real(transpose(ice%state%calving_apl)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied calving flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied calving flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dis_perp", real(transpose(ice%state%dis_perp)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied calving flux from discharge parameterisation",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied calving flux from discharge parameterisation",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"cst_dist", real(transpose(ice%state%cst_dist)*1.e-3,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="coastal distance",grid_mapping="polar_stereographic",units="km",ncid=ncid)    
+        long_name="coastal distance",grid_mapping="crs",units="km",ncid=ncid)    
 
   call nc_write(fnm,"cos_grad_tc", real(transpose(ice%state%cos_grad_tc),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Cosine of angle between surface gradient and cst dist gradient",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="Cosine of angle between surface gradient and cst dist gradient",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"mask_mar", transpose(ice%state%mask_mar), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="margina ring mask",grid_mapping="polar_stereographic",units="1",ncid=ncid)    
+        long_name="margina ring mask",grid_mapping="crs",units="1",ncid=ncid)    
 
   call nc_write(fnm,"runoff", real(transpose(ice%state%runoff)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="runoff flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="runoff flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"runoff_apl", real(transpose(ice%state%runoff_apl)*sec_year,sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied runoff flux",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied runoff flux",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"Q_b", real(transpose(ice%state%Q_b_tot*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Basal melting rate + Water drainage from the temperate layer",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Basal melting rate + Water drainage from the temperate layer",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"Q_b_apl", real(transpose(ice%state%Q_b_apl*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="applied Basal melting rate + Water drainage from the temperate layer",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="applied Basal melting rate + Water drainage from the temperate layer",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"Q_bm", real(transpose(ice%state%Q_bm*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Basal melting rate",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Basal melting rate",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"Q_tld", real(transpose(ice%state%Q_tld*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Water drainage from the temperate layer",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Water drainage from the temperate layer",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"q_geo", real(transpose(ice%state%q_geo),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="geothermal heat flux",grid_mapping="polar_stereographic",units="W/m2",ncid=ncid)    
+        long_name="geothermal heat flux",grid_mapping="crs",units="W/m2",ncid=ncid)    
 
   call nc_write(fnm,"maske", int(transpose(ice%state%maske),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="ice-land-sea mask",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="ice-land-sea mask",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"maske_old", int(transpose(ice%state%maske_old),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="ice-land-sea mask (old)",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="ice-land-sea mask (old)",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"f_sed", transpose(ice%state%f_sed), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="sediment fraction",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="sediment fraction",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"H_sed", transpose(ice%state%h_sed), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="sediment thickness",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="sediment thickness",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"c_slide", transpose(ice%state%c_slide), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="basal sliding coefficient",grid_mapping="polar_stereographic",units="m/(a*Pa^(p-q))",ncid=ncid)    
+        long_name="basal sliding coefficient",grid_mapping="crs",units="m/(a*Pa^(p-q))",ncid=ncid)    
 
   call nc_write(fnm,"c_fric", transpose(ice%state%c_fric), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="basal friction coefficient",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="basal friction coefficient",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"vb_t", transpose(ice%state%vb_t)*sec_year, &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="threshold basal velocity for regularized Coulomb law",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)    
+        long_name="threshold basal velocity for regularized Coulomb law",grid_mapping="crs",units="m/a",ncid=ncid)    
 
   call nc_write(fnm,"delta", transpose(ice%state%delta), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Fraction of overburden pressure at saturation",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="Fraction of overburden pressure at saturation",grid_mapping="crs",units="/",ncid=ncid)    
 
   if (ice%par%thk_evol==4) then
   call nc_write(fnm,"mask_maxextent", int(transpose(ice%state%mask_maxextent),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="mask of maximum allowed ice sheet extent",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="mask of maximum allowed ice sheet extent",grid_mapping="crs",units="/",ncid=ncid)    
   endif
 
   call nc_write(fnm,"n_cts", int(transpose(ice%state%n_cts),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="mask for polythermal conditions",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="mask for polythermal conditions",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"kc_cts", int(transpose(ice%state%kc_cts),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Grid index of the CTS position",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="Grid index of the CTS position",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"mask_ablation_type", int(transpose(ice%state%mask_ablation_type),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Mask indicating ablation type",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="Mask indicating ablation type",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"id_mask", int(transpose(ice%state%id_mask),4), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Mask indicating ice IDs",grid_mapping="polar_stereographic",units="/",ncid=ncid)    
+        long_name="Mask indicating ice IDs",grid_mapping="crs",units="/",ncid=ncid)    
 
   call nc_write(fnm,"z_sl", real(transpose(ice%state%z_sl),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="sea level",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="sea level",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zs", real(transpose(ice%state%zs),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of the free surface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of the free surface",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zm", real(transpose(ice%state%zm),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of z=zm interface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of z=zm interface",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zb", real(transpose(ice%state%zb),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of the ice base",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of the ice base",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zl", real(transpose(ice%state%zl),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of the lithosphere surface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of the lithosphere surface",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zl_std", real(transpose(ice%state%zl_std),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="sub-grid standard deviation of topography of the lithosphere surface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="sub-grid standard deviation of topography of the lithosphere surface",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zl_fil", real(transpose(ice%state%zl_fil),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of the filtered lithosphere surface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of the filtered lithosphere surface",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"zl0", real(transpose(ice%state%zl0),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Topography of isostatically relaxed lithosphere surface",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Topography of isostatically relaxed lithosphere surface",grid_mapping="crs",units="m",ncid=ncid)    
 
   allocate(H(0:ice%grid%JMAX,0:ice%grid%IMAX))
   allocate(H_cold(0:ice%grid%JMAX,0:ice%grid%IMAX))
@@ -781,119 +783,119 @@ contains
 
   call nc_write(fnm,"H", real(transpose(H),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Thickness of ice",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Thickness of ice",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"H_cold", real(transpose(H_cold),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Thickness of the cold ice layer",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Thickness of the cold ice layer",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"H_temp", real(transpose(H_temp),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="thickness of the temperate ice layer",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="thickness of the temperate ice layer",grid_mapping="crs",units="m",ncid=ncid)    
 
   call nc_write(fnm,"H_flow", real(transpose(ice%state%H_neu_flow),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Thickness of ice after dynamics (without source term)",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+        long_name="Thickness of ice after dynamics (without source term)",grid_mapping="crs",units="m",ncid=ncid)    
 
   deallocate(H_cold,H_temp)
 
   call nc_write(fnm,"H_eff", real(transpose(ice%state%H_eff),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Effective thickness at shelf ice front", grid_mapping="polar_stereographic", &
+        long_name="Effective thickness at shelf ice front", grid_mapping="crs", &
         units="m",ncid=ncid)
 
   call nc_write(fnm,"H_calv", real(transpose(ice%state%H_calv),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Calvin Threshold", grid_mapping="polar_stereographic", &
+        long_name="Calvin Threshold", grid_mapping="crs", &
         units="m",ncid=ncid)
 
   call nc_write(fnm,"am_perp", real(transpose(ice%state%am_perp*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Volume flux across the z=zm interface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Volume flux across the z=zm interface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"qx", real(transpose(ice%state%qx*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Horizontal volume flux qx",grid_mapping="polar_stereographic",units="m2/yr",ncid=ncid)    
+        long_name="Horizontal volume flux qx",grid_mapping="crs",units="m2/yr",ncid=ncid)    
 
   call nc_write(fnm,"qy", real(transpose(ice%state%qy*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Horizontal volume flux qy",grid_mapping="polar_stereographic",units="m2/yr",ncid=ncid)    
+        long_name="Horizontal volume flux qy",grid_mapping="crs",units="m2/yr",ncid=ncid)    
 
   call nc_write(fnm,"dzs_dt", real(transpose(ice%state%dzs_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the topography of the free surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the topography of the free surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dzm_dt", real(transpose(ice%state%dzm_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the topography of the z=zm interface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the topography of the z=zm interface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dzb_dt", real(transpose(ice%state%dzb_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the topography of the ice base",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the topography of the ice base",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dzl_dt", real(transpose(ice%state%dzl_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the topography of the lithosphere surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the topography of the lithosphere surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dH_c_dt", real(transpose(ice%state%dH_c_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the thickness of the upper (kc) ice layer",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the thickness of the upper (kc) ice layer",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
   call nc_write(fnm,"dH_t_dt", real(transpose(ice%state%dH_t_dtau*sec_year),sp), &
         dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-        long_name="Rate of change of the thickness of the lower (kt) ice layer",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+        long_name="Rate of change of the thickness of the lower (kt) ice layer",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"dH_dt", real(transpose((ice%state%dH_c_dtau+ice%state%dH_t_dtau)*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Rate of change of the ice thickness",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Rate of change of the ice thickness",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vx_m_sia", real(transpose(ice%state%vx_m_sia*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="x depth-averaged horizontal velocity from SIA ",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="x depth-averaged horizontal velocity from SIA ",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vy_m_sia", real(transpose(ice%state%vy_m_sia*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="y depth-averaged horizontal velocity from SIA ",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="y depth-averaged horizontal velocity from SIA ",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vx_m_ssa", real(transpose(ice%state%vx_m_ssa*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="x depth-averaged horizontal velocity from SSA ",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="x depth-averaged horizontal velocity from SSA ",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vy_m_ssa", real(transpose(ice%state%vy_m_ssa*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="y depth-averaged horizontal velocity from SSA ",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="y depth-averaged horizontal velocity from SSA ",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vx_b_g", real(transpose(ice%state%vx_b_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vx at the ice base",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vx at the ice base",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vy_b_g", real(transpose(ice%state%vy_b_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vy at the ice base",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vy at the ice base",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vz_b", real(transpose(ice%state%vz_b*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical velocity vz at the ice base",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical velocity vz at the ice base",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vh_b", real(transpose(sqrt(ice%state%vx_b_g**2+ice%state%vy_b_g**2))*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vh at the ice base",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vh at the ice base",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vx_s_g", real(transpose(ice%state%vx_s_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vx at the ice surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vx at the ice surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vy_s_g", real(transpose(ice%state%vy_s_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vy at the ice surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vy at the ice surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vz_s", real(transpose(ice%state%vz_s*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical velocity vz at the ice surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical velocity vz at the ice surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vh_s", real(transpose(sqrt(ice%state%vx_s_g**2+ice%state%vy_s_g**2))*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal velocity vh at the ice surface",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Horizontal velocity vh at the ice surface",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
 
     !-------- Vertical mean of horizontal velocities --------
@@ -914,15 +916,15 @@ contains
 
     call nc_write(fnm,"vx_m_g", real(transpose(vx_m_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical mean of horizontal velocity vx",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical mean of horizontal velocity vx",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vy_m_g", real(transpose(vy_m_g*sec_year),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical mean of horizontal velocity vy",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical mean of horizontal velocity vy",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     call nc_write(fnm,"vh_m", real(transpose(sqrt(vx_m_g**2+vy_m_g**2))*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical mean of horizontal velocity vh",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical mean of horizontal velocity vh",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     ! SIA
     vx_m_g = 0.0_wp
@@ -939,7 +941,7 @@ contains
 
     call nc_write(fnm,"vh_m_sia", real(transpose(sqrt(vx_m_g**2+vy_m_g**2))*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical mean of SIA horizontal velocity",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical mean of SIA horizontal velocity",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     ! SSA
     vx_m_g = 0.0_wp
@@ -956,17 +958,17 @@ contains
 
     call nc_write(fnm,"vh_m_ssa", real(transpose(sqrt(vx_m_g**2+vy_m_g**2))*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Vertical mean of SSA horizontal velocity",grid_mapping="polar_stereographic",units="m/yr",ncid=ncid)    
+          long_name="Vertical mean of SSA horizontal velocity",grid_mapping="crs",units="m/yr",ncid=ncid)    
 
     deallocate(vx_m_g,vy_m_g)
 
     call nc_write(fnm,"temp_b", real(transpose(ice%state%temp_b),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Temperature at the ice base",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+          long_name="Temperature at the ice base",grid_mapping="crs",units="degC",ncid=ncid)    
 
     call nc_write(fnm,"temph_b", real(transpose(ice%state%temph_b),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Temperature at the ice base relative to the pressure melting point",grid_mapping="polar_stereographic",units="degC",ncid=ncid)    
+          long_name="Temperature at the ice base relative to the pressure melting point",grid_mapping="crs",units="degC",ncid=ncid)    
 
     !-------- Driving stress and basal drag --------
     allocate(tau_b_driving(0:ice%grid%JMAX,0:ice%grid%IMAX))
@@ -993,112 +995,112 @@ contains
 
     call nc_write(fnm,"tau_b_driving", real(transpose(tau_b_driving),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Driving stress",grid_mapping="polar_stereographic",units="Pa",ncid=ncid)    
+          long_name="Driving stress",grid_mapping="crs",units="Pa",ncid=ncid)    
 
     call nc_write(fnm,"tau_b_drag", real(transpose(tau_b_drag),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Basal drag",grid_mapping="polar_stereographic",units="Pa",ncid=ncid)    
+          long_name="Basal drag",grid_mapping="crs",units="Pa",ncid=ncid)    
 
     deallocate(tau_b_driving,tau_b_drag)
     deallocate(H)
 
     call nc_write(fnm,"p_b", real(transpose(ice%state%p_b),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Basal pressure",grid_mapping="polar_stereographic",units="Pa",ncid=ncid)    
+          long_name="Basal pressure",grid_mapping="crs",units="Pa",ncid=ncid)    
 
     call nc_write(fnm,"p_b_w", real(transpose(ice%state%p_b_w),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Basal water pressure",grid_mapping="polar_stereographic",units="Pa",ncid=ncid)    
+          long_name="Basal water pressure",grid_mapping="crs",units="Pa",ncid=ncid)    
 
     call nc_write(fnm,"p_b_red_lim", real(transpose(ice%state%p_b_red_lim),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Reduced basal pressure",grid_mapping="polar_stereographic",units="Pa",ncid=ncid)    
+          long_name="Reduced basal pressure",grid_mapping="crs",units="Pa",ncid=ncid)    
 
     call nc_write(fnm,"H_w", real(transpose(ice%state%H_w),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Thickness of the water column under the ice base",grid_mapping="polar_stereographic",units="m",ncid=ncid)    
+          long_name="Thickness of the water column under the ice base",grid_mapping="crs",units="m",ncid=ncid)    
 
     call nc_write(fnm,"q_gl_g", real(transpose(ice%state%q_gl_g)*sec_year,sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Horizontal volume flux across the grounding line",grid_mapping="polar_stereographic",units="m2/yr",ncid=ncid)    
+          long_name="Horizontal volume flux across the grounding line",grid_mapping="crs",units="m2/yr",ncid=ncid)    
 
     call nc_write(fnm,"ratio_sl_x", real(transpose(ice%state%ratio_sl_x),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Ratio of basal to surface velocity (slip ratio) in x-direction at (i+1/2,j)",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="Ratio of basal to surface velocity (slip ratio) in x-direction at (i+1/2,j)",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"ratio_sl_y", real(transpose(ice%state%ratio_sl_y),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Ratio of basal to surface velocity (slip ratio) in y-direction at (i+1/2,j)?",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="Ratio of basal to surface velocity (slip ratio) in y-direction at (i+1/2,j)?",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"weigh_ssta_sia_x", real(transpose(ice%state%weigh_ssta_sia_x),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="weight of SStA vs SIA in x-direction at (i+1/2,j)",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="weight of SStA vs SIA in x-direction at (i+1/2,j)",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"weigh_ssta_sia_y", real(transpose(ice%state%weigh_ssta_sia_y),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="weight of SStA vs SIA in y-direction at (i,j+1/2)",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="weight of SStA vs SIA in y-direction at (i,j+1/2)",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"flag_shelfy_stream_x", transpose(ice%state%flag_shelfy_stream_x), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Shelfy stream flag in x-direction, at (i+1/2,j)",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="Shelfy stream flag in x-direction, at (i+1/2,j)",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"flag_shelfy_stream_y", transpose(ice%state%flag_shelfy_stream_y), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Shelfy stream flag in y-direction, at (i,j+1/2)",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="Shelfy stream flag in y-direction, at (i,j+1/2)",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"flag_shelfy_stream", transpose(ice%state%flag_shelfy_stream), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Shelfy stream flag",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="Shelfy stream flag",grid_mapping="crs",units="/",ncid=ncid)
 
     call nc_write(fnm,"vis_int_g", real(transpose(ice%state%vis_int_g),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="Depth-integrated viscosity",grid_mapping="polar_stereographic",units="Pa s m",ncid=ncid)
+          long_name="Depth-integrated viscosity",grid_mapping="crs",units="Pa s m",ncid=ncid)
 
     call nc_write(fnm,"beta_drag", real(transpose(ice%state%beta_drag),sp), &
           dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,1], &
-          long_name="basal drag parameter for shelfy stream",grid_mapping="polar_stereographic",units="/",ncid=ncid)
+          long_name="basal drag parameter for shelfy stream",grid_mapping="crs",units="/",ncid=ncid)
 
 if (ice%par%l_output_3d) then
 
     call nc_write(fnm,"vx_c", real(reshape(ice%state%vx_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Horizontal velocity vx in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Horizontal velocity vx in the upper (kc) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"vy_c", real(reshape(ice%state%vy_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Horizontal velocity vy in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Horizontal velocity vy in the upper (kc) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"vz_c", real(reshape(ice%state%vz_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Vertical velocity vz in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Vertical velocity vz in the upper (kc) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"vx_t", real(reshape(ice%state%vx_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Horizontal velocity vx in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Horizontal velocity vx in the lower (kt) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"vy_t", real(reshape(ice%state%vy_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Horizontal velocity vy in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Horizontal velocity vy in the lower (kt) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"vz_t", real(reshape(ice%state%vz_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Vertical velocity vz in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="m/a",ncid=ncid)
+          long_name="Vertical velocity vz in the lower (kt) ice layer",grid_mapping="crs",units="m/a",ncid=ncid)
 
     call nc_write(fnm,"temp_c", real(reshape(ice%state%temp_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Temperature in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="degC",ncid=ncid)
+          long_name="Temperature in the upper (kc) ice layer",grid_mapping="crs",units="degC",ncid=ncid)
 
     call nc_write(fnm,"omega_t", real(reshape(ice%state%omega_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Water content in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="1",ncid=ncid)
+          long_name="Water content in the lower (kt) ice layer",grid_mapping="crs",units="1",ncid=ncid)
 
     call nc_write(fnm,"omega_c", real(reshape(ice%state%omega_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Water content in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="1",ncid=ncid)
+          long_name="Water content in the upper (kc) ice layer",grid_mapping="crs",units="1",ncid=ncid)
 
     call nc_write(fnm,"temp_r", real(reshape(ice%state%temp_r,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KRMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kr,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KRMAX+1,1], &
-          long_name="Temperature in the lithosphere layer",grid_mapping="polar_stereographic",units="degC",ncid=ncid)
+          long_name="Temperature in the lithosphere layer",grid_mapping="crs",units="degC",ncid=ncid)
 
     !-------- Enthalpies for the non-enthalpy methods (POLY, COLD, ISOT) --------
 
@@ -1138,27 +1140,27 @@ if (ice%par%l_output_3d) then
 
     call nc_write(fnm,"enth_c", real(reshape(ice%state%enth_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Enthalpy in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="J7kg",ncid=ncid)
+          long_name="Enthalpy in the upper (kc) ice layer",grid_mapping="crs",units="J7kg",ncid=ncid)
 
     call nc_write(fnm,"enth_t", real(reshape(ice%state%enth_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Enthalpy in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="J7kg",ncid=ncid)
+          long_name="Enthalpy in the lower (kt) ice layer",grid_mapping="crs",units="J7kg",ncid=ncid)
 
     call nc_write(fnm,"enh_c", real(reshape(ice%state%enh_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Flow enhancement factor in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="1",ncid=ncid)
+          long_name="Flow enhancement factor in the upper (kc) ice layer",grid_mapping="crs",units="1",ncid=ncid)
 
     call nc_write(fnm,"enh_t", real(reshape(ice%state%enh_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1]),sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Flow enhancement factor in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="1",ncid=ncid)
+          long_name="Flow enhancement factor in the lower (kt) ice layer",grid_mapping="crs",units="1",ncid=ncid)
 
     call nc_write(fnm,"age_c", real(reshape(ice%state%enh_c,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kc,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KCMAX+1,1], &
-          long_name="Age in the upper (kc) ice layer",grid_mapping="polar_stereographic",units="a",ncid=ncid)
+          long_name="Age in the upper (kc) ice layer",grid_mapping="crs",units="a",ncid=ncid)
 
     call nc_write(fnm,"age_t", real(reshape(ice%state%age_t,[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1],order=[3,2,1])*sec_year,sp), &
           dims=[dim_x,dim_y,dim_kt,dim_time],start=[1,1,1,nout],count=[ice%grid%IMAX+1,ice%grid%JMAX+1,ice%grid%KTMAX+1,1], &
-          long_name="Age in the lower (kt) ice layer",grid_mapping="polar_stereographic",units="a",ncid=ncid)
+          long_name="Age in the lower (kt) ice layer",grid_mapping="crs",units="a",ncid=ncid)
 
 endif
 
