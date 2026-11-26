@@ -27,6 +27,7 @@ module bmb_model
 
   use nml
   use ncio
+  use grid_nc, only : grid_nc_write_map
   use precision, only : wp, dp
   use constants, only : rho_i, rho_sw, Lf, cap_sw, map_gen
   use timer, only : year_ini, year_now, nmon_year, nstep_year_bmb, time_soy_bmb, time_eoy_bmb
@@ -562,13 +563,14 @@ contains
     ! Create the netcdf file and the dimension variables
     call nc_create(fnm)
     call nc_open(fnm,ncid,writable=.TRUE.)
-    call nc_write_dim(fnm,dim_x,x=bmb%grid%G%x0,dx=bmb%grid%G%dx,nx=nx,axis="x",units="m",ncid=ncid)
-    call nc_write_dim(fnm,dim_y,x=bmb%grid%G%y0,dx=bmb%grid%G%dy,nx=ny,axis="y",units="m",ncid=ncid)
+    call nc_write_dim(fnm,dim_x,x=bmb%grid%G%x0,dx=bmb%grid%G%dx,nx=nx,axis="x",units="km",ncid=ncid)
+    call nc_write_dim(fnm,dim_y,x=bmb%grid%G%y0,dx=bmb%grid%G%dy,nx=ny,axis="y",units="km",ncid=ncid)
 
     call nc_write(fnm,"bmb_ann", bmb%bmb_ann, dims=[dim_x,dim_y],start=[1,1],count=[nx,ny], &
-      long_name="floating ice basal mass balance",grid_mapping="polar_stereographic",units="kg/m2/a",ncid=ncid)    
+      long_name="floating ice basal mass balance",grid_mapping="crs",units="kg/m2/a",ncid=ncid)    
 
     call nc_close(ncid)
+    call grid_nc_write_map(fnm, bmb%grid, dim_x, dim_y, 1.d-3)
 
 
   end subroutine bmb_write_restart

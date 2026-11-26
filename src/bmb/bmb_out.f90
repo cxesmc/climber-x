@@ -34,6 +34,7 @@ module bmb_out
   use bmb_def, only : bmb_class, ts_out, s_out 
   use bmb_params, only : l_monthly_output
   use ncio
+  use grid_nc, only : grid_nc_write_map
   use coords, only : grid_class
 
   implicit none
@@ -295,6 +296,7 @@ contains
     call nc_write(fnm,"phi",sngl(grid%lat), dims=[dim_x,dim_y],start=[1,1],count=[grid%G%nx,grid%G%ny],ncid=ncid)
     call nc_write(fnm,"lambda",sngl(grid%lon), dims=[dim_x,dim_y],start=[1,1],count=[grid%G%nx,grid%G%ny],ncid=ncid)
     call nc_close(ncid)
+    call grid_nc_write_map(fnm, grid, dim_x, dim_y, 1.d-3)
 
    return
 
@@ -318,60 +320,60 @@ contains
 
     if (l_monthly_output) then
       call nc_write(fnm,"t_bmb", sngl(vars%t_bmb   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water temperature used for basal mass balance",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="water temperature used for basal mass balance",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_bmb", sngl(vars%s_bmb   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water salinity used for basal mass balance",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+        long_name="water salinity used for basal mass balance",grid_mapping="crs",units="psu",ncid=ncid) 
       call nc_write(fnm,"t_freeze", sngl(vars%t_freeze   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="freezing temperature at the ice shelf base",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="freezing temperature at the ice shelf base",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"bmb", sngl(vars%bmb   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="basal mass balance of floating ice",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid) 
+        long_name="basal mass balance of floating ice",grid_mapping="crs",units="kg/m2/s",ncid=ncid) 
       call nc_write(fnm,"t_bmb_mask", sngl(vars%t_bmb*vars%mask_ice_shelf), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water temperature used for basal mass balance, masked with ice shelf mask",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="water temperature used for basal mass balance, masked with ice shelf mask",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_bmb_mask", sngl(vars%s_bmb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water salinity used for basal mass balance, masked with ice shelf mask",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+        long_name="water salinity used for basal mass balance, masked with ice shelf mask",grid_mapping="crs",units="psu",ncid=ncid) 
       call nc_write(fnm,"t_freeze_mask", sngl(vars%t_freeze*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="freezing temperature at the ice shelf base, masked with ice shelf mask",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="freezing temperature at the ice shelf base, masked with ice shelf mask",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"bmb_mask", sngl(vars%bmb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_month,dim_time],start=[1,1,ndat,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid) 
+        long_name="basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="crs",units="kg/m2/s",ncid=ncid) 
     else
     if (ndat.eq.13) then
       call nc_write(fnm,"t_bmb", sngl(vars%t_bmb   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water temperature used for basal mass balance",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="water temperature used for basal mass balance",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_bmb", sngl(vars%s_bmb   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water salinity used for basal mass balance",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+        long_name="water salinity used for basal mass balance",grid_mapping="crs",units="psu",ncid=ncid) 
       call nc_write(fnm,"t_freeze", sngl(vars%t_freeze   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="freezing temperature at the ice shelf base",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="freezing temperature at the ice shelf base",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"bmb", sngl(vars%bmb   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="basal mass balance of floating ice",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid) 
+        long_name="basal mass balance of floating ice",grid_mapping="crs",units="kg/m2/s",ncid=ncid) 
       call nc_write(fnm,"t_bmb_mask", sngl(vars%t_bmb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water temperature used for basal mass balance, masked with ice shelf mask",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="water temperature used for basal mass balance, masked with ice shelf mask",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_bmb_mask", sngl(vars%s_bmb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water salinity used for basal mass balance, masked with ice shelf mask",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+        long_name="water salinity used for basal mass balance, masked with ice shelf mask",grid_mapping="crs",units="psu",ncid=ncid) 
       call nc_write(fnm,"t_freeze_mask", sngl(vars%t_freeze*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="freezing temperature at the ice shelf base, masked with ice shelf mask",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="freezing temperature at the ice shelf base, masked with ice shelf mask",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"bmb_mask", sngl(vars%bmb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="polar_stereographic",units="kg/m2/s",ncid=ncid) 
+        long_name="basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="crs",units="kg/m2/s",ncid=ncid) 
     endif
     endif
     if (ndat.eq.13) then
       call nc_write(fnm,"t_disc", sngl(vars%t_disc   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water temperature used for small-scale basal melt in ice sheet_model",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="water temperature used for small-scale basal melt in ice sheet_model",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"s_disc", sngl(vars%s_disc   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="water salinity used for small-scale basal melt in ice sheet model",grid_mapping="polar_stereographic",units="psu",ncid=ncid) 
+        long_name="water salinity used for small-scale basal melt in ice sheet model",grid_mapping="crs",units="psu",ncid=ncid) 
       call nc_write(fnm,"t_ocn_bias", sngl(vars%t_ocn_bias ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="ocean temperature bias",grid_mapping="polar_stereographic",units="degC",ncid=ncid) 
+        long_name="ocean temperature bias",grid_mapping="crs",units="degC",ncid=ncid) 
       call nc_write(fnm,"mask_ocn_lake", vars%mask_ocn_lake, dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="ocean/lake mask",grid_mapping="polar_stereographic",units="",ncid=ncid) 
+        long_name="ocean/lake mask",grid_mapping="crs",units="",ncid=ncid) 
       call nc_write(fnm,"mask_ice_shelf", sngl(vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="ice mask",grid_mapping="polar_stereographic",units="",ncid=ncid) 
+        long_name="ice mask",grid_mapping="crs",units="",ncid=ncid) 
       call nc_write(fnm,"zb", sngl(vars%zb   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="elevation of ice base relative to sea level",grid_mapping="polar_stereographic",units="m",ncid=ncid) 
+        long_name="elevation of ice base relative to sea level",grid_mapping="crs",units="m",ncid=ncid) 
       call nc_write(fnm,"zb_mask", sngl(vars%zb*vars%mask_ice_shelf   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1,1], &
-        long_name="elevation of ice base relative to sea level, masked with ice shelf mask",grid_mapping="polar_stereographic",units="m",ncid=ncid) 
+        long_name="elevation of ice base relative to sea level, masked with ice shelf mask",grid_mapping="crs",units="m",ncid=ncid) 
       call nc_write(fnm,"bmb_ann", sngl(vars%bmb_ann   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1], &
-        long_name="annual basal mass balance of floating ice",grid_mapping="polar_stereographic",units="m/a",ncid=ncid) 
+        long_name="annual basal mass balance of floating ice",grid_mapping="crs",units="m/a",ncid=ncid) 
       call nc_write(fnm,"bmb_ann_mask", sngl(vars%bmb_ann_mask   ), dims=[dim_x,dim_y,dim_time],start=[1,1,nout],count=[grid%G%nx,grid%G%ny,1], &
-        long_name="annual basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="polar_stereographic",units="m/a",ncid=ncid) 
+        long_name="annual basal mass balance of floating ice, masked with ice shelf mask",grid_mapping="crs",units="m/a",ncid=ncid) 
     endif
 
    return

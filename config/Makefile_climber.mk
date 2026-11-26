@@ -205,7 +205,7 @@ obj_smb_dummy = $(patsubst %, $(objdir)/%, $(tmp_smb_dummy) )
 ########################################################################
 # utilities source files
 dir_utils = $(srcdir)/utils/
-files_utils = precision.f90 dim_name.f90 tridiag.f90 filter.f90 #hyster.f90
+files_utils = precision.f90 dim_name.f90 tridiag.f90 filter.f90 grid_nc.f90 #hyster.f90
 tmp_utils = $(patsubst %.f90, %.o, $(files_utils) )
 obj_utils = $(patsubst %, $(objdir)/%, $(tmp_utils) )
 ########################################################################
@@ -323,6 +323,11 @@ $(objdir)/%.o : $(dir_utils)%.f90
 
 # prerequisites of the objects built by the pattern rule above
 $(objdir)/filter.o $(objdir)/tridiag.o : $(objdir)/precision.o
+
+# modules writing ice-grid NetCDF files with the CF grid mapping (crs)
+$(objdir)/smb_model.o $(objdir)/smb_out.o $(objdir)/smb_bias_corr.o \
+$(objdir)/bmb_model.o $(objdir)/bmb_out.o \
+$(objdir)/sico_model.o $(objdir)/sico_out.o : $(objdir)/grid_nc.o
 
 #######################
 # atmosphere rules ####

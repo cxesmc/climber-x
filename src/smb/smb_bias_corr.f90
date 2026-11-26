@@ -33,6 +33,7 @@ module smb_bias_corr_mod
    use coords, only : map_init, map_class, map_field
    use constants, only : map_gen
    use ncio
+   use grid_nc, only : grid_nc_write_map
 
    implicit none
 
@@ -75,10 +76,11 @@ contains
      axis="x", units="km", ncid=ncid)
    call nc_write(fnm,"phi",sngl(grid%lat), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],ncid=ncid)
    call nc_write(fnm,"lambda",sngl(grid%lon), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],ncid=ncid)
-   call nc_write(fnm,"smb", sngl(ann_smb_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual surface mass balance",grid_mapping="polar_stereographic",units="kg/m2/yr",ncid=ncid) 
-   call nc_write(fnm,"prc", sngl(ann_prc_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual precipitation",grid_mapping="polar_stereographic",units="kg/m2/yr",ncid=ncid) 
-   call nc_write(fnm,"evp", sngl(ann_evp_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual sublimation",grid_mapping="polar_stereographic",units="kg/m2/yr",ncid=ncid) 
+   call nc_write(fnm,"smb", sngl(ann_smb_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual surface mass balance",grid_mapping="crs",units="kg/m2/yr",ncid=ncid) 
+   call nc_write(fnm,"prc", sngl(ann_prc_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual precipitation",grid_mapping="crs",units="kg/m2/yr",ncid=ncid) 
+   call nc_write(fnm,"evp", sngl(ann_evp_avg_ref), dims=["x","y"],start=[1,1],count=[grid%G%nx,grid%G%ny],long_name="Climatology of annual sublimation",grid_mapping="crs",units="kg/m2/yr",ncid=ncid) 
    call nc_close(ncid)
+   call grid_nc_write_map(fnm, grid, "x", "y", 1.d-3)
 
    return
 
