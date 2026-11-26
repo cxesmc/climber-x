@@ -180,8 +180,14 @@ contains
       if (l_feedbacks) then
         ! exponential ramp-up/down between co2_const and 2*co2_const over nyears/10 years
         fco2_ramp = 2._wp**(1._wp/real(max(1,nyears/10),wp))
-        if (year.le.nyears/2)   bnd%co2 = min(2._wp*co2_const, bnd%co2*fco2_ramp)
-        if (year.gt.nyears/2)   bnd%co2 = max(co2_const, bnd%co2/fco2_ramp)
+        if (ico2_rad.eq.1) then
+          ! radiatively-only: the ramp acts on the CO2 seen by radiation, land/ocean keep co2_const
+          if (year.le.nyears/2)   bnd%co2_rad = min(2._wp*co2_const, bnd%co2_rad*fco2_ramp)
+          if (year.gt.nyears/2)   bnd%co2_rad = max(co2_const, bnd%co2_rad/fco2_ramp)
+        else
+          if (year.le.nyears/2)   bnd%co2 = min(2._wp*co2_const, bnd%co2*fco2_ramp)
+          if (year.gt.nyears/2)   bnd%co2 = max(co2_const, bnd%co2/fco2_ramp)
+        endif
       endif
 
       ! update atmospheric CO2 concentration for radiation if required
@@ -378,6 +384,12 @@ contains
       call co2_rad_update(ico2_rad,real(year_ini,kind=wp),bnd%co2_rad)
     elseif (ico2_rad.ge.3) then
       bnd%co2_rad = co2_rad_const
+    endif
+    ! feedback analysis with ico2_rad==1: radiation follows the CO2 ramp starting from 280 ppm (as bnd%co2 in
+    ! the default protocol), land/ocean see constant co2_const (no CO2 physiological/fertilisation response)
+    if (l_feedbacks .and. ico2_rad.eq.1) then
+      bnd%co2     = co2_const
+      bnd%co2_rad = 280._wp
     endif
 
     ! initialize atmospheric d13C
