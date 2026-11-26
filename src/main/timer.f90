@@ -31,6 +31,8 @@ module timer
   use control, only : l_spinup_cc, nyears_spinup_bgc, year_start_offline, nyear_avg_offline
   use control, only : i_write_restart, n_year_write_restart, years_write_restart
   use control, only : atm_restart, smb_restart
+  use control, only : l_walltime_restart, walltime_margin
+  use, intrinsic :: iso_c_binding, only : c_long, c_ptr, c_null_ptr
 
   implicit none
 
@@ -88,6 +90,21 @@ module timer
   integer, parameter :: nyear_feedback_avg = 30
   logical :: time_spinup_cc_1, time_spinup_cc_2, time_call_daily_input_save, time_use_daily_input_save
   logical :: time_write_restart
+
+  ! wall-time limited restart (SLURM jobs)
+  logical :: l_walltime_active = .false.  !! true if the job end time is known and the check is switched on
+  real(dp) :: walltime_left_ini           !! wall time left at timer_init [s]
+  real(dp) :: walltime_year_max = 0._dp   !! longest wall time taken by a model year so far [s]
+  integer(8) :: clock_ini, clock_year, clock_rate
+  integer :: walltime_period = 1          !! restart-safe year period (lcm of multi-year call frequencies)
+
+  interface
+    function c_time(t) bind(C, name='time')
+      import :: c_long, c_ptr
+      integer(c_long) :: c_time
+      type(c_ptr), value :: t
+    end function c_time
+  end interface
 
   integer :: year_out_start
   integer :: y_out_ts, y_out_ts_geo, y_out_ts_clim, y_out_ts_smb, ny_out_ts, ny_out_ts_geo, &
@@ -245,6 +262,9 @@ contains
     doy = 0
     mon = 0
     year = 0
+
+    ! wall-time limit of the SLURM job
+    call walltime_init
 
 !   write(6,'(a)') "---------------------------------------------"
 !   write(6,'(a)') "From subroutine timer_init"
@@ -608,6 +628,13 @@ contains
 
     integer :: y, k, n_bad, y_bad
 
+    ! a wall-time restart is only written at years that are a multiple of every period
+    walltime_period = 1
+    do k=1,size(periods)
+      walltime_period = lcm(walltime_period,max(1,periods(k)))
+    enddo
+    call system_clock(clock_year)
+
     n_bad = 0
     y_bad = 0
     do y=1,nyears
@@ -631,6 +658,92 @@ contains
     endif
 
   end subroutine timer_check_restart_years
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  w a l l t i m e _ i n i t
+  !   Purpose    :  read the end time of the SLURM job from SLURM_JOB_END_TIME
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine walltime_init
+
+    implicit none
+
+    character(len=32) :: str
+    integer :: stat, ios
+    integer(8) :: t_end
+
+    l_walltime_active = .false.
+    if (.not.l_walltime_restart) return
+
+    call get_environment_variable("SLURM_JOB_END_TIME", str, status=stat)
+    if (stat.ne.0 .or. len_trim(str).eq.0) then
+      print *,'timer: SLURM_JOB_END_TIME not set, no wall-time limited restart'
+      return
+    endif
+    read(str,*,iostat=ios) t_end
+    if (ios.ne.0) then
+      print *,'timer: could not parse SLURM_JOB_END_TIME=',trim(str),', no wall-time limited restart'
+      return
+    endif
+
+    call system_clock(clock_ini, clock_rate)
+    clock_year = clock_ini
+    walltime_left_ini = real(t_end - int(c_time(c_null_ptr),8), dp)
+    l_walltime_active = .true.
+    write(6,'(a,f10.1,a,f6.1,a)') ' timer: wall time left ', walltime_left_ini/60._dp, &
+      ' min, restart written and run stopped when less than ', walltime_margin, &
+      ' min + time for the next restart-safe years is left'
+
+  end subroutine walltime_init
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Function   :  t i m e r _ w a l l t i m e _ s t o p
+  !   Purpose    :  called at the end of every model year; true if the run must
+  !                 write restart files and stop because the job time limit is near
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  logical function timer_walltime_stop()
+
+    implicit none
+
+    integer(8) :: clock_now
+    real(dp) :: t_left, t_need
+
+    timer_walltime_stop = .false.
+    if (.not.l_walltime_active) return
+
+    call system_clock(clock_now)
+    walltime_year_max = max(walltime_year_max, real(clock_now-clock_year,dp)/real(clock_rate,dp))
+    clock_year = clock_now
+
+    ! nothing to do at the last year (restart written anyway) or at years a restart cannot reproduce
+    if (year.ge.nyears .or. mod(year,walltime_period).ne.0) return
+
+    t_left = walltime_left_ini - real(clock_now-clock_ini,dp)/real(clock_rate,dp)
+    ! time needed to reach the next restart-safe year, plus margin for writing restart and shutdown
+    t_need = real(walltime_period,dp)*walltime_year_max + 60._dp*walltime_margin
+    if (t_left.lt.t_need) then
+      timer_walltime_stop = .true.
+      write(6,'(a,f8.1,a,f8.2,a)') ' timer: wall time left ',t_left/60._dp,' min, longest year ', &
+        walltime_year_max,' s: writing restart and stopping'
+    endif
+
+  end function timer_walltime_stop
+
+
+  integer function lcm(a,b)
+    implicit none
+    integer, intent(in) :: a, b
+    integer :: x, y, r
+    x = a
+    y = b
+    do while (y.ne.0)
+      r = mod(x,y)
+      x = y
+      y = r
+    enddo
+    lcm = (a/x)*b
+  end function lcm
 
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   ! Subroutine :  m o n t h l y 2 d a i l y

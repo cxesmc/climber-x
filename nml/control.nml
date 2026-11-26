@@ -405,6 +405,8 @@
                                     ! 2 = restart files written at years specified in years_write_restart
  n_year_write_restart = 1000                    ! frequency of writing restart files in years (only for i_write_restart==1)
  years_write_restart = -21000 -10000 -1000 0    ! years at which to write restart files (only for i_write_restart==2)
+ l_walltime_restart = true          ! write restart files and stop cleanly before the SLURM job time limit is reached (uses SLURM_JOB_END_TIME)?
+ walltime_margin = 10.              ! safety margin before the job end time [min], on top of the estimated run time of the next restart-safe block of years
 
  !-------------------------------------------------------
  ! conservation checks

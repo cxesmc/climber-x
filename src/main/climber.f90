@@ -34,6 +34,7 @@ program climber
   use timer, only : time_spinup_cc_1, time_spinup_cc_2
   use timer, only : time_out_ice 
   use timer, only : time_write_restart, timer_print, is_restart_year, nyears, timer_check_restart_years
+  use timer, only : soy, nstep_year, timer_walltime_stop
   use timer, only : n_year_ice, n_year_smb, n_year_geo, n_accel
   use smb_params, only : l_Tvar_ann, Tvar_ann_period
   use control, only: in_dir, out_dir, control_load, args, l_debug_main_loop, l_write_timer
@@ -146,6 +147,7 @@ program climber
 
   integer :: n, l
   logical :: l_error
+  logical :: l_walltime_stopped = .false.
   !$ real(dp) :: time_ini, time_end
   !$ real(dp) :: time_atm
   !$ real(dp) :: time_ocn
@@ -666,6 +668,18 @@ program climber
         call write_restart(trim(out_dir)//"/restart_out/", year_now)
       endif
 
+      ! write restart files and stop if the job time limit is near
+      if (soy.eq.nstep_year) then
+        if (timer_walltime_stop()) then
+          if (.not.time_write_restart) then
+            call make_restart_dir(trim(out_dir), year_now)
+            call write_restart(trim(out_dir)//"/restart_out/", year_now)
+          endif
+          l_walltime_stopped = .true.
+          exit
+        endif
+      endif
+
     enddo
 
 
@@ -724,6 +738,12 @@ program climber
       print*,'*******************************************************'
       print*
 
+      if (l_walltime_stopped) then
+        print *,'WARNING: run stopped at year ',year_now,' (run year ',year,' of ',nyears,') because the job time limit was near.'
+        print *,'         To continue, restart from ',trim(out_dir)//'/restart_out/year_'//trim(adjustl(int2str(year_now))), &
+          ' with year_ini=',year_now,' and nyears=',nyears-year
+      endif
+
     else
 
       print *,'run aborted because of instabilities:'
@@ -752,7 +772,6 @@ subroutine restart_init(folder)
   character(len=*), intent(in) :: folder
 
   integer :: cstat, estat, y
-  character(len=10) :: year_now_str
   character(len=256) :: rest_dir, cmsg
 
   print *, '== restart_init ==============================='
@@ -767,40 +786,44 @@ subroutine restart_init(folder)
   end if
   do y=1,nyears
 
-    if (is_restart_year(y)) then
-      ! cast year_now to string
-      write (year_now_str, '(I10)')  year_ini+y
-
-      rest_dir = adjustl(trim(folder))//"/restart_out/"//"/year_"//adjustl(trim(year_now_str))
-
-      ! make directory 
-      call execute_command_line('mkdir -p ' // adjustl(trim(rest_dir)), &
-      exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-
-      if (cstat == 0) then
-        print *, 'mkdir ',adjustl(trim(rest_dir)),' with status', estat
-      else
-        print *, 'command execution failed with error ', trim(cmsg)
-      end if
-
-      rest_dir = adjustl(trim(folder))//"/restart_out/"//"/year_"//trim(adjustl(year_now_str))//"/vilma"
-
-      ! make directory 
-      call execute_command_line('mkdir -p ' // adjustl(trim(rest_dir)), &
-      exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
-
-      if (cstat == 0) then
-        print *, 'mkdir ',adjustl(trim(rest_dir)),' with status', estat
-      else
-        print *, 'command execution failed with error ', trim(cmsg)
-      end if
-    end if
+    if (is_restart_year(y)) call make_restart_dir(folder, year_ini+y)
 
   end do
 
   return
 
 end subroutine restart_init
+
+
+subroutine make_restart_dir(folder, year_now)
+
+  implicit none
+
+  character(len=*), intent(in) :: folder
+  integer, intent(in) :: year_now
+
+  integer :: cstat, estat
+  character(len=256) :: rest_dir, cmsg
+
+  ! the vilma subdirectory also creates restart_out/year_*
+  rest_dir = adjustl(trim(folder))//"/restart_out/"//"/year_"//trim(adjustl(int2str(year_now)))//"/vilma"
+  call execute_command_line('mkdir -p ' // adjustl(trim(rest_dir)), &
+    exitstat=estat, cmdstat=cstat, cmdmsg=cmsg)
+  if (cstat == 0) then
+    print *, 'mkdir ',adjustl(trim(rest_dir)),' with status', estat
+  else
+    print *, 'command execution failed with error ', trim(cmsg)
+  end if
+
+end subroutine make_restart_dir
+
+
+function int2str(i) result(str)
+  implicit none
+  integer, intent(in) :: i
+  character(len=10) :: str
+  write (str, '(I10)') i
+end function int2str
 
 
 subroutine write_restart(restart_out_dir, year_now)

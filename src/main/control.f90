@@ -35,6 +35,8 @@ module control
   integer :: i_write_restart 
   integer :: n_year_write_restart 
   integer :: years_write_restart(10)
+  logical :: l_walltime_restart
+  real(wp) :: walltime_margin
 
   logical :: flag_atm, flag_co2, flag_ch4, flag_n2o, flag_lnd, flag_dust, flag_lakes, flag_ocn, flag_sic, flag_bgc, flag_ice, flag_smb, flag_bmb, flag_geo
   logical :: ocn_restore_sal, ocn_restore_temp
@@ -359,6 +361,8 @@ contains
     call nml_read(filename,"control","n_year_write_restart",n_year_write_restart)
     years_write_restart(:) = -999999
     call nml_read(filename,"control","years_write_restart",years_write_restart)
+    call nml_read(filename,"control","l_walltime_restart",l_walltime_restart)
+    call nml_read(filename,"control","walltime_margin",walltime_margin)
     call nml_read(filename,"control","ifake_atm",ifake_atm)
     call nml_read(filename,"control","fake_atm_const_file",fake_atm_const_file)
     call nml_read(filename,"control","fake_atm_var_file",fake_atm_var_file)
