@@ -29,7 +29,7 @@ module u3d_mod
   use constants, only : g, T0, r_earth, pi, omega
   use atm_params, only : amas, ra, dpc, i_dpc, dp_com, pbl
   use atm_params, only : i_mass_com, dps_com_topo, dp_com_topo, dps_com
-  use atm_params, only : c_uter_pol, c_uter_eq, c_uz500_pol
+  use atm_params, only : c_uter_pol, c_uter_eq
   use atm_grid, only : im, imc, jm, jmc, km, kmc, k500, k700, dxt, dxu, dy, zl, sqr, aim, dxtg, ftop
   use atm_grid, only : fcort, cost, sint, cosu, sinu
   use atm_grid, only : pl, rdpl, dplt, dplx, dply, dplxo, dplyo, plx, ply
@@ -821,9 +821,9 @@ contains
 
       ! zonal mean 500 hPa zonal wind
       do j=1,jm
-        ! polar damping of the thermal wind in the wind for the sea level pressure, independent of c_uter_pol
+        ! polar damping of the thermal wind in the wind for the sea level pressure, same factor as the thermal wind (c_uter_pol)
         cdamp_uz = 1._wp
-        if (c_uz500_pol.gt.0._wp) cdamp_uz = min(1._wp,c_uz500_pol*cost(j)**2)
+        if (c_uter_pol.gt.0._wp) cdamp_uz = min(1._wp,c_uter_pol*cost(j)**2)
         uz500(j) = 0._wp
         do i=1,im
           uz500(j) = uz500(j) + (u3f(i,j,k500) &

@@ -30,11 +30,10 @@ module adifa_mod
   use atm_params, only : f_diff_wtr, diff_stab
   use atm_params, only : cp
   use atm_params, only : tstep
-  use atm_params, only : l_dust, i_adv, c_adv_polar, lat_adv_polar
+  use atm_params, only : l_dust, i_adv
   use atm_params, only : l_write_timer
   use atm_grid, only : im, imc, jm, jmc, km, kdif_top
-  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr, fit
-  use constants, only : pi
+  use atm_grid, only : dplt, dplx, dply, dplx_dif, dply_dif, dy, dxt, dxu, sqr
   use adv_fct_mod, only : fct_level, fct_diag_add
   !$ use omp_lib
 
@@ -375,11 +374,6 @@ contains
     enddo
     !$omp end parallel do
 
-    ! zonal sub-cycling in rows that exceed the zonal Courant limit: overwrites the zonal advective
-    ! fluxes of those rows only, after (and outside) the main loop
-    call polar_zonal_subcycle(fax, fax_psi, fax_psi_topo, tp, q3, d3, cam, &
-      faxdse, faxdse_psi, faxdse_psi_topo, faxwtr, faxdst, faxco2)
-
     ! no-flux condition at the poles
     faydse(:,jmc) = 0._wp              
     faydse_psi(:,jmc) = 0._wp
@@ -498,189 +492,5 @@ contains
     return
 
   end subroutine adifa
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  p o l a r _ z o n a l _ s u b c y c l e
-  !   Purpose    :  zonal tracer advection in rows that violate the zonal Courant condition
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  ! Applied only poleward of lat_adv_polar. Near the poles dxt is a few tens of km, and a few m/s of azonal geostrophic wind give a zonal
-  ! Courant number above 1 on the fast step. There the FCT limiter falls back to upstream, which
-  ! is itself unstable for C>1 (output/cflchk: C_x 2.3 at 87.5N, moisture goes negative, crash).
-  ! In each row whose zonal inflow-mass Courant number C exceeds c_adv_polar, every level and
-  ! tracer is advected along the row with the zonal mass fluxes only, in nsub = ceil(C/c_adv_polar)
-  ! upstream sub-steps of the advective form used by the FCT low order leg,
-  !   x <- x + dt/nsub/m * sum_inflow F*(x_donor - x) ,
-  ! each a convex combination. The time mean of the upstream face value over the sub-steps
-  ! replaces the zonal face value of the row, and the zonal fluxes are rebuilt from it. The mass
-  ! fluxes are untouched, so fax, fax_psi and fax_psi_topo still add up and the column budgets
-  ! stay consistent with the meridional fluxes; tracers are conserved because the fluxes are on
-  ! shared faces. CO2 uses the column mass flux, as its FCT limiter does.
-  subroutine polar_zonal_subcycle(fax, fax_psi, fax_psi_topo, tp, q3, d3, cam, &
-      faxdse, faxdse_psi, faxdse_psi_topo, faxwtr, faxdst, faxco2)
-
-    implicit none
-
-    real(wp), intent(in   ) :: fax(:,:,:), fax_psi(:,:,:), fax_psi_topo(:,:,:)
-    real(wp), intent(in   ) :: tp(:,:,:), q3(:,:,:), d3(:,:,:), cam(:,:)
-    real(wp), intent(inout) :: faxdse(:,:), faxdse_psi(:,:), faxdse_psi_topo(:,:)
-    real(wp), intent(inout) :: faxwtr(:,:), faxdst(:,:), faxco2(:,:)
-
-    integer :: i, j, k, n, r, nsub, nrow
-    integer :: jrow(jm), nsub_row(jm)
-    real(wp) :: c, cmax, m
-    real(wp) :: fcol(imc), mcol(im)
-    real(wp), allocatable :: xb_dse(:,:,:), xb_wtr(:,:,:), xb_dst(:,:,:), xb_co2(:,:)
-    integer, save :: nsub_warned(jm) = 1
-
-
-    ! select the rows to treat and their number of sub-steps
-    nrow = 0
-    do j=1,jm
-
-      ! polar rows only
-      if (abs(fit(j))*180._wp/pi.le.lat_adv_polar) cycle
-
-      ! zonal inflow-mass Courant number of the row, over all levels
-      cmax = 0._wp
-      do i=1,im
-        do k=1,km
-          m = dplt(i,j,k)*sqr(i,j)
-          if (m.gt.0._wp) then
-            c = tstep*(max(0._wp,fax(i,j,k)) + max(0._wp,-fax(i+1,j,k)))/m
-            cmax = max(cmax,c)
-          endif
-        enddo
-      enddo
-      if (cmax.le.c_adv_polar) cycle
-
-      nsub = ceiling(cmax/c_adv_polar)
-      if (l_write_timer .and. nsub.gt.nsub_warned(j)) then
-        print '(a,i3,a,f7.2,a,i3)', ' atm polar zonal sub-cycling: j =',j,' , zonal Courant =',cmax,' , nsub =',nsub
-        nsub_warned(j) = nsub
-      endif
-
-      nrow = nrow + 1
-      jrow(nrow) = j
-      nsub_row(nrow) = nsub
-
-    enddo
-    if (nrow.eq.0) return
-
-    allocate(xb_dse(im,km,nrow), xb_wtr(im,km,nrow), xb_dst(im,km,nrow), xb_co2(im,nrow))
-
-    ! each (row, tracer, level) is independent. Items 1:km are dse, km+1:2km water, 2km+1:3km dust
-    ! and 3km+1 CO2.
-    !$omp parallel do collapse(2) schedule(dynamic,1) private(r, n, i, j, k, m, fcol, mcol)
-    do r=1,nrow
-      do n=1,3*km+1
-        j = jrow(r)
-        if (n.le.km) then
-          k = n
-          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), tp(:,j,k), xb_dse(:,k,r))
-        else if (n.le.2*km) then
-          k = n-km
-          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), q3(:,j,k), xb_wtr(:,k,r))
-        else if (n.le.3*km) then
-          k = n-2*km
-          call subcycle_row(nsub_row(r), fax(:,j,k), dplt(:,j,k)*sqr(:,j), d3(:,j,k), xb_dst(:,k,r))
-        else
-          ! CO2 uses the column mass flux and mass
-          do i=1,im
-            mcol(i) = 0._wp
-            do k=1,km
-              m = dplt(i,j,k)*sqr(i,j)
-              mcol(i) = mcol(i) + m
-            enddo
-          enddo
-          do i=1,imc
-            fcol(i) = 0._wp
-            do k=1,km
-              fcol(i) = fcol(i) + fax(i,j,k)
-            enddo
-          enddo
-          call subcycle_row(nsub_row(r), fcol, mcol, cam(:,j), xb_co2(:,r))
-        endif
-      enddo
-    enddo
-    !$omp end parallel do
-
-    ! rebuild the zonal advective fluxes of the rows from the time mean face values
-    !$omp parallel do private(r, i, j, k)
-    do r=1,nrow
-      j = jrow(r)
-      do i=1,im
-        faxdse(i,j) = 0._wp
-        faxdse_psi(i,j) = 0._wp
-        faxdse_psi_topo(i,j) = 0._wp
-        faxwtr(i,j) = 0._wp
-        faxdst(i,j) = 0._wp
-        faxco2(i,j) = 0._wp
-        do k=1,km
-          faxdse(i,j) = faxdse(i,j) + fax(i,j,k)*xb_dse(i,k,r)
-          faxdse_psi(i,j) = faxdse_psi(i,j) + fax_psi(i,j,k)*xb_dse(i,k,r)
-          faxdse_psi_topo(i,j) = faxdse_psi_topo(i,j) + fax_psi_topo(i,j,k)*xb_dse(i,k,r)
-          faxwtr(i,j) = faxwtr(i,j) + fax(i,j,k)*xb_wtr(i,k,r)
-          faxdst(i,j) = faxdst(i,j) + fax(i,j,k)*xb_dst(i,k,r)
-          faxco2(i,j) = faxco2(i,j) + fax(i,j,k)*xb_co2(i,r)
-        enddo
-      enddo
-    enddo
-    !$omp end parallel do
-
-    deallocate(xb_dse, xb_wtr, xb_dst, xb_co2)
-
-    return
-
-  end subroutine polar_zonal_subcycle
-
-
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  !   Subroutine :  s u b c y c l e _ r o w
-  !   Purpose    :  nsub upstream sub-steps of one tracer along one periodic row,
-  !                 returns the time mean upstream value on the zonal faces
-  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine subcycle_row(nsub, f, m, x0, xbar)
-
-    implicit none
-
-    integer,  intent(in ) :: nsub
-    real(wp), intent(in ) :: f(:)      ! (imc) zonal mass flux, face i between cells i-1 and i, positive eastward, kg/s
-    real(wp), intent(in ) :: m(:)      ! (im) cell mass, kg
-    real(wp), intent(in ) :: x0(:)     ! (im) tracer at the start of the step
-    real(wp), intent(out) :: xbar(:)   ! (im) time mean upstream value on face i
-
-    integer :: i, s, iw, ie
-    real(wp) :: x(im), xn(im), dts
-
-
-    dts = tstep/real(nsub,wp)
-    x(:) = x0(1:im)
-    xbar(:) = 0._wp
-    do s=1,nsub
-      do i=1,im
-        iw = modulo(i-2,im) + 1
-        if (f(i).gt.0._wp) then
-          xbar(i) = xbar(i) + x(iw)
-        else
-          xbar(i) = xbar(i) + x(i)
-        endif
-      enddo
-      do i=1,im
-        iw = modulo(i-2,im) + 1
-        ie = modulo(i,im) + 1
-        if (m(i).gt.0._wp) then
-          xn(i) = x(i) + dts/m(i)*( max(0._wp,f(i))*(x(iw)-x(i)) + max(0._wp,-f(i+1))*(x(ie)-x(i)) )
-        else
-          xn(i) = x(i)
-        endif
-      enddo
-      x(:) = xn(:)
-    enddo
-    xbar(:) = xbar(:)/real(nsub,wp)
-
-    return
-
-  end subroutine subcycle_row
 
 end module adifa_mod

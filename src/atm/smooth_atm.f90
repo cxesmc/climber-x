@@ -34,7 +34,7 @@ module smooth_atm_mod
   include 'fftw3.f03'
 
   private
-  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr, polar_filter, polar_filter3
+  public :: smooth2, smooth2_m, smooth2eq, zona, zofil, shapiro2dx, limit_filt_wtr, polar_filter, polar_filter3, polar_filter_taper
 
   ! FFTW plans of polar_filter, made on the first call
   integer :: n_pf_plan = 0
@@ -160,9 +160,10 @@ contains
   !                 within tstep, its filter increment is reduced (never beyond
   !                 the unfiltered value). The withheld water is taken from the
   !                 positive filter increments within the filter's reach
-  !                 (+-nord cells), so that sum(sqr*conv) is conserved.
+  !                 (+-nord cells; the whole row in rows flagged rowfull, which a
+  !                 zonal Fourier filter mixes), so that sum(sqr*conv) is conserved.
   ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  subroutine limit_filt_wtr(conv, conv_raw, sqr, wcon, wmin, evpa, tstep, nord)
+  subroutine limit_filt_wtr(conv, conv_raw, sqr, wcon, wmin, evpa, tstep, nord, rowfull)
 
     implicit none
 
@@ -174,14 +175,19 @@ contains
     real(wp), intent(in   ) :: evpa(:,:)       ! evaporation, kg/m2/s
     real(wp), intent(in   ) :: tstep           ! s
     integer,  intent(in   ) :: nord            ! filter order = reach of the filter in cells
+    logical,  intent(in   ), optional :: rowfull(:)  ! rows filtered along the whole row (zonal Fourier filter): reach = whole row
 
-    integer :: i, j, ii, jj, i2, im, jm
+    integer :: i, j, ii, jj, i2, im, jm, ilo, ihi
+    logical :: lfull(size(conv,2))
     real(wp) :: conv_min, conv_new, dw, pos, r
     real(wp) :: dinc(size(conv,1),size(conv,2))
 
 
     im = size(conv,1)
     jm = size(conv,2)
+
+    lfull = .false.
+    if (present(rowfull)) lfull = rowfull
 
     ! filter increment
     dinc = conv - conv_raw
@@ -199,7 +205,12 @@ contains
         ! positive filter increments within reach
         pos = 0._wp
         do jj=max(1,j-nord),min(jm,j+nord)
-          do ii=i-nord,i+nord
+          if (lfull(jj)) then
+            ilo = 1; ihi = im
+          else
+            ilo = i-nord; ihi = i+nord
+          endif
+          do ii=ilo,ihi
             i2 = modulo(ii-1,im)+1
             if (dinc(i2,jj).gt.0._wp) pos = pos + dinc(i2,jj)*sqr(i2,jj)
           enddo
@@ -208,7 +219,12 @@ contains
         ! withhold at most what the neighbours received
         r = min(1._wp, dw/pos)
         do jj=max(1,j-nord),min(jm,j+nord)
-          do ii=i-nord,i+nord
+          if (lfull(jj)) then
+            ilo = 1; ihi = im
+          else
+            ilo = i-nord; ihi = i+nord
+          endif
+          do ii=ilo,ihi
             i2 = modulo(ii-1,im)+1
             if (dinc(i2,jj).gt.0._wp) then
               conv(i2,jj) = conv(i2,jj) - r*dinc(i2,jj)
@@ -564,5 +580,68 @@ contains
     xr = rowr/real(n,wp)   ! FFTW is unnormalised
 
   end subroutine polar_filter_row
+
+
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  !   Subroutine :  p o l a r _ f i l t e r _ t a p e r
+  !   Purpose    :  zonal Fourier filter with the Arakawa-Lamb taper. Row j
+  !                 (|lat| poleward of the cutoff, cos(lat) < cosc) multiplies
+  !                 zonal wavenumber m by
+  !                   S = min(1, cos(lat) / (cosc*sin(pi*m/im))) ,
+  !                 i.e. every wave shorter (in metres) than the shortest wave
+  !                 resolved at the cutoff latitude is damped back to that
+  !                 scale, so the damping depends on the physical, not the
+  !                 grid, wavelength. Rows equatorward of the cutoff are
+  !                 untouched. m = 0 is kept: the zonal mean of each row, and so
+  !                 the area integral, is conserved exactly.
+  ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  subroutine polar_filter_taper(x, cosl, cosc)
+
+    implicit none
+
+    real(wp), intent(inout) :: x(:,:)
+    real(wp), intent(in) :: cosl(:)
+    real(wp), intent(in) :: cosc      ! cos of the cutoff latitude
+
+    integer :: j
+
+    call polar_filter_plan(size(x,1))
+
+    !$omp parallel do private(j)
+    do j=1,size(x,2)
+      if (cosl(j).lt.cosc) call polar_filter_taper_row(x(:,j), cosl(j)/cosc)
+    enddo
+    !$omp end parallel do
+
+    return
+
+  end subroutine polar_filter_taper
+
+
+  ! one row: wavenumber m multiplied by min(1, r/sin(pi*m/n)), r = cos(lat)/cos(lat_cutoff) < 1
+  subroutine polar_filter_taper_row(xr, r)
+
+    implicit none
+
+    real(wp), intent(inout) :: xr(:)
+    real(wp), intent(in) :: r
+
+    integer :: n, m
+    real(wp), parameter :: pi = 3.14159265358979323846_wp
+    real(C_DOUBLE) :: rowr(size(xr))
+    complex(C_DOUBLE_COMPLEX) :: rowc(size(xr)/2+1)
+
+    n = size(xr)
+
+    rowr = xr
+    call fftw_execute_dft_r2c(plan_pf_r2c, rowr, rowc)
+    ! wavenumber m is rowc(m+1)
+    do m=1,n/2
+      rowc(m+1) = rowc(m+1)*min(1._wp, r/sin(pi*real(m,wp)/real(n,wp)))
+    enddo
+    call fftw_execute_dft_c2r(plan_pf_c2r, rowc, rowr)
+    xr = rowr/real(n,wp)   ! FFTW is unnormalised
+
+  end subroutine polar_filter_taper_row
 
 end module smooth_atm_mod

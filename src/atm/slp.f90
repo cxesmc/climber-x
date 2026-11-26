@@ -76,7 +76,7 @@ contains
     real(wp), intent(in   ) :: tlay(:,:)
     real(wp), intent(in   ) :: htrop(:,:)
     real(wp), intent(in   ) :: zsa(:,:)
-    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind for the upstream displacement of aslp_temp, thermal wind damped with c_uz500_pol
+    real(wp), intent(in   ) :: uz500(:)       !! zonal mean 500 hPa zonal wind for the upstream displacement of aslp_temp, thermal wind damped with c_uter_pol
     real(wp), intent(in   ) :: u3f(:,:,:)     !! 3D zonal wind with undamped thermal wind, previous step, used if l_aslp_topo
     real(wp), intent(in   ) :: frlnd(:,:)     !! land fraction, used only if c_aslp_temp_dT>0
     real(wp), intent(in   ) :: tsl(:,:)       !! air temperature profile reduced to sea level (K), previous step, used only if c_aslp_temp_dT>0

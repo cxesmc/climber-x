@@ -102,7 +102,6 @@
   c_aslp_temp_dT = 2.           ! K, land contrast weighting of the upstream shift: tau = c_aslp_temp_tau*min(1,max(0,-C/c_aslp_temp_dT)), C = land-mean
                                 !   azonal sea level temperature (tsl) of the row (shift only where/when continents are colder than the zonal mean; 0 = constant tau)
   c_aslp_temp_wtau = 20.        ! days, relaxation time of the land contrast C, used only if c_aslp_temp_dT>0
-  c_uz500_pol = 3.              ! polar damping of the thermal wind in the 500 hPa zonal mean wind of the upstream displacement, min(1,c*cos(lat)**2), independent of c_uter_pol; <=0 = undamped
   l_aslp_topo = T               ! include effect of stationary topographic waves on sea level pressure? Linear barotropic vorticity equation
                                 ! about the zonal mean ~300 hPa wind, coupled in latitude (one tridiagonal solve per zonal wavenumber), forced by the ~850 hPa zonal mean flow over zsa
   c_aslp_sw_amp = 1.5           ! scaling of the sea level pressure response to the ~300 hPa height anomaly (x ra*g), used only if l_aslp_topo==T
@@ -130,7 +129,7 @@
   dps_com_topo = 0.1            ! depth above the local surface kept free of the topographic correction (i_mass_com=1)
   dp_com_topo = 1.0             ! depth of the terrain following band of the topographic correction, top capped at the tropopause (i_mass_com=1); 1 = up to the tropopause
   ptopdyn = 0.25                ! pressure level (p/p0) above which the geostrophic (ugb,vgb) and thermal (uter,vter) winds are disregarded in the advective mass fluxes
-  c_uter_pol = 3.               ! parameter for polar damping of thermal wind
+  c_uter_pol = 3.               ! polar damping of the thermal wind, min(1,c*cos(lat)**2), also used for the 500 hPa zonal mean wind of the upstream displacement of aslp_temp
   c_uter_eq = 3.                ! parameter for equatorial damping of thermal wind
   l_kata_wind = T               ! katabatic winds: inversion-layer slab with Coriolis (Ball 1960, Mahrt 1982), V_k = F/(r+if), r = cd0a*W/h_kata,
                                 !     buoyancy from the Ball deficit c_kata*(gamb-gams)*hgams*(1-h_kata/(2 hgams)), unclipped slope, cells with land only
@@ -228,14 +227,11 @@
   i_adv = 2                     ! advection scheme:
                                 ! 1 = first order upstream 
                                 ! 2 = flux corrected transport (Zalesak 1979)
-  c_adv_polar = 0.5             ! zonal sub-cycling of the tracer advection in polar rows (|lat| > lat_adv_polar) whose zonal Courant number
-                                ! exceeds c_adv_polar (strong azonal SLP near the pole): the zonal face values of those rows are replaced by
-                                ! the time mean of ceil(C/c_adv_polar) upstream sub-steps along the row. Zonal inflow-mass Courant threshold
-                                ! and target per sub-step
-  lat_adv_polar = 75.           ! deg, the zonal sub-cycling acts only poleward of this latitude (the zonal inflow-mass Courant number is
-                                ! also >1 in thin, topography-cut layers elsewhere, where the FCT upstream fallback copes)
   c_filt_conv = 1.0             ! strength [0..1] of conservative high-order 2dx filter on advective convergences (convdse/convwtr/convdst) to suppress grid-scale checkerboard; 0 = off
   nord_filt_conv = 2            ! order (selectivity) of the convergence 2dx filter
+  i_filt_conv_polar = 1         ! zonal Fourier filter of the convergences poleward of lat_filt_conv_polar, wavenumber m damped by min(1, cos(lat)/(cos(lat_c)*sin(pi*m/im))) (Arakawa-Lamb): 0 = off, 1 = on
+                                !   removes the polar zonal Courant limit of the advection (replaced the polar zonal sub-cycling; without either the 87.5N row crashes in year 1)
+  lat_filt_conv_polar = 60.     ! deg, cutoff latitude of the polar convergence filter
 
   !-----------------------------------------------------------
   ! cloud fraction parameters

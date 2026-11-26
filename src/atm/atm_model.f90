@@ -47,7 +47,7 @@ module atm_model
     use atm_params, only : l_write_timer
     use atm_params, only : synsurmin
     use atm_params, only : i_adv
-    use atm_params, only : c_filt_conv, nord_filt_conv
+    use atm_params, only : c_filt_conv, nord_filt_conv, i_filt_conv_polar, lat_filt_conv_polar
     use atm_params, only : tam_init
     use atm_params, only : ecs_scale, ecs_scale_dT
     use atm_grid, only : atm_grid_init, atm_grid_update, diff_prof_update
@@ -77,7 +77,7 @@ module atm_model
     use time_step_mod, only : time_step, dtcol_prev_unset
     use feedbacks_mod, only : feedback_type, feedback_init, feedback_save, feedback_analysis, feedback_write, feedback_tg
     use rad_kernels_mod, only : rad_kernels_type, rad_kernels_init, rad_kernels, rad_kernels_write
-    use smooth_atm_mod, only : smooth2, shapiro2dx, limit_filt_wtr
+    use smooth_atm_mod, only : smooth2, shapiro2dx, limit_filt_wtr, polar_filter_taper
     !$  use omp_lib
 
     implicit none
@@ -415,26 +415,35 @@ contains
       !$ if(l_write_timer .and. niter.eq.1) print *,'diffuse_impl',(time2-time1)*nstep_fast
 
       !-------------------------------------------------
+      ! polar zonal Fourier filter on the convergences: damps the zonal waves that are shorter, in metres,
+      ! than the shortest wave resolved at lat_filt_conv_polar (Arakawa-Lamb taper). The 2dx Shapiro filter
+      ! below counts wavelengths in grid cells, so it spares the 4-7dx (100-170 km at 87.5N) polar-row noise.
+      !-------------------------------------------------
+      convwtr_raw = atm%convwtr_adv
+      if (i_filt_conv_polar.eq.1) then
+        call polar_filter_taper(atm%convdse, cost, cos(lat_filt_conv_polar*pi/180._wp))
+        call polar_filter_taper(atm%convwtr_adv, cost, cos(lat_filt_conv_polar*pi/180._wp))
+        call polar_filter_taper(atm%convwtr_dif, cost, cos(lat_filt_conv_polar*pi/180._wp))
+        if (l_dust) call polar_filter_taper(atm%convdst, cost, cos(lat_filt_conv_polar*pi/180._wp))
+      endif
+
+      !-------------------------------------------------
       ! grid-scale (2dx) checkerboard control on the convergences
       !-------------------------------------------------
-      if (c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdse, sqr, c_filt_conv, nord_filt_conv)
-      ! the same linear filter on the diagnostic parts, so that they stay comparable
-      ! with the filtered convdse they are a part of
       if (c_filt_conv.gt.0._wp) then
-        call shapiro2dx(atm%convdse_psi, sqr, c_filt_conv, nord_filt_conv)
-        call shapiro2dx(atm%convdse_psi_topo, sqr, c_filt_conv, nord_filt_conv)
-      endif
-      ! filter the advective convergence AND the implicit diffusive convergence.
-      if (c_filt_conv.gt.0._wp) then
-        convwtr_raw = atm%convwtr_adv
+        call shapiro2dx(atm%convdse,     sqr, c_filt_conv, nord_filt_conv)
         call shapiro2dx(atm%convwtr_adv, sqr, c_filt_conv, nord_filt_conv)
         call shapiro2dx(atm%convwtr_dif, sqr, c_filt_conv, nord_filt_conv)
-        ! the advective part is what drains the column water in time_step: keep the filter from emptying it
-        call limit_filt_wtr(atm%convwtr_adv, convwtr_raw, sqr, atm%wcon, atm%W_strat+wfrac_filt_min*atm%A_trop, atm%evpa, tstep, nord_filt_conv)
+        if (l_dust) call shapiro2dx(atm%convdst, sqr, c_filt_conv, nord_filt_conv)
       endif
+      ! the advective part is what drains the column water in time_step: keep the filters from emptying it
+      ! (rows mixed by the polar Fourier filter take the withheld water from the whole row)
+      if (c_filt_conv.gt.0._wp .or. i_filt_conv_polar.eq.1) then
+        call limit_filt_wtr(atm%convwtr_adv, convwtr_raw, sqr, atm%wcon, atm%W_strat+wfrac_filt_min*atm%A_trop, atm%evpa, tstep, &
+          max(1,nord_filt_conv), rowfull=(i_filt_conv_polar.eq.1 .and. cost.lt.cos(lat_filt_conv_polar*pi/180._wp)))
+      endif
+
       atm%convwtr(:,:) = atm%convwtr_adv(:,:) + atm%convwtr_dif(:,:)
-      ! dust: same treatment as convdse (the implicit diffusive increment is already in dam).
-      if (l_dust .and. c_filt_conv.gt.0._wp) call shapiro2dx(atm%convdst, sqr, c_filt_conv, nord_filt_conv)
 
       !-------------------------------------------------
       ! time step, prognostic equations for temperature, humidity and dust

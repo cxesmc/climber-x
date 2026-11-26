@@ -103,7 +103,6 @@ module atm_params
   real(wp) :: c_aslp_temp_tau
   real(wp) :: c_aslp_temp_dT
   real(wp) :: c_aslp_temp_wtau
-  real(wp) :: c_uz500_pol
   logical :: l_aslp_topo
   real(wp) :: c_aslp_sw_amp
   real(wp) :: c_aslp_sw_tau
@@ -201,10 +200,10 @@ module atm_params
   integer  :: i_diff_prof  !! vertical profile of the macro-diffusivity: 0 = exp(-z/h_diff) up to 0.2*p0, 1 = linear from 1 at the surface to 0 at the tropopause, 2 = as 1 but linear from 1 at sea level, 3 = uniform up to the tropopause
   real(wp) :: diff_stab   !! m2/s, uniform additional ZONAL macro-diffusivity (all tracers) for numerical stability of i_adv=2; 0 = off
   integer :: i_adv         !! advection scheme: 1 = first order upstream (donor cell), 2 = flux corrected transport (Zalesak 1979)
-  real(wp) :: c_adv_polar  !! zonal inflow-mass Courant threshold (and target per sub-step) for the zonal sub-cycling of the tracer advection in polar rows
-  real(wp) :: lat_adv_polar  !! deg, the zonal sub-cycling acts only on rows poleward of this latitude
   real(wp) :: c_filt_conv  !! strength [0..1] of the conservative high-order 2dx (Shapiro) filter applied to the convergences (convdse/convwtr) to suppress the grid-scale checkerboard; 0 = off
   integer :: nord_filt_conv !! order (selectivity) of the convergence 2dx filter; higher = more selective (spares resolved scales)
+  integer :: i_filt_conv_polar !! zonal Fourier filter of the convergences poleward of lat_filt_conv_polar (Arakawa-Lamb taper on the physical wavelength): 0 = off, 1 = on
+  real(wp) :: lat_filt_conv_polar !! deg, cutoff latitude of the polar convergence filter
 
   logical  :: l_kata_wind
   real(wp) :: h_kata
@@ -409,7 +408,6 @@ contains
     call nml_read(filename,"atm_par","c_aslp_temp_dT",c_aslp_temp_dT)
     c_aslp_temp_wtau = 20._wp
     call nml_read(filename,"atm_par","c_aslp_temp_wtau",c_aslp_temp_wtau)
-    call nml_read(filename,"atm_par","c_uz500_pol",c_uz500_pol)
     call nml_read(filename,"atm_par","l_aslp_topo",l_aslp_topo)
     call nml_read(filename,"atm_par","c_aslp_sw_amp",c_aslp_sw_amp)
     call nml_read(filename,"atm_par","c_aslp_sw_tau",c_aslp_sw_tau)
@@ -524,10 +522,10 @@ contains
     call nml_read(filename,"atm_par","f_diff_wtr",f_diff_wtr)
     call nml_read(filename,"atm_par","diff_stab",diff_stab)
     call nml_read(filename,"atm_par","i_adv",i_adv)
-    call nml_read(filename,"atm_par","c_adv_polar",c_adv_polar)
-    call nml_read(filename,"atm_par","lat_adv_polar",lat_adv_polar)
     call nml_read(filename,"atm_par","c_filt_conv",c_filt_conv)
     call nml_read(filename,"atm_par","nord_filt_conv",nord_filt_conv)
+    call nml_read(filename,"atm_par","i_filt_conv_polar",i_filt_conv_polar)
+    call nml_read(filename,"atm_par","lat_filt_conv_polar",lat_filt_conv_polar)
     call nml_read(filename,"atm_par","l_kata_wind",l_kata_wind)
     call nml_read(filename,"atm_par","h_kata",h_kata)
     call nml_read(filename,"atm_par","c_kata",c_kata)
